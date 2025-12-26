@@ -56,3 +56,20 @@ Thumbs.db
 structures/
 cache/
 alphafold_cache/
+
+# Development artifacts (local archive)
+_dev_archive/
+*_backup.py
+*.bak
+
+# Temporary commit files
+commit_msg.txt
+*.bat
+
+# Ad-hoc test scripts (use tests/ folder instead)
+test_*.py
+!tests/test_*.py
+check_*.py
+merge_*.py
+insert_*.py
+*_additions.py
