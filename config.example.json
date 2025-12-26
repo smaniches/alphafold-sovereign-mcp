@@ -1,0 +1,15 @@
+{
+    "structures_dir": "C:\\TOPOLOGICA_KAGGLE_CAFA6\\ALPHAFOLD2_STRUCTURES\\pdb_files",
+    "cache_dir": "C:\\TOPOLOGICA_KAGGLE_CAFA6\\CACHE",
+    "cache_mode": "sovereign",
+    "_comment_cache_modes": {
+        "sovereign": "Full read/write - primary device with local storage",
+        "readonly": "Read cache only, no writes - secondary device sharing cache",
+        "disabled": "Pure online mode, no local caching - mobile/temporary use"
+    },
+    "_comment_env_overrides": {
+        "ALPHAFOLD_STRUCTURES_DIR": "Overrides structures_dir",
+        "ALPHAFOLD_CACHE_DIR": "Overrides cache_dir", 
+        "ALPHAFOLD_CACHE_MODE": "Overrides cache_mode"
+    }
+}

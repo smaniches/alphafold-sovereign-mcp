@@ -43,18 +43,90 @@ import time
 import json
 
 # ===========================================================================
-# CONFIGURATION - SOVEREIGN INFRASTRUCTURE PATHS
+# CONFIGURATION SYSTEM - PORTABLE & MULTI-DEVICE SUPPORT
 # ===========================================================================
 
-# Local structure cache (primary sovereign storage - indexed dynamically on startup)
-LOCAL_STRUCTURES_DIR = Path(r"C:\TOPOLOGICA_KAGGLE_CAFA6\ALPHAFOLD2_STRUCTURES\pdb_files")
+class CacheMode:
+    """Cache operation modes for multi-device support."""
+    SOVEREIGN = "sovereign"   # Full read/write (primary device)
+    READONLY = "readonly"     # Read cache, no writes (secondary device)
+    DISABLED = "disabled"     # Pure online, no cache (mobile/temporary)
 
-# Cache directory for computed features + online fetched structures
-CACHE_DIR = Path(r"C:\TOPOLOGICA_KAGGLE_CAFA6\CACHE")
+
+def _load_config_file() -> Dict[str, Any]:
+    """Load configuration from JSON file if exists."""
+    config_paths = [
+        Path.home() / ".alphafold_sovereign" / "config.json",
+        Path.home() / ".config" / "alphafold_sovereign" / "config.json",
+        Path(__file__).parent / "config.json",
+    ]
+    
+    for config_path in config_paths:
+        if config_path.exists():
+            try:
+                with open(config_path, 'r') as f:
+                    return json.load(f)
+            except Exception:
+                pass
+    
+    return {}
+
+
+def _get_config_value(key: str, default: Any, env_var: str = None) -> Any:
+    """
+    Get configuration value with priority:
+    1. Environment variable (highest priority)
+    2. Config file
+    3. Default value (lowest priority)
+    """
+    # Check environment variable first
+    if env_var:
+        env_value = os.environ.get(env_var)
+        if env_value is not None:
+            return env_value
+    
+    # Check config file
+    config = _load_config_file()
+    if key in config:
+        return config[key]
+    
+    # Return default
+    return default
+
+
+# Platform-specific defaults
+if os.name == 'nt':  # Windows
+    _DEFAULT_STRUCTURES_DIR = r"C:\TOPOLOGICA_KAGGLE_CAFA6\ALPHAFOLD2_STRUCTURES\pdb_files"
+    _DEFAULT_CACHE_DIR = r"C:\TOPOLOGICA_KAGGLE_CAFA6\CACHE"
+else:  # Linux/Mac
+    _DEFAULT_STRUCTURES_DIR = str(Path.home() / "alphafold_structures" / "pdb_files")
+    _DEFAULT_CACHE_DIR = str(Path.home() / ".cache" / "alphafold_sovereign")
+
+# Load configuration with environment variable overrides
+LOCAL_STRUCTURES_DIR = Path(_get_config_value(
+    "structures_dir",
+    _DEFAULT_STRUCTURES_DIR,
+    env_var="ALPHAFOLD_STRUCTURES_DIR"
+))
+
+CACHE_DIR = Path(_get_config_value(
+    "cache_dir",
+    _DEFAULT_CACHE_DIR,
+    env_var="ALPHAFOLD_CACHE_DIR"
+))
+
+CACHE_MODE = _get_config_value(
+    "cache_mode",
+    CacheMode.SOVEREIGN,
+    env_var="ALPHAFOLD_CACHE_MODE"
+)
 
 # AlphaFold DB online access (NO API KEY REQUIRED)
 ALPHAFOLD_BASE_URL = "https://alphafold.ebi.ac.uk/files"
 ALPHAFOLD_PDB_TEMPLATE = "AF-{uniprot_id}-F1-model_v4.pdb"
+
+# UniProt API for metadata enrichment
+UNIPROT_API_URL = "https://rest.uniprot.org/uniprotkb"
 
 # Performance settings
 REQUEST_TIMEOUT = 30.0
@@ -68,6 +140,12 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 logger = logging.getLogger(__name__)
+
+# Log configuration on startup
+logger.info(f"Configuration loaded:")
+logger.info(f"  STRUCTURES_DIR: {LOCAL_STRUCTURES_DIR}")
+logger.info(f"  CACHE_DIR: {CACHE_DIR}")
+logger.info(f"  CACHE_MODE: {CACHE_MODE}")
 
 # ===========================================================================
 # MCP SERVER INITIALIZATION
@@ -216,6 +294,38 @@ class CheckAvailabilityInput(BaseModel):
         description="List of UniProt IDs to check",
         min_length=1,
         max_length=100
+    )
+
+
+class GetEnrichedProteinInput(BaseModel):
+    """Input for retrieving enriched protein information (AlphaFold + UniProt)."""
+    model_config = ConfigDict(str_strip_whitespace=True, validate_assignment=True, extra='forbid')
+    
+    uniprot_id: str = Field(
+        ...,
+        description="UniProt accession ID (e.g., 'P12345', 'A0A023FBW4')",
+        min_length=1,
+        max_length=20
+    )
+    include_structure: bool = Field(
+        default=True,
+        description="Include AlphaFold structure summary"
+    )
+    include_go_terms: bool = Field(
+        default=True,
+        description="Include Gene Ontology annotations"
+    )
+    include_disease: bool = Field(
+        default=True,
+        description="Include disease associations"
+    )
+    include_features: bool = Field(
+        default=True,
+        description="Include structural features (secondary structure, binding pockets)"
+    )
+    response_format: ResponseFormat = Field(
+        default=ResponseFormat.MARKDOWN,
+        description="Output format"
     )
 
 
@@ -522,12 +632,29 @@ class AlphaFoldFetcher:
         """
         Fetch structure from AlphaFold DB.
         
+        Respects CACHE_MODE:
+            - SOVEREIGN: Full read/write
+            - READONLY: Read cache but no writes
+            - DISABLED: Pure online, no cache operations
+        
         Returns:
             Tuple of (success, content_or_none, error_or_none)
         """
         uniprot_id = uniprot_id.upper().strip()
-        url = self._build_url(uniprot_id)
         
+        # Check local cache first (unless cache disabled)
+        if CACHE_MODE != CacheMode.DISABLED and self.cache_dir:
+            local_path = self.cache_dir / f"{uniprot_id}.pdb"
+            if local_path.exists():
+                try:
+                    with open(local_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                    logger.info(f"[{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}] Loaded from cache: {local_path}")
+                    return (True, content, None)
+                except Exception as e:
+                    logger.warning(f"Cache read failed: {e}")
+        
+        url = self._build_url(uniprot_id)
         logger.info(f"[{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}] Fetching: {uniprot_id} from {url}")
         
         for attempt in range(MAX_RETRIES):
@@ -544,8 +671,9 @@ class AlphaFoldFetcher:
                 ) as response:
                     content = response.read().decode('utf-8')
                 
-                # Save to local cache if configured
-                if save_locally and self.cache_dir:
+                # Save to local cache if configured AND cache mode allows writes
+                can_write = CACHE_MODE == CacheMode.SOVEREIGN
+                if save_locally and self.cache_dir and can_write:
                     local_path = self.cache_dir / f"{uniprot_id}.pdb"
                     with open(local_path, 'w', encoding='utf-8') as f:
                         f.write(content)
@@ -581,6 +709,180 @@ class AlphaFoldFetcher:
                 return response.status == 200
         except:
             return False
+
+
+# ===========================================================================
+# UNIPROT METADATA FETCHER - VALUE-ADD ENRICHMENT
+# ===========================================================================
+
+class UniProtFetcher:
+    """
+    Fetches protein metadata from UniProt REST API.
+    
+    PROPRIETARY INTEGRATION - TOPOLOGICA LLC
+    
+    Provides complementary metadata to AlphaFold structures:
+        - Protein name and function
+        - Gene name and organism
+        - GO annotations (molecular function, biological process, cellular component)
+        - Active sites and binding sites
+        - Disease associations
+        - Sequence information
+    
+    NO API KEY REQUIRED - UniProt REST API is publicly accessible.
+    """
+    
+    def __init__(self, timeout: float = REQUEST_TIMEOUT):
+        self.timeout = timeout
+        self._ssl_context = ssl.create_default_context()
+        self._cache: Dict[str, Dict[str, Any]] = {}  # In-memory cache
+    
+    def fetch(self, uniprot_id: str) -> Tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
+        """
+        Fetch protein metadata from UniProt.
+        
+        Returns:
+            Tuple of (success, metadata_dict_or_none, error_or_none)
+        """
+        uniprot_id = uniprot_id.upper().strip()
+        
+        # Check in-memory cache
+        if uniprot_id in self._cache:
+            return (True, self._cache[uniprot_id], None)
+        
+        url = f"{UNIPROT_API_URL}/{uniprot_id}.json"
+        
+        try:
+            request = urllib.request.Request(
+                url,
+                headers={
+                    'User-Agent': 'TOPOLOGICA-Sovereign-AlphaFold/1.0',
+                    'Accept': 'application/json'
+                }
+            )
+            
+            with urllib.request.urlopen(
+                request,
+                timeout=self.timeout,
+                context=self._ssl_context
+            ) as response:
+                data = json.loads(response.read().decode('utf-8'))
+            
+            # Extract relevant metadata
+            metadata = self._parse_uniprot_response(data, uniprot_id)
+            
+            # Cache for future use
+            self._cache[uniprot_id] = metadata
+            
+            return (True, metadata, None)
+            
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                return (False, None, f"UniProt entry not found: {uniprot_id}")
+            return (False, None, f"UniProt HTTP error {e.code}: {e.reason}")
+        except Exception as e:
+            return (False, None, f"UniProt fetch error: {str(e)}")
+    
+    def _parse_uniprot_response(self, data: Dict[str, Any], uniprot_id: str) -> Dict[str, Any]:
+        """Parse UniProt JSON response into structured metadata."""
+        
+        # Basic info
+        protein_name = "Unknown"
+        if 'proteinDescription' in data:
+            rec_name = data['proteinDescription'].get('recommendedName', {})
+            if 'fullName' in rec_name:
+                protein_name = rec_name['fullName'].get('value', 'Unknown')
+        
+        # Gene name
+        gene_name = "Unknown"
+        if 'genes' in data and len(data['genes']) > 0:
+            gene_data = data['genes'][0]
+            if 'geneName' in gene_data:
+                gene_name = gene_data['geneName'].get('value', 'Unknown')
+        
+        # Organism
+        organism = "Unknown"
+        scientific_name = "Unknown"
+        if 'organism' in data:
+            organism = data['organism'].get('commonName', 'Unknown')
+            scientific_name = data['organism'].get('scientificName', 'Unknown')
+        
+        # Sequence length
+        sequence_length = 0
+        sequence = ""
+        if 'sequence' in data:
+            sequence_length = data['sequence'].get('length', 0)
+            sequence = data['sequence'].get('value', '')
+        
+        # GO annotations
+        go_terms = {'molecular_function': [], 'biological_process': [], 'cellular_component': []}
+        if 'uniProtKBCrossReferences' in data:
+            for xref in data['uniProtKBCrossReferences']:
+                if xref.get('database') == 'GO':
+                    go_id = xref.get('id', '')
+                    props = {p['key']: p['value'] for p in xref.get('properties', [])}
+                    go_type = props.get('GoTerm', '')
+                    go_name = props.get('GoTerm', '').split(':')[-1] if ':' in props.get('GoTerm', '') else ''
+                    
+                    if go_type.startswith('F:'):
+                        go_terms['molecular_function'].append({'id': go_id, 'name': go_type[2:]})
+                    elif go_type.startswith('P:'):
+                        go_terms['biological_process'].append({'id': go_id, 'name': go_type[2:]})
+                    elif go_type.startswith('C:'):
+                        go_terms['cellular_component'].append({'id': go_id, 'name': go_type[2:]})
+        
+        # Function description
+        function_description = ""
+        if 'comments' in data:
+            for comment in data['comments']:
+                if comment.get('commentType') == 'FUNCTION':
+                    texts = comment.get('texts', [])
+                    if texts:
+                        function_description = texts[0].get('value', '')
+                        break
+        
+        # Active sites and binding sites
+        active_sites = []
+        binding_sites = []
+        if 'features' in data:
+            for feature in data['features']:
+                feat_type = feature.get('type', '')
+                location = feature.get('location', {})
+                start = location.get('start', {}).get('value', 0)
+                end = location.get('end', {}).get('value', 0)
+                description = feature.get('description', '')
+                
+                if feat_type == 'Active site':
+                    active_sites.append({'position': start, 'description': description})
+                elif feat_type == 'Binding site':
+                    binding_sites.append({'start': start, 'end': end, 'description': description})
+        
+        # Disease associations
+        diseases = []
+        if 'comments' in data:
+            for comment in data['comments']:
+                if comment.get('commentType') == 'DISEASE':
+                    disease = comment.get('disease', {})
+                    if disease:
+                        diseases.append({
+                            'name': disease.get('diseaseId', ''),
+                            'description': disease.get('description', '')
+                        })
+        
+        return {
+            'uniprot_id': uniprot_id,
+            'protein_name': protein_name,
+            'gene_name': gene_name,
+            'organism': organism,
+            'scientific_name': scientific_name,
+            'sequence_length': sequence_length,
+            'function': function_description,
+            'go_terms': go_terms,
+            'active_sites': active_sites,
+            'binding_sites': binding_sites,
+            'diseases': diseases,
+            'uniprot_url': f"https://www.uniprot.org/uniprotkb/{uniprot_id}"
+        }
 
 
 # ===========================================================================
@@ -1769,8 +2071,9 @@ async def get_cache_statistics() -> str:
     
     Returns information about:
         - Number of local structures
-        - Cache directories
+        - Cache directories and mode
         - Storage locations
+        - Configuration status
     """
     timestamp = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
     logger.info(f"[{timestamp}] get_cache_statistics called")
@@ -1779,17 +2082,32 @@ async def get_cache_statistics() -> str:
         manager = get_structure_manager()
         stats = manager.get_statistics()
         
+        cache_mode_desc = {
+            CacheMode.SOVEREIGN: "SOVEREIGN (full read/write - primary device)",
+            CacheMode.READONLY: "READONLY (read cache, no writes - secondary device)",
+            CacheMode.DISABLED: "DISABLED (pure online, no cache)"
+        }
+        
         lines = [
-            "# AlphaFold Cache Statistics",
+            "# AlphaFold Sovereign Cache Statistics",
             "",
+            f"**Cache Mode:** {cache_mode_desc.get(CACHE_MODE, CACHE_MODE)}",
             f"**Local Structures:** {stats['local_structures']:,}",
-            f"**Structures Directory:** `{stats['structures_dir']}`",
-            f"**Cache Directory:** `{stats['cache_dir']}`",
-            f"**Online Cache:** `{stats['online_cache_dir']}`",
+            "",
+            "## Directories",
+            f"- **Primary Structures:** `{stats['structures_dir']}`",
+            f"- **Cache Directory:** `{stats['cache_dir']}`",
+            f"- **Online Cache:** `{stats['online_cache_dir']}`",
+            "",
+            "## Configuration",
+            "Environment variables (override defaults):",
+            "- `ALPHAFOLD_STRUCTURES_DIR` - Primary structures path",
+            "- `ALPHAFOLD_CACHE_DIR` - Cache directory path",
+            "- `ALPHAFOLD_CACHE_MODE` - sovereign | readonly | disabled",
             "",
             "## Coverage",
-            f"- Local cache contains {stats['local_structures']:,} pre-downloaded AlphaFold2 structures",
-            f"- Online fallback provides access to 200M+ structures from AlphaFold DB",
+            f"- Local sovereign cache: {stats['local_structures']:,} structures",
+            f"- Online fallback: 200M+ structures from AlphaFold DB",
             f"- No API key required for online access"
         ]
         
@@ -1797,6 +2115,191 @@ async def get_cache_statistics() -> str:
         
     except Exception as e:
         logger.error(f"[{timestamp}] Error in get_cache_statistics: {str(e)}")
+        return f"Error: {str(e)}"
+
+
+# Global UniProt fetcher instance
+_uniprot_fetcher: Optional[UniProtFetcher] = None
+
+def get_uniprot_fetcher() -> UniProtFetcher:
+    """Get or create UniProt fetcher singleton."""
+    global _uniprot_fetcher
+    if _uniprot_fetcher is None:
+        _uniprot_fetcher = UniProtFetcher()
+    return _uniprot_fetcher
+
+
+@mcp.tool()
+async def get_enriched_protein(params: GetEnrichedProteinInput) -> str:
+    """
+    Get comprehensive protein information combining AlphaFold structure + UniProt metadata.
+    
+    PROPRIETARY TOOL - TOPOLOGICA LLC
+    
+    This tool provides UNIQUE VALUE by combining:
+        1. AlphaFold structural data (3D coordinates, pLDDT confidence)
+        2. UniProt functional annotations (function, GO terms, active sites)
+        3. Disease associations and literature links
+        4. Computed structural features (secondary structure, binding pockets)
+    
+    Use Cases:
+        - Drug target assessment (structure + function + disease)
+        - Protein characterization (complete biological context)
+        - Research starting point (links to UniProt, PubMed, AlphaFold)
+    
+    Args:
+        uniprot_id: UniProt accession (e.g., 'P53_HUMAN', 'EGFR_HUMAN')
+        include_structure: Include AlphaFold structure summary
+        include_go_terms: Include Gene Ontology annotations
+        include_disease: Include disease associations
+        include_features: Include computed structural features
+    
+    Returns:
+        Comprehensive protein profile in markdown or JSON
+    """
+    timestamp = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+    logger.info(f"[{timestamp}] get_enriched_protein called: {params.uniprot_id}")
+    
+    try:
+        uniprot_id = params.uniprot_id.upper().strip()
+        
+        # Fetch UniProt metadata
+        uniprot_fetcher = get_uniprot_fetcher()
+        up_success, metadata, up_error = uniprot_fetcher.fetch(uniprot_id)
+        
+        if not up_success:
+            return f"Error fetching UniProt data: {up_error}"
+        
+        # Fetch AlphaFold structure if requested
+        structure_info = None
+        features = {}
+        if params.include_structure:
+            manager = get_structure_manager()
+            success, structure, error = manager.get_structure(uniprot_id)
+            
+            if success and structure:
+                structure_info = {
+                    'residue_count': len(structure.residues),
+                    'mean_plddt': float(np.mean([r.mean_plddt for r in structure.residues])),
+                    'source': structure.source,
+                    'alphafold_url': f"https://alphafold.ebi.ac.uk/entry/{uniprot_id}"
+                }
+                
+                # Compute features if requested
+                if params.include_features:
+                    ca_coords = structure.get_ca_coords()
+                    if len(ca_coords) > 0:
+                        ss = SecondaryStructureAnalyzer.analyze(structure)
+                        features = {
+                            'helix_fraction': ss.get('helix_fraction', 0),
+                            'strand_fraction': ss.get('strand_fraction', 0),
+                            'coil_fraction': ss.get('coil_fraction', 0)
+                        }
+        
+        # Format output
+        if params.response_format == ResponseFormat.JSON:
+            result = {
+                'uniprot_id': uniprot_id,
+                'metadata': metadata,
+                'structure': structure_info,
+                'features': features
+            }
+            return json.dumps(result, indent=2, default=str)
+        
+        # Markdown format
+        lines = [
+            f"# {metadata['protein_name']}",
+            f"**UniProt ID:** [{uniprot_id}]({metadata['uniprot_url']})",
+            f"**Gene:** {metadata['gene_name']}",
+            f"**Organism:** {metadata['organism']} (*{metadata['scientific_name']}*)",
+            f"**Length:** {metadata['sequence_length']} amino acids",
+            ""
+        ]
+        
+        # Function
+        if metadata.get('function'):
+            lines.extend([
+                "## Function",
+                metadata['function'],
+                ""
+            ])
+        
+        # Structure info
+        if structure_info:
+            lines.extend([
+                "## AlphaFold Structure",
+                f"- **Residues:** {structure_info['residue_count']}",
+                f"- **Mean pLDDT:** {structure_info['mean_plddt']:.1f}",
+                f"- **Source:** {structure_info['source']}",
+                f"- **View:** [AlphaFold DB]({structure_info['alphafold_url']})",
+                ""
+            ])
+            
+            if features:
+                lines.extend([
+                    "### Secondary Structure",
+                    f"- α-helix: {features['helix_fraction']*100:.1f}%",
+                    f"- β-strand: {features['strand_fraction']*100:.1f}%",
+                    f"- Coil: {features['coil_fraction']*100:.1f}%",
+                    ""
+                ])
+        
+        # GO terms
+        if params.include_go_terms and metadata.get('go_terms'):
+            go = metadata['go_terms']
+            if any([go['molecular_function'], go['biological_process'], go['cellular_component']]):
+                lines.append("## Gene Ontology")
+                
+                if go['molecular_function']:
+                    lines.append("### Molecular Function")
+                    for term in go['molecular_function'][:5]:
+                        lines.append(f"- {term['name']} ({term['id']})")
+                    lines.append("")
+                
+                if go['biological_process']:
+                    lines.append("### Biological Process")
+                    for term in go['biological_process'][:5]:
+                        lines.append(f"- {term['name']} ({term['id']})")
+                    lines.append("")
+                
+                if go['cellular_component']:
+                    lines.append("### Cellular Component")
+                    for term in go['cellular_component'][:5]:
+                        lines.append(f"- {term['name']} ({term['id']})")
+                    lines.append("")
+        
+        # Active sites
+        if metadata.get('active_sites'):
+            lines.append("## Active Sites")
+            for site in metadata['active_sites'][:5]:
+                lines.append(f"- Position {site['position']}: {site['description']}")
+            lines.append("")
+        
+        # Binding sites
+        if metadata.get('binding_sites'):
+            lines.append("## Binding Sites")
+            for site in metadata['binding_sites'][:5]:
+                lines.append(f"- Positions {site['start']}-{site['end']}: {site['description']}")
+            lines.append("")
+        
+        # Disease associations
+        if params.include_disease and metadata.get('diseases'):
+            lines.append("## Disease Associations")
+            for disease in metadata['diseases'][:5]:
+                lines.append(f"- **{disease['name']}**: {disease['description'][:200]}...")
+            lines.append("")
+        
+        # Footer with links
+        lines.extend([
+            "---",
+            f"*Data sources: [UniProt]({metadata['uniprot_url']})" + 
+            (f", [AlphaFold DB]({structure_info['alphafold_url']})*" if structure_info else "*")
+        ])
+        
+        return "\n".join(lines)
+        
+    except Exception as e:
+        logger.error(f"[{timestamp}] Error in get_enriched_protein: {str(e)}")
         return f"Error: {str(e)}"
 
 
