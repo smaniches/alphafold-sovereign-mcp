@@ -2180,16 +2180,16 @@ async def get_enriched_protein(params: GetEnrichedProteinInput) -> str:
             if success and structure:
                 structure_info = {
                     'residue_count': len(structure.residues),
-                    'mean_plddt': float(np.mean([r.mean_plddt for r in structure.residues])),
+                    'mean_plddt': float(np.mean([r.plddt for r in structure.residues])),
                     'source': structure.source,
                     'alphafold_url': f"https://alphafold.ebi.ac.uk/entry/{uniprot_id}"
                 }
                 
                 # Compute features if requested
                 if params.include_features:
-                    ca_coords = structure.get_ca_coords()
+                    ca_coords = structure.get_ca_coordinates()
                     if len(ca_coords) > 0:
-                        ss = SecondaryStructureAnalyzer.analyze(structure)
+                        ss = FeatureComputer.compute_secondary_structure(structure)
                         features = {
                             'helix_fraction': ss.get('helix_fraction', 0),
                             'strand_fraction': ss.get('strand_fraction', 0),
