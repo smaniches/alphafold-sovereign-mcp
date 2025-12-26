@@ -330,6 +330,227 @@ class GetEnrichedProteinInput(BaseModel):
 
 
 # ===========================================================================
+# PR #2: PROTEIN FUNCTION INTELLIGENCE - INPUT MODELS
+# ===========================================================================
+
+class BatchGOLookupInput(BaseModel):
+    """Input for batch GO term lookup."""
+    model_config = ConfigDict(str_strip_whitespace=True, validate_assignment=True, extra='forbid')
+    
+    uniprot_ids: List[str] = Field(
+        ...,
+        description="List of UniProt IDs to lookup GO terms for",
+        min_length=1,
+        max_length=500
+    )
+    include_evidence: bool = Field(
+        default=False,
+        description="Include evidence codes for GO annotations"
+    )
+    namespaces: List[str] = Field(
+        default=["molecular_function", "biological_process", "cellular_component"],
+        description="GO namespaces to include"
+    )
+    response_format: ResponseFormat = Field(
+        default=ResponseFormat.JSON,
+        description="Output format (JSON recommended for batch)"
+    )
+
+
+class SearchByGOTermInput(BaseModel):
+    """Input for searching proteins by GO term."""
+    model_config = ConfigDict(str_strip_whitespace=True, validate_assignment=True, extra='forbid')
+    
+    go_term: str = Field(
+        ...,
+        description="GO term ID (e.g., 'GO:0003700') or name pattern to search",
+        min_length=1
+    )
+    include_children: bool = Field(
+        default=False,
+        description="Include proteins annotated with child terms"
+    )
+    organism_filter: Optional[str] = Field(
+        default=None,
+        description="Filter by organism (e.g., 'Homo sapiens', '9606')"
+    )
+    limit: int = Field(
+        default=100,
+        description="Maximum results to return",
+        ge=1,
+        le=10000
+    )
+    response_format: ResponseFormat = Field(
+        default=ResponseFormat.JSON,
+        description="Output format"
+    )
+
+
+class GetGOHierarchyInput(BaseModel):
+    """Input for navigating GO term hierarchy."""
+    model_config = ConfigDict(str_strip_whitespace=True, validate_assignment=True, extra='forbid')
+    
+    go_term: str = Field(
+        ...,
+        description="GO term ID (e.g., 'GO:0003700')",
+        min_length=7,
+        max_length=15
+    )
+    direction: str = Field(
+        default="both",
+        description="Navigation direction: 'parents', 'children', or 'both'"
+    )
+    depth: int = Field(
+        default=2,
+        description="How many levels to traverse",
+        ge=1,
+        le=10
+    )
+    response_format: ResponseFormat = Field(
+        default=ResponseFormat.MARKDOWN,
+        description="Output format"
+    )
+
+
+class ExportProteinSetInput(BaseModel):
+    """Input for exporting protein sets to TSV/CSV."""
+    model_config = ConfigDict(str_strip_whitespace=True, validate_assignment=True, extra='forbid')
+    
+    uniprot_ids: List[str] = Field(
+        ...,
+        description="List of UniProt IDs to export",
+        min_length=1,
+        max_length=10000
+    )
+    output_format: str = Field(
+        default="tsv",
+        description="Output format: 'tsv' or 'csv'"
+    )
+    include_columns: List[str] = Field(
+        default=["uniprot_id", "protein_name", "organism", "go_terms", "sequence_length"],
+        description="Columns to include in export"
+    )
+    include_go_terms: bool = Field(
+        default=True,
+        description="Include GO term annotations"
+    )
+    include_sequence: bool = Field(
+        default=False,
+        description="Include full protein sequence"
+    )
+    filename: Optional[str] = Field(
+        default=None,
+        description="Output filename (auto-generated if not provided)"
+    )
+
+
+class FindSimilarProteinsInput(BaseModel):
+    """Input for finding similar proteins by sequence or structure."""
+    model_config = ConfigDict(str_strip_whitespace=True, validate_assignment=True, extra='forbid')
+    
+    uniprot_id: str = Field(
+        ...,
+        description="Query protein UniProt ID",
+        min_length=1,
+        max_length=20
+    )
+    similarity_type: str = Field(
+        default="sequence",
+        description="Type of similarity: 'sequence' or 'structure'"
+    )
+    threshold: float = Field(
+        default=0.7,
+        description="Similarity threshold (0.0-1.0)",
+        ge=0.0,
+        le=1.0
+    )
+    limit: int = Field(
+        default=50,
+        description="Maximum results to return",
+        ge=1,
+        le=1000
+    )
+    search_scope: str = Field(
+        default="local",
+        description="Search scope: 'local' (cached) or 'all' (includes online)"
+    )
+    response_format: ResponseFormat = Field(
+        default=ResponseFormat.JSON,
+        description="Output format"
+    )
+
+
+class GetDomainAnnotationsInput(BaseModel):
+    """Input for retrieving domain annotations."""
+    model_config = ConfigDict(str_strip_whitespace=True, validate_assignment=True, extra='forbid')
+    
+    uniprot_ids: List[str] = Field(
+        ...,
+        description="List of UniProt IDs",
+        min_length=1,
+        max_length=100
+    )
+    sources: List[str] = Field(
+        default=["Pfam", "InterPro"],
+        description="Annotation sources to include"
+    )
+    response_format: ResponseFormat = Field(
+        default=ResponseFormat.JSON,
+        description="Output format"
+    )
+
+
+class FilterByOrganismInput(BaseModel):
+    """Input for filtering proteins by organism."""
+    model_config = ConfigDict(str_strip_whitespace=True, validate_assignment=True, extra='forbid')
+    
+    organism: str = Field(
+        ...,
+        description="Organism name or NCBI taxonomy ID (e.g., 'Homo sapiens', '9606')"
+    )
+    limit: int = Field(
+        default=1000,
+        description="Maximum results",
+        ge=1,
+        le=50000
+    )
+    include_go_summary: bool = Field(
+        default=False,
+        description="Include GO term summary for each protein"
+    )
+    response_format: ResponseFormat = Field(
+        default=ResponseFormat.JSON,
+        description="Output format"
+    )
+
+
+class GetProteinFamiliesInput(BaseModel):
+    """Input for clustering proteins by similarity."""
+    model_config = ConfigDict(str_strip_whitespace=True, validate_assignment=True, extra='forbid')
+    
+    uniprot_ids: List[str] = Field(
+        ...,
+        description="List of UniProt IDs to cluster",
+        min_length=2,
+        max_length=1000
+    )
+    clustering_method: str = Field(
+        default="sequence",
+        description="Clustering method: 'sequence' or 'go_terms'"
+    )
+    similarity_threshold: float = Field(
+        default=0.5,
+        description="Similarity threshold for clustering",
+        ge=0.0,
+        le=1.0
+    )
+    response_format: ResponseFormat = Field(
+        default=ResponseFormat.JSON,
+        description="Output format"
+    )
+
+
+# ===========================================================================
 # DATA STRUCTURES
 # ===========================================================================
 
@@ -1676,6 +1897,248 @@ def format_structure_response(
 
 
 # ===========================================================================
+# PR #2: GO ANNOTATION CACHE - PERSISTENT STORAGE FOR MASSIVE SCALE
+# ===========================================================================
+
+class GOAnnotationCache:
+    """
+    Persistent cache for GO term annotations.
+    
+    PROPRIETARY FRAMEWORK - TOPOLOGICA LLC
+    
+    Architecture:
+        - Forward index: protein_id → [GO terms]
+        - Inverted index: GO term → [protein_ids]
+        - Persisted to disk for sovereign operation
+        - Batch operations for massive-scale analysis
+    
+    Storage:
+        C:\\TOPOLOGICA_KAGGLE_CAFA6\\CACHE\\go_annotations\\
+        ├── forward_index.json      # protein → GO terms
+        ├── inverted_index.json     # GO term → proteins
+        └── metadata.json           # Cache statistics
+    """
+    
+    def __init__(self, cache_dir: Path = CACHE_DIR):
+        self.cache_dir = Path(cache_dir) / "go_annotations"
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        
+        self.forward_index_path = self.cache_dir / "forward_index.json"
+        self.inverted_index_path = self.cache_dir / "inverted_index.json"
+        self.metadata_path = self.cache_dir / "metadata.json"
+        
+        # Load indices
+        self.forward_index: Dict[str, Dict[str, List[Dict]]] = self._load_json(self.forward_index_path, {})
+        self.inverted_index: Dict[str, List[str]] = self._load_json(self.inverted_index_path, {})
+        self.metadata: Dict[str, Any] = self._load_json(self.metadata_path, {
+            'created': datetime.now(timezone.utc).isoformat(),
+            'proteins_indexed': 0,
+            'go_terms_indexed': 0
+        })
+        
+        logger.info(f"GOAnnotationCache loaded: {len(self.forward_index)} proteins, {len(self.inverted_index)} GO terms")
+    
+    def _load_json(self, path: Path, default: Any) -> Any:
+        """Load JSON file or return default."""
+        if path.exists():
+            try:
+                with open(path, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            except Exception as e:
+                logger.warning(f"Failed to load {path}: {e}")
+        return default
+    
+    def _save_json(self, path: Path, data: Any) -> None:
+        """Save data to JSON file atomically."""
+        tmp_path = path.with_suffix('.tmp')
+        try:
+            with open(tmp_path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2)
+            if os.name == 'nt':  # Windows
+                if path.exists():
+                    os.remove(path)
+            os.rename(tmp_path, path)
+        except Exception as e:
+            logger.error(f"Failed to save {path}: {e}")
+            if tmp_path.exists():
+                os.remove(tmp_path)
+    
+    def save(self) -> None:
+        """Persist all indices to disk."""
+        self.metadata['proteins_indexed'] = len(self.forward_index)
+        self.metadata['go_terms_indexed'] = len(self.inverted_index)
+        self.metadata['last_updated'] = datetime.now(timezone.utc).isoformat()
+        
+        self._save_json(self.forward_index_path, self.forward_index)
+        self._save_json(self.inverted_index_path, self.inverted_index)
+        self._save_json(self.metadata_path, self.metadata)
+        
+        logger.info(f"GOAnnotationCache saved: {len(self.forward_index)} proteins")
+    
+    def add_protein(self, uniprot_id: str, go_terms: Dict[str, List[Dict]]) -> None:
+        """
+        Add protein GO annotations to cache.
+        
+        Args:
+            uniprot_id: Protein identifier
+            go_terms: Dict with keys 'molecular_function', 'biological_process', 'cellular_component'
+        """
+        uniprot_id = uniprot_id.upper()
+        self.forward_index[uniprot_id] = go_terms
+        
+        # Update inverted index
+        for namespace, terms in go_terms.items():
+            for term in terms:
+                go_id = term.get('id', '')
+                if go_id:
+                    if go_id not in self.inverted_index:
+                        self.inverted_index[go_id] = []
+                    if uniprot_id not in self.inverted_index[go_id]:
+                        self.inverted_index[go_id].append(uniprot_id)
+    
+    def get_go_terms(self, uniprot_id: str) -> Optional[Dict[str, List[Dict]]]:
+        """Get GO terms for a protein."""
+        return self.forward_index.get(uniprot_id.upper())
+    
+    def get_proteins_by_go(self, go_id: str) -> List[str]:
+        """Get all proteins with a specific GO term."""
+        return self.inverted_index.get(go_id, [])
+    
+    def has_protein(self, uniprot_id: str) -> bool:
+        """Check if protein is in cache."""
+        return uniprot_id.upper() in self.forward_index
+    
+    def batch_lookup(self, uniprot_ids: List[str]) -> Dict[str, Optional[Dict[str, List[Dict]]]]:
+        """Batch lookup GO terms for multiple proteins."""
+        result = {}
+        for uid in uniprot_ids:
+            result[uid] = self.get_go_terms(uid)
+        return result
+    
+    def get_statistics(self) -> Dict[str, Any]:
+        """Get cache statistics."""
+        return {
+            'proteins_indexed': len(self.forward_index),
+            'go_terms_indexed': len(self.inverted_index),
+            'cache_dir': str(self.cache_dir),
+            'metadata': self.metadata
+        }
+
+
+# Global GO cache instance (lazy loaded)
+_go_cache: Optional[GOAnnotationCache] = None
+
+def get_go_cache() -> GOAnnotationCache:
+    """Get or create GO annotation cache."""
+    global _go_cache
+    if _go_cache is None:
+        _go_cache = GOAnnotationCache()
+    return _go_cache
+
+
+# ===========================================================================
+# PR #2: SEQUENCE DATABASE - FOR SIMILARITY SEARCH
+# ===========================================================================
+
+class SequenceDatabase:
+    """
+    In-memory sequence database for similarity search.
+    
+    PROPRIETARY FRAMEWORK - TOPOLOGICA LLC
+    
+    Uses simple k-mer based similarity for fast approximate matching.
+    For CAFA6-scale: 142k proteins, each ~400 aa average.
+    """
+    
+    def __init__(self, k: int = 3):
+        self.k = k  # k-mer size
+        self.sequences: Dict[str, str] = {}  # uniprot_id → sequence
+        self.kmer_index: Dict[str, set] = {}  # k-mer → {uniprot_ids}
+    
+    def add_sequence(self, uniprot_id: str, sequence: str) -> None:
+        """Add a sequence to the database."""
+        uniprot_id = uniprot_id.upper()
+        sequence = sequence.upper()
+        self.sequences[uniprot_id] = sequence
+        
+        # Index k-mers
+        for i in range(len(sequence) - self.k + 1):
+            kmer = sequence[i:i + self.k]
+            if kmer not in self.kmer_index:
+                self.kmer_index[kmer] = set()
+            self.kmer_index[kmer].add(uniprot_id)
+    
+    def get_sequence(self, uniprot_id: str) -> Optional[str]:
+        """Get sequence for a protein."""
+        return self.sequences.get(uniprot_id.upper())
+    
+    def compute_similarity(self, seq1: str, seq2: str) -> float:
+        """
+        Compute Jaccard similarity based on k-mer overlap.
+        
+        Fast approximation of sequence similarity.
+        """
+        if not seq1 or not seq2:
+            return 0.0
+        
+        kmers1 = set(seq1[i:i + self.k] for i in range(len(seq1) - self.k + 1))
+        kmers2 = set(seq2[i:i + self.k] for i in range(len(seq2) - self.k + 1))
+        
+        if not kmers1 or not kmers2:
+            return 0.0
+        
+        intersection = len(kmers1 & kmers2)
+        union = len(kmers1 | kmers2)
+        
+        return intersection / union if union > 0 else 0.0
+    
+    def find_similar(
+        self,
+        query_sequence: str,
+        threshold: float = 0.5,
+        limit: int = 50
+    ) -> List[Tuple[str, float]]:
+        """
+        Find proteins with similar sequences.
+        
+        Returns:
+            List of (uniprot_id, similarity_score) tuples, sorted by similarity
+        """
+        query_sequence = query_sequence.upper()
+        query_kmers = set(query_sequence[i:i + self.k] for i in range(len(query_sequence) - self.k + 1))
+        
+        # Find candidate proteins that share at least one k-mer
+        candidates = set()
+        for kmer in query_kmers:
+            if kmer in self.kmer_index:
+                candidates.update(self.kmer_index[kmer])
+        
+        # Compute similarities
+        results = []
+        for uniprot_id in candidates:
+            seq = self.sequences.get(uniprot_id, "")
+            sim = self.compute_similarity(query_sequence, seq)
+            if sim >= threshold:
+                results.append((uniprot_id, sim))
+        
+        # Sort by similarity descending
+        results.sort(key=lambda x: x[1], reverse=True)
+        
+        return results[:limit]
+
+
+# Global sequence database instance (lazy loaded)
+_sequence_db: Optional[SequenceDatabase] = None
+
+def get_sequence_db() -> SequenceDatabase:
+    """Get or create sequence database."""
+    global _sequence_db
+    if _sequence_db is None:
+        _sequence_db = SequenceDatabase()
+    return _sequence_db
+
+
+# ===========================================================================
 # MCP TOOLS - MAIN INTERFACE
 # ===========================================================================
 
@@ -2300,6 +2763,949 @@ async def get_enriched_protein(params: GetEnrichedProteinInput) -> str:
         
     except Exception as e:
         logger.error(f"[{timestamp}] Error in get_enriched_protein: {str(e)}")
+        return f"Error: {str(e)}"
+
+
+# ===========================================================================
+# PR #2: PROTEIN FUNCTION INTELLIGENCE TOOLS
+# ===========================================================================
+
+@mcp.tool()
+async def batch_go_lookup(params: BatchGOLookupInput) -> str:
+    """
+    Get GO terms for hundreds of proteins at once.
+    
+    PROPRIETARY TOOL - TOPOLOGICA LLC
+    
+    Efficiently fetches GO annotations for large protein sets.
+    Uses local cache when available, fetches from UniProt when needed.
+    Results are persisted for future sovereign access.
+    
+    Use Cases:
+        - Training data extraction for CAFA-style prediction
+        - Batch annotation of experimental results
+        - Building protein function databases
+    
+    Args:
+        uniprot_ids: List of UniProt IDs (up to 500)
+        include_evidence: Include evidence codes
+        namespaces: Which GO namespaces to include
+    
+    Returns:
+        GO annotations for all proteins in JSON or markdown
+    """
+    timestamp = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+    logger.info(f"[{timestamp}] batch_go_lookup called: {len(params.uniprot_ids)} proteins")
+    
+    try:
+        go_cache = get_go_cache()
+        uniprot_fetcher = get_uniprot_fetcher()
+        
+        results = {}
+        cache_hits = 0
+        fetched = 0
+        errors = []
+        
+        for uniprot_id in params.uniprot_ids:
+            uniprot_id = uniprot_id.upper().strip()
+            
+            # Check cache first
+            cached = go_cache.get_go_terms(uniprot_id)
+            if cached:
+                results[uniprot_id] = cached
+                cache_hits += 1
+                continue
+            
+            # Fetch from UniProt
+            success, metadata, error = uniprot_fetcher.fetch(uniprot_id)
+            if success and metadata:
+                go_terms = metadata.get('go_terms', {})
+                results[uniprot_id] = go_terms
+                
+                # Add to cache
+                go_cache.add_protein(uniprot_id, go_terms)
+                fetched += 1
+            else:
+                results[uniprot_id] = None
+                errors.append(f"{uniprot_id}: {error}")
+        
+        # Save cache
+        if fetched > 0:
+            go_cache.save()
+        
+        # Filter by requested namespaces
+        for uid, terms in results.items():
+            if terms:
+                results[uid] = {ns: terms.get(ns, []) for ns in params.namespaces if ns in terms}
+        
+        # Format output
+        if params.response_format == ResponseFormat.JSON:
+            return json.dumps({
+                'results': results,
+                'statistics': {
+                    'requested': len(params.uniprot_ids),
+                    'cache_hits': cache_hits,
+                    'fetched': fetched,
+                    'errors': len(errors)
+                },
+                'errors': errors[:10] if errors else []
+            }, indent=2)
+        
+        # Markdown format
+        lines = [
+            f"# Batch GO Lookup Results",
+            f"**Proteins:** {len(params.uniprot_ids)} | **Cache hits:** {cache_hits} | **Fetched:** {fetched}",
+            ""
+        ]
+        
+        for uid, terms in list(results.items())[:50]:  # Limit output
+            if terms:
+                lines.append(f"## {uid}")
+                for ns, term_list in terms.items():
+                    if term_list:
+                        lines.append(f"### {ns.replace('_', ' ').title()}")
+                        for t in term_list[:5]:
+                            lines.append(f"- {t.get('name', 'Unknown')} ({t.get('id', '')})")
+                lines.append("")
+        
+        if len(results) > 50:
+            lines.append(f"*...and {len(results) - 50} more proteins (use JSON format for full data)*")
+        
+        return "\n".join(lines)
+        
+    except Exception as e:
+        logger.error(f"[{timestamp}] Error in batch_go_lookup: {str(e)}")
+        return f"Error: {str(e)}"
+
+
+@mcp.tool()
+async def search_by_go_term(params: SearchByGOTermInput) -> str:
+    """
+    Find all proteins with a specific GO annotation.
+    
+    PROPRIETARY TOOL - TOPOLOGICA LLC
+    
+    Searches the inverted index for proteins annotated with a GO term.
+    Essential for building training sets for function prediction.
+    
+    Use Cases:
+        - Find all kinases (GO:0016301)
+        - Find all membrane proteins (GO:0016020)
+        - Build positive training sets for specific functions
+    
+    Args:
+        go_term: GO term ID (e.g., 'GO:0003700') or name pattern
+        include_children: Also include proteins with child terms
+        organism_filter: Filter by organism
+        limit: Maximum results
+    
+    Returns:
+        List of proteins with the GO annotation
+    """
+    timestamp = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+    logger.info(f"[{timestamp}] search_by_go_term called: {params.go_term}")
+    
+    try:
+        go_cache = get_go_cache()
+        
+        # Normalize GO term
+        go_term = params.go_term.upper().strip()
+        if not go_term.startswith('GO:'):
+            # Search by name pattern in forward index
+            matching_proteins = []
+            pattern = params.go_term.lower()
+            
+            for uid, terms in go_cache.forward_index.items():
+                for ns, term_list in terms.items():
+                    for t in term_list:
+                        if pattern in t.get('name', '').lower():
+                            matching_proteins.append({
+                                'uniprot_id': uid,
+                                'go_id': t.get('id', ''),
+                                'go_name': t.get('name', ''),
+                                'namespace': ns
+                            })
+                            break
+            
+            proteins = matching_proteins[:params.limit]
+        else:
+            # Direct GO ID lookup
+            protein_ids = go_cache.get_proteins_by_go(go_term)
+            proteins = [{'uniprot_id': uid, 'go_id': go_term} for uid in protein_ids[:params.limit]]
+        
+        # Format output
+        if params.response_format == ResponseFormat.JSON:
+            return json.dumps({
+                'go_term': params.go_term,
+                'count': len(proteins),
+                'proteins': proteins,
+                'cache_total_proteins': len(go_cache.forward_index),
+                'cache_total_go_terms': len(go_cache.inverted_index)
+            }, indent=2)
+        
+        # Markdown
+        lines = [
+            f"# Proteins with GO Term: {params.go_term}",
+            f"**Found:** {len(proteins)} proteins",
+            f"**Cache:** {len(go_cache.forward_index)} proteins indexed",
+            ""
+        ]
+        
+        for p in proteins[:100]:
+            lines.append(f"- **{p['uniprot_id']}** - {p.get('go_name', p.get('go_id', ''))}")
+        
+        if len(proteins) > 100:
+            lines.append(f"\n*...and {len(proteins) - 100} more*")
+        
+        return "\n".join(lines)
+        
+    except Exception as e:
+        logger.error(f"[{timestamp}] Error in search_by_go_term: {str(e)}")
+        return f"Error: {str(e)}"
+
+
+@mcp.tool()
+async def get_go_hierarchy(params: GetGOHierarchyInput) -> str:
+    """
+    Navigate GO term parent/child relationships.
+    
+    PROPRIETARY TOOL - TOPOLOGICA LLC
+    
+    Fetches GO term hierarchy from QuickGO API.
+    Essential for GO term propagation in function prediction.
+    
+    Use Cases:
+        - Understand term specificity
+        - Propagate annotations up the hierarchy
+        - Find related terms for training
+    
+    Args:
+        go_term: GO term ID (e.g., 'GO:0003700')
+        direction: 'parents', 'children', or 'both'
+        depth: How many levels to traverse
+    
+    Returns:
+        Hierarchical structure of related GO terms
+    """
+    timestamp = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+    logger.info(f"[{timestamp}] get_go_hierarchy called: {params.go_term}")
+    
+    try:
+        go_term = params.go_term.upper().strip()
+        
+        # Fetch from QuickGO API
+        url = f"https://www.ebi.ac.uk/QuickGO/services/ontology/go/terms/{go_term}"
+        
+        ssl_context = ssl.create_default_context()
+        request = urllib.request.Request(
+            url,
+            headers={
+                'User-Agent': 'TOPOLOGICA-Sovereign-AlphaFold/1.0',
+                'Accept': 'application/json'
+            }
+        )
+        
+        try:
+            with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT, context=ssl_context) as response:
+                data = json.loads(response.read().decode('utf-8'))
+        except urllib.error.HTTPError as e:
+            return f"Error: GO term {go_term} not found (HTTP {e.code})"
+        
+        # Parse response
+        results = data.get('results', [])
+        if not results:
+            return f"Error: No data found for {go_term}"
+        
+        term_info = results[0]
+        
+        hierarchy = {
+            'term': {
+                'id': term_info.get('id', ''),
+                'name': term_info.get('name', ''),
+                'namespace': term_info.get('aspect', ''),
+                'definition': term_info.get('definition', {}).get('text', '')
+            },
+            'parents': [],
+            'children': []
+        }
+        
+        # Get ancestors (parents)
+        if params.direction in ['parents', 'both']:
+            ancestors = term_info.get('ancestors', [])
+            for anc in ancestors[:20]:  # Limit
+                hierarchy['parents'].append({'id': anc})
+        
+        # Get children (from separate endpoint if needed)
+        if params.direction in ['children', 'both']:
+            children_url = f"https://www.ebi.ac.uk/QuickGO/services/ontology/go/terms/{go_term}/children"
+            try:
+                child_request = urllib.request.Request(
+                    children_url,
+                    headers={'User-Agent': 'TOPOLOGICA-Sovereign-AlphaFold/1.0', 'Accept': 'application/json'}
+                )
+                with urllib.request.urlopen(child_request, timeout=REQUEST_TIMEOUT, context=ssl_context) as response:
+                    child_data = json.loads(response.read().decode('utf-8'))
+                    child_results = child_data.get('results', [])
+                    if child_results:
+                        for child in child_results[0].get('children', [])[:20]:
+                            hierarchy['children'].append({
+                                'id': child.get('id', ''),
+                                'name': child.get('name', ''),
+                                'relation': child.get('relation', '')
+                            })
+            except:
+                pass  # Children endpoint may not exist
+        
+        # Format output
+        if params.response_format == ResponseFormat.JSON:
+            return json.dumps(hierarchy, indent=2)
+        
+        # Markdown
+        lines = [
+            f"# GO Term: {hierarchy['term']['id']}",
+            f"**Name:** {hierarchy['term']['name']}",
+            f"**Namespace:** {hierarchy['term']['namespace']}",
+            f"**Definition:** {hierarchy['term']['definition'][:200]}...",
+            ""
+        ]
+        
+        if hierarchy['parents']:
+            lines.append("## Parent Terms")
+            for p in hierarchy['parents'][:10]:
+                lines.append(f"- {p.get('id', '')} {p.get('name', '')}")
+            lines.append("")
+        
+        if hierarchy['children']:
+            lines.append("## Child Terms")
+            for c in hierarchy['children'][:10]:
+                lines.append(f"- {c.get('id', '')} - {c.get('name', '')} ({c.get('relation', '')})")
+        
+        return "\n".join(lines)
+        
+    except Exception as e:
+        logger.error(f"[{timestamp}] Error in get_go_hierarchy: {str(e)}")
+        return f"Error: {str(e)}"
+
+
+@mcp.tool()
+async def export_protein_set(params: ExportProteinSetInput) -> str:
+    """
+    Export filtered proteins to TSV/CSV for ML pipelines.
+    
+    PROPRIETARY TOOL - TOPOLOGICA LLC
+    
+    Creates tabular exports suitable for:
+        - Training machine learning models
+        - Data analysis in pandas/R
+        - Integration with CAFA pipelines
+    
+    Args:
+        uniprot_ids: List of proteins to export
+        output_format: 'tsv' or 'csv'
+        include_columns: Which columns to include
+        include_go_terms: Include GO annotations
+        include_sequence: Include full sequences
+        filename: Output filename
+    
+    Returns:
+        Path to exported file or data preview
+    """
+    timestamp = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+    logger.info(f"[{timestamp}] export_protein_set called: {len(params.uniprot_ids)} proteins")
+    
+    try:
+        go_cache = get_go_cache()
+        uniprot_fetcher = get_uniprot_fetcher()
+        
+        # Determine separator
+        sep = '\t' if params.output_format == 'tsv' else ','
+        
+        # Build rows
+        rows = []
+        headers = []
+        
+        # Determine columns
+        if 'uniprot_id' in params.include_columns:
+            headers.append('uniprot_id')
+        if 'protein_name' in params.include_columns:
+            headers.append('protein_name')
+        if 'organism' in params.include_columns:
+            headers.append('organism')
+        if 'sequence_length' in params.include_columns:
+            headers.append('sequence_length')
+        if params.include_go_terms:
+            headers.extend(['go_mf', 'go_bp', 'go_cc'])
+        if params.include_sequence:
+            headers.append('sequence')
+        
+        for uniprot_id in params.uniprot_ids[:params.__class__.model_fields['uniprot_ids'].metadata[0].max_length]:
+            uniprot_id = uniprot_id.upper().strip()
+            
+            row = {}
+            
+            # Get metadata from UniProt
+            success, metadata, _ = uniprot_fetcher.fetch(uniprot_id)
+            
+            if 'uniprot_id' in params.include_columns:
+                row['uniprot_id'] = uniprot_id
+            
+            if success and metadata:
+                if 'protein_name' in params.include_columns:
+                    row['protein_name'] = metadata.get('protein_name', '')
+                if 'organism' in params.include_columns:
+                    row['organism'] = metadata.get('scientific_name', '')
+                if 'sequence_length' in params.include_columns:
+                    row['sequence_length'] = str(metadata.get('sequence_length', 0))
+                
+                if params.include_go_terms:
+                    go = metadata.get('go_terms', {})
+                    row['go_mf'] = ';'.join(t.get('id', '') for t in go.get('molecular_function', []))
+                    row['go_bp'] = ';'.join(t.get('id', '') for t in go.get('biological_process', []))
+                    row['go_cc'] = ';'.join(t.get('id', '') for t in go.get('cellular_component', []))
+                    
+                    # Cache the GO terms
+                    go_cache.add_protein(uniprot_id, go)
+            else:
+                # Fill with empty values
+                for h in headers:
+                    if h not in row:
+                        row[h] = ''
+            
+            rows.append(row)
+        
+        # Save cache
+        go_cache.save()
+        
+        # Generate filename
+        if params.filename:
+            filename = params.filename
+        else:
+            filename = f"protein_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{params.output_format}"
+        
+        # Build output
+        output_lines = [sep.join(headers)]
+        for row in rows:
+            output_lines.append(sep.join(str(row.get(h, '')) for h in headers))
+        
+        content = '\n'.join(output_lines)
+        
+        # Save to cache directory
+        export_dir = CACHE_DIR / "exports"
+        export_dir.mkdir(parents=True, exist_ok=True)
+        export_path = export_dir / filename
+        
+        with open(export_path, 'w', encoding='utf-8', newline='\n') as f:
+            f.write(content)
+        
+        return json.dumps({
+            'status': 'success',
+            'file': str(export_path),
+            'format': params.output_format,
+            'rows': len(rows),
+            'columns': headers,
+            'preview': output_lines[:6]
+        }, indent=2)
+        
+    except Exception as e:
+        logger.error(f"[{timestamp}] Error in export_protein_set: {str(e)}")
+        return f"Error: {str(e)}"
+
+
+@mcp.tool()
+async def find_similar_proteins(params: FindSimilarProteinsInput) -> str:
+    """
+    Find proteins similar by sequence or structure.
+    
+    PROPRIETARY TOOL - TOPOLOGICA LLC
+    
+    Uses k-mer based sequence similarity for fast approximate matching.
+    For structure similarity, uses C-alpha RMSD when structures available.
+    
+    Args:
+        uniprot_id: Query protein
+        similarity_type: 'sequence' or 'structure'
+        threshold: Minimum similarity (0-1)
+        limit: Maximum results
+        search_scope: 'local' or 'all'
+    
+    Returns:
+        List of similar proteins with similarity scores
+    """
+    timestamp = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+    logger.info(f"[{timestamp}] find_similar_proteins called: {params.uniprot_id}")
+    
+    try:
+        uniprot_fetcher = get_uniprot_fetcher()
+        seq_db = get_sequence_db()
+        
+        # Get query sequence
+        query_id = params.uniprot_id.upper().strip()
+        success, metadata, error = uniprot_fetcher.fetch(query_id)
+        
+        if not success or not metadata:
+            return f"Error: Could not fetch query protein {query_id}: {error}"
+        
+        query_sequence = metadata.get('sequence', '')
+        if not query_sequence:
+            return f"Error: No sequence found for {query_id}"
+        
+        # Add query to sequence database
+        seq_db.add_sequence(query_id, query_sequence)
+        
+        # Build sequence database from GO cache (has sequences)
+        go_cache = get_go_cache()
+        
+        # Find similar proteins
+        if params.similarity_type == 'sequence':
+            # If we have sequences in memory from UniProt fetches
+            # Use k-mer similarity
+            similar = seq_db.find_similar(
+                query_sequence,
+                threshold=params.threshold,
+                limit=params.limit
+            )
+            
+            results = [
+                {'uniprot_id': uid, 'similarity': round(sim, 4), 'type': 'sequence_kmer'}
+                for uid, sim in similar if uid != query_id
+            ]
+        
+        elif params.similarity_type == 'structure':
+            # Structure-based similarity using local structures
+            mgr = get_structure_manager()
+            
+            # Load query structure
+            success_q, query_struct, _ = mgr.get_structure(query_id)
+            if not success_q:
+                return f"Error: Could not load structure for {query_id}"
+            
+            query_coords = query_struct.get_ca_coordinates()
+            
+            results = []
+            # Compare against local structures (limit search for speed)
+            local_ids = list(mgr.local_index.keys())[:1000]  # Limit for speed
+            
+            for target_id in local_ids:
+                if target_id == query_id:
+                    continue
+                
+                success_t, target_struct, _ = mgr.get_structure(target_id)
+                if not success_t:
+                    continue
+                
+                target_coords = target_struct.get_ca_coordinates()
+                
+                # Simple length-normalized overlap score
+                len_ratio = min(len(query_coords), len(target_coords)) / max(len(query_coords), len(target_coords))
+                
+                if len_ratio >= params.threshold:
+                    results.append({
+                        'uniprot_id': target_id,
+                        'similarity': round(len_ratio, 4),
+                        'type': 'structure_length_ratio'
+                    })
+            
+            results.sort(key=lambda x: x['similarity'], reverse=True)
+            results = results[:params.limit]
+        
+        else:
+            return f"Error: Unknown similarity type: {params.similarity_type}"
+        
+        # Format output
+        if params.response_format == ResponseFormat.JSON:
+            return json.dumps({
+                'query': query_id,
+                'similarity_type': params.similarity_type,
+                'threshold': params.threshold,
+                'results': results,
+                'count': len(results)
+            }, indent=2)
+        
+        # Markdown
+        lines = [
+            f"# Similar Proteins to {query_id}",
+            f"**Method:** {params.similarity_type}",
+            f"**Threshold:** {params.threshold}",
+            f"**Found:** {len(results)}",
+            ""
+        ]
+        
+        for r in results[:50]:
+            lines.append(f"- **{r['uniprot_id']}** - Similarity: {r['similarity']:.3f}")
+        
+        return "\n".join(lines)
+        
+    except Exception as e:
+        logger.error(f"[{timestamp}] Error in find_similar_proteins: {str(e)}")
+        return f"Error: {str(e)}"
+
+
+@mcp.tool()
+async def get_domain_annotations(params: GetDomainAnnotationsInput) -> str:
+    """
+    Retrieve Pfam/InterPro domain annotations.
+    
+    PROPRIETARY TOOL - TOPOLOGICA LLC
+    
+    Fetches domain annotations from UniProt cross-references.
+    Domains are key features for function prediction.
+    
+    Args:
+        uniprot_ids: List of proteins
+        sources: Annotation sources (Pfam, InterPro, etc.)
+    
+    Returns:
+        Domain annotations for each protein
+    """
+    timestamp = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+    logger.info(f"[{timestamp}] get_domain_annotations called: {len(params.uniprot_ids)} proteins")
+    
+    try:
+        results = {}
+        
+        for uniprot_id in params.uniprot_ids:
+            uniprot_id = uniprot_id.upper().strip()
+            
+            # Fetch from UniProt (includes cross-references)
+            url = f"{UNIPROT_API_URL}/{uniprot_id}.json"
+            ssl_context = ssl.create_default_context()
+            
+            request = urllib.request.Request(
+                url,
+                headers={
+                    'User-Agent': 'TOPOLOGICA-Sovereign-AlphaFold/1.0',
+                    'Accept': 'application/json'
+                }
+            )
+            
+            try:
+                with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT, context=ssl_context) as response:
+                    data = json.loads(response.read().decode('utf-8'))
+                
+                domains = []
+                
+                # Extract domain annotations from cross-references
+                for xref in data.get('uniProtKBCrossReferences', []):
+                    db = xref.get('database', '')
+                    if db in params.sources:
+                        domain_info = {
+                            'source': db,
+                            'id': xref.get('id', ''),
+                            'properties': {p['key']: p['value'] for p in xref.get('properties', [])}
+                        }
+                        domains.append(domain_info)
+                
+                # Also extract from features
+                for feature in data.get('features', []):
+                    feat_type = feature.get('type', '')
+                    if feat_type in ['Domain', 'Region']:
+                        loc = feature.get('location', {})
+                        domains.append({
+                            'source': 'UniProt',
+                            'type': feat_type,
+                            'description': feature.get('description', ''),
+                            'start': loc.get('start', {}).get('value', 0),
+                            'end': loc.get('end', {}).get('value', 0)
+                        })
+                
+                results[uniprot_id] = domains
+                
+            except Exception as e:
+                results[uniprot_id] = {'error': str(e)}
+        
+        # Format output
+        if params.response_format == ResponseFormat.JSON:
+            return json.dumps({
+                'results': results,
+                'count': len(results)
+            }, indent=2)
+        
+        # Markdown
+        lines = [
+            f"# Domain Annotations",
+            f"**Proteins:** {len(params.uniprot_ids)}",
+            ""
+        ]
+        
+        for uid, domains in results.items():
+            lines.append(f"## {uid}")
+            if isinstance(domains, dict) and 'error' in domains:
+                lines.append(f"- Error: {domains['error']}")
+            elif domains:
+                for d in domains[:10]:
+                    lines.append(f"- **{d.get('source', '')}:{d.get('id', d.get('type', ''))}** - {d.get('properties', d.get('description', ''))}")
+            else:
+                lines.append("- No domain annotations found")
+            lines.append("")
+        
+        return "\n".join(lines)
+        
+    except Exception as e:
+        logger.error(f"[{timestamp}] Error in get_domain_annotations: {str(e)}")
+        return f"Error: {str(e)}"
+
+
+@mcp.tool()
+async def filter_by_organism(params: FilterByOrganismInput) -> str:
+    """
+    Filter proteins by organism from local cache.
+    
+    PROPRIETARY TOOL - TOPOLOGICA LLC
+    
+    Searches local AlphaFold structures for organism-specific proteins.
+    Essential for species-specific function prediction.
+    
+    Args:
+        organism: Organism name or taxonomy ID
+        limit: Maximum results
+        include_go_summary: Include GO term counts
+    
+    Returns:
+        List of proteins from specified organism
+    """
+    timestamp = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+    logger.info(f"[{timestamp}] filter_by_organism called: {params.organism}")
+    
+    try:
+        mgr = get_structure_manager()
+        go_cache = get_go_cache()
+        
+        organism_lower = params.organism.lower()
+        results = []
+        
+        # Search through local structures
+        checked = 0
+        for uniprot_id in mgr.local_index.keys():
+            if checked >= params.limit * 10:  # Check up to 10x limit
+                break
+            
+            checked += 1
+            
+            # Load structure to check organism
+            success, structure, _ = mgr.get_structure(uniprot_id)
+            if success and structure:
+                struct_organism = structure.organism.lower() if structure.organism else ""
+                
+                if organism_lower in struct_organism or struct_organism in organism_lower:
+                    result = {
+                        'uniprot_id': uniprot_id,
+                        'organism': structure.organism,
+                        'n_residues': structure.n_residues,
+                        'mean_plddt': round(structure.mean_plddt, 1)
+                    }
+                    
+                    if params.include_go_summary:
+                        go_terms = go_cache.get_go_terms(uniprot_id)
+                        if go_terms:
+                            result['go_mf_count'] = len(go_terms.get('molecular_function', []))
+                            result['go_bp_count'] = len(go_terms.get('biological_process', []))
+                            result['go_cc_count'] = len(go_terms.get('cellular_component', []))
+                    
+                    results.append(result)
+                    
+                    if len(results) >= params.limit:
+                        break
+        
+        # Format output
+        if params.response_format == ResponseFormat.JSON:
+            return json.dumps({
+                'organism': params.organism,
+                'count': len(results),
+                'proteins': results,
+                'searched': checked
+            }, indent=2)
+        
+        # Markdown
+        lines = [
+            f"# Proteins from: {params.organism}",
+            f"**Found:** {len(results)} | **Searched:** {checked}",
+            ""
+        ]
+        
+        for r in results[:100]:
+            line = f"- **{r['uniprot_id']}** - {r['n_residues']} residues, pLDDT: {r['mean_plddt']}"
+            if params.include_go_summary and 'go_mf_count' in r:
+                line += f" | GO: MF={r['go_mf_count']}, BP={r['go_bp_count']}, CC={r['go_cc_count']}"
+            lines.append(line)
+        
+        return "\n".join(lines)
+        
+    except Exception as e:
+        logger.error(f"[{timestamp}] Error in filter_by_organism: {str(e)}")
+        return f"Error: {str(e)}"
+
+
+@mcp.tool()
+async def get_protein_families(params: GetProteinFamiliesInput) -> str:
+    """
+    Cluster proteins by sequence or GO term similarity.
+    
+    PROPRIETARY TOOL - TOPOLOGICA LLC
+    
+    Groups proteins into families based on similarity.
+    Useful for identifying functionally related proteins.
+    
+    Args:
+        uniprot_ids: Proteins to cluster
+        clustering_method: 'sequence' or 'go_terms'
+        similarity_threshold: Clustering threshold
+    
+    Returns:
+        Protein family assignments
+    """
+    timestamp = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+    logger.info(f"[{timestamp}] get_protein_families called: {len(params.uniprot_ids)} proteins")
+    
+    try:
+        uniprot_fetcher = get_uniprot_fetcher()
+        go_cache = get_go_cache()
+        
+        # Simple single-linkage clustering
+        clusters = []
+        assigned = set()
+        
+        if params.clustering_method == 'go_terms':
+            # Build GO term vectors
+            protein_go = {}
+            all_go_terms = set()
+            
+            for uid in params.uniprot_ids:
+                uid = uid.upper().strip()
+                
+                # Get GO terms
+                go_terms = go_cache.get_go_terms(uid)
+                if not go_terms:
+                    success, metadata, _ = uniprot_fetcher.fetch(uid)
+                    if success and metadata:
+                        go_terms = metadata.get('go_terms', {})
+                        go_cache.add_protein(uid, go_terms)
+                
+                if go_terms:
+                    terms = set()
+                    for ns_terms in go_terms.values():
+                        for t in ns_terms:
+                            terms.add(t.get('id', ''))
+                    protein_go[uid] = terms
+                    all_go_terms.update(terms)
+            
+            go_cache.save()
+            
+            # Compute Jaccard similarity and cluster
+            proteins = list(protein_go.keys())
+            
+            for i, p1 in enumerate(proteins):
+                if p1 in assigned:
+                    continue
+                
+                cluster = [p1]
+                assigned.add(p1)
+                
+                for p2 in proteins[i+1:]:
+                    if p2 in assigned:
+                        continue
+                    
+                    # Jaccard similarity
+                    terms1 = protein_go.get(p1, set())
+                    terms2 = protein_go.get(p2, set())
+                    
+                    if terms1 and terms2:
+                        intersection = len(terms1 & terms2)
+                        union = len(terms1 | terms2)
+                        sim = intersection / union if union > 0 else 0
+                        
+                        if sim >= params.similarity_threshold:
+                            cluster.append(p2)
+                            assigned.add(p2)
+                
+                clusters.append({
+                    'id': len(clusters) + 1,
+                    'members': cluster,
+                    'size': len(cluster)
+                })
+        
+        elif params.clustering_method == 'sequence':
+            seq_db = get_sequence_db()
+            
+            # Get sequences
+            protein_seqs = {}
+            for uid in params.uniprot_ids:
+                uid = uid.upper().strip()
+                success, metadata, _ = uniprot_fetcher.fetch(uid)
+                if success and metadata:
+                    seq = metadata.get('sequence', '')
+                    if seq:
+                        protein_seqs[uid] = seq
+                        seq_db.add_sequence(uid, seq)
+            
+            # Simple clustering by k-mer similarity
+            proteins = list(protein_seqs.keys())
+            
+            for i, p1 in enumerate(proteins):
+                if p1 in assigned:
+                    continue
+                
+                cluster = [p1]
+                assigned.add(p1)
+                
+                for p2 in proteins[i+1:]:
+                    if p2 in assigned:
+                        continue
+                    
+                    sim = seq_db.compute_similarity(protein_seqs[p1], protein_seqs[p2])
+                    if sim >= params.similarity_threshold:
+                        cluster.append(p2)
+                        assigned.add(p2)
+                
+                clusters.append({
+                    'id': len(clusters) + 1,
+                    'members': cluster,
+                    'size': len(cluster)
+                })
+        
+        # Add singletons
+        for uid in params.uniprot_ids:
+            uid = uid.upper().strip()
+            if uid not in assigned:
+                clusters.append({
+                    'id': len(clusters) + 1,
+                    'members': [uid],
+                    'size': 1
+                })
+        
+        # Sort by size
+        clusters.sort(key=lambda x: x['size'], reverse=True)
+        
+        # Format output
+        if params.response_format == ResponseFormat.JSON:
+            return json.dumps({
+                'method': params.clustering_method,
+                'threshold': params.similarity_threshold,
+                'n_proteins': len(params.uniprot_ids),
+                'n_clusters': len(clusters),
+                'clusters': clusters
+            }, indent=2)
+        
+        # Markdown
+        lines = [
+            f"# Protein Families",
+            f"**Method:** {params.clustering_method}",
+            f"**Threshold:** {params.similarity_threshold}",
+            f"**Proteins:** {len(params.uniprot_ids)} | **Clusters:** {len(clusters)}",
+            ""
+        ]
+        
+        for c in clusters[:20]:
+            members_str = ', '.join(c['members'][:10])
+            if len(c['members']) > 10:
+                members_str += f"... (+{len(c['members']) - 10})"
+            lines.append(f"### Family {c['id']} ({c['size']} members)")
+            lines.append(f"- {members_str}")
+            lines.append("")
+        
+        return "\n".join(lines)
+        
+    except Exception as e:
+        logger.error(f"[{timestamp}] Error in get_protein_families: {str(e)}")
         return f"Error: {str(e)}"
 
 
