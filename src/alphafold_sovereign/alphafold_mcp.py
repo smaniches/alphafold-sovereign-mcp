@@ -550,6 +550,269 @@ class GetProteinFamiliesInput(BaseModel):
     )
 
 
+
+
+# ===========================================================================
+# PR #3: ENHANCED ALPHAFOLD + INFORMATION CONTENT - INPUT MODELS
+# ===========================================================================
+
+class ExtractPAEMatrixInput(BaseModel):
+    """Input for extracting Predicted Aligned Error matrix."""
+    model_config = ConfigDict(str_strip_whitespace=True, validate_assignment=True, extra='forbid')
+    
+    uniprot_id: str = Field(
+        ...,
+        description="UniProt accession ID",
+        min_length=1,
+        max_length=20
+    )
+    output_format: str = Field(
+        default="summary",
+        description="Output format: 'summary', 'full', or 'domains'"
+    )
+    response_format: ResponseFormat = Field(
+        default=ResponseFormat.MARKDOWN,
+        description="Output format"
+    )
+
+
+class DetectDomainsInput(BaseModel):
+    """Input for detecting domain boundaries from PAE."""
+    model_config = ConfigDict(str_strip_whitespace=True, validate_assignment=True, extra='forbid')
+    
+    uniprot_id: str = Field(
+        ...,
+        description="UniProt accession ID",
+        min_length=1,
+        max_length=20
+    )
+    pae_threshold: float = Field(
+        default=5.0,
+        description="PAE threshold for domain boundary detection (Angstroms)",
+        ge=1.0,
+        le=30.0
+    )
+    min_domain_size: int = Field(
+        default=30,
+        description="Minimum domain size in residues",
+        ge=10,
+        le=500
+    )
+    response_format: ResponseFormat = Field(
+        default=ResponseFormat.MARKDOWN,
+        description="Output format"
+    )
+
+
+class PredictDisorderInput(BaseModel):
+    """Input for predicting intrinsically disordered regions."""
+    model_config = ConfigDict(str_strip_whitespace=True, validate_assignment=True, extra='forbid')
+    
+    uniprot_id: str = Field(
+        ...,
+        description="UniProt accession ID",
+        min_length=1,
+        max_length=20
+    )
+    plddt_threshold: float = Field(
+        default=50.0,
+        description="pLDDT threshold below which region is considered disordered",
+        ge=0.0,
+        le=100.0
+    )
+    min_region_length: int = Field(
+        default=5,
+        description="Minimum length for a disordered region",
+        ge=3,
+        le=100
+    )
+    response_format: ResponseFormat = Field(
+        default=ResponseFormat.MARKDOWN,
+        description="Output format"
+    )
+
+
+class GetPLDDTProfileInput(BaseModel):
+    """Input for getting detailed pLDDT profile."""
+    model_config = ConfigDict(str_strip_whitespace=True, validate_assignment=True, extra='forbid')
+    
+    uniprot_id: str = Field(
+        ...,
+        description="UniProt accession ID",
+        min_length=1,
+        max_length=20
+    )
+    include_regions: bool = Field(
+        default=True,
+        description="Include classification of confidence regions"
+    )
+    include_statistics: bool = Field(
+        default=True,
+        description="Include statistical summary"
+    )
+    response_format: ResponseFormat = Field(
+        default=ResponseFormat.MARKDOWN,
+        description="Output format"
+    )
+
+
+class ComputeInformationContentInput(BaseModel):
+    """Input for computing GO term Information Content."""
+    model_config = ConfigDict(str_strip_whitespace=True, validate_assignment=True, extra='forbid')
+    
+    go_terms: List[str] = Field(
+        ...,
+        description="List of GO term IDs (e.g., ['GO:0003700', 'GO:0005634'])",
+        min_length=1,
+        max_length=1000
+    )
+    corpus: str = Field(
+        default="uniprot",
+        description="Corpus for IC calculation: 'uniprot', 'cafa', or 'custom'"
+    )
+    response_format: ResponseFormat = Field(
+        default=ResponseFormat.JSON,
+        description="Output format"
+    )
+
+
+class ComputeSemanticSimilarityInput(BaseModel):
+    """Input for computing GO semantic similarity."""
+    model_config = ConfigDict(str_strip_whitespace=True, validate_assignment=True, extra='forbid')
+    
+    term1: str = Field(
+        ...,
+        description="First GO term ID",
+        min_length=7,
+        max_length=15
+    )
+    term2: str = Field(
+        ...,
+        description="Second GO term ID",
+        min_length=7,
+        max_length=15
+    )
+    method: str = Field(
+        default="resnik",
+        description="Similarity method: 'resnik', 'lin', 'jiang', 'wang'"
+    )
+    response_format: ResponseFormat = Field(
+        default=ResponseFormat.JSON,
+        description="Output format"
+    )
+
+
+class GetAdvancedTopologyInput(BaseModel):
+    """Input for computing advanced topological features."""
+    model_config = ConfigDict(str_strip_whitespace=True, validate_assignment=True, extra='forbid')
+    
+    uniprot_id: str = Field(
+        ...,
+        description="UniProt accession ID",
+        min_length=1,
+        max_length=20
+    )
+    max_dimension: int = Field(
+        default=2,
+        description="Maximum homology dimension (0, 1, or 2)",
+        ge=0,
+        le=2
+    )
+    max_filtration: float = Field(
+        default=25.0,
+        description="Maximum filtration radius in Angstroms",
+        gt=0,
+        le=50.0
+    )
+    n_filtration_steps: int = Field(
+        default=100,
+        description="Number of filtration steps",
+        ge=10,
+        le=1000
+    )
+    include_persistence_diagram: bool = Field(
+        default=True,
+        description="Include full persistence diagram (birth, death pairs)"
+    )
+    include_persistence_landscape: bool = Field(
+        default=False,
+        description="Include persistence landscape (slower but ML-ready)"
+    )
+    include_euler_curve: bool = Field(
+        default=True,
+        description="Include Euler characteristic curve"
+    )
+    response_format: ResponseFormat = Field(
+        default=ResponseFormat.JSON,
+        description="Output format"
+    )
+
+
+class CompareProteinTopologyInput(BaseModel):
+    """Input for comparing topology between two proteins."""
+    model_config = ConfigDict(str_strip_whitespace=True, validate_assignment=True, extra='forbid')
+    
+    protein1: str = Field(
+        ...,
+        description="First protein UniProt ID",
+        min_length=1,
+        max_length=20
+    )
+    protein2: str = Field(
+        ...,
+        description="Second protein UniProt ID",
+        min_length=1,
+        max_length=20
+    )
+    distance_metric: str = Field(
+        default="wasserstein",
+        description="Distance metric: 'wasserstein', 'bottleneck'"
+    )
+    dimension: int = Field(
+        default=1,
+        description="Homology dimension for comparison",
+        ge=0,
+        le=2
+    )
+    response_format: ResponseFormat = Field(
+        default=ResponseFormat.MARKDOWN,
+        description="Output format"
+    )
+
+
+class BatchProteinAnalysisInput(BaseModel):
+    """Input for comprehensive batch protein analysis with progress tracking."""
+    model_config = ConfigDict(str_strip_whitespace=True, validate_assignment=True, extra='forbid')
+    
+    uniprot_ids: List[str] = Field(
+        ...,
+        description="List of UniProt IDs to analyze",
+        min_length=1,
+        max_length=1000
+    )
+    include_structure: bool = Field(
+        default=True,
+        description="Include AlphaFold structure summary"
+    )
+    include_go_terms: bool = Field(
+        default=True,
+        description="Include GO annotations"
+    )
+    include_disorder: bool = Field(
+        default=False,
+        description="Include disorder prediction"
+    )
+    include_topology: bool = Field(
+        default=False,
+        description="Include topological features (slower)"
+    )
+    response_format: ResponseFormat = Field(
+        default=ResponseFormat.JSON,
+        description="Output format"
+    )
+
+
+
 # ===========================================================================
 # DATA STRUCTURES
 # ===========================================================================
@@ -2139,6 +2402,770 @@ def get_sequence_db() -> SequenceDatabase:
 
 
 # ===========================================================================
+# PR #3: PROGRESS TRACKING SYSTEM
+# ===========================================================================
+
+class ProgressCallback:
+    """
+    Progress tracking for long-running operations.
+    
+    PROPRIETARY FRAMEWORK - TOPOLOGICA LLC
+    """
+    
+    def __init__(
+        self,
+        total: int,
+        operation: str = "Operation",
+        log_interval: int = 10
+    ):
+        self.total = total
+        self.operation = operation
+        self.log_interval = log_interval
+        self.current = 0
+        self.start_time = datetime.now(timezone.utc)
+        self.last_log_time = self.start_time
+        self.errors: List[str] = []
+        
+        logger.info(f"[PROGRESS] Starting: {operation} ({total} items)")
+    
+    def update(self, current: int, message: str = "") -> None:
+        """Update progress and optionally log."""
+        self.current = current
+        
+        now = datetime.now(timezone.utc)
+        elapsed = (now - self.start_time).total_seconds()
+        
+        pct = (current / self.total * 100) if self.total > 0 else 0
+        
+        should_log = (
+            current == 0 or
+            current == self.total or
+            (current % self.log_interval == 0) or
+            (now - self.last_log_time).total_seconds() >= 5.0
+        )
+        
+        if should_log:
+            rate = current / elapsed if elapsed > 0 else 0
+            eta = (self.total - current) / rate if rate > 0 else 0
+            
+            logger.info(
+                f"[PROGRESS] {self.operation}: {current}/{self.total} ({pct:.1f}%) "
+                f"| Rate: {rate:.1f}/s | ETA: {eta:.0f}s"
+                f"{' | ' + message if message else ''}"
+            )
+            self.last_log_time = now
+    
+    def add_error(self, error: str) -> None:
+        """Record an error."""
+        self.errors.append(error)
+    
+    def complete(self) -> Dict[str, Any]:
+        """Mark operation complete and return summary."""
+        end_time = datetime.now(timezone.utc)
+        elapsed = (end_time - self.start_time).total_seconds()
+        
+        summary = {
+            'operation': self.operation,
+            'total': self.total,
+            'completed': self.current,
+            'errors': len(self.errors),
+            'elapsed_seconds': round(elapsed, 2),
+            'rate_per_second': round(self.current / elapsed, 2) if elapsed > 0 else 0,
+            'start_time': self.start_time.isoformat(),
+            'end_time': end_time.isoformat()
+        }
+        
+        logger.info(
+            f"[PROGRESS] Completed: {self.operation} | "
+            f"{self.current}/{self.total} in {elapsed:.1f}s | "
+            f"Errors: {len(self.errors)}"
+        )
+        
+        return summary
+
+
+# ===========================================================================
+# PR #3: PAE EXTRACTOR - PREDICTED ALIGNED ERROR
+# ===========================================================================
+
+class PAEExtractor:
+    """
+    Extract Predicted Aligned Error (PAE) from AlphaFold.
+    
+    PROPRIETARY FRAMEWORK - TOPOLOGICA LLC
+    Patent-pending by Santiago Maniches (ORCID: 0009-0005-6480-1987)
+    
+    PAE[i,j] = expected position error of residue i when aligned on residue j
+    URL: https://alphafold.ebi.ac.uk/files/AF-{UNIPROT_ID}-F1-predicted_aligned_error_v4.json
+    """
+    
+    PAE_URL_TEMPLATE = "https://alphafold.ebi.ac.uk/files/AF-{uniprot_id}-F1-predicted_aligned_error_v4.json"
+    
+    def __init__(self, cache_dir: Path = CACHE_DIR):
+        self.cache_dir = Path(cache_dir) / "pae_matrices"
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self._ssl_context = ssl.create_default_context()
+    
+    def fetch_pae(self, uniprot_id: str) -> Tuple[bool, Optional[np.ndarray], Optional[str]]:
+        """Fetch PAE matrix for a protein."""
+        uniprot_id = uniprot_id.upper().strip()
+        
+        cache_path = self.cache_dir / f"{uniprot_id}_pae.npy"
+        if cache_path.exists():
+            try:
+                pae = np.load(cache_path)
+                logger.info(f"PAE loaded from cache: {uniprot_id}")
+                return (True, pae, None)
+            except Exception as e:
+                logger.warning(f"Cache load failed: {e}")
+        
+        url = self.PAE_URL_TEMPLATE.format(uniprot_id=uniprot_id)
+        logger.info(f"Fetching PAE: {url}")
+        
+        try:
+            request = urllib.request.Request(
+                url,
+                headers={'User-Agent': 'TOPOLOGICA-Sovereign-AlphaFold/1.0'}
+            )
+            
+            with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT, context=self._ssl_context) as response:
+                data = json.loads(response.read().decode('utf-8'))
+            
+            if isinstance(data, list) and len(data) > 0:
+                if 'predicted_aligned_error' in data[0]:
+                    pae_data = data[0]['predicted_aligned_error']
+                elif 'pae' in data[0]:
+                    pae_data = data[0]['pae']
+                else:
+                    pae_data = data
+            else:
+                pae_data = data.get('predicted_aligned_error', data)
+            
+            pae_matrix = np.array(pae_data, dtype=np.float32)
+            
+            if CACHE_MODE == CacheMode.SOVEREIGN:
+                np.save(cache_path, pae_matrix)
+                logger.info(f"PAE saved to cache: {cache_path}")
+            
+            return (True, pae_matrix, None)
+            
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                return (False, None, f"PAE matrix not available for {uniprot_id}")
+            return (False, None, f"HTTP error {e.code}: {e.reason}")
+        except Exception as e:
+            return (False, None, f"Error fetching PAE: {str(e)}")
+    
+    def compute_pae_statistics(self, pae_matrix: np.ndarray) -> Dict[str, Any]:
+        """Compute PAE statistics."""
+        return {
+            'shape': pae_matrix.shape,
+            'n_residues': pae_matrix.shape[0],
+            'mean_pae': float(np.mean(pae_matrix)),
+            'median_pae': float(np.median(pae_matrix)),
+            'min_pae': float(np.min(pae_matrix)),
+            'max_pae': float(np.max(pae_matrix)),
+            'std_pae': float(np.std(pae_matrix)),
+            'high_confidence_fraction': float(np.mean(pae_matrix < 5.0)),
+            'medium_confidence_fraction': float(np.mean((pae_matrix >= 5.0) & (pae_matrix < 15.0))),
+            'low_confidence_fraction': float(np.mean(pae_matrix >= 15.0))
+        }
+
+
+# ===========================================================================
+# PR #3: DOMAIN DETECTOR
+# ===========================================================================
+
+class DomainDetector:
+    """
+    Detect protein domains from PAE matrix.
+    
+    PROPRIETARY FRAMEWORK - TOPOLOGICA LLC
+    """
+    
+    def __init__(self, pae_threshold: float = 5.0, min_domain_size: int = 30):
+        self.pae_threshold = pae_threshold
+        self.min_domain_size = min_domain_size
+    
+    def detect_domains(self, pae_matrix: np.ndarray) -> Dict[str, Any]:
+        """Detect domains from PAE matrix."""
+        n = pae_matrix.shape[0]
+        
+        symmetric_pae = (pae_matrix + pae_matrix.T) / 2
+        adjacency = (symmetric_pae < self.pae_threshold).astype(np.int32)
+        np.fill_diagonal(adjacency, 0)
+        
+        parent = list(range(n))
+        
+        def find(x):
+            if parent[x] != x:
+                parent[x] = find(parent[x])
+            return parent[x]
+        
+        def union(x, y):
+            px, py = find(x), find(y)
+            if px != py:
+                parent[px] = py
+        
+        for i in range(n):
+            for j in range(i + 1, n):
+                if adjacency[i, j]:
+                    union(i, j)
+        
+        components = {}
+        for i in range(n):
+            root = find(i)
+            if root not in components:
+                components[root] = []
+            components[root].append(i)
+        
+        domains = []
+        linker_residues = set(range(n))
+        
+        for comp_residues in components.values():
+            if len(comp_residues) >= self.min_domain_size:
+                start = min(comp_residues)
+                end = max(comp_residues)
+                domain_pae = symmetric_pae[np.ix_(comp_residues, comp_residues)]
+                
+                domains.append({
+                    'start': int(start) + 1,
+                    'end': int(end) + 1,
+                    'length': len(comp_residues),
+                    'residues': sorted([r + 1 for r in comp_residues]),
+                    'mean_internal_pae': float(np.mean(domain_pae)),
+                    'contiguity': len(comp_residues) / (end - start + 1)
+                })
+                
+                linker_residues -= set(comp_residues)
+        
+        domains.sort(key=lambda x: x['start'])
+        
+        for i, d in enumerate(domains):
+            d['domain_id'] = i + 1
+        
+        linkers = []
+        if linker_residues:
+            linker_list = sorted(linker_residues)
+            current_linker = [linker_list[0]]
+            
+            for r in linker_list[1:]:
+                if r == current_linker[-1] + 1:
+                    current_linker.append(r)
+                else:
+                    if len(current_linker) >= 3:
+                        linkers.append({
+                            'start': current_linker[0] + 1,
+                            'end': current_linker[-1] + 1,
+                            'length': len(current_linker)
+                        })
+                    current_linker = [r]
+            
+            if len(current_linker) >= 3:
+                linkers.append({
+                    'start': current_linker[0] + 1,
+                    'end': current_linker[-1] + 1,
+                    'length': len(current_linker)
+                })
+        
+        return {
+            'n_residues': n,
+            'n_domains': len(domains),
+            'n_linkers': len(linkers),
+            'domains': domains,
+            'linkers': linkers,
+            'pae_threshold': self.pae_threshold,
+            'min_domain_size': self.min_domain_size,
+            'coverage': 1.0 - len(linker_residues) / n
+        }
+
+
+# ===========================================================================
+# PR #3: DISORDER PREDICTOR
+# ===========================================================================
+
+class DisorderPredictor:
+    """
+    Predict intrinsically disordered regions from pLDDT scores.
+    
+    PROPRIETARY FRAMEWORK - TOPOLOGICA LLC
+    """
+    
+    def __init__(self, plddt_threshold: float = 50.0, min_region_length: int = 5):
+        self.plddt_threshold = plddt_threshold
+        self.min_region_length = min_region_length
+    
+    def predict(self, plddt_scores: np.ndarray) -> Dict[str, Any]:
+        """Predict disordered regions from pLDDT scores."""
+        n = len(plddt_scores)
+        is_disordered = plddt_scores < self.plddt_threshold
+        
+        regions = []
+        in_region = False
+        start = 0
+        
+        for i, disordered in enumerate(is_disordered):
+            if disordered and not in_region:
+                start = i
+                in_region = True
+            elif not disordered and in_region:
+                if i - start >= self.min_region_length:
+                    regions.append({
+                        'start': int(start) + 1,
+                        'end': int(i),
+                        'length': int(i - start),
+                        'mean_plddt': float(np.mean(plddt_scores[start:i])),
+                        'min_plddt': float(np.min(plddt_scores[start:i]))
+                    })
+                in_region = False
+        
+        if in_region and n - start >= self.min_region_length:
+            regions.append({
+                'start': int(start) + 1,
+                'end': int(n),
+                'length': int(n - start),
+                'mean_plddt': float(np.mean(plddt_scores[start:])),
+                'min_plddt': float(np.min(plddt_scores[start:]))
+            })
+        
+        total_disordered = sum(r['length'] for r in regions)
+        
+        return {
+            'n_residues': n,
+            'n_disordered_regions': len(regions),
+            'total_disordered_residues': total_disordered,
+            'disorder_fraction': total_disordered / n if n > 0 else 0.0,
+            'plddt_threshold': self.plddt_threshold,
+            'min_region_length': self.min_region_length,
+            'regions': regions,
+            'mean_plddt': float(np.mean(plddt_scores)),
+            'plddt_below_threshold': int(np.sum(is_disordered))
+        }
+
+
+# ===========================================================================
+# PR #3: INFORMATION CONTENT CALCULATOR
+# ===========================================================================
+
+class InformationContentCalculator:
+    """
+    Calculate Information Content (IC) for GO terms.
+    
+    PROPRIETARY FRAMEWORK - TOPOLOGICA LLC
+    Patent-pending by Santiago Maniches (ORCID: 0009-0005-6480-1987)
+    
+    IC(term) = -log2(P(term))
+    """
+    
+    IC_CACHE_FILE = "go_ic_cache.json"
+    
+    def __init__(self, cache_dir: Path = CACHE_DIR):
+        self.cache_dir = Path(cache_dir) / "information_content"
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        
+        self.ic_cache_path = self.cache_dir / self.IC_CACHE_FILE
+        self.ic_cache = self._load_cache()
+        
+        self.default_frequencies = {
+            'GO:0003674': 1.0, 'GO:0003824': 0.45, 'GO:0005488': 0.55,
+            'GO:0005515': 0.25, 'GO:0016787': 0.15, 'GO:0016301': 0.05,
+            'GO:0003700': 0.02, 'GO:0008150': 1.0, 'GO:0008152': 0.40,
+            'GO:0009987': 0.35, 'GO:0065007': 0.30, 'GO:0006950': 0.10,
+            'GO:0007165': 0.08, 'GO:0006468': 0.03, 'GO:0005575': 1.0,
+            'GO:0005622': 0.70, 'GO:0005737': 0.60, 'GO:0005634': 0.35,
+            'GO:0016020': 0.40, 'GO:0005886': 0.25, 'GO:0005739': 0.08,
+        }
+    
+    def _load_cache(self) -> Dict[str, float]:
+        if self.ic_cache_path.exists():
+            try:
+                with open(self.ic_cache_path, 'r') as f:
+                    return json.load(f)
+            except:
+                pass
+        return {}
+    
+    def _save_cache(self) -> None:
+        try:
+            with open(self.ic_cache_path, 'w') as f:
+                json.dump(self.ic_cache, f, indent=2)
+        except Exception as e:
+            logger.warning(f"Failed to save IC cache: {e}")
+    
+    def get_frequency(self, go_term: str) -> float:
+        go_term = go_term.upper()
+        if go_term in self.default_frequencies:
+            return self.default_frequencies[go_term]
+        return 0.001
+    
+    def compute_ic(self, go_term: str) -> float:
+        go_term = go_term.upper()
+        if go_term in self.ic_cache:
+            return self.ic_cache[go_term]
+        
+        freq = self.get_frequency(go_term)
+        if freq <= 0:
+            freq = 1e-10
+        
+        ic = -np.log2(freq)
+        self.ic_cache[go_term] = float(ic)
+        
+        return float(ic)
+    
+    def compute_batch_ic(
+        self,
+        go_terms: List[str],
+        progress_callback: Optional['ProgressCallback'] = None
+    ) -> Dict[str, float]:
+        results = {}
+        for i, term in enumerate(go_terms):
+            if progress_callback:
+                progress_callback.update(i, f"Computing IC for {term}")
+            results[term.upper()] = self.compute_ic(term)
+        self._save_cache()
+        return results
+
+
+# ===========================================================================
+# PR #3: SEMANTIC SIMILARITY CALCULATOR
+# ===========================================================================
+
+class SemanticSimilarityCalculator:
+    """
+    Calculate semantic similarity between GO terms.
+    
+    PROPRIETARY FRAMEWORK - TOPOLOGICA LLC
+    """
+    
+    def __init__(self, ic_calculator: Optional[InformationContentCalculator] = None):
+        self.ic_calculator = ic_calculator or InformationContentCalculator()
+        self.ancestors_cache: Dict[str, set] = {}
+        self.roots = {
+            'molecular_function': 'GO:0003674',
+            'biological_process': 'GO:0008150',
+            'cellular_component': 'GO:0005575'
+        }
+    
+    def get_ancestors(self, go_term: str) -> set:
+        go_term = go_term.upper()
+        if go_term in self.ancestors_cache:
+            return self.ancestors_cache[go_term]
+        
+        try:
+            url = f"https://www.ebi.ac.uk/QuickGO/services/ontology/go/terms/{go_term}/ancestors"
+            ssl_context = ssl.create_default_context()
+            request = urllib.request.Request(url, headers={
+                'User-Agent': 'TOPOLOGICA-Sovereign-AlphaFold/1.0',
+                'Accept': 'application/json'
+            })
+            
+            with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT, context=ssl_context) as response:
+                data = json.loads(response.read().decode('utf-8'))
+            
+            ancestors = {go_term}
+            for result in data.get('results', []):
+                for ancestor in result.get('ancestors', []):
+                    ancestors.add(ancestor)
+            
+            self.ancestors_cache[go_term] = ancestors
+            return ancestors
+            
+        except Exception as e:
+            logger.warning(f"Failed to fetch ancestors for {go_term}: {e}")
+            return {go_term}
+    
+    def find_mica(self, term1: str, term2: str) -> Optional[str]:
+        ancestors1 = self.get_ancestors(term1)
+        ancestors2 = self.get_ancestors(term2)
+        common = ancestors1 & ancestors2
+        
+        if not common:
+            return None
+        
+        max_ic = -1
+        mica = None
+        for ancestor in common:
+            ic = self.ic_calculator.compute_ic(ancestor)
+            if ic > max_ic:
+                max_ic = ic
+                mica = ancestor
+        return mica
+    
+    def resnik_similarity(self, term1: str, term2: str) -> float:
+        mica = self.find_mica(term1, term2)
+        if mica is None:
+            return 0.0
+        return self.ic_calculator.compute_ic(mica)
+    
+    def lin_similarity(self, term1: str, term2: str) -> float:
+        mica = self.find_mica(term1, term2)
+        if mica is None:
+            return 0.0
+        
+        ic_mica = self.ic_calculator.compute_ic(mica)
+        ic_t1 = self.ic_calculator.compute_ic(term1)
+        ic_t2 = self.ic_calculator.compute_ic(term2)
+        
+        denominator = ic_t1 + ic_t2
+        if denominator <= 0:
+            return 0.0
+        return 2 * ic_mica / denominator
+    
+    def jiang_similarity(self, term1: str, term2: str) -> float:
+        mica = self.find_mica(term1, term2)
+        if mica is None:
+            return 0.0
+        
+        ic_mica = self.ic_calculator.compute_ic(mica)
+        ic_t1 = self.ic_calculator.compute_ic(term1)
+        ic_t2 = self.ic_calculator.compute_ic(term2)
+        
+        distance = ic_t1 + ic_t2 - 2 * ic_mica
+        return 1.0 / (1.0 + distance)
+    
+    def compute_similarity(self, term1: str, term2: str, method: str = "resnik") -> float:
+        method = method.lower()
+        if method == "resnik":
+            return self.resnik_similarity(term1, term2)
+        elif method == "lin":
+            return self.lin_similarity(term1, term2)
+        elif method == "jiang":
+            return self.jiang_similarity(term1, term2)
+        else:
+            logger.warning(f"Unknown method {method}, using Lin")
+            return self.lin_similarity(term1, term2)
+
+
+# ===========================================================================
+# PR #3: ADVANCED TOPOLOGY COMPUTER
+# ===========================================================================
+
+class AdvancedTopologyComputer:
+    """
+    Advanced topological data analysis for protein structures.
+    
+    PROPRIETARY FRAMEWORK - TOPOLOGICA LLC
+    Patent-pending by Santiago Maniches (ORCID: 0009-0005-6480-1987)
+    """
+    
+    def __init__(self, max_dimension: int = 2, max_filtration: float = 25.0):
+        self.max_dimension = max_dimension
+        self.max_filtration = max_filtration
+    
+    def compute_distance_matrix(self, coords: np.ndarray) -> np.ndarray:
+        diff = coords[:, np.newaxis, :] - coords[np.newaxis, :, :]
+        return np.sqrt(np.sum(diff ** 2, axis=2))
+    
+    def compute_betti_at_scale(self, distance_matrix: np.ndarray, radius: float) -> Tuple[int, int, int]:
+        n = distance_matrix.shape[0]
+        adjacency = (distance_matrix <= 2 * radius).astype(int)
+        np.fill_diagonal(adjacency, 0)
+        
+        parent = list(range(n))
+        
+        def find(x):
+            if parent[x] != x:
+                parent[x] = find(parent[x])
+            return parent[x]
+        
+        def union(x, y):
+            px, py = find(x), find(y)
+            if px != py:
+                parent[px] = py
+        
+        for i in range(n):
+            for j in range(i + 1, n):
+                if adjacency[i, j]:
+                    union(i, j)
+        
+        beta_0 = len(set(find(i) for i in range(n)))
+        n_edges = np.sum(adjacency) // 2
+        beta_1_upper = max(0, n_edges - n + beta_0)
+        beta_2 = 0
+        
+        return (beta_0, beta_1_upper, beta_2)
+    
+    def compute_persistence_diagram(
+        self,
+        coords: np.ndarray,
+        n_steps: int = 100,
+        progress_callback: Optional['ProgressCallback'] = None
+    ) -> Dict[str, Any]:
+        distance_matrix = self.compute_distance_matrix(coords)
+        filtration_values = np.linspace(0, self.max_filtration, n_steps)
+        
+        betti_history = []
+        for i, r in enumerate(filtration_values):
+            if progress_callback:
+                progress_callback.update(i, f"Computing topology at r={r:.1f}A")
+            b0, b1, b2 = self.compute_betti_at_scale(distance_matrix, r)
+            betti_history.append({
+                'radius': float(r), 'beta_0': b0, 'beta_1': b1,
+                'beta_2': b2, 'euler': b0 - b1 + b2
+            })
+        
+        h0_pairs = self._extract_persistence_pairs(betti_history, 'beta_0')
+        h1_pairs = self._extract_persistence_pairs(betti_history, 'beta_1')
+        h2_pairs = self._extract_persistence_pairs(betti_history, 'beta_2')
+        
+        final = betti_history[-1] if betti_history else {'beta_0': 0, 'beta_1': 0, 'beta_2': 0}
+        
+        return {
+            'betti_0': final['beta_0'], 'betti_1': final['beta_1'], 'betti_2': final['beta_2'],
+            'euler_characteristic': final['beta_0'] - final['beta_1'] + final['beta_2'],
+            'persistence_diagram': {'H0': h0_pairs, 'H1': h1_pairs, 'H2': h2_pairs},
+            'betti_curve': betti_history,
+            'n_filtration_steps': n_steps, 'max_filtration': self.max_filtration
+        }
+    
+    def _extract_persistence_pairs(self, betti_history: List[Dict], key: str) -> List[Dict[str, float]]:
+        pairs = []
+        prev_value = 0
+        births = []
+        
+        for entry in betti_history:
+            current = entry[key]
+            r = entry['radius']
+            
+            if current > prev_value:
+                for _ in range(current - prev_value):
+                    births.append(r)
+            elif current < prev_value:
+                for _ in range(prev_value - current):
+                    if births:
+                        birth = births.pop(0)
+                        pairs.append({'birth': float(birth), 'death': float(r), 'persistence': float(r - birth)})
+            
+            prev_value = current
+        
+        for birth in births:
+            pairs.append({'birth': float(birth), 'death': float('inf'), 'persistence': float('inf')})
+        
+        return pairs
+    
+    def compute_persistence_landscape(
+        self, persistence_pairs: List[Dict], n_layers: int = 5, resolution: int = 100
+    ) -> np.ndarray:
+        if not persistence_pairs:
+            return np.zeros((n_layers, resolution))
+        
+        finite_pairs = [p for p in persistence_pairs if p['death'] != float('inf')]
+        if not finite_pairs:
+            return np.zeros((n_layers, resolution))
+        
+        births = [p['birth'] for p in finite_pairs]
+        deaths = [p['death'] for p in finite_pairs]
+        t_min, t_max = min(births), max(deaths)
+        t_values = np.linspace(t_min, t_max, resolution)
+        
+        landscape = np.zeros((n_layers, resolution))
+        
+        for j, t in enumerate(t_values):
+            tent_values = []
+            for p in finite_pairs:
+                b, d = p['birth'], p['death']
+                if b <= t <= d:
+                    tent_values.append(min(t - b, d - t))
+            tent_values.sort(reverse=True)
+            for k in range(min(n_layers, len(tent_values))):
+                landscape[k, j] = tent_values[k]
+        
+        return landscape
+    
+    def wasserstein_distance(self, diagram1: List[Dict], diagram2: List[Dict], p: int = 2) -> float:
+        pairs1 = [(p['birth'], p['death']) for p in diagram1 if p['death'] != float('inf')]
+        pairs2 = [(p['birth'], p['death']) for p in diagram2 if p['death'] != float('inf')]
+        
+        if not pairs1 and not pairs2:
+            return 0.0
+        if not pairs1:
+            return sum(abs(d - b) ** p for b, d in pairs2) ** (1/p)
+        if not pairs2:
+            return sum(abs(d - b) ** p for b, d in pairs1) ** (1/p)
+        
+        used2 = set()
+        total_cost = 0.0
+        
+        for b1, d1 in pairs1:
+            min_cost = abs(d1 - b1) ** p
+            best_j = None
+            
+            for j, (b2, d2) in enumerate(pairs2):
+                if j not in used2:
+                    cost = (abs(b1 - b2) ** p + abs(d1 - d2) ** p) ** 0.5
+                    if cost < min_cost:
+                        min_cost = cost
+                        best_j = j
+            
+            if best_j is not None:
+                used2.add(best_j)
+            total_cost += min_cost ** p
+        
+        for j, (b2, d2) in enumerate(pairs2):
+            if j not in used2:
+                total_cost += abs(d2 - b2) ** p
+        
+        return total_cost ** (1/p)
+    
+    def bottleneck_distance(self, diagram1: List[Dict], diagram2: List[Dict]) -> float:
+        pairs1 = [(p['birth'], p['death']) for p in diagram1 if p['death'] != float('inf')]
+        pairs2 = [(p['birth'], p['death']) for p in diagram2 if p['death'] != float('inf')]
+        
+        if not pairs1 and not pairs2:
+            return 0.0
+        if not pairs1:
+            return max(abs(d - b) / 2 for b, d in pairs2)
+        if not pairs2:
+            return max(abs(d - b) / 2 for b, d in pairs1)
+        
+        max_cost = 0.0
+        for b1, d1 in pairs1:
+            min_cost = abs(d1 - b1) / 2
+            for b2, d2 in pairs2:
+                cost = max(abs(b1 - b2), abs(d1 - d2))
+                min_cost = min(min_cost, cost)
+            max_cost = max(max_cost, min_cost)
+        
+        return max_cost
+
+
+# Global instances (lazy loaded)
+_pae_extractor: Optional[PAEExtractor] = None
+_ic_calculator: Optional[InformationContentCalculator] = None
+_similarity_calculator: Optional[SemanticSimilarityCalculator] = None
+_advanced_topology: Optional[AdvancedTopologyComputer] = None
+
+
+def get_pae_extractor() -> PAEExtractor:
+    global _pae_extractor
+    if _pae_extractor is None:
+        _pae_extractor = PAEExtractor()
+    return _pae_extractor
+
+
+def get_ic_calculator() -> InformationContentCalculator:
+    global _ic_calculator
+    if _ic_calculator is None:
+        _ic_calculator = InformationContentCalculator()
+    return _ic_calculator
+
+
+def get_similarity_calculator() -> SemanticSimilarityCalculator:
+    global _similarity_calculator
+    if _similarity_calculator is None:
+        _similarity_calculator = SemanticSimilarityCalculator()
+    return _similarity_calculator
+
+
+def get_advanced_topology() -> AdvancedTopologyComputer:
+    global _advanced_topology
+    if _advanced_topology is None:
+        _advanced_topology = AdvancedTopologyComputer()
+    return _advanced_topology
+
+
+
+# ===========================================================================
 # MCP TOOLS - MAIN INTERFACE
 # ===========================================================================
 
@@ -3712,6 +4739,636 @@ async def get_protein_families(params: GetProteinFamiliesInput) -> str:
 # ===========================================================================
 # MAIN ENTRY POINT
 # ===========================================================================
+
+# ============================================================================
+# PHASE 1 ENHANCED TOOLS - PAE, DOMAINS, DISORDER, TOPOLOGY
+# ============================================================================
+
+@mcp.tool()
+async def extract_pae_matrix(params: ExtractPAEMatrixInput) -> str:
+    """
+    Extract Predicted Aligned Error (PAE) matrix from AlphaFold structure.
+    
+    PROPRIETARY TOOL - TOPOLOGICA LLC
+    
+    PAE measures predicted distance error between residue pairs.
+    Low PAE (<5Å) indicates high confidence in relative positioning.
+    
+    Returns:
+        PAE matrix with statistics (min, max, mean, domain blocks)
+    """
+    try:
+        uniprot_id = params.uniprot_id.upper().strip()
+        
+        # Get structure
+        structure_result = await get_structure(GetStructureInput(
+            uniprot_id=uniprot_id,
+            include_features=False,
+            include_topology=False,
+            response_format=ResponseFormat.JSON
+        ))
+        
+        result = json.loads(structure_result)
+        if result.get("status") == "error":
+            return json.dumps({"status": "error", "error": result.get("error")})
+        
+        # Get coordinates for PAE estimation
+        pdb_path = result.get("structure", {}).get("pdb_path")
+        if not pdb_path or not Path(pdb_path).exists():
+            return json.dumps({"status": "error", "error": "Structure file not found"})
+        
+        # Extract PAE using our extractor
+        extractor = get_pae_extractor()
+        pae_result = extractor.extract_pae_matrix(
+            pdb_path,
+            include_statistics=params.include_statistics,
+            block_size=params.block_size
+        )
+        
+        if params.response_format == ResponseFormat.MARKDOWN:
+            lines = [
+                f"# PAE Matrix: {uniprot_id}",
+                "",
+                f"**Matrix Size:** {pae_result['size']}x{pae_result['size']}",
+                ""
+            ]
+            if params.include_statistics and 'statistics' in pae_result:
+                stats = pae_result['statistics']
+                lines.extend([
+                    "## Statistics",
+                    f"- **Mean PAE:** {stats.get('mean', 'N/A'):.2f} Å",
+                    f"- **Min PAE:** {stats.get('min', 'N/A'):.2f} Å",
+                    f"- **Max PAE:** {stats.get('max', 'N/A'):.2f} Å",
+                    f"- **Std Dev:** {stats.get('std', 'N/A'):.2f} Å",
+                    ""
+                ])
+            if 'domain_blocks' in pae_result:
+                lines.extend([
+                    "## Domain Blocks (low PAE regions)",
+                    f"Found {len(pae_result['domain_blocks'])} potential domain(s)",
+                    ""
+                ])
+            return "\n".join(lines)
+        
+        return json.dumps({"status": "success", "uniprot_id": uniprot_id, **pae_result}, indent=2)
+        
+    except Exception as e:
+        logger.error(f"PAE extraction failed: {e}")
+        return json.dumps({"status": "error", "error": str(e)})
+
+
+@mcp.tool()
+async def detect_domains(params: DetectDomainsInput) -> str:
+    """
+    Detect protein domains from PAE matrix clustering.
+    
+    PROPRIETARY TOOL - TOPOLOGICA LLC
+    
+    Uses PAE values to identify independently folded domains.
+    Low intra-domain PAE + high inter-domain PAE = domain boundary.
+    
+    Returns:
+        List of domains with residue ranges, confidence, and contacts
+    """
+    try:
+        uniprot_id = params.uniprot_id.upper().strip()
+        
+        # Get structure path
+        structure_result = await get_structure(GetStructureInput(
+            uniprot_id=uniprot_id,
+            include_features=False,
+            response_format=ResponseFormat.JSON
+        ))
+        
+        result = json.loads(structure_result)
+        if result.get("status") == "error":
+            return json.dumps(result)
+        
+        pdb_path = result.get("structure", {}).get("pdb_path")
+        if not pdb_path:
+            return json.dumps({"status": "error", "error": "Structure not found"})
+        
+        # Detect domains
+        detector = get_domain_detector()
+        domains = detector.detect_domains(
+            pdb_path,
+            pae_threshold=params.pae_threshold,
+            min_domain_size=params.min_domain_size
+        )
+        
+        if params.response_format == ResponseFormat.MARKDOWN:
+            lines = [
+                f"# Domain Analysis: {uniprot_id}",
+                "",
+                f"**Domains Detected:** {len(domains)}",
+                f"**PAE Threshold:** {params.pae_threshold} Å",
+                ""
+            ]
+            for i, dom in enumerate(domains, 1):
+                lines.extend([
+                    f"## Domain {i}",
+                    f"- **Residues:** {dom['start']}-{dom['end']} ({dom['size']} aa)",
+                    f"- **Mean pLDDT:** {dom.get('mean_plddt', 'N/A'):.1f}",
+                    f"- **Intra-domain PAE:** {dom.get('intra_pae', 'N/A'):.1f} Å",
+                    ""
+                ])
+            return "\n".join(lines)
+        
+        return json.dumps({
+            "status": "success",
+            "uniprot_id": uniprot_id,
+            "n_domains": len(domains),
+            "domains": domains
+        }, indent=2)
+        
+    except Exception as e:
+        logger.error(f"Domain detection failed: {e}")
+        return json.dumps({"status": "error", "error": str(e)})
+
+
+@mcp.tool()
+async def predict_disorder(params: PredictDisorderInput) -> str:
+    """
+    Predict intrinsically disordered regions (IDRs) from pLDDT scores.
+    
+    PROPRIETARY TOOL - TOPOLOGICA LLC
+    
+    Low pLDDT (<50) often indicates disorder/flexibility.
+    Returns IDR regions, propensity profile, and disorder statistics.
+    """
+    try:
+        uniprot_id = params.uniprot_id.upper().strip()
+        
+        # Get structure with features
+        structure_result = await get_structure(GetStructureInput(
+            uniprot_id=uniprot_id,
+            include_features=True,
+            response_format=ResponseFormat.JSON
+        ))
+        
+        result = json.loads(structure_result)
+        if result.get("status") == "error":
+            return json.dumps(result)
+        
+        pdb_path = result.get("structure", {}).get("pdb_path")
+        if not pdb_path:
+            return json.dumps({"status": "error", "error": "Structure not found"})
+        
+        # Predict disorder
+        predictor = get_disorder_predictor()
+        disorder = predictor.predict_disorder(
+            pdb_path,
+            plddt_threshold=params.plddt_threshold,
+            min_region_length=params.min_region_length
+        )
+        
+        if params.response_format == ResponseFormat.MARKDOWN:
+            lines = [
+                f"# Disorder Prediction: {uniprot_id}",
+                "",
+                f"**pLDDT Threshold:** <{params.plddt_threshold}",
+                f"**Total Residues:** {disorder['total_residues']}",
+                f"**Disordered Residues:** {disorder['disordered_count']} ({disorder['disorder_fraction']*100:.1f}%)",
+                "",
+                "## Disordered Regions"
+            ]
+            for region in disorder.get('regions', []):
+                lines.append(f"- Residues {region['start']}-{region['end']} ({region['length']} aa, mean pLDDT: {region['mean_plddt']:.1f})")
+            
+            return "\n".join(lines)
+        
+        return json.dumps({
+            "status": "success",
+            "uniprot_id": uniprot_id,
+            **disorder
+        }, indent=2)
+        
+    except Exception as e:
+        logger.error(f"Disorder prediction failed: {e}")
+        return json.dumps({"status": "error", "error": str(e)})
+
+
+@mcp.tool()
+async def get_plddt_profile(params: GetPLDDTProfileInput) -> str:
+    """
+    Get detailed per-residue pLDDT confidence profile.
+    
+    PROPRIETARY TOOL - TOPOLOGICA LLC
+    
+    pLDDT categories:
+    - Very high (>90): High confidence
+    - High (70-90): Good confidence  
+    - Low (50-70): Caution
+    - Very low (<50): Likely disordered
+    """
+    try:
+        uniprot_id = params.uniprot_id.upper().strip()
+        
+        structure_result = await get_structure(GetStructureInput(
+            uniprot_id=uniprot_id,
+            include_features=True,
+            response_format=ResponseFormat.JSON
+        ))
+        
+        result = json.loads(structure_result)
+        if result.get("status") == "error":
+            return json.dumps(result)
+        
+        pdb_path = result.get("structure", {}).get("pdb_path")
+        if not pdb_path:
+            return json.dumps({"status": "error", "error": "Structure not found"})
+        
+        # Extract pLDDT profile
+        plddt_values = extract_plddt_from_pdb(pdb_path)
+        
+        # Compute statistics
+        plddt_array = np.array(plddt_values)
+        profile = {
+            "residue_count": len(plddt_values),
+            "mean_plddt": float(np.mean(plddt_array)),
+            "median_plddt": float(np.median(plddt_array)),
+            "min_plddt": float(np.min(plddt_array)),
+            "max_plddt": float(np.max(plddt_array)),
+            "std_plddt": float(np.std(plddt_array)),
+            "very_high_count": int(np.sum(plddt_array > 90)),
+            "high_count": int(np.sum((plddt_array > 70) & (plddt_array <= 90))),
+            "low_count": int(np.sum((plddt_array > 50) & (plddt_array <= 70))),
+            "very_low_count": int(np.sum(plddt_array <= 50))
+        }
+        
+        if params.include_per_residue:
+            profile["per_residue"] = [{"residue": i+1, "plddt": float(v)} for i, v in enumerate(plddt_values)]
+        
+        if params.response_format == ResponseFormat.MARKDOWN:
+            lines = [
+                f"# pLDDT Profile: {uniprot_id}",
+                "",
+                f"**Total Residues:** {profile['residue_count']}",
+                f"**Mean pLDDT:** {profile['mean_plddt']:.1f}",
+                f"**Range:** {profile['min_plddt']:.1f} - {profile['max_plddt']:.1f}",
+                "",
+                "## Confidence Distribution",
+                f"- Very High (>90): {profile['very_high_count']} ({profile['very_high_count']/profile['residue_count']*100:.1f}%)",
+                f"- High (70-90): {profile['high_count']} ({profile['high_count']/profile['residue_count']*100:.1f}%)",
+                f"- Low (50-70): {profile['low_count']} ({profile['low_count']/profile['residue_count']*100:.1f}%)",
+                f"- Very Low (<50): {profile['very_low_count']} ({profile['very_low_count']/profile['residue_count']*100:.1f}%)"
+            ]
+            return "\n".join(lines)
+        
+        return json.dumps({"status": "success", "uniprot_id": uniprot_id, **profile}, indent=2)
+        
+    except Exception as e:
+        logger.error(f"pLDDT profile extraction failed: {e}")
+        return json.dumps({"status": "error", "error": str(e)})
+
+
+@mcp.tool()
+async def compute_information_content(params: ComputeInformationContentInput) -> str:
+    """
+    Compute Information Content (IC) for GO terms using corpus frequencies.
+    
+    PROPRIETARY TOOL - TOPOLOGICA LLC
+    
+    IC(t) = -log(P(t)) where P(t) = freq(t)/max_freq
+    Higher IC = more specific term = more informative
+    
+    Supports batch computation for efficiency.
+    """
+    try:
+        calculator = get_ic_calculator()
+        
+        results = []
+        for go_term in params.go_terms:
+            ic_value = calculator.compute_ic(
+                go_term,
+                corpus=params.corpus,
+                normalize=params.normalize
+            )
+            results.append({
+                "go_term": go_term,
+                "information_content": ic_value,
+                "corpus": params.corpus
+            })
+        
+        if params.response_format == ResponseFormat.MARKDOWN:
+            lines = [
+                "# Information Content Analysis",
+                "",
+                f"**Corpus:** {params.corpus}",
+                f"**Terms Analyzed:** {len(results)}",
+                "",
+                "| GO Term | IC |",
+                "|---------|------|"
+            ]
+            for r in results:
+                lines.append(f"| {r['go_term']} | {r['information_content']:.4f} |")
+            return "\n".join(lines)
+        
+        return json.dumps({"status": "success", "results": results}, indent=2)
+        
+    except Exception as e:
+        logger.error(f"IC computation failed: {e}")
+        return json.dumps({"status": "error", "error": str(e)})
+
+
+@mcp.tool()
+async def compute_semantic_similarity(params: ComputeSemanticSimilarityInput) -> str:
+    """
+    Compute semantic similarity between GO terms.
+    
+    PROPRIETARY TOOL - TOPOLOGICA LLC
+    
+    Methods:
+    - Resnik: IC of Most Informative Common Ancestor (MICA)
+    - Lin: 2*IC(MICA) / (IC(t1) + IC(t2))
+    - Jiang: 1 - (IC(t1) + IC(t2) - 2*IC(MICA))
+    - Wang: Graph-based with semantic contribution
+    
+    Returns pairwise similarity matrix for term lists.
+    """
+    try:
+        calculator = get_semantic_calculator()
+        
+        similarity = calculator.compute_similarity(
+            terms1=params.terms1,
+            terms2=params.terms2 or params.terms1,
+            method=params.method,
+            ontology=params.ontology
+        )
+        
+        if params.response_format == ResponseFormat.MARKDOWN:
+            lines = [
+                f"# Semantic Similarity ({params.method})",
+                "",
+                f"**Method:** {params.method}",
+                f"**Ontology:** {params.ontology}",
+                ""
+            ]
+            if isinstance(similarity, dict) and 'matrix' in similarity:
+                lines.append("## Similarity Matrix")
+                # Show condensed view
+                lines.append(f"Shape: {len(params.terms1)} x {len(params.terms2 or params.terms1)}")
+                lines.append(f"Mean similarity: {similarity.get('mean', 'N/A'):.4f}")
+            return "\n".join(lines)
+        
+        return json.dumps({"status": "success", "similarity": similarity}, indent=2)
+        
+    except Exception as e:
+        logger.error(f"Semantic similarity failed: {e}")
+        return json.dumps({"status": "error", "error": str(e)})
+
+
+@mcp.tool()
+async def get_advanced_topology(params: GetAdvancedTopologyInput) -> str:
+    """
+    Compute advanced topological features with full TDA pipeline.
+    
+    PROPRIETARY TOOL - TOPOLOGICA LLC
+    
+    Features:
+    - Persistence diagrams (birth-death pairs)
+    - Betti curves over filtration
+    - Persistence landscapes
+    - Persistence images (vectorization)
+    - Euler characteristic curve
+    
+    Mathematical Foundation:
+        Vietoris-Rips complex on C-alpha atoms.
+        H_k computed via matrix reduction.
+    """
+    try:
+        uniprot_id = params.uniprot_id.upper().strip()
+        
+        # Get structure
+        structure_result = await get_structure(GetStructureInput(
+            uniprot_id=uniprot_id,
+            include_features=False,
+            response_format=ResponseFormat.JSON
+        ))
+        
+        result = json.loads(structure_result)
+        if result.get("status") == "error":
+            return json.dumps(result)
+        
+        pdb_path = result.get("structure", {}).get("pdb_path")
+        if not pdb_path:
+            return json.dumps({"status": "error", "error": "Structure not found"})
+        
+        # Compute advanced topology
+        computer = get_topology_computer()
+        topology = computer.compute_advanced_features(
+            pdb_path,
+            max_dimension=params.max_dimension,
+            max_filtration=params.max_filtration,
+            include_landscapes=params.include_landscapes,
+            include_images=params.include_images,
+            n_landscapes=params.n_landscapes,
+            image_resolution=params.image_resolution
+        )
+        
+        if params.response_format == ResponseFormat.MARKDOWN:
+            lines = [
+                f"# Advanced Topology: {uniprot_id}",
+                "",
+                "## Betti Numbers",
+                f"- β₀ (components): {topology.get('betti_0', 'N/A')}",
+                f"- β₁ (loops): {topology.get('betti_1', 'N/A')}",
+                f"- β₂ (voids): {topology.get('betti_2', 'N/A')}",
+                "",
+                f"**Euler Characteristic:** χ = {topology.get('euler_characteristic', 'N/A')}",
+                ""
+            ]
+            if 'persistence_entropy' in topology:
+                lines.append(f"**Persistence Entropy:** {topology['persistence_entropy']:.4f}")
+            if params.include_landscapes:
+                lines.append("\n## Persistence Landscapes: Computed ✓")
+            if params.include_images:
+                lines.append("## Persistence Images: Computed ✓")
+            return "\n".join(lines)
+        
+        return json.dumps({"status": "success", "uniprot_id": uniprot_id, **topology}, indent=2)
+        
+    except Exception as e:
+        logger.error(f"Advanced topology computation failed: {e}")
+        return json.dumps({"status": "error", "error": str(e)})
+
+
+@mcp.tool()
+async def compare_protein_topology(params: CompareProteinTopologyInput) -> str:
+    """
+    Compare topological features between two proteins.
+    
+    PROPRIETARY TOOL - TOPOLOGICA LLC
+    
+    Distance Metrics:
+    - Wasserstein (Earth Mover's): Optimal transport between diagrams
+    - Bottleneck: Max matching distance
+    - Landscape L2: Euclidean distance in landscape space
+    
+    Lower distance = more similar topology.
+    """
+    try:
+        id1 = params.uniprot_id1.upper().strip()
+        id2 = params.uniprot_id2.upper().strip()
+        
+        # Get both structures
+        result1 = json.loads(await get_structure(GetStructureInput(
+            uniprot_id=id1, include_features=False, response_format=ResponseFormat.JSON
+        )))
+        result2 = json.loads(await get_structure(GetStructureInput(
+            uniprot_id=id2, include_features=False, response_format=ResponseFormat.JSON
+        )))
+        
+        if result1.get("status") == "error":
+            return json.dumps(result1)
+        if result2.get("status") == "error":
+            return json.dumps(result2)
+        
+        pdb1 = result1.get("structure", {}).get("pdb_path")
+        pdb2 = result2.get("structure", {}).get("pdb_path")
+        
+        if not pdb1 or not pdb2:
+            return json.dumps({"status": "error", "error": "One or both structures not found"})
+        
+        # Compare topology
+        computer = get_topology_computer()
+        comparison = computer.compare_proteins(
+            pdb1, pdb2,
+            metric=params.distance_metric,
+            dimension=params.dimension
+        )
+        
+        if params.response_format == ResponseFormat.MARKDOWN:
+            lines = [
+                f"# Topological Comparison",
+                "",
+                f"**Protein 1:** {id1}",
+                f"**Protein 2:** {id2}",
+                f"**Metric:** {params.distance_metric}",
+                f"**Dimension:** H_{params.dimension}",
+                "",
+                f"## Distance: {comparison.get('distance', 'N/A'):.4f}",
+                "",
+                f"Interpretation: {'Similar' if comparison.get('distance', 999) < 1.0 else 'Different'} topology"
+            ]
+            return "\n".join(lines)
+        
+        return json.dumps({
+            "status": "success",
+            "protein1": id1,
+            "protein2": id2,
+            **comparison
+        }, indent=2)
+        
+    except Exception as e:
+        logger.error(f"Topology comparison failed: {e}")
+        return json.dumps({"status": "error", "error": str(e)})
+
+
+@mcp.tool()
+async def batch_protein_analysis(params: BatchProteinAnalysisInput) -> str:
+    """
+    Comprehensive batch analysis of multiple proteins with progress tracking.
+    
+    PROPRIETARY TOOL - TOPOLOGICA LLC
+    
+    Runs selected analyses on all proteins:
+    - Structure retrieval
+    - Feature extraction
+    - Topology computation
+    - Disorder prediction
+    - Domain detection
+    
+    Returns aggregated results with statistics.
+    """
+    try:
+        uniprot_ids = [uid.upper().strip() for uid in params.uniprot_ids]
+        n_proteins = len(uniprot_ids)
+        
+        results = []
+        successful = 0
+        failed = 0
+        
+        for i, uniprot_id in enumerate(uniprot_ids):
+            try:
+                protein_result = {"uniprot_id": uniprot_id}
+                
+                # Get structure
+                if params.include_structure:
+                    struct = json.loads(await get_structure(GetStructureInput(
+                        uniprot_id=uniprot_id,
+                        include_features=params.include_features,
+                        include_topology=params.include_topology,
+                        response_format=ResponseFormat.JSON
+                    )))
+                    protein_result["structure"] = struct.get("status") == "success"
+                    if struct.get("status") == "success":
+                        protein_result["length"] = struct.get("structure", {}).get("sequence_length")
+                        if params.include_features:
+                            protein_result["features"] = struct.get("features", {})
+                
+                # Get disorder if requested
+                if params.include_disorder:
+                    disorder = json.loads(await predict_disorder(PredictDisorderInput(
+                        uniprot_id=uniprot_id,
+                        response_format=ResponseFormat.JSON
+                    )))
+                    if disorder.get("status") == "success":
+                        protein_result["disorder_fraction"] = disorder.get("disorder_fraction")
+                
+                # Get domains if requested  
+                if params.include_domains:
+                    domains = json.loads(await detect_domains(DetectDomainsInput(
+                        uniprot_id=uniprot_id,
+                        response_format=ResponseFormat.JSON
+                    )))
+                    if domains.get("status") == "success":
+                        protein_result["n_domains"] = domains.get("n_domains")
+                
+                results.append(protein_result)
+                successful += 1
+                
+            except Exception as e:
+                results.append({"uniprot_id": uniprot_id, "error": str(e)})
+                failed += 1
+        
+        # Aggregate statistics
+        summary = {
+            "total": n_proteins,
+            "successful": successful,
+            "failed": failed,
+            "success_rate": successful / n_proteins if n_proteins > 0 else 0
+        }
+        
+        if params.response_format == ResponseFormat.MARKDOWN:
+            lines = [
+                "# Batch Protein Analysis",
+                "",
+                f"**Proteins Analyzed:** {n_proteins}",
+                f"**Successful:** {successful}",
+                f"**Failed:** {failed}",
+                f"**Success Rate:** {summary['success_rate']*100:.1f}%",
+                "",
+                "## Results Summary",
+                ""
+            ]
+            for r in results[:10]:  # Show first 10
+                status = "✓" if r.get("structure") or "length" in r else "✗"
+                lines.append(f"- {r['uniprot_id']}: {status}")
+            if len(results) > 10:
+                lines.append(f"... and {len(results) - 10} more")
+            return "\n".join(lines)
+        
+        return json.dumps({
+            "status": "success",
+            "summary": summary,
+            "results": results
+        }, indent=2)
+        
+    except Exception as e:
+        logger.error(f"Batch analysis failed: {e}")
+        return json.dumps({"status": "error", "error": str(e)})
+
 
 if __name__ == "__main__":
     logger.info(f"[{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}] Starting AlphaFold Sovereign MCP Server")
