@@ -12,9 +12,10 @@ Production MCP server for AlphaFold structure analysis.
 HYBRID MODE: Local filesystem primary + AlphaFold DB online fallback.
 
 Architecture:
-    1. PRIMARY: Check local PDB cache (81,559 structures)
+    1. PRIMARY: Check local PDB cache (dynamically indexed, grows as structures are fetched)
     2. FALLBACK: Fetch from AlphaFold DB (200M+ structures, NO API KEY)
-    3. COMPUTE: Extract features, topology on-demand
+    3. AUTO-CACHE: Fetched structures saved locally for future sovereign access
+    4. COMPUTE: Extract features, topology on-demand
     
 Mathematical Foundation:
     Protein structure P in configuration manifold M
@@ -45,10 +46,10 @@ import json
 # CONFIGURATION - SOVEREIGN INFRASTRUCTURE PATHS
 # ===========================================================================
 
-# Local structure cache (81,559 AlphaFold2 PDB files)
+# Local structure cache (primary sovereign storage - indexed dynamically on startup)
 LOCAL_STRUCTURES_DIR = Path(r"C:\TOPOLOGICA_KAGGLE_CAFA6\ALPHAFOLD2_STRUCTURES\pdb_files")
 
-# Cache directory for computed features
+# Cache directory for computed features + online fetched structures
 CACHE_DIR = Path(r"C:\TOPOLOGICA_KAGGLE_CAFA6\CACHE")
 
 # AlphaFold DB online access (NO API KEY REQUIRED)
@@ -622,24 +623,46 @@ class StructureManager:
         )
     
     def _build_local_index(self) -> Dict[str, Path]:
-        """Build index of local PDB files."""
+        """
+        Build unified index of ALL local PDB files.
+        
+        Scans BOTH:
+            1. Primary structures directory (pre-downloaded bulk cache)
+            2. Online cache directory (dynamically fetched structures)
+        
+        This ensures the cache grows dynamically as new structures are fetched,
+        and previously-fetched online structures are found on restart.
+        """
         index = {}
         
+        def _extract_uniprot_id(pdb_file: Path) -> Optional[str]:
+            """Extract UniProt ID from PDB filename."""
+            stem = pdb_file.stem
+            if stem.startswith("AF-"):
+                # AlphaFold format: AF-XXXXX-F1-model_v4
+                parts = stem.split("-")
+                if len(parts) >= 2:
+                    return parts[1].upper()
+            else:
+                # Simple format: XXXXX.pdb
+                return stem.upper()
+            return None
+        
+        # Scan PRIMARY structures directory
         if self.structures_dir.exists():
             for pdb_file in self.structures_dir.glob("*.pdb"):
-                # Extract UniProt ID from filename
-                # Format: UNIPROT_ID.pdb or AF-UNIPROT_ID-F1-model_v4.pdb
-                stem = pdb_file.stem
-                if stem.startswith("AF-"):
-                    # AlphaFold format: AF-XXXXX-F1-model_v4
-                    parts = stem.split("-")
-                    if len(parts) >= 2:
-                        uniprot_id = parts[1].upper()
-                else:
-                    # Simple format: XXXXX.pdb
-                    uniprot_id = stem.upper()
-                
-                index[uniprot_id] = pdb_file
+                uniprot_id = _extract_uniprot_id(pdb_file)
+                if uniprot_id:
+                    index[uniprot_id] = pdb_file
+        
+        # Scan ONLINE CACHE directory (dynamically fetched structures)
+        online_cache_dir = self.cache_dir / "online_structures"
+        if online_cache_dir.exists():
+            for pdb_file in online_cache_dir.glob("*.pdb"):
+                uniprot_id = _extract_uniprot_id(pdb_file)
+                if uniprot_id and uniprot_id not in index:
+                    # Only add if not already in primary (avoid duplicates)
+                    index[uniprot_id] = pdb_file
         
         return index
     
@@ -1361,10 +1384,11 @@ async def get_structure(params: GetStructureInput) -> str:
     
     PROPRIETARY TOOL - TOPOLOGICA LLC
     
-    Operation:
-        1. Check local cache (81,559 structures)
+    Operation (Cache-First Sovereign Strategy):
+        1. Check local cache (dynamically indexed, grows with usage)
         2. If not found, fetch from AlphaFold DB online
-        3. Optionally compute structural and topological features
+        3. Auto-cache fetched structures for future sovereign access
+        4. Optionally compute structural and topological features
     
     Args:
         uniprot_id: UniProt accession (e.g., 'P12345', 'A0A023FBW4')
@@ -1423,7 +1447,8 @@ async def search_structures(params: SearchStructuresInput) -> str:
     
     PROPRIETARY TOOL - TOPOLOGICA LLC
     
-    Searches 81,559 cached AlphaFold2 structures by UniProt ID pattern.
+    Searches the sovereign cache (dynamically indexed) by UniProt ID pattern.
+    Includes both pre-downloaded structures and previously-fetched online structures.
     
     Args:
         pattern: Glob-style pattern (e.g., 'A0A*', 'P123*')

@@ -190,18 +190,25 @@ class AlphaFoldFetcher:
         self,
         uniprot_id: str,
         file_type: str = "pdb",
-        save_to_cache: Optional[bool] = None
+        save_to_cache: Optional[bool] = None,
+        skip_cache: bool = False
     ) -> FetchResult:
         """
-        Fetch AlphaFold structure from online database.
+        Fetch AlphaFold structure with cache-first strategy.
+        
+        Operation Mode (Sovereign Cache-First):
+            1. CHECK LOCAL CACHE - Return immediately if cached
+            2. FETCH FROM NETWORK - Only if not in cache
+            3. AUTO-CACHE - Save fetched structures for future use
         
         Args:
             uniprot_id: UniProt accession to fetch
             file_type: File format ('pdb', 'cif', 'pae')
             save_to_cache: Override auto_save setting
+            skip_cache: Force network fetch (bypass cache check)
         
         Returns:
-            FetchResult with success status and content/error
+            FetchResult with success status, content, and source indicator
         
         Network Behavior:
             - Retries up to MAX_RETRIES times on failure
@@ -213,10 +220,47 @@ class AlphaFoldFetcher:
         
         # Normalize
         uniprot_id = uniprot_id.upper().strip()
+        
+        # ===================================================================
+        # CACHE-FIRST: Check local cache before network request
+        # ===================================================================
+        if not skip_cache and self.cache_dir:
+            cached_path = self.cache_dir / f"{uniprot_id}.{file_type}"
+            if cached_path.exists():
+                try:
+                    with open(cached_path, 'rb') as f:
+                        content = f.read()
+                    
+                    fetch_time = time.time() - start_time
+                    self._success_count += 1
+                    
+                    logger.info(
+                        "fetch_from_cache",
+                        uniprot_id=uniprot_id,
+                        source="local_cache",
+                        fetch_time=fetch_time
+                    )
+                    
+                    return FetchResult(
+                        success=True,
+                        uniprot_id=uniprot_id,
+                        content=content,
+                        checksum=self._compute_checksum(content),
+                        source='cached',
+                        file_path=cached_path,
+                        fetch_time=fetch_time
+                    )
+                except Exception as e:
+                    logger.warning(f"Cache read failed for {uniprot_id}: {e}")
+                    # Fall through to network fetch
+        
+        # ===================================================================
+        # NETWORK FETCH: Only reached if not in cache
+        # ===================================================================
         url = self._build_url(uniprot_id, file_type)
         
         logger.info(
-            "fetch_started",
+            "fetch_from_network",
             uniprot_id=uniprot_id,
             url=url,
             file_type=file_type
