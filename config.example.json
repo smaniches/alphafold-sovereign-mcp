@@ -2,14 +2,20 @@
     "structures_dir": "C:\\TOPOLOGICA_KAGGLE_CAFA6\\ALPHAFOLD2_STRUCTURES\\pdb_files",
     "cache_dir": "C:\\TOPOLOGICA_KAGGLE_CAFA6\\CACHE",
     "cache_mode": "sovereign",
-    "_comment_cache_modes": {
-        "sovereign": "Full read/write - primary device with local storage",
-        "readonly": "Read cache only, no writes - secondary device sharing cache",
-        "disabled": "Pure online mode, no local caching - mobile/temporary use"
+    
+    "_comment_structures_dir": "Path to local AlphaFold PDB files directory",
+    "_comment_cache_dir": "Path to cache directory for GO annotations, sequences, etc.",
+    "_comment_cache_mode": "Options: sovereign (read/write), readonly, disabled",
+    
+    "_environment_variables": {
+        "ALPHAFOLD_STRUCTURES_DIR": "Override structures_dir",
+        "ALPHAFOLD_CACHE_DIR": "Override cache_dir", 
+        "ALPHAFOLD_CACHE_MODE": "Override cache_mode"
     },
-    "_comment_env_overrides": {
-        "ALPHAFOLD_STRUCTURES_DIR": "Overrides structures_dir",
-        "ALPHAFOLD_CACHE_DIR": "Overrides cache_dir", 
-        "ALPHAFOLD_CACHE_MODE": "Overrides cache_mode"
-    }
+    
+    "_config_locations": [
+        "~/.alphafold_sovereign/config.json (recommended)",
+        "~/.config/alphafold_sovereign/config.json",
+        "<module_dir>/config.json"
+    ]
 }

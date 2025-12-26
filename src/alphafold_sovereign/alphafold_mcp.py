@@ -42,6 +42,28 @@ import logging
 import time
 import json
 
+
+# ===========================================================================
+# NUMPY JSON ENCODER - Handle int64, float64, ndarray
+# ===========================================================================
+
+class NumpyEncoder(json.JSONEncoder):
+    """Custom JSON encoder for numpy types."""
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        if isinstance(obj, np.floating):
+            return float(obj)
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return super().default(obj)
+
+
+def json_dumps(obj, **kwargs) -> str:
+    """JSON dumps with numpy support."""
+    return json.dumps(obj, cls=NumpyEncoder, **kwargs)
+
+
 # ===========================================================================
 # CONFIGURATION SYSTEM - PORTABLE & MULTI-DEVICE SUPPORT
 # ===========================================================================
@@ -570,6 +592,16 @@ class ExtractPAEMatrixInput(BaseModel):
         default="summary",
         description="Output format: 'summary', 'full', or 'domains'"
     )
+    include_statistics: bool = Field(
+        default=True,
+        description="Include statistical summary of PAE values"
+    )
+    block_size: int = Field(
+        default=10,
+        description="Block size for domain boundary detection",
+        ge=5,
+        le=50
+    )
     response_format: ResponseFormat = Field(
         default=ResponseFormat.MARKDOWN,
         description="Output format"
@@ -650,6 +682,10 @@ class GetPLDDTProfileInput(BaseModel):
         default=True,
         description="Include statistical summary"
     )
+    include_per_residue: bool = Field(
+        default=False,
+        description="Include per-residue pLDDT values in output"
+    )
     response_format: ResponseFormat = Field(
         default=ResponseFormat.MARKDOWN,
         description="Output format"
@@ -669,6 +705,10 @@ class ComputeInformationContentInput(BaseModel):
     corpus: str = Field(
         default="uniprot",
         description="Corpus for IC calculation: 'uniprot', 'cafa', or 'custom'"
+    )
+    normalize: bool = Field(
+        default=True,
+        description="Normalize IC values to [0, 1] range"
     )
     response_format: ResponseFormat = Field(
         default=ResponseFormat.JSON,
@@ -742,6 +782,26 @@ class GetAdvancedTopologyInput(BaseModel):
         default=True,
         description="Include Euler characteristic curve"
     )
+    include_landscapes: bool = Field(
+        default=False,
+        description="Alias for include_persistence_landscape"
+    )
+    include_images: bool = Field(
+        default=False,
+        description="Include persistence images for ML vectorization"
+    )
+    n_landscapes: int = Field(
+        default=5,
+        description="Number of landscape functions to compute",
+        ge=1,
+        le=20
+    )
+    image_resolution: int = Field(
+        default=50,
+        description="Resolution for persistence images",
+        ge=10,
+        le=200
+    )
     response_format: ResponseFormat = Field(
         default=ResponseFormat.JSON,
         description="Output format"
@@ -794,6 +854,10 @@ class BatchProteinAnalysisInput(BaseModel):
         default=True,
         description="Include AlphaFold structure summary"
     )
+    include_features: bool = Field(
+        default=True,
+        description="Include structural features (secondary structure, binding pockets)"
+    )
     include_go_terms: bool = Field(
         default=True,
         description="Include GO annotations"
@@ -801,6 +865,10 @@ class BatchProteinAnalysisInput(BaseModel):
     include_disorder: bool = Field(
         default=False,
         description="Include disorder prediction"
+    )
+    include_domains: bool = Field(
+        default=False,
+        description="Include domain detection"
     )
     include_topology: bool = Field(
         default=False,
@@ -2077,7 +2145,7 @@ def format_structure_response(
             result['features'] = features
         if topology:
             result['topology'] = topology
-        return json.dumps(result, indent=2)
+        return json_dumps(result, indent=2)
     
     # Markdown format
     lines = [
@@ -2678,6 +2746,95 @@ class DomainDetector:
             'min_domain_size': self.min_domain_size,
             'coverage': 1.0 - len(linker_residues) / n
         }
+    
+    def detect_domains_from_pdb(
+        self,
+        pdb_path: str,
+        pae_threshold: float = None,
+        min_domain_size: int = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Detect domains from PDB file path by extracting PAE and analyzing.
+        
+        Args:
+            pdb_path: Path to AlphaFold PDB file
+            pae_threshold: Override default threshold
+            min_domain_size: Override default minimum domain size
+        
+        Returns:
+            List of detected domains
+        """
+        # Use parameters if provided
+        if pae_threshold is not None:
+            self.pae_threshold = pae_threshold
+        if min_domain_size is not None:
+            self.min_domain_size = min_domain_size
+        
+        # Try to find PAE file alongside PDB
+        pdb_path_obj = Path(pdb_path)
+        pae_path = pdb_path_obj.parent / pdb_path_obj.name.replace('.pdb', '_pae.json')
+        
+        if not pae_path.exists():
+            # Try alternate naming
+            pae_path = pdb_path_obj.parent / f"{pdb_path_obj.stem}_predicted_aligned_error.json"
+        
+        if pae_path.exists():
+            try:
+                with open(pae_path, 'r') as f:
+                    pae_data = json.load(f)
+                
+                # Extract PAE matrix from AlphaFold format
+                if isinstance(pae_data, list) and len(pae_data) > 0:
+                    pae_matrix = np.array(pae_data[0].get('predicted_aligned_error', pae_data))
+                elif isinstance(pae_data, dict):
+                    pae_matrix = np.array(pae_data.get('predicted_aligned_error', []))
+                else:
+                    pae_matrix = np.array(pae_data)
+                
+                if pae_matrix.size > 0:
+                    result = self.detect_domains(pae_matrix)
+                    return result.get('domains', [])
+            except Exception as e:
+                logger.warning(f"Failed to read PAE file {pae_path}: {e}")
+        
+        # Fallback: extract pLDDT and create pseudo-domains based on confidence
+        plddt_values = extract_plddt_from_pdb(pdb_path)
+        if not plddt_values:
+            return []
+        
+        # Create simple domain based on high-confidence regions
+        plddt_array = np.array(plddt_values)
+        high_conf = plddt_array > 70
+        
+        domains = []
+        in_domain = False
+        start = 0
+        
+        for i, is_conf in enumerate(high_conf):
+            if is_conf and not in_domain:
+                start = i
+                in_domain = True
+            elif not is_conf and in_domain:
+                if i - start >= self.min_domain_size:
+                    domains.append({
+                        'start': int(start) + 1,
+                        'end': int(i),
+                        'size': int(i - start),
+                        'mean_plddt': float(np.mean(plddt_array[start:i])),
+                        'intra_pae': 5.0  # Estimated
+                    })
+                in_domain = False
+        
+        if in_domain and len(plddt_values) - start >= self.min_domain_size:
+            domains.append({
+                'start': int(start) + 1,
+                'end': len(plddt_values),
+                'size': len(plddt_values) - start,
+                'mean_plddt': float(np.mean(plddt_array[start:])),
+                'intra_pae': 5.0
+            })
+        
+        return domains
 
 
 # ===========================================================================
@@ -2741,6 +2898,57 @@ class DisorderPredictor:
             'mean_plddt': float(np.mean(plddt_scores)),
             'plddt_below_threshold': int(np.sum(is_disordered))
         }
+    
+    def predict_disorder(
+        self,
+        pdb_path: str,
+        plddt_threshold: float = None,
+        min_region_length: int = None
+    ) -> Dict[str, Any]:
+        """
+        Predict disorder from PDB file path.
+        
+        Args:
+            pdb_path: Path to AlphaFold PDB file
+            plddt_threshold: Override default threshold
+            min_region_length: Override default minimum region length
+        
+        Returns:
+            Disorder prediction results
+        """
+        # Use parameters if provided, else use instance defaults
+        if plddt_threshold is not None:
+            self.plddt_threshold = plddt_threshold
+        if min_region_length is not None:
+            self.min_region_length = min_region_length
+        
+        # Extract pLDDT values from PDB
+        plddt_values = extract_plddt_from_pdb(pdb_path)
+        
+        if not plddt_values:
+            return {
+                'total_residues': 0,
+                'disordered_count': 0,
+                'disorder_fraction': 0.0,
+                'regions': [],
+                'error': 'Failed to extract pLDDT values'
+            }
+        
+        # Convert to numpy and predict
+        plddt_array = np.array(plddt_values)
+        result = self.predict(plddt_array)
+        
+        # Rename keys for API consistency
+        return {
+            'total_residues': result['n_residues'],
+            'disordered_count': result['total_disordered_residues'],
+            'disorder_fraction': result['disorder_fraction'],
+            'n_disordered_regions': result['n_disordered_regions'],
+            'regions': result['regions'],
+            'mean_plddt': result['mean_plddt'],
+            'plddt_threshold': result['plddt_threshold'],
+            'min_region_length': result['min_region_length']
+        }
 
 
 # ===========================================================================
@@ -2792,23 +3000,40 @@ class InformationContentCalculator:
         except Exception as e:
             logger.warning(f"Failed to save IC cache: {e}")
     
-    def get_frequency(self, go_term: str) -> float:
+    def get_frequency(self, go_term: str, corpus: str = "uniprot") -> float:
         go_term = go_term.upper()
         if go_term in self.default_frequencies:
             return self.default_frequencies[go_term]
         return 0.001
     
-    def compute_ic(self, go_term: str) -> float:
-        go_term = go_term.upper()
-        if go_term in self.ic_cache:
-            return self.ic_cache[go_term]
+    def compute_ic(self, go_term: str, corpus: str = "uniprot", normalize: bool = True) -> float:
+        """
+        Compute Information Content for a GO term.
         
-        freq = self.get_frequency(go_term)
+        Args:
+            go_term: GO term ID
+            corpus: Corpus for frequency calculation ('uniprot', 'cafa', 'custom')
+            normalize: If True, normalize IC to [0, 1] range
+        
+        Returns:
+            IC value (normalized if normalize=True)
+        """
+        go_term = go_term.upper()
+        cache_key = f"{go_term}_{corpus}_{normalize}"
+        if cache_key in self.ic_cache:
+            return self.ic_cache[cache_key]
+        
+        freq = self.get_frequency(go_term, corpus)
         if freq <= 0:
             freq = 1e-10
         
         ic = -np.log2(freq)
-        self.ic_cache[go_term] = float(ic)
+        
+        # Normalize to [0, 1] if requested (max IC is ~10 for very rare terms)
+        if normalize:
+            ic = min(ic / 10.0, 1.0)
+        
+        self.ic_cache[cache_key] = float(ic)
         
         return float(ic)
     
@@ -3127,6 +3352,183 @@ class AdvancedTopologyComputer:
             max_cost = max(max_cost, min_cost)
         
         return max_cost
+    
+    def compare_proteins(
+        self,
+        pdb_path1: str,
+        pdb_path2: str,
+        metric: str = "wasserstein",
+        dimension: int = 1
+    ) -> Dict[str, Any]:
+        """
+        Compare topological features between two proteins.
+        
+        Args:
+            pdb_path1: Path to first protein PDB file
+            pdb_path2: Path to second protein PDB file
+            metric: Distance metric ('wasserstein' or 'bottleneck')
+            dimension: Homology dimension to compare (0, 1, or 2)
+        
+        Returns:
+            Comparison results with distance and interpretation
+        """
+        # Extract coordinates from both PDB files
+        coords1 = self._extract_ca_coords(pdb_path1)
+        coords2 = self._extract_ca_coords(pdb_path2)
+        
+        if coords1 is None or len(coords1) == 0:
+            return {'error': f'Failed to extract coordinates from {pdb_path1}'}
+        if coords2 is None or len(coords2) == 0:
+            return {'error': f'Failed to extract coordinates from {pdb_path2}'}
+        
+        # Compute persistence diagrams
+        diagram1 = self.compute_persistence_diagram(coords1)
+        diagram2 = self.compute_persistence_diagram(coords2)
+        
+        # Get the appropriate homology dimension
+        dim_key = f'H{dimension}'
+        pairs1 = diagram1.get('persistence_diagram', {}).get(dim_key, [])
+        pairs2 = diagram2.get('persistence_diagram', {}).get(dim_key, [])
+        
+        # Compute distance
+        if metric.lower() == 'wasserstein':
+            distance = self.wasserstein_distance(pairs1, pairs2)
+        elif metric.lower() == 'bottleneck':
+            distance = self.bottleneck_distance(pairs1, pairs2)
+        else:
+            distance = self.wasserstein_distance(pairs1, pairs2)
+        
+        return {
+            'distance': float(distance),
+            'metric': metric,
+            'dimension': dimension,
+            'protein1_betti': [diagram1.get('betti_0', 0), diagram1.get('betti_1', 0), diagram1.get('betti_2', 0)],
+            'protein2_betti': [diagram2.get('betti_0', 0), diagram2.get('betti_1', 0), diagram2.get('betti_2', 0)],
+            'interpretation': 'similar' if distance < 1.0 else 'different'
+        }
+    
+    def _extract_ca_coords(self, pdb_path: str) -> Optional[np.ndarray]:
+        """Extract C-alpha coordinates from PDB file."""
+        coords = []
+        try:
+            with open(pdb_path, 'r') as f:
+                for line in f:
+                    if line.startswith('ATOM') and len(line) >= 54:
+                        atom_name = line[12:16].strip()
+                        if atom_name == 'CA':
+                            try:
+                                x = float(line[30:38].strip())
+                                y = float(line[38:46].strip())
+                                z = float(line[46:54].strip())
+                                coords.append([x, y, z])
+                            except (ValueError, IndexError):
+                                continue
+        except Exception as e:
+            logger.error(f"Error reading PDB file {pdb_path}: {e}")
+            return None
+        
+        return np.array(coords) if coords else None
+    
+    def compute_advanced_features(
+        self,
+        pdb_path: str,
+        max_dimension: int = 2,
+        max_filtration: float = 25.0,
+        include_landscapes: bool = False,
+        include_images: bool = False,
+        n_landscapes: int = 5,
+        image_resolution: int = 50
+    ) -> Dict[str, Any]:
+        """
+        Compute advanced topological features from PDB file.
+        
+        Args:
+            pdb_path: Path to protein PDB file
+            max_dimension: Maximum homology dimension
+            max_filtration: Maximum filtration radius
+            include_landscapes: Compute persistence landscapes
+            include_images: Compute persistence images
+            n_landscapes: Number of landscape layers
+            image_resolution: Resolution for persistence images
+        
+        Returns:
+            Complete topological analysis results
+        """
+        # Update instance parameters
+        self.max_dimension = max_dimension
+        self.max_filtration = max_filtration
+        
+        # Extract coordinates
+        coords = self._extract_ca_coords(pdb_path)
+        if coords is None or len(coords) == 0:
+            return {'error': 'Failed to extract coordinates'}
+        
+        # Compute persistence diagram
+        result = self.compute_persistence_diagram(coords, n_steps=100)
+        
+        # Add persistence entropy
+        h1_pairs = result.get('persistence_diagram', {}).get('H1', [])
+        if h1_pairs:
+            finite_pers = [p['persistence'] for p in h1_pairs if p['persistence'] != float('inf') and p['persistence'] > 0]
+            if finite_pers:
+                total = sum(finite_pers)
+                probs = [p/total for p in finite_pers]
+                entropy = -sum(p * np.log(p + 1e-10) for p in probs)
+                result['persistence_entropy'] = float(entropy)
+        
+        # Add landscapes if requested
+        if include_landscapes:
+            h1_diagram = result.get('persistence_diagram', {}).get('H1', [])
+            landscapes = self.compute_persistence_landscape(h1_diagram, n_landscapes, image_resolution)
+            result['landscapes'] = landscapes.tolist()
+        
+        # Add images if requested
+        if include_images:
+            h1_diagram = result.get('persistence_diagram', {}).get('H1', [])
+            image = self._compute_persistence_image(h1_diagram, image_resolution)
+            result['persistence_image'] = image.tolist() if image is not None else None
+        
+        return result
+    
+    def _compute_persistence_image(
+        self,
+        persistence_pairs: List[Dict],
+        resolution: int = 50
+    ) -> Optional[np.ndarray]:
+        """Compute persistence image from persistence diagram."""
+        finite_pairs = [p for p in persistence_pairs if p['death'] != float('inf')]
+        if not finite_pairs:
+            return np.zeros((resolution, resolution))
+        
+        # Transform to birth-persistence coordinates
+        births = np.array([p['birth'] for p in finite_pairs])
+        persists = np.array([p['death'] - p['birth'] for p in finite_pairs])
+        
+        # Create grid
+        b_min, b_max = births.min(), births.max()
+        p_min, p_max = 0, persists.max()
+        
+        if b_max == b_min:
+            b_max = b_min + 1
+        if p_max == p_min:
+            p_max = p_min + 1
+        
+        image = np.zeros((resolution, resolution))
+        
+        # Add Gaussian kernel at each point
+        sigma = max((b_max - b_min), (p_max - p_min)) / (resolution * 2)
+        
+        for b, p in zip(births, persists):
+            # Grid indices
+            bi = int((b - b_min) / (b_max - b_min) * (resolution - 1))
+            pi = int((p - p_min) / (p_max - p_min) * (resolution - 1))
+            bi = min(max(bi, 0), resolution - 1)
+            pi = min(max(pi, 0), resolution - 1)
+            
+            # Add weighted point (weight by persistence)
+            image[pi, bi] += p
+        
+        return image
 
 
 # Global instances (lazy loaded)
@@ -3162,6 +3564,71 @@ def get_advanced_topology() -> AdvancedTopologyComputer:
     if _advanced_topology is None:
         _advanced_topology = AdvancedTopologyComputer()
     return _advanced_topology
+
+
+# ===========================================================================
+# PHASE 1 HELPER FUNCTIONS - ADDITIONAL LAZY LOADED INSTANCES
+# ===========================================================================
+
+_disorder_predictor: Optional['DisorderPredictor'] = None
+_domain_detector: Optional['DomainDetector'] = None
+_topology_computer: Optional['AdvancedTopologyComputer'] = None
+
+
+def get_disorder_predictor() -> 'DisorderPredictor':
+    """Get or create disorder predictor instance."""
+    global _disorder_predictor
+    if _disorder_predictor is None:
+        _disorder_predictor = DisorderPredictor()
+    return _disorder_predictor
+
+
+def get_domain_detector() -> 'DomainDetector':
+    """Get or create domain detector instance."""
+    global _domain_detector
+    if _domain_detector is None:
+        _domain_detector = DomainDetector()
+    return _domain_detector
+
+
+def get_topology_computer() -> 'AdvancedTopologyComputer':
+    """Get or create topology computer instance for comparison operations."""
+    global _topology_computer
+    if _topology_computer is None:
+        _topology_computer = AdvancedTopologyComputer()
+    return _topology_computer
+
+
+def extract_plddt_from_pdb(pdb_path: str) -> List[float]:
+    """
+    Extract per-residue pLDDT values from PDB file.
+    
+    In AlphaFold PDB files, pLDDT is stored in the B-factor column.
+    Returns list of pLDDT values, one per residue (CA atoms).
+    """
+    plddt_values = []
+    current_residue = None
+    
+    try:
+        with open(pdb_path, 'r') as f:
+            for line in f:
+                if line.startswith('ATOM') and len(line) >= 66:
+                    atom_name = line[12:16].strip()
+                    if atom_name == 'CA':
+                        try:
+                            residue_num = int(line[22:26].strip())
+                            if residue_num != current_residue:
+                                current_residue = residue_num
+                                # B-factor column is 60-66
+                                plddt = float(line[60:66].strip())
+                                plddt_values.append(plddt)
+                        except (ValueError, IndexError):
+                            continue
+    except Exception as e:
+        logger.error(f"Error extracting pLDDT from {pdb_path}: {e}")
+        return []
+    
+    return plddt_values
 
 
 
@@ -4850,7 +5317,7 @@ async def detect_domains(params: DetectDomainsInput) -> str:
         
         # Detect domains
         detector = get_domain_detector()
-        domains = detector.detect_domains(
+        domains = detector.detect_domains_from_pdb(
             pdb_path,
             pae_threshold=params.pae_threshold,
             min_domain_size=params.min_domain_size
@@ -5087,28 +5554,24 @@ async def compute_semantic_similarity(params: ComputeSemanticSimilarityInput) ->
     Returns pairwise similarity matrix for term lists.
     """
     try:
-        calculator = get_semantic_calculator()
+        calculator = get_similarity_calculator()
         
         similarity = calculator.compute_similarity(
-            terms1=params.terms1,
-            terms2=params.terms2 or params.terms1,
-            method=params.method,
-            ontology=params.ontology
+            term1=params.term1,
+            term2=params.term2,
+            method=params.method
         )
         
         if params.response_format == ResponseFormat.MARKDOWN:
             lines = [
                 f"# Semantic Similarity ({params.method})",
                 "",
+                f"**Term 1:** {params.term1}",
+                f"**Term 2:** {params.term2}",
                 f"**Method:** {params.method}",
-                f"**Ontology:** {params.ontology}",
+                f"**Similarity:** {similarity.get('similarity', 'N/A'):.4f}" if isinstance(similarity, dict) else f"**Similarity:** {similarity:.4f}",
                 ""
             ]
-            if isinstance(similarity, dict) and 'matrix' in similarity:
-                lines.append("## Similarity Matrix")
-                # Show condensed view
-                lines.append(f"Shape: {len(params.terms1)} x {len(params.terms2 or params.terms1)}")
-                lines.append(f"Mean similarity: {similarity.get('mean', 'N/A'):.4f}")
             return "\n".join(lines)
         
         return json.dumps({"status": "success", "similarity": similarity}, indent=2)
@@ -5208,8 +5671,8 @@ async def compare_protein_topology(params: CompareProteinTopologyInput) -> str:
     Lower distance = more similar topology.
     """
     try:
-        id1 = params.uniprot_id1.upper().strip()
-        id2 = params.uniprot_id2.upper().strip()
+        id1 = params.protein1.upper().strip()
+        id2 = params.protein2.upper().strip()
         
         # Get both structures
         result1 = json.loads(await get_structure(GetStructureInput(

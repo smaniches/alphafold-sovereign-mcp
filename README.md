@@ -1,254 +1,138 @@
-# AlphaFold Sovereign MCP Server
-## TOPOLOGICA LLC - Private Research Infrastructure
+# AlphaFold Sovereign MCP
 
-**PROPRIETARY AND CONFIDENTIAL**  
-**Patent-pending framework by Santiago Maniches (ORCID: 0009-0005-6480-1987)**  
-**THIS SOFTWARE IS NOT FOR PUBLIC DISTRIBUTION**
+Production-grade MCP server for sovereign AlphaFold structure analysis with local-first architecture and advanced topological computation.
 
----
+## Features
 
-## UNIQUE VALUE PROPOSITION
+- **25 API Tools** for comprehensive protein structure analysis
+- **222,891 Local Structures** with dynamic indexing
+- **200M+ Online Fallback** via AlphaFold DB (no API key required)
+- **Persistent Homology** via Vietoris-Rips filtration
+- **GO Semantic Analysis** with information content metrics
+- **Multi-device Support** with configurable cache modes
 
-This MCP server goes **beyond AlphaFold** by integrating:
+## Quick Start
 
-| Data Source | Information Provided |
-|-------------|---------------------|
-| **AlphaFold DB** | 3D structure, pLDDT confidence, coordinate data |
-| **UniProt** | Protein function, GO annotations, active sites, disease links |
-| **Computed Features** | Secondary structure analysis, binding pocket detection |
-| **Topological Analysis** | Persistent homology (Betti numbers, Euler characteristic) |
-
-**Result**: Complete protein characterization in a single query.
-
----
-
-## ARCHITECTURE: SOVEREIGN CACHE-FIRST
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    QUERY: get_structure(P12345)                 │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  1. CHECK LOCAL INDEX (O(1) hash lookup)                        │
-│     - Primary: ALPHAFOLD2_STRUCTURES/pdb_files/                 │
-│     - Secondary: CACHE/online_structures/                       │
-│     → FOUND? Return immediately (sovereign, no network)         │
-└─────────────────────────────────────────────────────────────────┘
-                              │ NOT FOUND
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  2. FETCH FROM ALPHAFOLD DB (network)                           │
-│     - URL: https://alphafold.ebi.ac.uk/files/AF-{ID}-F1-*.pdb   │
-│     - NO API KEY REQUIRED                                       │
-│     - Auto-retry with exponential backoff                       │
-└─────────────────────────────────────────────────────────────────┘
-                              │ SUCCESS
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  3. AUTO-CACHE FOR FUTURE ACCESS (if cache_mode=sovereign)      │
-│     - Saved to: CACHE/online_structures/{ID}.pdb                │
-│     - Added to local index (no restart needed)                  │
-│     → Cache grows dynamically over time                         │
-└─────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## TOOLS AVAILABLE (8 Total)
-
-| Tool Name | Function |
-|-----------|----------|
-| `get_structure` | Retrieve AlphaFold structure (cache-first + online fallback) |
-| `get_enriched_protein` | **NEW** Complete protein profile (AlphaFold + UniProt + features) |
-| `search_structures` | Search local cache by glob pattern |
-| `batch_structures` | Retrieve multiple structures efficiently |
-| `get_features` | Compute secondary structure, binding pockets, confidence |
-| `get_topology` | Compute persistent homology (Betti numbers, Euler characteristic) |
-| `check_availability` | Check if structures exist locally/online |
-| `get_cache_statistics` | Get current cache size, mode, and configuration |
-
----
-
-## CONFIGURATION
-
-### Method 1: Environment Variables (Highest Priority)
+### Installation
 
 ```bash
-# Windows (PowerShell)
-$env:ALPHAFOLD_STRUCTURES_DIR = "D:\my_structures\pdb_files"
-$env:ALPHAFOLD_CACHE_DIR = "D:\my_cache"
-$env:ALPHAFOLD_CACHE_MODE = "sovereign"
-
-# Linux/Mac
-export ALPHAFOLD_STRUCTURES_DIR="/data/alphafold/pdb_files"
-export ALPHAFOLD_CACHE_DIR="/data/alphafold/cache"
-export ALPHAFOLD_CACHE_MODE="sovereign"
+git clone https://github.com/topologica-ai/alphafold-sovereign-mcp.git
+cd alphafold-sovereign-mcp
+pip install -e .
 ```
 
-### Method 2: Config File
+### Claude Desktop Integration
 
-Create `~/.alphafold_sovereign/config.json`:
-
-```json
-{
-    "structures_dir": "/path/to/structures/pdb_files",
-    "cache_dir": "/path/to/cache",
-    "cache_mode": "sovereign"
-}
-```
-
-### Cache Modes
-
-| Mode | Description | Use Case |
-|------|-------------|----------|
-| `sovereign` | Full read/write | Primary device with local storage |
-| `readonly` | Read cache, no writes | Secondary device sharing NAS/cloud cache |
-| `disabled` | Pure online, no cache | Mobile, temporary, or testing |
-
----
-
-## MULTI-DEVICE SETUP
-
-### Primary Device (Desktop with Storage)
-```json
-{
-    "cache_mode": "sovereign",
-    "structures_dir": "C:\\AlphaFold\\structures",
-    "cache_dir": "C:\\AlphaFold\\cache"
-}
-```
-
-### Secondary Device (Laptop)
-```json
-{
-    "cache_mode": "readonly",
-    "structures_dir": "\\\\NAS\\alphafold\\structures",
-    "cache_dir": "\\\\NAS\\alphafold\\cache"
-}
-```
-
-### Mobile/Temporary
-```bash
-export ALPHAFOLD_CACHE_MODE="disabled"
-# All requests go to AlphaFold DB online
-```
-
----
-
-## USAGE EXAMPLES
-
-### Get Enriched Protein Profile (Recommended)
-```
-Get enriched protein info for P53_HUMAN including GO terms and disease associations
-```
-
-Returns: Protein name, function, structure summary, GO annotations, active sites, disease links.
-
-### Get Structure Only
-```
-Get the AlphaFold structure for P12345 with features
-```
-
-### Search Local Cache
-```
-Search for all structures matching pattern Q9* in local cache
-```
-
-### Compute Topology
-```
-Compute persistent homology for structure A0A023FBW4
-```
-
-### Batch Retrieval
-```
-Get structures for: P53_HUMAN, EGFR_HUMAN, BRCA1_HUMAN
-```
-
-### Check Cache Statistics
-```
-Show me the AlphaFold cache statistics and configuration
-```
-
----
-
-## MATHEMATICAL FOUNDATION
-
-### Structural Features
-- **Secondary Structure**: Ramachandran angle-based (φ/ψ) with distance refinement
-- **Binding Pockets**: Local curvature analysis (negative = concave = pocket)
-- **Confidence Regions**: pLDDT-based quality classification
-
-### Topological Features (Patent-Pending)
-- **Vietoris-Rips Filtration**: VR(X, ε) for ε ∈ [0, ε_max]
-- **Betti Numbers**: β₀ (components), β₁ (loops), β₂ (voids)
-- **Euler Characteristic**: χ = β₀ - β₁ + β₂
-- **Persistence Diagrams**: Birth/death pairs for topological features
-
----
-
-## DIRECTORY STRUCTURE
-
-```
-C:\TOPOLOGICA_KAGGLE_CAFA6\                    # Default on Windows
-├── ALPHAFOLD2_STRUCTURES\
-│   └── pdb_files\           # Primary sovereign cache (bulk pre-downloaded)
-└── CACHE\
-    └── online_structures\   # Dynamic cache (auto-populated on fetch)
-
-~/.alphafold_sovereign/                         # Linux/Mac config location
-└── config.json              # User configuration
-```
-
----
-
-## CLAUDE DESKTOP CONFIG
-
-Location: `C:\Users\<user>\AppData\Roaming\Claude\claude_desktop_config.json`
+Add to `claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
-    "alphafold_sovereign": {
-      "command": "C:\\Python\\python.exe",
-      "args": ["path/to/alphafold_mcp.py"],
+    "alphafold-sovereign": {
+      "command": "python",
+      "args": ["-m", "alphafold_sovereign"],
       "env": {
-        "ALPHAFOLD_CACHE_MODE": "sovereign"
+        "ALPHAFOLD_STRUCTURES_DIR": "/path/to/pdb_files",
+        "ALPHAFOLD_CACHE_DIR": "/path/to/cache"
       }
     }
   }
 }
 ```
 
----
+## Configuration
 
-## LOGS
+Configuration priority (highest to lowest):
 
-MCP server logs appear in:
-- Windows: `C:\Users\<user>\AppData\Roaming\Claude\logs\mcp-server-alphafold_sovereign.log`
-- Linux/Mac: `~/.config/Claude/logs/mcp-server-alphafold_sovereign.log`
+1. **Environment variables**: `ALPHAFOLD_STRUCTURES_DIR`, `ALPHAFOLD_CACHE_DIR`, `ALPHAFOLD_CACHE_MODE`
+2. **User config**: `~/.alphafold_sovereign/config.json`
+3. **XDG config**: `~/.config/alphafold_sovereign/config.json`
+4. **Module defaults**: Platform-specific paths
 
----
+### Cache Modes
 
-## API DEPENDENCIES (NO KEYS REQUIRED)
+| Mode | Description |
+|------|-------------|
+| `sovereign` | Full read/write (primary device) |
+| `readonly` | Read cache, no writes (secondary device) |
+| `disabled` | Pure online, no cache (mobile/temporary) |
 
-| API | Purpose | Auth |
-|-----|---------|------|
-| AlphaFold DB | 3D protein structures | Public |
-| UniProt REST | Protein metadata | Public |
+## API Reference
 
----
+### Core Tools (7)
 
-## INTELLECTUAL PROPERTY
+| Tool | Description |
+|------|-------------|
+| `get_structure` | Retrieve AlphaFold structure by UniProt ID |
+| `search_structures` | Search local cache by pattern |
+| `batch_structures` | Retrieve multiple structures (up to 50) |
+| `get_features` | Compute structural features |
+| `get_topology` | Compute persistent homology |
+| `check_availability` | Check local/online availability |
+| `get_cache_statistics` | Get cache statistics |
 
-This software implements patent-pending innovations:
-- Drift tensor correction framework (R² = 0.9992)
-- Topological data analysis for protein structures
-- Sovereign computational infrastructure
+### Enrichment Tools (9)
 
-All rights reserved. Unauthorized distribution prohibited.
+| Tool | Description |
+|------|-------------|
+| `get_enriched_protein` | AlphaFold + UniProt + GO + disease |
+| `batch_go_lookup` | Batch GO annotations (up to 500) |
+| `search_by_go_term` | Find proteins by GO term |
+| `get_go_hierarchy` | Navigate GO parent/child relationships |
+| `export_protein_set` | Export to TSV/CSV for ML pipelines |
+| `filter_by_organism` | Filter by organism |
+| `get_protein_families` | Cluster proteins by similarity |
+| `find_similar_proteins` | Find similar by sequence/structure |
+| `get_domain_annotations` | Pfam/InterPro domain annotations |
 
----
+### Advanced Analysis Tools (9)
 
-© 2025 TOPOLOGICA LLC - Santiago Maniches (ORCID: 0009-0005-6480-1987)
+| Tool | Description |
+|------|-------------|
+| `extract_pae_matrix` | Extract Predicted Aligned Error matrix |
+| `detect_domains` | Detect domains from PAE clustering |
+| `predict_disorder` | Predict intrinsically disordered regions |
+| `get_plddt_profile` | Per-residue pLDDT confidence profile |
+| `compute_information_content` | GO term information content |
+| `compute_semantic_similarity` | GO semantic similarity (Resnik/Lin/Jiang) |
+| `get_advanced_topology` | Full TDA: landscapes, images, Euler curves |
+| `compare_protein_topology` | Wasserstein/bottleneck distance |
+| `batch_protein_analysis` | Comprehensive batch analysis |
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    AlphaFold Sovereign MCP                  │
+├─────────────────────────────────────────────────────────────┤
+│  1. Check Local Cache (dynamically indexed)                 │
+│  2. Fallback: AlphaFold DB Online (no API key)              │
+│  3. Auto-cache fetched structures                           │
+│  4. Compute features/topology on-demand                     │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Mathematical Foundation
+
+Built on rigorous topological data analysis:
+
+- **Persistent Homology**: Vietoris-Rips complex on C-alpha atoms
+- **Betti Numbers**: β₀ (components), β₁ (loops), β₂ (voids)
+- **Distances**: Wasserstein (optimal transport), Bottleneck (max matching)
+- **GO Semantics**: Information content IC(t) = -log(P(t))
+
+## Documentation
+
+Full API documentation: [docs/index.html](docs/index.html)
+
+## License
+
+Proprietary - TOPOLOGICA LLC
+
+Patent-pending drift tensor correction framework (R²=0.9992)
+
+## Author
+
+Santiago Maniches (ORCID: [0009-0005-6480-1987](https://orcid.org/0009-0005-6480-1987))
+
+TOPOLOGICA LLC | [topologica.ai](https://topologica.ai)
