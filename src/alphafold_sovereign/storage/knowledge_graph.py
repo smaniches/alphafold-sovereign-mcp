@@ -141,19 +141,19 @@ class KnowledgeGraph:
             self._apply_migration_1(conn)
             conn.execute(
                 "INSERT INTO _schema_version VALUES (1, ?)",
-                [datetime.datetime.utcnow().isoformat()],
+                [datetime.datetime.now(datetime.timezone.utc).isoformat()],
             )
         if current < 2:
             self._apply_migration_2(conn)
             conn.execute(
                 "INSERT INTO _schema_version VALUES (2, ?)",
-                [datetime.datetime.utcnow().isoformat()],
+                [datetime.datetime.now(datetime.timezone.utc).isoformat()],
             )
         if current < 3:
             self._apply_migration_3(conn)
             conn.execute(
                 "INSERT INTO _schema_version VALUES (3, ?)",
-                [datetime.datetime.utcnow().isoformat()],
+                [datetime.datetime.now(datetime.timezone.utc).isoformat()],
             )
         conn.commit()
 
@@ -434,7 +434,7 @@ class KnowledgeGraph:
         extra: dict[str, Any] | None = None,
     ) -> str:
         """Upsert a protein record. Returns the uniprot_id."""
-        now = datetime.datetime.utcnow().isoformat()
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
         canonical: dict[str, Any] = {
             "uniprot_id": uniprot_id,
             "gene_symbol": gene_symbol,
@@ -512,7 +512,7 @@ class KnowledgeGraph:
         acmg_criteria: dict[str, Any] | None = None,
     ) -> str:
         """Upsert a variant record. Returns the hgvs identifier."""
-        now = datetime.datetime.utcnow().isoformat()
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
         canonical: dict[str, Any] = {
             "hgvs": hgvs,
             "clinvar_class": clinvar_class,
@@ -605,7 +605,7 @@ class KnowledgeGraph:
         therapeutic_area: bool = False,
     ) -> str:
         """Upsert a disease record. Returns the mondo_id."""
-        now = datetime.datetime.utcnow().isoformat()
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
         async with self._lock:
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(
@@ -666,7 +666,7 @@ class KnowledgeGraph:
         alogp: float | None = None,
     ) -> str:
         """Upsert a drug record. Returns the chembl_id."""
-        now = datetime.datetime.utcnow().isoformat()
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
         async with self._lock:
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(
@@ -719,15 +719,14 @@ class KnowledgeGraph:
         request_id: str = "",
     ) -> int:
         """Log a tool invocation for audit trail. Returns the invocation row ID."""
-        now = datetime.datetime.utcnow().isoformat()
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
         params_hash = _sha256(params)
         params_json = json.dumps(params, default=str)
         result_hash: str | None = None
         result_json: str | None = None
         if result is not None:
             result_hash = _sha256(result)
-            raw = json.dumps(result, default=str)
-            result_json = raw[:1_000_000]  # cap at 1MB
+            result_json = json.dumps(result, default=str)
 
         async with self._lock:
             loop = asyncio.get_event_loop()

@@ -16,6 +16,7 @@ Reference:
 """
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 import structlog
@@ -243,23 +244,26 @@ class ChEMBLClient(BaseAsyncClient):
         if not chembl_ids:
             return []
 
-        # Batch-fetch compound info
+        # Batch-fetch compound info in parallel
+        target_ids = chembl_ids[:50]
+        molecule_results = await asyncio.gather(
+            *[self._get_molecule(cid) for cid in target_ids],
+            return_exceptions=True,
+        )
         drugs: list[dict[str, Any]] = []
-        for cid in chembl_ids[:50]:
-            drug = await self._get_molecule(cid)
-            if drug is None:
+        for cid, drug in zip(target_ids, molecule_results):
+            if drug is None or isinstance(drug, BaseException):
                 continue
-            max_phase = int(drug.get("max_phase") or 0)
+            max_phase = int(drug.get("max_phase") or 0)  # type: ignore[union-attr]
             if max_phase < min_phase:
                 continue
-            # Match mechanism entry
             mechs = [
                 m.get("mechanism_of_action", "")
                 for m in data.get("mechanisms", [])
                 if m.get("molecule_chembl_id") == cid and m.get("mechanism_of_action")
             ]
-            drug["mechanism"] = mechs[0] if mechs else ""
-            drugs.append(drug)
+            drug["mechanism"] = mechs[0] if mechs else ""  # type: ignore[index]
+            drugs.append(drug)  # type: ignore[arg-type]
 
         return sorted(drugs, key=lambda d: d.get("max_phase", 0), reverse=True)
 

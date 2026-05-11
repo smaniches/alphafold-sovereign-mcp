@@ -1195,24 +1195,29 @@ async def _omim_to_mondo(disease_id: str) -> str | None:
         return None
 
 
-async def _uniprot_to_ensembl(uniprot_id: str) -> str:
-    """Resolve UniProt accession to Ensembl gene ID via UniProt REST API.
+_uniprot_http: "httpx.AsyncClient | None" = None
 
-    Full async client in clients/uniprot.py (Wave 3 migration); this
-    is a lightweight inline implementation for immediate use.
-    """
-    import httpx
+
+def _get_uniprot_http() -> "httpx.AsyncClient":
+    global _uniprot_http  # noqa: PLW0603
+    import httpx  # noqa: PLC0415
+    if _uniprot_http is None:
+        _uniprot_http = httpx.AsyncClient(timeout=10.0)
+    return _uniprot_http
+
+
+async def _uniprot_to_ensembl(uniprot_id: str) -> str:
+    """Resolve UniProt accession to Ensembl gene ID via UniProt REST API."""
     url = f"https://rest.uniprot.org/uniprotkb/{uniprot_id}.json"
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(url)
-            resp.raise_for_status()
-            data = resp.json()
-            for ref in data.get("dbReferences", []):
-                if ref.get("type") == "Ensembl":
-                    for prop in ref.get("properties", []):
-                        if prop.get("key") == "gene ID":
-                            return prop["value"]
+        resp = await _get_uniprot_http().get(url)
+        resp.raise_for_status()
+        data = resp.json()
+        for ref in data.get("dbReferences", []):
+            if ref.get("type") == "Ensembl":
+                for prop in ref.get("properties", []):
+                    if prop.get("key") == "gene ID":
+                        return prop["value"]
     except Exception:
         pass
     return ""

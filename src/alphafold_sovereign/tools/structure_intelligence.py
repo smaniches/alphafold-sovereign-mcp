@@ -49,7 +49,7 @@ mcp: FastMCP = FastMCP("alphafold_sovereign_structure_intelligence")
 
 
 def _provenance(**meta: str) -> str:
-    ts = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+    ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     parts = ", ".join(f"{k}={v}" for k, v in meta.items() if v)
     return f"\n\n---\n*AlphaFold Sovereign MCP v{__version__} · {ts} · {parts}*"
 

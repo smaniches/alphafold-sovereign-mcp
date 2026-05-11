@@ -315,7 +315,10 @@ class BaseAsyncClient:
         extra_headers: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         response = await self._request("GET", path, params=params, extra_headers=extra_headers)
-        return response.json()  # type: ignore[no-any-return]
+        try:
+            return response.json()  # type: ignore[no-any-return]
+        except Exception as exc:
+            raise UpstreamError(self.upstream_name, response.status_code, f"JSON parse failed: {exc}") from exc
 
     async def _get_bytes(self, path: str, params: dict[str, Any] | None = None) -> bytes:
         response = await self._request("GET", path, params=params)
@@ -328,7 +331,10 @@ class BaseAsyncClient:
         extra_headers: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         response = await self._request("POST", path, json=json, extra_headers=extra_headers)
-        return response.json()  # type: ignore[no-any-return]
+        try:
+            return response.json()  # type: ignore[no-any-return]
+        except Exception as exc:
+            raise UpstreamError(self.upstream_name, response.status_code, f"JSON parse failed: {exc}") from exc
 
     async def _graphql(self, endpoint: str, query: str, variables: dict[str, Any]) -> dict[str, Any]:
         """Execute a GraphQL query against an absolute endpoint path."""

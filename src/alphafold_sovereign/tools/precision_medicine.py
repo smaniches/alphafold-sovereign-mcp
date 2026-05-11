@@ -97,7 +97,7 @@ def _chembl() -> ChEMBLClient:
 # ── Provenance footer ─────────────────────────────────────────────────────────
 
 def _provenance(**sources: str) -> str:
-    ts = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+    ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     src_str = ", ".join(f"{k}={v}" for k, v in sources.items() if v)
     return f"\n\n---\n*AlphaFold Sovereign MCP v{__version__} · {ts} · {src_str}*"
 
@@ -445,7 +445,10 @@ async def generate_variant_clinical_report(
                 _opentargets().associated_diseases(ensembl_id, limit=5)
             )
         else:
-            tasks.append(asyncio.coroutine(lambda: [])())  # type: ignore
+            async def _empty_list() -> list[Any]:
+                return []
+
+            tasks.append(_empty_list())
 
         results = await asyncio.gather(*tasks, return_exceptions=True)
         if not isinstance(results[0], Exception):
@@ -627,9 +630,12 @@ async def assess_target_druggability(
     log = logger.bind(uniprot_id=uid, tool="assess_target_druggability")
     log.info("start")
 
+    async def _empty_dict() -> dict[str, Any]:
+        return {}
+
     chembl_target, ot_drug_info = await asyncio.gather(
         _chembl().target_by_uniprot(uid),
-        asyncio.coroutine(lambda: {})(),  # placeholder — populated below
+        _empty_dict(),
         return_exceptions=True,
     )
 
@@ -1298,11 +1304,15 @@ async def find_drug_repurposing_candidates(
 
 def _build_gnomad_id(hgvs: str, vep_results: list[dict[str, Any]]) -> str | None:
     """Attempt to build a gnomAD variant ID from VEP result mappings."""
-    for tc in vep_results:
-        # VEP returns location in transcript; we need genomic coords
-        # gnomAD ID format: {chrom}-{pos}-{ref}-{alt}
-        # This comes from the top-level hit, not the transcript consequence
-        pass
+    for hit in vep_results:
+        # VEP top-level hit contains seq_region_name, start, and allele_string
+        chrom = str(hit.get("seq_region_name", "")).lstrip("chr")
+        pos = hit.get("start")
+        allele_str = hit.get("allele_string", "")
+        if chrom and pos and "/" in allele_str:
+            ref, _, alt = allele_str.partition("/")
+            if ref and alt and ref != "-" and alt != "-":
+                return f"{chrom}-{pos}-{ref}-{alt}"
     # Fallback: try to parse from HGVS genomic notation
     m = re.search(r"(\d+)-(\d+)-([ACGT]+)-([ACGT]+)", hgvs.replace(":", "-"))
     if m:
