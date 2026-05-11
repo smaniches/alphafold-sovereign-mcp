@@ -101,7 +101,6 @@ dev = [
     "pytest-xdist>=3.5.0",
     "pytest-benchmark>=4.0.0",
     "pytest-mock>=3.14.0",
-    "pytest-rerunfailures>=14.0",
     "hypothesis>=6.103.0",
     "respx>=0.21.0",
     "ruff>=0.4.0",

@@ -81,7 +81,6 @@ jobs:
             --cov-report=term-missing \
             --cov-report=xml:coverage.xml \
             --cov-fail-under=60 \
-            --reruns 2 --reruns-delay 1 \
             -v --tb=short
         env:
           PYTHONPATH: src
