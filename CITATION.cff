@@ -1,0 +1,76 @@
+cff-version: 1.2.0
+message: >-
+  If you use AlphaFold Sovereign MCP in research, please cite it
+  using the metadata below. For citations of specific data sources
+  accessed through this software (AlphaFold DB, UniProt, etc.)
+  please also cite those sources according to their own citation
+  requirements.
+type: software
+title: "AlphaFold Sovereign MCP"
+abstract: >-
+  A production-grade Model Context Protocol (MCP) server for
+  sovereign structural-biology analysis. Provides 25+ tools spanning
+  AlphaFold structure retrieval, persistent-homology topological data
+  analysis, disease-ontology integration (MONDO, HPO, ICD-10/11,
+  OMIM, Orphanet, Open Targets), variant triage (AlphaMissense,
+  ClinVar, gnomAD), sequence-of-concern biosecurity screening, and
+  federated multi-instance operation. Designed for pharmaceutical,
+  clinical-research, and national-security deployments requiring
+  air-gap installability, 21 CFR Part 11 audit trails, and
+  FIPS 140-3 cryptographic compliance.
+authors:
+  - family-names: Maniches
+    given-names: Santiago
+    orcid: "https://orcid.org/0009-0005-6480-1987"
+    affiliation: "TOPOLOGICA LLC"
+    email: "santiago@topologica.ai"
+license: Apache-2.0
+repository-code: "https://github.com/smaniches/alphafold-sovereign-mcp"
+url: "https://docs.topologica.ai"
+keywords:
+  - alphafold
+  - protein-structure
+  - model-context-protocol
+  - MCP
+  - bioinformatics
+  - structural-biology
+  - topological-data-analysis
+  - persistent-homology
+  - disease-ontology
+  - MONDO
+  - biosecurity
+  - drug-discovery
+  - clinical-research
+  - FedRAMP
+  - FIPS-140-3
+version: "1.0.0"
+date-released: "2026-05-10"
+references:
+  - type: software
+    title: "AlphaFold Protein Structure Database"
+    authors:
+      - family-names: Jumper
+        given-names: John
+      - name: "DeepMind"
+      - name: "EMBL-EBI"
+    url: "https://alphafold.ebi.ac.uk"
+    notes: >-
+      Jumper, J. et al. Highly accurate protein structure prediction
+      with AlphaFold. Nature 596, 583–589 (2021).
+  - type: software
+    title: "Model Context Protocol"
+    authors:
+      - name: "Anthropic"
+    url: "https://modelcontextprotocol.io"
+    version: "2025-06-18"
+  - type: software
+    title: "MONDO Disease Ontology"
+    authors:
+      - name: "Monarch Initiative"
+    url: "https://mondo.monarchinitiative.org"
+  - type: software
+    title: "Human Phenotype Ontology"
+    authors:
+      - family-names: Köhler
+        given-names: Sebastian
+    url: "https://hpo.jax.org"

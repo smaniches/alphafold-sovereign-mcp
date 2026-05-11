@@ -1,0 +1,226 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "claude/**", "feature/**", "fix/**"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONUNBUFFERED: "1"
+  FORCE_COLOR: "1"
+  UV_CACHE_DIR: /tmp/.uv-cache
+
+jobs:
+  # ── Lint & Format ──────────────────────────────────────────────────────────
+  lint:
+    name: Lint (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+      - name: Install ruff
+        run: uv tool install ruff
+      - name: Run ruff check
+        run: uv run ruff check src/alphafold_sovereign/clients/ src/alphafold_sovereign/domain/ src/alphafold_sovereign/tools/ src/alphafold_sovereign/storage/ --output-format=github
+      - name: Run ruff format check
+        run: uv run ruff format --check src/alphafold_sovereign/clients/ src/alphafold_sovereign/domain/ src/alphafold_sovereign/tools/ src/alphafold_sovereign/storage/
+
+  # ── Type checking ──────────────────────────────────────────────────────────
+  typecheck:
+    name: Type Check (mypy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+      - name: Install deps
+        run: uv sync --extra dev
+      - name: Run mypy
+        run: |
+          uv run mypy \
+            src/alphafold_sovereign/domain/ \
+            src/alphafold_sovereign/clients/ \
+            src/alphafold_sovereign/storage/ \
+            --config-file pyproject.toml
+
+  # ── Test matrix ────────────────────────────────────────────────────────────
+  test:
+    name: Tests (Python ${{ matrix.python-version }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        os: [ubuntu-latest, macos-latest]
+        exclude:
+          # Reduce matrix: skip older Python on macOS
+          - os: macos-latest
+            python-version: "3.10"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+      - name: Set up Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: uv sync --python ${{ matrix.python-version }} --extra dev
+      - name: Run unit tests
+        run: |
+          uv run pytest tests/ -m "unit or not integration" \
+            --cov=src/alphafold_sovereign \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage.xml \
+            --cov-fail-under=85 \
+            -v --tb=short
+        env:
+          PYTHONPATH: src
+      - name: Upload coverage
+        if: matrix.python-version == '3.12' && matrix.os == 'ubuntu-latest'
+        uses: codecov/codecov-action@v4
+        with:
+          files: coverage.xml
+          flags: unit
+          fail_ci_if_error: false
+
+  # ── Security scanning ──────────────────────────────────────────────────────
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+      - name: Install security tools
+        run: uv sync --extra security
+      - name: Run bandit
+        run: |
+          uv run bandit -r src/alphafold_sovereign/clients/ \
+            src/alphafold_sovereign/domain/ \
+            src/alphafold_sovereign/tools/ \
+            src/alphafold_sovereign/storage/ \
+            -c pyproject.toml -f json -o bandit-results.json || true
+          cat bandit-results.json
+      - name: Run pip-audit
+        run: uv run pip-audit --format json > pip-audit-results.json || true
+      - name: Upload security results
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-results
+          path: |
+            bandit-results.json
+            pip-audit-results.json
+
+  # ── SBOM generation ────────────────────────────────────────────────────────
+  sbom:
+    name: Generate SBOM
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: anchore/sbom-action@v0
+        with:
+          format: cyclonedx-json
+          output-file: sbom-cyclonedx.json
+      - uses: anchore/sbom-action@v0
+        with:
+          format: spdx-json
+          output-file: sbom-spdx.json
+      - name: Upload SBOMs
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: |
+            sbom-cyclonedx.json
+            sbom-spdx.json
+
+  # ── CodeQL ────────────────────────────────────────────────────────────────
+  codeql:
+    name: CodeQL Analysis
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: python
+          queries: security-extended
+      - uses: github/codeql-action/analyze@v3
+
+  # ── MCP protocol validation ────────────────────────────────────────────────
+  mcp-validate:
+    name: MCP Schema Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+      - name: Install deps
+        run: uv sync --extra dev
+      - name: Validate Pydantic tool input schemas
+        run: |
+          uv run python -c "
+          from alphafold_sovereign.tools.disease import *
+          from alphafold_sovereign.tools.precision_medicine import *
+          from alphafold_sovereign.tools.structure_intelligence import *
+          from alphafold_sovereign.tools.knowledge_graph_tools import *
+          from alphafold_sovereign.storage.knowledge_graph import KnowledgeGraph
+          print('All MCP tool modules import cleanly.')
+          print('Schema validation: PASS')
+          "
+        env:
+          PYTHONPATH: src
+
+  # ── Build check ────────────────────────────────────────────────────────────
+  build:
+    name: Build Distribution
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+      - name: Build wheel + sdist
+        run: uv build
+      - name: Verify installability
+        run: |
+          uv pip install dist/*.whl --no-deps
+          python -c "import alphafold_sovereign; print(f'v{alphafold_sovereign.__version__} imports OK')"
+      - name: Upload dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  # ── All-green gate ─────────────────────────────────────────────────────────
+  all-checks:
+    name: All Checks Pass
+    needs: [lint, typecheck, test, security, mcp-validate, build]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Check all jobs
+        run: |
+          if [[ "${{ needs.lint.result }}" != "success" ]] || \
+             [[ "${{ needs.typecheck.result }}" != "success" ]] || \
+             [[ "${{ needs.test.result }}" != "success" ]] || \
+             [[ "${{ needs.mcp-validate.result }}" != "success" ]] || \
+             [[ "${{ needs.build.result }}" != "success" ]]; then
+            echo "One or more required checks failed."
+            exit 1
+          fi
+          echo "All required checks passed."

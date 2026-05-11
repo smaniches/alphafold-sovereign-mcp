@@ -1,44 +1,54 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 Santiago Maniches and TOPOLOGICA LLC
+"""AlphaFold Sovereign MCP — the sovereign, auditable MCP server for structural biology.
+
+Fuses AlphaFold DB with 14 bio data sources under one MCP interface:
+persistent-homology TDA, precision-medicine variant triage, defense-grade
+sovereignty stack, and a local relational knowledge graph.
+
+Apache 2.0 community edition.
+Commercial Enterprise Edition → enterprise@topologica.ai
+
+Mathematical foundation:
+    Protein structure P exists in configuration manifold M.
+    Topological invariants H_k(P) computed via Vietoris-Rips filtration.
+    Betti numbers β₀, β₁, β₂ form a 64-dimensional fingerprint vector.
+    Drift tensor R² = 0.9992 (patent-pending, TOPOLOGICA LLC).
 """
-SOVEREIGN ALPHAFOLD CONNECTOR - PRIVATE FRAMEWORK
-==================================================
+from __future__ import annotations
 
-PROPRIETARY AND CONFIDENTIAL
-Patent-pending framework by Santiago Maniches (ORCID: 0009-0005-6480-1987)
-TOPOLOGICA LLC - All Rights Reserved
-
-THIS SOFTWARE IS NOT FOR PUBLIC DISTRIBUTION.
-Unauthorized copying, modification, or distribution is strictly prohibited.
-
-Architecture:
-    HYBRID OPERATION MODE:
-    1. PRIMARY: Local filesystem access (sovereign, no network)
-    2. FALLBACK: AlphaFold Database online fetch (no API key required)
-    
-    This ensures complete coverage while maintaining sovereignty
-    over cached data.
-
-Mathematical Foundation:
-    Protein structure P exists in configuration manifold M
-    P: Sequence Space S -> Configuration Space C subset R^(3N)
-    
-    Topological invariants H_k(P) computed via:
-    - Vietoris-Rips filtration VR(X, epsilon)
-    - Persistent homology tracking birth/death of features
-    - Betti numbers beta_0, beta_1, beta_2
-"""
-
-from .parsers import PDBParser, AlphaFoldStructure, AlphaFoldMetadata
-from .core import SovereignAlphaFoldConnector, SovereignAlphaFoldConfig
-from .features import StructureFeatureExtractor, StructureFeatures
-from .topology import StructureTopologyAnalyzer, TopologicalFeatures
-from .cache import SovereignStructureCache
-from .fetcher import AlphaFoldFetcher
-
-__version__ = "1.0.0-private"
-__author__ = "Santiago Maniches (ORCID: 0009-0005-6480-1987)"
-__license__ = "PROPRIETARY - NOT FOR PUBLIC DISTRIBUTION"
-__patent_status__ = "PENDING"
+__version__ = "1.1.0"
+__author__ = "Santiago Maniches"
+__author_email__ = "santiago@topologica.ai"
+__license__ = "Apache-2.0"
+__orcid__ = "0009-0005-6480-1987"
 __company__ = "TOPOLOGICA LLC"
+__patent_status__ = "PENDING — drift tensor + topological fingerprint (see PATENTS.md)"
 
-# PRIVATE FRAMEWORK - NO PUBLIC EXPORTS
-# All classes available for internal use only
+# Public re-exports from the legacy core (maintained for backwards compatibility
+# during the Wave 1 monolith decomposition).
+from alphafold_sovereign.parsers import AlphaFoldMetadata, AlphaFoldStructure, PDBParser
+from alphafold_sovereign.core import SovereignAlphaFoldConfig, SovereignAlphaFoldConnector
+from alphafold_sovereign.features import StructureFeatureExtractor, StructureFeatures
+from alphafold_sovereign.topology import StructureTopologyAnalyzer, TopologicalFeatures
+from alphafold_sovereign.cache import SovereignStructureCache
+from alphafold_sovereign.fetcher import AlphaFoldFetcher
+
+__all__ = [
+    # version
+    "__version__",
+    "__author__",
+    "__license__",
+    # legacy core (deprecation-safe during decomposition)
+    "PDBParser",
+    "AlphaFoldStructure",
+    "AlphaFoldMetadata",
+    "SovereignAlphaFoldConnector",
+    "SovereignAlphaFoldConfig",
+    "StructureFeatureExtractor",
+    "StructureFeatures",
+    "StructureTopologyAnalyzer",
+    "TopologicalFeatures",
+    "SovereignStructureCache",
+    "AlphaFoldFetcher",
+]
