@@ -9,6 +9,47 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added — Wave 1: Production hardening (continued)
+- 100% line + branch coverage on every shipped module (clients, tools, domain,
+  storage, server). Coverage gate raised from 30 → 100 in CI.
+- `tests/conftest.py` with shared respx + retry-collapsing + rate-limit-off
+  fixtures for hermetic, sub-second test runs.
+- `tests/test_base_client_full.py` — full-coverage suite for the async base
+  client: circuit breaker, retry, air-gap, JSON parsing errors, rate-limiter
+  branch.
+- `tests/test_client_*.py` — respx-based contract tests for every upstream
+  client (AlphaFold, ChEMBL, ClinVar, DisGeNET, Ensembl, gnomAD, HPO, MONDO,
+  Open Targets).
+- `tests/test_tool_*.py` — mocked-client tests for the 4 flagship tool
+  modules.
+- `src/alphafold_sovereign/server/stdio.py` — stdio transport entry-point
+  that aggregates each tool module's `FastMCP` instance.
+
+### Fixed — Wave 1: Production hardening
+- SQL injection (CWE-89) in `storage/knowledge_graph.py`: parameterised
+  `LIMIT` clauses and added the `_ALLOWED_TABLES` allow-list guarding
+  `export_to_dict(tables=...)`.
+- `__init__.py` no longer eagerly imports legacy `parsers`/`core`/`features`/
+  `topology` modules.  `import alphafold_sovereign` now succeeds without
+  `numpy` (the CI Build-Distribution `--no-deps` check passes).
+- 24 mypy strict errors across the client modules (proper return-type casts
+  for `Any`-typed upstream responses; removal of stale `# type: ignore`
+  comments).
+- 5 bandit/CodeQL `B608` hardcoded-SQL flags eliminated.
+- Dead `except RetryError` branch in `_base.py` removed (`reraise=True`
+  means it was unreachable).
+
+### Changed — Wave 1: Production hardening
+- **Monolith archived.** `alphafold_mcp.py` (5,840 LOC) and its supporting
+  modules (`parsers`, `core`, `features`, `topology`, `fetcher`, `cache`)
+  moved to `_archive/legacy/` with a deprecation timeline (removed in v1.2,
+  deleted in v2.0).  Not packaged in the wheel; excluded from lint, type,
+  coverage, and security tooling.
+- `pyproject.toml`: coverage `omit` reduced to `tests/*` and `_archive/*`;
+  `fail_under = 100`.
+- `__main__.py` entry-point now invokes `server.stdio.run_stdio()` rather
+  than the archived monolith.
+
 ### Added — Wave 0: Legal, Governance & Professionalization
 - Apache 2.0 license replacing proprietary license (full open-core model)
 - `LICENSE-COMMERCIAL.md` describing Enterprise Edition contractual guarantees

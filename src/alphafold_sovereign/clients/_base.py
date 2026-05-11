@@ -30,7 +30,6 @@ import httpx
 import structlog
 from tenacity import (
     AsyncRetrying,
-    RetryError,
     retry_if_exception,
     stop_after_attempt,
     wait_exponential_jitter,
@@ -281,13 +280,6 @@ class BaseAsyncClient:
                         )
                         response.raise_for_status()
 
-        except RetryError as exc:
-            await self._circuit.record_failure()
-            self._log.error(
-                "upstream_exhausted_retries",
-                elapsed=round(time.monotonic() - start, 3),
-            )
-            raise UpstreamError(self.upstream_name, 0, "Exhausted retries") from exc
         except httpx.HTTPStatusError as exc:
             await self._circuit.record_failure()
             raise UpstreamError(

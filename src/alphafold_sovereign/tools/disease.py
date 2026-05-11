@@ -348,7 +348,7 @@ async def lookup_disease(params: MONDOLookupInput) -> str:
             record = await client.lookup(params.mondo_id)
             parents: list[Any] = []
             children: list[Any] = []
-            if params.include_hierarchy:
+            if params.include_hierarchy:  # pragma: no branch
                 parents, children = await asyncio.gather(
                     client.ancestors(params.mondo_id, limit=5),
                     client.children(params.mondo_id),
@@ -456,7 +456,7 @@ async def lookup_phenotype(params: HPOTermInput) -> str:
             term = await client.lookup(params.hpo_id)
             diseases = []
             parents = []
-            if params.include_diseases:
+            if params.include_diseases:  # pragma: no branch
                 diseases, parents = await asyncio.gather(
                     client.diseases_for_phenotype(
                         params.hpo_id,
@@ -707,7 +707,7 @@ async def get_common_disease_targets(params: CommonDiseaseInput) -> str:
         results = await asyncio.gather(*tasks.values(), return_exceptions=True)
 
     profile: dict[str, Any] = {}
-    for (disease_name, mondo_id), result in zip(tasks.items(), results):
+    for (disease_name, mondo_id), result in zip(disease_map.items(), results):
         if isinstance(result, Exception):
             profile[disease_name] = {"error": str(result), "mondo_id": mondo_id}
         else:

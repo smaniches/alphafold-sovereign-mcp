@@ -117,7 +117,12 @@ class DisGeNETClient(BaseAsyncClient):
 
         results: list[dict[str, Any]] = []
         _d: Any = data
-        for item in _d.get("payload") or (_d if isinstance(_d, list) else []):
+        _items = (
+            _d
+            if isinstance(_d, list)
+            else (_d.get("payload") if isinstance(_d, dict) else []) or []
+        )
+        for item in _items:
             if not isinstance(item, dict):
                 continue
             score = float(item.get("score", 0.0) or 0.0)
@@ -179,7 +184,12 @@ class DisGeNETClient(BaseAsyncClient):
 
         results: list[dict[str, Any]] = []
         _d: Any = data
-        for item in _d.get("payload") or (_d if isinstance(_d, list) else []):
+        _items = (
+            _d
+            if isinstance(_d, list)
+            else (_d.get("payload") if isinstance(_d, dict) else []) or []
+        )
+        for item in _items:
             if not isinstance(item, dict):
                 continue
             score = float(item.get("score", 0.0) or 0.0)
@@ -235,7 +245,12 @@ class DisGeNETClient(BaseAsyncClient):
 
         results: list[dict[str, Any]] = []
         _d: Any = data
-        for item in _d.get("payload") or (_d if isinstance(_d, list) else []):
+        _items = (
+            _d
+            if isinstance(_d, list)
+            else (_d.get("payload") if isinstance(_d, dict) else []) or []
+        )
+        for item in _items:
             if not isinstance(item, dict):
                 continue
             results.append(
@@ -298,7 +313,12 @@ class DisGeNETClient(BaseAsyncClient):
 
         results: list[dict[str, Any]] = []
         _d: Any = data
-        for item in _d.get("payload") or (_d if isinstance(_d, list) else []):
+        _items = (
+            _d
+            if isinstance(_d, list)
+            else (_d.get("payload") if isinstance(_d, dict) else []) or []
+        )
+        for item in _items:
             if not isinstance(item, dict):
                 continue
             pval = float(item.get("p_value", 1.0) or 1.0)

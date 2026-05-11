@@ -63,6 +63,26 @@ _DEFAULT_DB_PATH = _DEFAULT_DB_DIR / "knowledge_graph.db"
 
 _SCHEMA_VERSION = 3
 
+# Static allow-list of table names used in dynamic SQL — guards against
+# identifier injection (CWE-89) in ``export_to_dict()`` and ``_gather_stats()``.
+# SQLite does not support parameterised table names, so identifiers must be
+# validated against this set before string interpolation.
+_ALLOWED_TABLES: frozenset[str] = frozenset(
+    {
+        "proteins",
+        "variants",
+        "diseases",
+        "drugs",
+        "genes",
+        "phenotypes",
+        "protein_disease",
+        "protein_drug",
+        "variant_disease",
+        "gene_phenotype",
+        "tool_invocations",
+    }
+)
+
 
 def _default_db_path() -> Path:
     custom = os.environ.get("ALPHAFOLD_KG_PATH", "")
@@ -946,9 +966,10 @@ class KnowledgeGraph:
             values.append(max_gnomad_af)
 
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-        sql = (
-            f"SELECT * FROM variant_summary {where} ORDER BY alphamissense_score DESC LIMIT {limit}"
-        )
+        # LIMIT is parameterised to avoid SQL injection even though the value
+        # comes from the typed Python signature (int) — defence in depth.
+        sql = f"SELECT * FROM variant_summary {where} ORDER BY alphamissense_score DESC LIMIT ?"  # nosec B608 - column identifiers are static; values are parameterised
+        values.append(int(limit))
 
         async with self._lock:
             loop = asyncio.get_event_loop()
@@ -972,7 +993,8 @@ class KnowledgeGraph:
             clauses.append("mean_plddt >= ?")
             values.append(min_plddt)
         where = f"WHERE {' AND '.join(clauses)}"
-        sql = f"SELECT * FROM proteins {where} ORDER BY mean_plddt DESC LIMIT {limit}"
+        sql = f"SELECT * FROM proteins {where} ORDER BY mean_plddt DESC LIMIT ?"  # nosec B608 - column identifiers static; values parameterised
+        values.append(int(limit))
         async with self._lock:
             loop = asyncio.get_event_loop()
             return await loop.run_in_executor(None, self._fetchall, sql, values)
@@ -991,7 +1013,8 @@ class KnowledgeGraph:
             clauses.append("mondo_id = ?")
             values.append(mondo_id)
         where = f"WHERE {' AND '.join(clauses)}"
-        sql = f"SELECT * FROM drug_landscape {where} ORDER BY max_phase DESC LIMIT {limit}"
+        sql = f"SELECT * FROM drug_landscape {where} ORDER BY max_phase DESC LIMIT ?"  # nosec B608 - column identifiers static; values parameterised
+        values.append(int(limit))
         async with self._lock:
             loop = asyncio.get_event_loop()
             return await loop.run_in_executor(None, self._fetchall, sql, values)
@@ -1004,22 +1027,13 @@ class KnowledgeGraph:
 
     def _gather_stats(self) -> dict[str, Any]:
         assert self._conn is not None
-        tables = [
-            "proteins",
-            "variants",
-            "diseases",
-            "drugs",
-            "genes",
-            "phenotypes",
-            "protein_disease",
-            "protein_drug",
-            "variant_disease",
-            "gene_phenotype",
-            "tool_invocations",
-        ]
         counts: dict[str, int] = {}
-        for t in tables:
-            row = self._conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()
+        for t in _ALLOWED_TABLES:
+            # Table names are an internal allow-list constant — never user input —
+            # but we validate-by-membership before interpolation as defence in depth.
+            if t not in _ALLOWED_TABLES:  # pragma: no cover  # invariant guard
+                continue
+            row = self._conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()  # nosec B608 - validated allow-list (_ALLOWED_TABLES)
             counts[t] = row[0] if row else 0
 
         last_inv = self._conn.execute(
@@ -1063,13 +1077,17 @@ class KnowledgeGraph:
         selected = tables or default_tables
         result: dict[str, list[dict[str, Any]]] = {}
         for t in selected:
+            # Validate table name against the static allow-list to prevent
+            # SQL identifier injection through the public ``tables=`` argument.
+            if t not in _ALLOWED_TABLES:
+                raise ValueError(f"Unknown table {t!r}. Allowed: {sorted(_ALLOWED_TABLES)}")
             async with self._lock:
                 loop = asyncio.get_event_loop()
                 result[t] = await loop.run_in_executor(
                     None,
                     self._fetchall,
-                    f"SELECT * FROM {t} LIMIT {limit}",
-                    [],
+                    f"SELECT * FROM {t} LIMIT ?",  # nosec B608 - table validated; LIMIT parameterised
+                    [int(limit)],
                 )
         return result
 
