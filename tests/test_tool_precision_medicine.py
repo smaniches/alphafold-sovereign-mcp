@@ -665,6 +665,29 @@ async def test_generate_variant_report_no_gene_symbol(
     assert out["gene_constraint"]["pLI"] is None
 
 
+async def test_generate_variant_report_ot_diseases_exception(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Open Targets associated_diseases raises → ot_diseases stays empty (line 462->466)."""
+    mocks = _patch_clients(monkeypatch)
+    mocks["ensembl"].vep_hgvs = AsyncMock(return_value=_make_vep_result())
+    mocks["ensembl"].gene_lookup = AsyncMock(
+        return_value={"ensembl_gene_id": "ENSG0001", "uniprot_ids": []}
+    )
+    mocks["clinvar"].search_by_hgvs = AsyncMock(return_value=[])
+    mocks["gnomad"].variant_frequencies = AsyncMock(return_value={})
+    mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
+    mocks["disgenet"].gene_disease_associations = AsyncMock(return_value=[])
+    mocks["opentargets"].associated_diseases = AsyncMock(side_effect=RuntimeError("ot fail"))
+
+    out = await generate_variant_clinical_report(
+        VariantClinicalReportInput(
+            hgvs="BRCA1:c.181T>G", include_drug_context=False
+        )
+    )
+    assert out["disease_associations"]["open_targets_top_diseases"] == []
+
+
 async def test_generate_variant_report_gnomad_variant_freq_exception(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1216,6 +1239,148 @@ async def test_classify_variant_acmg_no_gnomad_id(monkeypatch: pytest.MonkeyPatc
 
     out = await classify_variant_acmg(ACMGVariantInput(hgvs="X:c.18T>G"))
     assert "criteria_met" in out
+
+
+async def test_classify_variant_acmg_gnomad_var_freq_exception(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """gnomad.variant_frequencies raises during classify (line 1090-1091)."""
+    mocks = _patch_clients(monkeypatch)
+    mocks["ensembl"].vep_hgvs = AsyncMock(
+        return_value=[
+            {
+                "canonical": True,
+                "consequence_terms": ["missense_variant"],
+                "seq_region_name": "17",
+                "start": 12345,
+                "allele_string": "G/A",
+            }
+        ]
+    )
+    mocks["clinvar"].search_by_hgvs = AsyncMock(return_value=[])
+    mocks["gnomad"].variant_frequencies = AsyncMock(side_effect=RuntimeError("g fail"))
+    mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
+
+    out = await classify_variant_acmg(ACMGVariantInput(hgvs="BRCA1:c.18T>G"))
+    assert "criteria_met" in out
+
+
+async def test_classify_variant_acmg_pathogenic_strong_strong(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Hit final classification line 1165: 'Pathogenic' branch with PVS1 + Strong P*.
+
+    The evidence-starts-with-P condition relies on internal criteria construction.
+    Patch _acmg_strength to make PM2 a 'Strong' criterion with evidence starting 'P'.
+    """
+    import alphafold_sovereign.tools.precision_medicine as pm_mod
+
+    original_strength = pm_mod._acmg_strength
+    original_gnomad_to_acmg = pm_mod._gnomad_to_acmg
+
+    def fake_strength(code: str) -> str:
+        if code == "PM2":
+            return "Strong"
+        return original_strength(code)
+
+    def fake_gnomad_to_acmg(af: float | None) -> dict[str, str]:
+        # Inject evidence starting with "P"
+        if af is None:
+            return {}
+        return {"PM2": "Pathogenic-leaning evidence: af present"}
+
+    monkeypatch.setattr(pm_mod, "_acmg_strength", fake_strength)
+    monkeypatch.setattr(pm_mod, "_gnomad_to_acmg", fake_gnomad_to_acmg)
+
+    mocks = _patch_clients(monkeypatch)
+    mocks["ensembl"].vep_hgvs = AsyncMock(
+        return_value=[
+            {
+                "canonical": True,
+                "consequence_terms": ["stop_gained"],
+                "seq_region_name": "17",
+                "start": 12345,
+                "allele_string": "G/A",
+            }
+        ]
+    )
+    mocks["clinvar"].search_by_hgvs = AsyncMock(return_value=[])
+    mocks["gnomad"].variant_frequencies = AsyncMock(return_value={"global_af": 1e-6})
+    mocks["gnomad"].gene_constraint = AsyncMock(return_value={"loeuf": 0.2})
+
+    out = await classify_variant_acmg(ACMGVariantInput(hgvs="BRCA1:c.18T>G"))
+    assert out["draft_classification"] == "Pathogenic"
+
+
+async def test_classify_variant_acmg_likely_pathogenic_two_strong(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Hit line 1167: 'Likely Pathogenic' branch (no PVS1, ≥2 Strong P*)."""
+    import alphafold_sovereign.tools.precision_medicine as pm_mod
+
+    def fake_strength(code: str) -> str:
+        if code in {"PM2", "PP3"}:
+            return "Strong"
+        return "Supporting"
+
+    def fake_gnomad_to_acmg(af: float | None) -> dict[str, str]:
+        return {"PM2": "Pathogenic evidence: rare"}
+
+    def fake_am_to_acmg(am_score: float | None) -> dict[str, str]:
+        return {"PP3": "Pathogenic evidence: AM high"}
+
+    monkeypatch.setattr(pm_mod, "_acmg_strength", fake_strength)
+    monkeypatch.setattr(pm_mod, "_gnomad_to_acmg", fake_gnomad_to_acmg)
+    monkeypatch.setattr(pm_mod, "_am_to_acmg_evidence", fake_am_to_acmg)
+
+    mocks = _patch_clients(monkeypatch)
+    mocks["ensembl"].vep_hgvs = AsyncMock(
+        return_value=[
+            {
+                "canonical": True,
+                "consequence_terms": ["missense_variant"],
+                "seq_region_name": "17",
+                "start": 12345,
+                "allele_string": "G/A",
+            }
+        ]
+    )
+    mocks["clinvar"].search_by_hgvs = AsyncMock(return_value=[])
+    mocks["gnomad"].variant_frequencies = AsyncMock(
+        return_value={"alphamissense_score": 0.9, "global_af": 1e-6}
+    )
+    mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
+
+    out = await classify_variant_acmg(ACMGVariantInput(hgvs="BRCA1:c.18T>G"))
+    assert out["draft_classification"] == "Likely Pathogenic"
+
+
+async def test_classify_variant_acmg_canonical_skip(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """VEP results contain non-canonical entries that are skipped."""
+    mocks = _patch_clients(monkeypatch)
+    mocks["ensembl"].vep_hgvs = AsyncMock(
+        return_value=[
+            {
+                "canonical": False,
+                "consequence_terms": ["stop_gained"],
+            },
+            {
+                "canonical": True,
+                "consequence_terms": ["synonymous_variant"],
+                "seq_region_name": "1",
+                "start": 100,
+                "allele_string": "A/G",
+            },
+        ]
+    )
+    mocks["clinvar"].search_by_hgvs = AsyncMock(return_value=[])
+    mocks["gnomad"].variant_frequencies = AsyncMock(return_value={})
+    mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
+
+    out = await classify_variant_acmg(ACMGVariantInput(hgvs="BRCA1:c.18T>G"))
+    assert "BP7" in out["criteria_met"]
 
 
 # ---------------------------------------------------------------------------
