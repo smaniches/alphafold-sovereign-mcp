@@ -73,3 +73,6 @@ check_*.py
 merge_*.py
 insert_*.py
 *_additions.py
+
+# uv: ephemeral verify env created by CI build job
+.verify-env/

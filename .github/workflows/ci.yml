@@ -196,10 +196,15 @@ jobs:
           version: "latest"
       - name: Build wheel + sdist
         run: uv build
-      - name: Verify installability
+      - name: Verify wheel installs and imports cleanly (no-deps)
         run: |
-          uv pip install dist/*.whl --no-deps
-          python -c "import alphafold_sovereign; print(f'v{alphafold_sovereign.__version__} imports OK')"
+          # Use an isolated venv so we know exactly what's on the path.
+          # `uv pip install` against this venv installs the wheel without
+          # pulling any transitive dependencies, mimicking what an air-gap
+          # / sovereign user would see on first import.
+          uv venv .verify-env
+          uv pip install --python .verify-env/bin/python dist/*.whl --no-deps
+          .verify-env/bin/python -c "import alphafold_sovereign as a; print(f'v{a.__version__} imports OK (no-deps)')"
       - name: Upload dist
         uses: actions/upload-artifact@v4
         with:
