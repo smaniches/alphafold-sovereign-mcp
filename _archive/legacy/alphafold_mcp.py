@@ -1,12 +1,10 @@
-"""
-alphafold_mcp.py
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 Santiago Maniches and TOPOLOGICA LLC
+"""alphafold_mcp.py — Legacy monolith MCP server (being decomposed in Wave 1).
 
-PROPRIETARY AND CONFIDENTIAL - PRIVATE FRAMEWORK
-Patent-pending framework by Santiago Maniches (ORCID: 0009-0005-6480-1987)
-TOPOLOGICA LLC - All Rights Reserved
-
-THIS SOFTWARE IS NOT FOR PUBLIC DISTRIBUTION.
-Unauthorized copying, modification, or distribution is strictly prohibited.
+This file remains the live entry point during decomposition.
+New tools live in src/alphafold_sovereign/tools/.
+New clients live in src/alphafold_sovereign/clients/.
 
 Production MCP server for AlphaFold structure analysis.
 HYBRID MODE: Local filesystem primary + AlphaFold DB online fallback.

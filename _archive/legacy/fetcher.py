@@ -1,26 +1,16 @@
-"""
-SOVEREIGN ALPHAFOLD FETCHER - ONLINE ACCESS MODULE
-===================================================
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 Santiago Maniches and TOPOLOGICA LLC
+"""AlphaFold DB structure fetcher (legacy synchronous client).
 
-PROPRIETARY AND CONFIDENTIAL
-Patent-pending framework by Santiago Maniches (ORCID: 0009-0005-6480-1987)
-TOPOLOGICA LLC - All Rights Reserved
+Fetches AlphaFold structures from the EBI AlphaFold Database.
+NO API KEY REQUIRED — AlphaFold DB is publicly accessible (CC BY 4.0).
 
-THIS SOFTWARE IS NOT FOR PUBLIC DISTRIBUTION.
-
-Purpose:
-    Fetch AlphaFold structures directly from AlphaFold Database
-    when not available in local cache.
-    
-    NO API KEY REQUIRED - AlphaFold DB is publicly accessible.
-    
 URL Patterns:
     PDB: https://alphafold.ebi.ac.uk/files/AF-{UNIPROT_ID}-F1-model_v4.pdb
     CIF: https://alphafold.ebi.ac.uk/files/AF-{UNIPROT_ID}-F1-model_v4.cif
-    
-Mathematical Guarantee:
-    Online fetch provides IDENTICAL structure data to cached files.
-    Verified via SHA256 checksum comparison.
+
+Note: This module uses synchronous urllib — being replaced by
+src/alphafold_sovereign/clients/alphafold.py (async httpx) in Wave 1.
 """
 
 from typing import Optional, Dict, Any, Tuple

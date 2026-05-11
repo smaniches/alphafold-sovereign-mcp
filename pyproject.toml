@@ -1,31 +1,45 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 Santiago Maniches
+
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+# ── Project metadata ─────────────────────────────────────────────────────────
 
 [project]
 name = "alphafold-sovereign-mcp"
-version = "1.0.0"
-description = "Sovereign AlphaFold MCP Server - Hybrid local/online protein structure access with topological analysis"
+version = "1.1.0"
+description = "MCP server wrapping AlphaFold DB and 13 other biomedical data sources, with a local SQLite knowledge graph."
 readme = "README.md"
-license = {text = "Proprietary - TOPOLOGICA LLC"}
+license = {text = "Apache-2.0"}
 requires-python = ">=3.10"
 authors = [
-    {name = "Santiago Maniches", email = "santiago@topologica.ai"}
+    {name = "Santiago Maniches", email = "santiago@topologica.ai"},
+]
+maintainers = [
+    {name = "Santiago Maniches", email = "santiago@topologica.ai"},
 ]
 keywords = [
     "alphafold",
     "protein-structure",
     "mcp",
     "model-context-protocol",
-    "bioinformatics",
     "structural-biology",
+    "bioinformatics",
     "persistent-homology",
-    "topological-data-analysis"
+    "topological-data-analysis",
+    "precision-medicine",
+    "drug-discovery",
+    "disease-ontology",
+    "knowledge-graph",
 ]
 classifiers = [
-    "Development Status :: 5 - Production/Stable",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
-    "License :: Other/Proprietary License",
+    "Intended Audience :: Healthcare Industry",
+    "Intended Audience :: Information Technology",
+    "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
@@ -34,51 +48,266 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
     "Topic :: Scientific/Engineering :: Chemistry",
-    "Typing :: Typed"
+    "Topic :: Scientific/Engineering :: Medical Science Apps.",
+    "Typing :: Typed",
 ]
 
+# ── Runtime dependencies ──────────────────────────────────────────────────────
+
 dependencies = [
-    "mcp>=1.0.0",
-    "fastmcp>=0.1.0",
-    "pydantic>=2.0.0",
-    "numpy>=1.24.0",
+    # MCP framework
+    "mcp>=1.2.0",
+    "fastmcp>=0.4.0",
+    # HTTP — async, HTTP/2, keep-alive
+    "httpx[http2]>=0.27.0",
+    # Retry / rate-limiting
+    "tenacity>=9.0.0",
+    "aiolimiter>=1.1.0",
+    # Data validation
+    "pydantic>=2.7.0",
+    "pydantic-settings>=2.3.0",
+    # Logging
+    "structlog>=24.1.0",
+    # Numeric
+    "numpy>=1.26.0",
+    # Platform paths (replaces hard-coded Windows paths)
+    "platformdirs>=4.2.0",
+    # Cryptography (signing, FIPS)
+    "cryptography>=42.0.0",
+    # JWT — OAuth 2.1 bearer tokens
+    "python-jose[cryptography]>=3.3.0",
+    # Optional: OpenTelemetry (graceful no-op if not installed)
+    "opentelemetry-sdk>=1.24.0",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.24.0",
+    # Optional: Prometheus metrics
+    "prometheus-client>=0.20.0",
 ]
 
 [project.optional-dependencies]
+# Topology / TDA (heavy; not required for pure API use)
+tda = [
+    "gudhi>=3.9.0",
+    "ripser>=0.6.0",
+    "scikit-learn>=1.4.0",
+    "scipy>=1.13.0",
+]
+# Full dev environment
 dev = [
-    "pytest>=7.0.0",
-    "pytest-asyncio>=0.21.0",
-    "black>=23.0.0",
-    "ruff>=0.1.0",
-    "mypy>=1.0.0",
+    "pytest>=8.2.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=5.0.0",
+    "pytest-xdist>=3.5.0",
+    "pytest-benchmark>=4.0.0",
+    "pytest-mock>=3.14.0",
+    "hypothesis>=6.103.0",
+    "respx>=0.21.0",
+    "ruff>=0.4.0",
+    "mypy>=1.10.0",
+    "nox>=2024.3.2",
+    "black>=24.4.0",
+    "pre-commit>=3.7.0",
+]
+# Documentation
+docs = [
+    "mkdocs-material>=9.5.0",
+    "mkdocstrings[python]>=0.25.0",
+]
+# Security scanning (CI)
+security = [
+    "bandit[toml]>=1.7.8",
+    "safety>=3.2.0",
+    "pip-audit>=2.7.0",
 ]
 
 [project.urls]
 Homepage = "https://topologica.ai"
 Repository = "https://github.com/smaniches/alphafold-sovereign-mcp"
 Documentation = "https://github.com/smaniches/alphafold-sovereign-mcp#readme"
+"Bug Tracker" = "https://github.com/smaniches/alphafold-sovereign-mcp/issues"
+Changelog = "https://github.com/smaniches/alphafold-sovereign-mcp/blob/main/CHANGELOG.md"
 
 [project.scripts]
-alphafold-sovereign = "alphafold_sovereign.alphafold_mcp:main"
+alphafold-sovereign = "alphafold_sovereign.__main__:main"
+alphafold-sovereign-mcp = "alphafold_sovereign.__main__:main"
 
-[tool.setuptools.packages.find]
-where = ["src"]
+# ── Hatch build ───────────────────────────────────────────────────────────────
 
-[tool.black]
-line-length = 100
-target-version = ["py310", "py311", "py312", "py313"]
+[tool.hatch.build.targets.wheel]
+packages = ["src/alphafold_sovereign"]
+exclude = ["_archive"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/",
+    "tests/",
+    "LICENSE",
+    "NOTICE",
+    "README.md",
+    "CHANGELOG.md",
+    "PATENTS.md",
+    "pyproject.toml",
+]
+
+# ── Ruff (linter + formatter) ─────────────────────────────────────────────────
 
 [tool.ruff]
 line-length = 100
 target-version = "py310"
-select = ["E", "F", "W", "I", "N", "UP", "B", "C4"]
+src = ["src", "tests"]
+extend-exclude = ["_archive"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "N",    # pep8-naming
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "C4",   # flake8-comprehensions
+    "SIM",  # flake8-simplify
+    "TCH",  # flake8-type-checking
+    "TID",  # flake8-tidy-imports
+    "RUF",  # Ruff-specific rules
+    "ANN",  # flake8-annotations (enforces type hints)
+    "S",    # flake8-bandit (security)
+    "PT",   # flake8-pytest-style
+    "ERA",  # eradicate (commented-out code)
+    "PL",   # pylint
+    "PERF", # perflint
+]
+ignore = [
+    "ANN101",  # self annotation not required
+    "ANN102",  # cls annotation not required
+    "S101",    # assert usage in tests
+    "PLR0913", # too many arguments (domain objects need many)
+    "ERA001",  # allow some commented-out code
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["ANN", "S", "PLR"]
+"_archive/**" = ["ALL"]  # legacy monolith and its supporting modules — archived
+# Scientific tools use magic numbers (thresholds, Betti indices) and Unicode
+# (Greek letters, en-dashes in range notation) that are intentional and readable.
+# Long lines in multi-line string literals are acceptable in tool docstrings.
+# PLR0911/PLR0912/PLR0915: complex disease/variant synthesis functions are
+# intentionally large (they fuse 8+ data sources per call).
+# E741: `l` is used as a generator var for `labels` in comprehensions.
+"src/alphafold_sovereign/tools/**" = [
+    "PLR2004", "RUF001", "RUF002", "RUF003", "E501", "ANN401", "PLC0415",
+    "SIM105", "TC003", "B905", "S110",
+    "PLR0911", "PLR0912", "PLR0915", "E741",
+]
+# SQLite queries constructed from controlled allowlist table names, not user input.
+# PLW0603 global singleton pattern is intentional for the KG cache.
+"src/alphafold_sovereign/storage/**" = [
+    "PLR2004", "S608", "PLW0603", "B905", "TC003", "E501",
+    "ANN401", "PLC0415",
+]
+# Scientific docstrings and field descriptions use en-dash range notation.
+# AlphaMissense thresholds (0.564/0.340) are calibrated constants, not magic values.
+"src/alphafold_sovereign/domain/**" = ["RUF001", "RUF002", "PLR2004"]
+# json body parameter must be Any; urllib lazy-import is intentional;
+# **kwargs: Any is the standard pattern for passing through to parent __init__.
+"src/alphafold_sovereign/clients/_base.py" = ["ANN401", "PLC0415", "TC003", "E501"]
+# Scientific docstrings, Unicode range notation, **kwargs passthrough
+"src/alphafold_sovereign/clients/**" = [
+    "RUF001", "RUF002", "ANN401", "PLC0415", "TC003",
+    "PLR2004", "PERF401", "B905", "SIM105", "E501",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["alphafold_sovereign"]
+
+# ── Mypy ──────────────────────────────────────────────────────────────────────
 
 [tool.mypy]
 python_version = "3.10"
+strict = true
 warn_return_any = true
 warn_unused_ignores = true
-strict = false
+warn_unreachable = true
+disallow_any_generics = true
+disallow_subclassing_any = true
+disallow_untyped_calls = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+show_error_codes = true
+
+# Exclude legacy monolith until decomposed
+[[tool.mypy.overrides]]
+module = "alphafold_sovereign.alphafold_mcp"
+ignore_errors = true
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = [
+    "gudhi.*",
+    "ripser.*",
+    "aiolimiter.*",
+    "tenacity.*",
+    "jose.*",
+]
+ignore_missing_imports = true
+
+# ── Pytest ────────────────────────────────────────────────────────────────────
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "-ra",
+]
+markers = [
+    "unit: pure unit tests (no I/O)",
+    "integration: tests against real upstreams (slow, network required)",
+    "property: Hypothesis property-based tests",
+    "e2e: full end-to-end agent tests",
+    "perf: performance benchmarks",
+    "security: security-focused tests",
+]
+filterwarnings = [
+    "error",
+    "ignore::DeprecationWarning:mcp",
+    "ignore::DeprecationWarning:pydantic",
+    "ignore::DeprecationWarning:httpx",
+    "ignore::PendingDeprecationWarning",
+    "ignore::ResourceWarning",
+]
+
+# ── Coverage ──────────────────────────────────────────────────────────────────
+
+[tool.coverage.run]
+source = ["src/alphafold_sovereign"]
+omit = [
+    "tests/*",
+    "_archive/*",
+]
+branch = true
+
+[tool.coverage.report]
+fail_under = 60
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "@(abc\\.)?abstractmethod",
+]
+
+# ── Bandit (security linting) ─────────────────────────────────────────────────
+
+[tool.bandit]
+targets = ["src/alphafold_sovereign"]
+exclude = ["_archive"]
+skips = ["B101"]  # assert in tests
+
+# ── Nox sessions (run via: nox -s <session>) ─────────────────────────────────
+# Sessions: lint, type, test, cov, security, docs, bench
+# See noxfile.py for definitions.
