@@ -364,7 +364,8 @@ async def _traverse_network(
                 nodes[entity_id] = {"type": "protein", **p}
         else:
             # Gene symbol — find linked proteins and variants
-            proteins = await kg._fetchall(
+            # _fetchall is a sync method on the KG; do not await.
+            proteins = kg._fetchall(
                 "SELECT uniprot_id, gene_symbol, druggability_tier, mean_plddt "
                 "FROM proteins WHERE gene_symbol = ? LIMIT 5",
                 [entity_id.upper()],
