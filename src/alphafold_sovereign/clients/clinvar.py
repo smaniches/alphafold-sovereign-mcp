@@ -10,9 +10,9 @@ Reference:
   Landrum MJ et al. ClinVar: improvements to accessing data.
   Nucleic Acids Res. 2020;48(D1):D835–D844.
 """
+
 from __future__ import annotations
 
-import re
 from typing import Any
 
 import structlog
@@ -58,6 +58,7 @@ class ClinVarClient(BaseAsyncClient):
 
     def __init__(self, *, ncbi_api_key: str = "", **kwargs: Any) -> None:
         import os
+
         self._api_key = ncbi_api_key or os.environ.get("NCBI_API_KEY", "")
         if self._api_key:
             self.config = UpstreamConfig(
@@ -114,9 +115,7 @@ class ClinVarClient(BaseAsyncClient):
             raise KeyError(f"ClinVar variation not found: {variation_id}")
         return summaries[0]
 
-    async def search_gene(
-        self, gene_symbol: str, *, limit: int = 50
-    ) -> list[dict[str, Any]]:
+    async def search_gene(self, gene_symbol: str, *, limit: int = 50) -> list[dict[str, Any]]:
         """Fetch pathogenic / likely-pathogenic variants for a gene.
 
         Args:
@@ -130,7 +129,7 @@ class ClinVarClient(BaseAsyncClient):
             "db": "clinvar",
             "term": (
                 f"{gene_symbol}[Gene Name] AND "
-                "(\"pathogenic\"[Significance] OR \"likely pathogenic\"[Significance])"
+                '("pathogenic"[Significance] OR "likely pathogenic"[Significance])'
             ),
             "retmode": "json",
             "retmax": min(limit, 200),
@@ -175,13 +174,13 @@ class ClinVarClient(BaseAsyncClient):
 
         # Clinical significance (may be nested)
         germline = raw.get("germline_classification") or {}
-        clinical_sig = germline.get("description", "") or raw.get(
-            "clinical_significance", {}).get("description", ""
+        clinical_sig = germline.get("description", "") or raw.get("clinical_significance", {}).get(
+            "description", ""
         )
 
         review_status = germline.get("review_status", "") or raw.get(
-            "clinical_significance", {}).get("review_status", ""
-        )
+            "clinical_significance", {}
+        ).get("review_status", "")
 
         # Conditions
         conditions: list[str] = []

@@ -13,16 +13,18 @@ together:
 - Outbound domain allow-list (blocks all egress in air-gap mode)
 - Content hash verification for cached responses
 """
+
 from __future__ import annotations
 
 import asyncio
 import hashlib
 import os
 import time
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, AsyncIterator
+from typing import Any
 
 import httpx
 import structlog
@@ -46,7 +48,9 @@ logger = structlog.get_logger(__name__)
 # is opened.  This is the hard enforcement of sovereign / offline operation.
 # ---------------------------------------------------------------------------
 _OFFLINE_MODE: bool = os.environ.get("ALPHAFOLD_OFFLINE", "").lower() in {
-    "1", "true", "yes",
+    "1",
+    "true",
+    "yes",
 }
 
 # Domains always allowed even in offline mode (e.g. localhost, Vault)
@@ -168,15 +172,13 @@ class BaseAsyncClient:
     """
 
     upstream_name: str = "upstream"
-    config: UpstreamConfig = field(default_factory=UpstreamConfig)  # type: ignore[assignment]
+    config: UpstreamConfig = UpstreamConfig(base_url="http://localhost")
 
     def __init__(self, *, request_id: str = "") -> None:
         self._request_id = request_id
         self._circuit: CircuitBreaker = CircuitBreaker()
         self._limiter: AsyncLimiter | None = (
-            AsyncLimiter(self.config.calls_per_second, 1.0)
-            if AsyncLimiter is not None
-            else None
+            AsyncLimiter(self.config.calls_per_second, 1.0) if AsyncLimiter is not None else None
         )
         self._client: httpx.AsyncClient | None = None
         self._log = logger.bind(
@@ -184,7 +186,7 @@ class BaseAsyncClient:
             request_id=request_id,
         )
 
-    async def __aenter__(self) -> "BaseAsyncClient":
+    async def __aenter__(self) -> BaseAsyncClient:
         self._client = httpx.AsyncClient(
             base_url=self.config.base_url,
             headers={
@@ -240,9 +242,7 @@ class BaseAsyncClient:
         self._check_air_gap(full_url)
 
         if not await self._circuit.allow_request():
-            raise CircuitOpenError(
-                f"Circuit open for {self.upstream_name}; retry after cooldown."
-            )
+            raise CircuitOpenError(f"Circuit open for {self.upstream_name}; retry after cooldown.")
 
         start = time.monotonic()
         try:
@@ -287,9 +287,7 @@ class BaseAsyncClient:
                 "upstream_exhausted_retries",
                 elapsed=round(time.monotonic() - start, 3),
             )
-            raise UpstreamError(
-                self.upstream_name, 0, "Exhausted retries"
-            ) from exc
+            raise UpstreamError(self.upstream_name, 0, "Exhausted retries") from exc
         except httpx.HTTPStatusError as exc:
             await self._circuit.record_failure()
             raise UpstreamError(
@@ -318,7 +316,9 @@ class BaseAsyncClient:
         try:
             return response.json()  # type: ignore[no-any-return]
         except Exception as exc:
-            raise UpstreamError(self.upstream_name, response.status_code, f"JSON parse failed: {exc}") from exc
+            raise UpstreamError(
+                self.upstream_name, response.status_code, f"JSON parse failed: {exc}"
+            ) from exc
 
     async def _get_bytes(self, path: str, params: dict[str, Any] | None = None) -> bytes:
         response = await self._request("GET", path, params=params)
@@ -334,9 +334,13 @@ class BaseAsyncClient:
         try:
             return response.json()  # type: ignore[no-any-return]
         except Exception as exc:
-            raise UpstreamError(self.upstream_name, response.status_code, f"JSON parse failed: {exc}") from exc
+            raise UpstreamError(
+                self.upstream_name, response.status_code, f"JSON parse failed: {exc}"
+            ) from exc
 
-    async def _graphql(self, endpoint: str, query: str, variables: dict[str, Any]) -> dict[str, Any]:
+    async def _graphql(
+        self, endpoint: str, query: str, variables: dict[str, Any]
+    ) -> dict[str, Any]:
         """Execute a GraphQL query against an absolute endpoint path."""
         result: dict[str, Any] = await self._post(
             endpoint,
@@ -349,14 +353,15 @@ class BaseAsyncClient:
                 200,
                 "; ".join(e.get("message", "?") for e in result["errors"]),
             )
-        return result.get("data", {})
+        gql_data: dict[str, Any] = result.get("data") or {}
+        return gql_data
 
     @staticmethod
     def _sha256(data: bytes) -> str:
         return hashlib.sha256(data).hexdigest()
 
     @asynccontextmanager
-    async def session(self) -> AsyncIterator["BaseAsyncClient"]:
+    async def session(self) -> AsyncIterator[BaseAsyncClient]:
         """Convenience context manager for explicit session lifetime."""
         async with self:
             yield self

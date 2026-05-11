@@ -10,6 +10,7 @@ Reference:
   identification and prioritisation.  Nucleic Acids Res. 2021;49(D1):D1302–D1310.
   https://platform.opentargets.org
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -151,10 +152,7 @@ class OpenTargetsClient(BaseAsyncClient):
         symbol: str = target.get("approvedSymbol", "")
         uniprot_id = self._extract_uniprot(target.get("proteinIds", []))
         rows = target.get("associatedDiseases", {}).get("rows", [])
-        return [
-            self._row_to_score(r, ensembl_id, symbol, uniprot_id)
-            for r in rows
-        ]
+        return [self._row_to_score(r, ensembl_id, symbol, uniprot_id) for r in rows]
 
     # ------------------------------------------------------------------
     # Disease → targets
@@ -191,10 +189,7 @@ class OpenTargetsClient(BaseAsyncClient):
             ensembl = target.get("id", "")
             symbol = target.get("approvedSymbol", "")
             uniprot = self._extract_uniprot(target.get("proteinIds", []))
-            tractable = any(
-                t.get("value", False)
-                for t in (target.get("tractability") or [])
-            )
+            tractable = any(t.get("value", False) for t in (target.get("tractability") or []))
             dt = self._datatype_scores(row.get("datatypeScores", []))
             scores.append(
                 TargetEvidenceScore(
@@ -220,9 +215,7 @@ class OpenTargetsClient(BaseAsyncClient):
     # Drug tractability
     # ------------------------------------------------------------------
 
-    async def drug_count_and_tractability(
-        self, ensembl_id: str
-    ) -> dict[str, Any]:
+    async def drug_count_and_tractability(self, ensembl_id: str) -> dict[str, Any]:
         """Return known drug count and tractability labels for a target.
 
         Args:
@@ -240,9 +233,7 @@ class OpenTargetsClient(BaseAsyncClient):
         return {
             "drug_count": target.get("knownDrugs", {}).get("count", 0),
             "tractability_labels": [
-                t.get("label", "")
-                for t in (target.get("tractability") or [])
-                if t.get("value")
+                t.get("label", "") for t in (target.get("tractability") or []) if t.get("value")
             ],
         }
 

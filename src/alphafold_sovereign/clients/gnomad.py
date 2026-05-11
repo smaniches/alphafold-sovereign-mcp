@@ -10,6 +10,7 @@ Reference:
   1,000 human exomes. Nature. 2024;625:92–100.
   https://gnomad.broadinstitute.org
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -139,9 +140,7 @@ class GnomADClient(BaseAsyncClient):
     # Variant queries
     # ------------------------------------------------------------------
 
-    async def variant_frequencies(
-        self, variant_id: str
-    ) -> dict[str, Any]:
+    async def variant_frequencies(self, variant_id: str) -> dict[str, Any]:
         """Fetch allele frequencies and population breakdown for a variant.
 
         Args:
@@ -239,9 +238,7 @@ class GnomADClient(BaseAsyncClient):
             _GENE_CONSTRAINT_QUERY,
             {"geneSymbol": gene_symbol, "datasetId": self.dataset},
         )
-        constraint = (
-            (data.get("gene") or {}).get("gnomad_constraint") or {}
-        )
+        constraint = (data.get("gene") or {}).get("gnomad_constraint") or {}
         if not constraint:
             return {"gene_symbol": gene_symbol, "constraint_available": False}
         return {
@@ -258,7 +255,6 @@ class GnomADClient(BaseAsyncClient):
 def _interpret_constraint(c: dict[str, Any]) -> str:
     """Return a human-readable constraint interpretation."""
     loeuf = c.get("loeuf")
-    pli = c.get("pLI")
     if loeuf is None:
         return "Constraint data unavailable."
     if loeuf < 0.35:
@@ -268,8 +264,7 @@ def _interpret_constraint(c: dict[str, Any]) -> str:
         )
     if loeuf < 0.6:
         return (
-            f"Moderately constrained (LOEUF={loeuf:.3f}): "
-            "partial intolerance to loss-of-function."
+            f"Moderately constrained (LOEUF={loeuf:.3f}): partial intolerance to loss-of-function."
         )
     return (
         f"Tolerant to loss-of-function (LOEUF={loeuf:.3f}): "

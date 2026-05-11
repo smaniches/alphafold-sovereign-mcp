@@ -14,6 +14,7 @@ Reference:
   Nucleic Acids Res. 2019;47(D1):D930–D940.
   https://www.ebi.ac.uk/chembl/
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -77,9 +78,7 @@ class ChEMBLClient(BaseAsyncClient):
     # Target lookup
     # ------------------------------------------------------------------
 
-    async def target_by_gene(
-        self, gene_symbol: str
-    ) -> list[dict[str, Any]]:
+    async def target_by_gene(self, gene_symbol: str) -> list[dict[str, Any]]:
         """Find ChEMBL targets matching a gene symbol.
 
         Args:
@@ -102,9 +101,7 @@ class ChEMBLClient(BaseAsyncClient):
         results: list[dict[str, Any]] = []
         for t in data.get("targets", []):
             uniprot_ids = [
-                c.get("accession", "")
-                for c in t.get("target_components", [])
-                if c.get("accession")
+                c.get("accession", "") for c in t.get("target_components", []) if c.get("accession")
             ]
             results.append(
                 {
@@ -239,7 +236,11 @@ class ChEMBLClient(BaseAsyncClient):
             },
         )
         chembl_ids = list(
-            {m.get("molecule_chembl_id") for m in data.get("mechanisms", []) if m.get("molecule_chembl_id")}
+            {
+                m.get("molecule_chembl_id")
+                for m in data.get("mechanisms", [])
+                if m.get("molecule_chembl_id")
+            }
         )
         if not chembl_ids:
             return []
@@ -254,7 +255,7 @@ class ChEMBLClient(BaseAsyncClient):
         for cid, drug in zip(target_ids, molecule_results):
             if drug is None or isinstance(drug, BaseException):
                 continue
-            max_phase = int(drug.get("max_phase") or 0)  # type: ignore[union-attr]
+            max_phase = int(drug.get("max_phase") or 0)
             if max_phase < min_phase:
                 continue
             mechs = [
@@ -262,8 +263,8 @@ class ChEMBLClient(BaseAsyncClient):
                 for m in data.get("mechanisms", [])
                 if m.get("molecule_chembl_id") == cid and m.get("mechanism_of_action")
             ]
-            drug["mechanism"] = mechs[0] if mechs else ""  # type: ignore[index]
-            drugs.append(drug)  # type: ignore[arg-type]
+            drug["mechanism"] = mechs[0] if mechs else ""
+            drugs.append(drug)
 
         return sorted(drugs, key=lambda d: d.get("max_phase", 0), reverse=True)
 
@@ -324,9 +325,7 @@ class ChEMBLClient(BaseAsyncClient):
     # Mechanism of action lookup
     # ------------------------------------------------------------------
 
-    async def mechanism_of_action(
-        self, molecule_chembl_id: str
-    ) -> list[dict[str, Any]]:
+    async def mechanism_of_action(self, molecule_chembl_id: str) -> list[dict[str, Any]]:
         """Return mechanism of action entries for a drug.
 
         Args:

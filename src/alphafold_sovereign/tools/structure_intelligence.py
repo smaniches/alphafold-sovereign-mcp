@@ -27,6 +27,7 @@ Tool inventory:
 All tools are read-only and compatible with air-gap deployment when
 AF structures are locally cached.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -41,7 +42,6 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from alphafold_sovereign import __version__
 from alphafold_sovereign.clients.ensembl import EnsemblClient
-from alphafold_sovereign.clients.gnomad import GnomADClient
 
 logger = structlog.get_logger(__name__)
 
@@ -55,6 +55,7 @@ def _provenance(**meta: str) -> str:
 
 
 # ── Input models ──────────────────────────────────────────────────────────────
+
 
 class UniProtInput(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
@@ -112,9 +113,11 @@ class BindingPocketInput(BaseModel):
 
 # ── AF structure fetcher (uses existing fetcher infrastructure) ───────────────
 
+
 async def _fetch_af_structure(uniprot_id: str) -> dict[str, Any] | None:
     """Fetch AlphaFold structure coordinates via the AF DB API."""
     import httpx
+
     url = f"https://alphafold.ebi.ac.uk/files/AF-{uniprot_id}-F1-model_v4.pdb"
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -167,21 +170,17 @@ async def _fetch_af_plddt(uniprot_id: str) -> dict[str, Any] | None:
     return result
 
 
-def _find_high_pae_pairs(
-    pae: np.ndarray, threshold: float = 15.0
-) -> list[dict[str, Any]]:
+def _find_high_pae_pairs(pae: np.ndarray, threshold: float = 15.0) -> list[dict[str, Any]]:
     """Find residue pairs with high inter-residue positional error."""
-    n = pae.shape[0]
-    pairs: list[dict[str, Any]] = []
     # Sample to avoid O(n²) memory — take top 20 worst pairs
     rows, cols = np.where(pae > threshold)
-    pairs_arr = [(float(pae[r, c]), int(r) + 1, int(c) + 1)
-                 for r, c in zip(rows, cols) if abs(int(r) - int(c)) > 10]
-    pairs_arr.sort(reverse=True, key=lambda x: x[0])
-    return [
-        {"residue_a": p[1], "residue_b": p[2], "pae": round(p[0], 2)}
-        for p in pairs_arr[:20]
+    pairs_arr = [
+        (float(pae[r, c]), int(r) + 1, int(c) + 1)
+        for r, c in zip(rows, cols)
+        if abs(int(r) - int(c)) > 10
     ]
+    pairs_arr.sort(reverse=True, key=lambda x: x[0])
+    return [{"residue_a": p[1], "residue_b": p[2], "pae": round(p[0], 2)} for p in pairs_arr[:20]]
 
 
 def _detect_domain_boundaries(pae: np.ndarray, window: int = 10) -> list[int]:
@@ -213,6 +212,7 @@ def _detect_domain_boundaries(pae: np.ndarray, window: int = 10) -> list[int]:
 
 
 # ── TDA fingerprint computation ───────────────────────────────────────────────
+
 
 def _compute_tda_fingerprint(
     ca_coords: np.ndarray,
@@ -254,24 +254,25 @@ def _compute_tda_fingerprint(
 
     for dim in range(max_dimension + 1):
         intervals = [
-            (b, d) for (k, (b, d)) in simplex_tree.persistence()
-            if k == dim and d < float("inf")
+            (b, d) for (k, (b, d)) in simplex_tree.persistence() if k == dim and d < float("inf")
         ]
         betti = len(intervals)
         betti_numbers.append(betti)
 
         if intervals:
             lifetimes = [d - b for b, d in intervals]
-            fingerprint.extend([
-                float(np.mean(lifetimes)),
-                float(np.std(lifetimes)),
-                float(np.max(lifetimes)),
-                float(np.min(lifetimes)),
-                float(np.median(lifetimes)),
-                float(np.percentile(lifetimes, 75)),
-                float(np.percentile(lifetimes, 25)),
-                float(sum(lifetimes)),
-            ])
+            fingerprint.extend(
+                [
+                    float(np.mean(lifetimes)),
+                    float(np.std(lifetimes)),
+                    float(np.max(lifetimes)),
+                    float(np.min(lifetimes)),
+                    float(np.median(lifetimes)),
+                    float(np.percentile(lifetimes, 75)),
+                    float(np.percentile(lifetimes, 25)),
+                    float(sum(lifetimes)),
+                ]
+            )
             landscapes.append(
                 {
                     "dimension": dim,
@@ -315,9 +316,7 @@ def _fallback_tda_fingerprint(ca_coords: np.ndarray) -> dict[str, Any]:
     if len(ca_coords) < 2:
         return {"betti_numbers": [], "fingerprint_vector": [0.0] * 64, "gudhi_available": False}
 
-    dists = np.sqrt(
-        np.sum((ca_coords[:, None, :] - ca_coords[None, :, :]) ** 2, axis=-1)
-    )
+    dists = np.sqrt(np.sum((ca_coords[:, None, :] - ca_coords[None, :, :]) ** 2, axis=-1))
     np.fill_diagonal(dists, np.inf)
 
     # Approximate β0: connected components (residues within 4 Å of another)
@@ -378,6 +377,7 @@ def _parse_ca_coords_from_pdb(pdb_text: str) -> np.ndarray:
 
 
 # ── Tool 1: Structural confidence ────────────────────────────────────────────
+
 
 @mcp.tool(
     annotations={
@@ -442,7 +442,8 @@ async def analyze_structural_confidence(
         "druggability_pre_screen": {
             "ordered_fraction": _estimate_ordered_fraction(plddt),
             "structural_suitability": (
-                "SUITABLE for structure-based drug design" if (plddt or 0) >= 70
+                "SUITABLE for structure-based drug design"
+                if (plddt or 0) >= 70
                 else "CAUTION: low confidence may indicate IDP or novel fold"
             ),
         },
@@ -452,6 +453,7 @@ async def analyze_structural_confidence(
 
 
 # ── Tool 2: TDA Fingerprint ───────────────────────────────────────────────────
+
 
 @mcp.tool(
     annotations={
@@ -518,6 +520,7 @@ async def compute_topology_fingerprint(
 
 
 # ── Tool 3: Pairwise topological comparison ───────────────────────────────────
+
 
 @mcp.tool(
     annotations={
@@ -616,6 +619,7 @@ async def compare_proteins_topologically(
 
 
 # ── Tool 4: Evolutionary structural shifts ───────────────────────────────────
+
 
 @mcp.tool(
     annotations={
@@ -728,6 +732,7 @@ async def find_evolutionary_structural_shifts(
 
 # ── Tool 5: Binding pocket geometry ──────────────────────────────────────────
 
+
 @mcp.tool(
     annotations={
         "title": "Score Binding Pocket Geometry",
@@ -805,6 +810,7 @@ async def score_binding_pocket_geometry(
 
 # ── Tool 6: Intrinsic disorder map ───────────────────────────────────────────
 
+
 @mcp.tool(
     annotations={
         "title": "Detect Intrinsically Disordered Regions",
@@ -868,8 +874,8 @@ async def detect_intrinsically_disordered(
         "drug_target_potential": (
             "EMERGING: long IDRs are targets for targeted covalent inhibitors and "
             "phase-separation modulators — consult recent IDR drug discovery literature."
-            if idr_fraction > 0.3 else
-            "CONVENTIONAL: ordered structure is suitable for classical SBDD approaches."
+            if idr_fraction > 0.3
+            else "CONVENTIONAL: ordered structure is suitable for classical SBDD approaches."
         ),
         "reference": "Ruff KM & Pappu RV (2021) J Mol Biol 433:167208. doi:10.1016/j.jmb.2021.167208",
         "provenance": _provenance(alphafold_db="v4", plddt_cutoff="50"),
@@ -877,6 +883,7 @@ async def detect_intrinsically_disordered(
 
 
 # ── Pocket geometry helpers ───────────────────────────────────────────────────
+
 
 def _parse_pdb_full(
     pdb_text: str,
@@ -970,7 +977,7 @@ def _geometric_pocket_detection(
                 "mean_plddt": round(mean_plddt, 2),
                 "radius_of_gyration_angstrom": round(rog, 2),
                 "burial_from_centroid": round(burial, 2),
-                "estimated_volume_angstrom3": round((4 / 3) * math.pi * rog ** 3, 1),
+                "estimated_volume_angstrom3": round((4 / 3) * math.pi * rog**3, 1),
             }
         )
 
@@ -1084,9 +1091,7 @@ def _classify_idr_protein(
     return "Predominantly ordered — classical structural biology approaches apply."
 
 
-def _idr_clinical_implications(
-    idr_fraction: float, segments: list[dict[str, Any]]
-) -> list[str]:
+def _idr_clinical_implications(idr_fraction: float, segments: list[dict[str, Any]]) -> list[str]:
     implications: list[str] = []
     if idr_fraction > 0.3:
         implications.append(
@@ -1111,6 +1116,7 @@ def _idr_clinical_implications(
 
 
 # ── pLDDT helpers ─────────────────────────────────────────────────────────────
+
 
 def _plddt_tier(plddt: float | None) -> str:
     if plddt is None:
@@ -1142,6 +1148,7 @@ def _estimate_ordered_fraction(plddt: float | None) -> float | None:
 
 # ── TDA interpretation ────────────────────────────────────────────────────────
 
+
 def _interpret_tda(tda: dict[str, Any]) -> str:
     betti = tda.get("betti_numbers", [0, 0, 0])
     b0 = betti[0] if len(betti) > 0 else 0
@@ -1163,6 +1170,7 @@ def _interpret_tda(tda: dict[str, Any]) -> str:
 
 # ── Evolutionary drift helpers ────────────────────────────────────────────────
 
+
 def _drift_interpretation(drift: float | None, dn_ds: float | None) -> str:
     if drift is None:
         return "Structural drift not quantifiable (AF DB coverage unavailable for this species)."
@@ -1183,9 +1191,7 @@ def _cross_reactivity_risk(identity: float, dn_ds: float | None) -> str:
     return "MINIMAL — distant homolog; cross-reactivity unlikely."
 
 
-def _find_most_similar_pair(
-    ids: list[str], matrix: list[list[float]]
-) -> dict[str, Any] | None:
+def _find_most_similar_pair(ids: list[str], matrix: list[list[float]]) -> dict[str, Any] | None:
     if len(ids) < 2:
         return None
     best: tuple[float, str, str] = (float("inf"), "", "")

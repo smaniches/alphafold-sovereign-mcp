@@ -188,6 +188,34 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["ANN", "S", "PLR"]
 "src/alphafold_sovereign/alphafold_mcp.py" = ["ALL"]  # legacy monolith — migrating
+# Scientific tools use magic numbers (thresholds, Betti indices) and Unicode
+# (Greek letters, en-dashes in range notation) that are intentional and readable.
+# Long lines in multi-line string literals are acceptable in tool docstrings.
+# PLR0911/PLR0912/PLR0915: complex disease/variant synthesis functions are
+# intentionally large (they fuse 8+ data sources per call).
+# E741: `l` is used as a generator var for `labels` in comprehensions.
+"src/alphafold_sovereign/tools/**" = [
+    "PLR2004", "RUF001", "RUF002", "RUF003", "E501", "ANN401", "PLC0415",
+    "SIM105", "TC003", "B905", "S110",
+    "PLR0911", "PLR0912", "PLR0915", "E741",
+]
+# SQLite queries constructed from controlled allowlist table names, not user input.
+# PLW0603 global singleton pattern is intentional for the KG cache.
+"src/alphafold_sovereign/storage/**" = [
+    "PLR2004", "S608", "PLW0603", "B905", "TC003", "E501",
+    "ANN401", "PLC0415",
+]
+# Scientific docstrings and field descriptions use en-dash range notation.
+# AlphaMissense thresholds (0.564/0.340) are calibrated constants, not magic values.
+"src/alphafold_sovereign/domain/**" = ["RUF001", "RUF002", "PLR2004"]
+# json body parameter must be Any; urllib lazy-import is intentional;
+# **kwargs: Any is the standard pattern for passing through to parent __init__.
+"src/alphafold_sovereign/clients/_base.py" = ["ANN401", "PLC0415", "TC003", "E501"]
+# Scientific docstrings, Unicode range notation, **kwargs passthrough
+"src/alphafold_sovereign/clients/**" = [
+    "RUF001", "RUF002", "ANN401", "PLC0415", "TC003",
+    "PLR2004", "PERF401", "B905", "SIM105", "E501",
+]
 
 [tool.ruff.lint.isort]
 known-first-party = ["alphafold_sovereign"]

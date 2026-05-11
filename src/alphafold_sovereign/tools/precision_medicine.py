@@ -21,6 +21,7 @@ This module is the reference implementation of what precision-medicine-grade
 MCP tooling looks like.  Designed to be cited in regulatory filings, clinical
 variant boards, and drug discovery decision memos.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -96,6 +97,7 @@ def _chembl() -> ChEMBLClient:
 
 # ── Provenance footer ─────────────────────────────────────────────────────────
 
+
 def _provenance(**sources: str) -> str:
     ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     src_str = ", ".join(f"{k}={v}" for k, v in sources.items() if v)
@@ -103,6 +105,7 @@ def _provenance(**sources: str) -> str:
 
 
 # ── Input models ──────────────────────────────────────────────────────────────
+
 
 class VariantClinicalReportInput(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
@@ -230,7 +233,7 @@ class TargetSelectivityInput(BaseModel):
 # ── ACMG criteria helpers ─────────────────────────────────────────────────────
 
 _POPULATION_THRESHOLDS = {
-    "BS1": 0.05,   # allele frequency > 5% in gnomAD → Benign Strong
+    "BS1": 0.05,  # allele frequency > 5% in gnomAD → Benign Strong
     "PM2": 0.001,  # absent or extremely rare → Pathogenic Moderate
 }
 
@@ -282,8 +285,13 @@ def _gnomad_to_acmg(af: float | None) -> dict[str, str]:
 def _vep_to_acmg(consequences: list[dict[str, Any]]) -> dict[str, str]:
     """Extract ACMG PVS1-level evidence from VEP functional predictions."""
     criteria: dict[str, str] = {}
-    null_terms = {"stop_gained", "frameshift_variant", "splice_acceptor_variant",
-                  "splice_donor_variant", "start_lost"}
+    null_terms = {
+        "stop_gained",
+        "frameshift_variant",
+        "splice_acceptor_variant",
+        "splice_donor_variant",
+        "start_lost",
+    }
     missense_terms = {"missense_variant"}
     synonymous_terms = {"synonymous_variant"}
 
@@ -309,8 +317,7 @@ def _vep_to_acmg(consequences: list[dict[str, Any]]) -> dict[str, str]:
                 parts.append(f"CADD-phred={cadd:.1f}")
             if len(parts) >= 2:
                 criteria["PP3"] = (
-                    "Multiple computational evidence suggesting pathogenicity: "
-                    + "; ".join(parts)
+                    "Multiple computational evidence suggesting pathogenicity: " + "; ".join(parts)
                 )
         if terms & synonymous_terms:
             criteria["BP7"] = "Synonymous variant with no predicted splicing impact."
@@ -335,8 +342,7 @@ def _druggability_tier(
 
     # Tractability labels from Open Targets
     small_mol_labels = {"Small molecule", "Discovery_small_molecule", "SM_clinical"}
-    if any(lab in small_mol_labels or "small_mol" in lab.lower()
-           for lab in tractability_labels):
+    if any(lab in small_mol_labels or "small_mol" in lab.lower() for lab in tractability_labels):
         score += 2
 
     # pLDDT ≥ 70 → confident structure → analysable binding pockets
@@ -357,6 +363,7 @@ def _druggability_tier(
 
 
 # ── Tool 1: Full clinical variant report ─────────────────────────────────────
+
 
 @mcp.tool(
     annotations={
@@ -441,10 +448,9 @@ async def generate_variant_clinical_report(
             _disgenet().gene_disease_associations(gene_symbol, min_score=0.1, limit=5),
         ]
         if ensembl_id:
-            tasks.append(
-                _opentargets().associated_diseases(ensembl_id, limit=5)
-            )
+            tasks.append(_opentargets().associated_diseases(ensembl_id, limit=5))
         else:
+
             async def _empty_list() -> list[Any]:
                 return []
 
@@ -474,7 +480,9 @@ async def generate_variant_clinical_report(
     if clinvar_results:
         clinvar_record = clinvar_results[0] if not isinstance(clinvar_results, Exception) else None
 
-    clinvar_class = (clinvar_record or {}).get("classification", PathogenicityClass.NOT_PROVIDED.value)
+    clinvar_class = (clinvar_record or {}).get(
+        "classification", PathogenicityClass.NOT_PROVIDED.value
+    )
 
     # ── Step 8: AlphaMissense from gnomAD payload ─────────────────────────────
     am_score: float | None = gnomad_data.get("alphamissense_score")
@@ -487,11 +495,13 @@ async def generate_variant_clinical_report(
         acmg_criteria.update(_vep_to_acmg(vep_results))
 
     # ClinVar evidence
-    if clinvar_class in {PathogenicityClass.PATHOGENIC.value, PathogenicityClass.LIKELY_PATHOGENIC.value}:
+    if clinvar_class in {
+        PathogenicityClass.PATHOGENIC.value,
+        PathogenicityClass.LIKELY_PATHOGENIC.value,
+    }:
         status = (clinvar_record or {}).get("review_status", "")
         acmg_criteria["PP5"] = (
-            f"ClinVar: {clinvar_class} ({status}). "
-            "Reputable source with strong concordance."
+            f"ClinVar: {clinvar_class} ({status}). Reputable source with strong concordance."
         )
 
     # ── Step 10: Clinical tier ────────────────────────────────────────────────
@@ -541,7 +551,9 @@ async def generate_variant_clinical_report(
             "global_an": gnomad_data.get("global_an"),
             "homozygote_count": gnomad_data.get("homozygote_count"),
             "alphamissense_score": am_score,
-            "populations": gnomad_data.get("populations", []) if params.include_population_breakdown else [],
+            "populations": gnomad_data.get("populations", [])
+            if params.include_population_breakdown
+            else [],
         },
         "gene_constraint": {
             "pLI": gene_constraint.get("pLI"),
@@ -599,6 +611,7 @@ async def generate_variant_clinical_report(
 
 # ── Tool 2: Target druggability assessment ───────────────────────────────────
 
+
 @mcp.tool(
     annotations={
         "title": "Assess Target Druggability",
@@ -633,7 +646,7 @@ async def assess_target_druggability(
     async def _empty_dict() -> dict[str, Any]:
         return {}
 
-    chembl_target, ot_drug_info = await asyncio.gather(
+    chembl_target, _ = await asyncio.gather(
         _chembl().target_by_uniprot(uid),
         _empty_dict(),
         return_exceptions=True,
@@ -713,8 +726,7 @@ async def assess_target_druggability(
         ],
         "tractability_assessment": {
             "small_molecule": any(
-                "small_mol" in l.lower() or "SM" in l
-                for l in tractability_labels
+                "small_mol" in l.lower() or "SM" in l for l in tractability_labels
             ),
             "antibody": any("antibody" in l.lower() or "AB" in l for l in tractability_labels),
             "protac": any("protac" in l.lower() or "PROTAC" in l for l in tractability_labels),
@@ -734,6 +746,7 @@ async def assess_target_druggability(
 
 
 # ── Tool 3: Protein intelligence dossier ─────────────────────────────────────
+
 
 @mcp.tool(
     annotations={
@@ -788,8 +801,7 @@ async def synthesize_protein_dossier(
 
     gathered = await asyncio.gather(*tasks.values(), return_exceptions=True)
     results: dict[str, Any] = {
-        k: (v if not isinstance(v, Exception) else None)
-        for k, v in zip(tasks.keys(), gathered)
+        k: (v if not isinstance(v, Exception) else None) for k, v in zip(tasks.keys(), gathered)
     }
 
     # Drug data (needs ChEMBL target lookup first)
@@ -919,6 +931,7 @@ async def synthesize_protein_dossier(
 
 # ── Tool 4: Disease drug landscape ───────────────────────────────────────────
 
+
 @mcp.tool(
     annotations={
         "title": "Map Disease Drug Landscape",
@@ -1025,6 +1038,7 @@ async def map_disease_drug_landscape(
 
 # ── Tool 5: ACMG variant classification framework ────────────────────────────
 
+
 @mcp.tool(
     annotations={
         "title": "Draft ACMG/AMP Variant Classification",
@@ -1087,7 +1101,9 @@ async def classify_variant_acmg(
     am_score: float | None = gnomad_data.get("alphamissense_score")
     global_af: float | None = gnomad_data.get("global_af")
     clinvar_record = clinvar_results[0] if clinvar_results else None
-    clinvar_class = (clinvar_record or {}).get("classification", PathogenicityClass.NOT_PROVIDED.value)
+    clinvar_class = (clinvar_record or {}).get(
+        "classification", PathogenicityClass.NOT_PROVIDED.value
+    )
     loeuf: float | None = gene_constraint.get("loeuf")
 
     # Build criteria
@@ -1109,7 +1125,10 @@ async def classify_variant_acmg(
         criteria[k] = {"met": True, "evidence": v, "strength": _acmg_strength(k)}
 
     # ClinVar
-    if clinvar_class in {PathogenicityClass.PATHOGENIC.value, PathogenicityClass.LIKELY_PATHOGENIC.value}:
+    if clinvar_class in {
+        PathogenicityClass.PATHOGENIC.value,
+        PathogenicityClass.LIKELY_PATHOGENIC.value,
+    }:
         criteria["PP5"] = {
             "met": True,
             "evidence": f"ClinVar: {clinvar_class} — {(clinvar_record or {}).get('review_status', '')}",
@@ -1123,16 +1142,21 @@ async def classify_variant_acmg(
             pv["evidence"] += f" LOEUF={loeuf:.3f} confirms LoF intolerance."
         else:
             pv["strength"] = "Strong"
-            pv["evidence"] += f" Note: LOEUF={loeuf:.3f} indicates moderate LoF tolerance — downgrade PVS1→PS1."
+            pv["evidence"] += (
+                f" Note: LOEUF={loeuf:.3f} indicates moderate LoF tolerance — downgrade PVS1→PS1."
+            )
 
     # Final classification rules (simplified Richards et al.)
     pathogenic_strong = sum(
-        1 for c in criteria.values()
-        if c.get("met") and c.get("strength") in ("Very Strong", "Strong")
+        1
+        for c in criteria.values()
+        if c.get("met")
+        and c.get("strength") in ("Very Strong", "Strong")
         and c.get("evidence", "").split()[0][0] == "P"
     )
     benign_strong = sum(
-        1 for k, c in criteria.items()
+        1
+        for k, c in criteria.items()
         if c.get("met") and k.startswith("B") and c.get("strength") in ("Strong", "Stand-alone")
     )
 
@@ -1141,10 +1165,15 @@ async def classify_variant_acmg(
         final_class = "Pathogenic"
     elif pathogenic_strong >= 2:
         final_class = "Likely Pathogenic"
-    elif benign_strong >= 2 or (benign_strong >= 1 and sum(
-        1 for k, c in criteria.items()
-        if c.get("met") and k.startswith("B") and c.get("strength") == "Supporting"
-    ) >= 1):
+    elif benign_strong >= 2 or (
+        benign_strong >= 1
+        and sum(
+            1
+            for k, c in criteria.items()
+            if c.get("met") and k.startswith("B") and c.get("strength") == "Supporting"
+        )
+        >= 1
+    ):
         final_class = "Likely Benign"
     elif clinvar_class == PathogenicityClass.PATHOGENIC.value:
         final_class = "Pathogenic (ClinVar-supported)"
@@ -1177,6 +1206,7 @@ async def classify_variant_acmg(
 
 
 # ── Tool 6: Drug repurposing candidates for a disease ────────────────────────
+
 
 @mcp.tool(
     annotations={
@@ -1228,7 +1258,9 @@ async def find_drug_repurposing_candidates(
         target: Any,
     ) -> tuple[Any, list[dict[str, Any]]]:
         async with semaphore:
-            uid = target.uniprot_id if hasattr(target, "uniprot_id") else target.get("uniprot_id", "")
+            uid = (
+                target.uniprot_id if hasattr(target, "uniprot_id") else target.get("uniprot_id", "")
+            )
             if not uid:
                 return target, []
             try:
@@ -1302,6 +1334,7 @@ async def find_drug_repurposing_candidates(
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _build_gnomad_id(hgvs: str, vep_results: list[dict[str, Any]]) -> str | None:
     """Attempt to build a gnomAD variant ID from VEP result mappings."""
     for hit in vep_results:
@@ -1371,9 +1404,7 @@ def _tier_explanation(tier: str) -> str:
     }.get(tier, "Unknown tier.")
 
 
-def _druggability_actionability(
-    tier: str, drug_count: int, tractability_labels: list[str]
-) -> str:
+def _druggability_actionability(tier: str, drug_count: int, tractability_labels: list[str]) -> str:
     if tier == "HOT":
         return (
             f"Target is HOT: {drug_count} known drug(s) + tractability confirmed. "
@@ -1407,9 +1438,7 @@ def _narrative_summary(
     loeuf = constraint.get("loeuf")
     constraint_desc = ""
     if loeuf is not None:
-        constraint_desc = (
-            f"The gene is {'highly constrained (LoF intolerant, LOEUF=' + f'{loeuf:.3f}' + ')' if loeuf < 0.35 else 'moderately constrained' if loeuf < 0.6 else 'tolerant to LoF'}. "
-        )
+        constraint_desc = f"The gene is {'highly constrained (LoF intolerant, LOEUF=' + f'{loeuf:.3f}' + ')' if loeuf < 0.35 else 'moderately constrained' if loeuf < 0.6 else 'tolerant to LoF'}. "
     return (
         f"{sym} is a {tier.lower()}-priority drug target with {drug_count} known clinical compound(s). "
         f"Top associated diseases: {disease_names or 'not determined'}. "
@@ -1421,15 +1450,32 @@ def _narrative_summary(
 def _acmg_strength(code: str) -> str:
     strength_map = {
         "PVS1": "Very Strong",
-        "PS1": "Strong", "PS2": "Strong", "PS3": "Strong", "PS4": "Strong",
-        "PM1": "Moderate", "PM2": "Moderate", "PM3": "Moderate",
-        "PM4": "Moderate", "PM5": "Moderate", "PM6": "Moderate",
-        "PP1": "Supporting", "PP2": "Supporting", "PP3": "Supporting",
-        "PP4": "Supporting", "PP5": "Supporting",
+        "PS1": "Strong",
+        "PS2": "Strong",
+        "PS3": "Strong",
+        "PS4": "Strong",
+        "PM1": "Moderate",
+        "PM2": "Moderate",
+        "PM3": "Moderate",
+        "PM4": "Moderate",
+        "PM5": "Moderate",
+        "PM6": "Moderate",
+        "PP1": "Supporting",
+        "PP2": "Supporting",
+        "PP3": "Supporting",
+        "PP4": "Supporting",
+        "PP5": "Supporting",
         "BA1": "Stand-alone",
-        "BS1": "Strong", "BS2": "Strong", "BS3": "Strong", "BS4": "Strong",
-        "BP1": "Supporting", "BP2": "Supporting", "BP3": "Supporting",
-        "BP4": "Supporting", "BP5": "Supporting", "BP6": "Supporting",
+        "BS1": "Strong",
+        "BS2": "Strong",
+        "BS3": "Strong",
+        "BS4": "Strong",
+        "BP1": "Supporting",
+        "BP2": "Supporting",
+        "BP3": "Supporting",
+        "BP4": "Supporting",
+        "BP5": "Supporting",
+        "BP6": "Supporting",
         "BP7": "Supporting",
     }
     return strength_map.get(code, "Supporting")
@@ -1437,12 +1483,34 @@ def _acmg_strength(code: str) -> str:
 
 def _criteria_not_met(criteria: dict[str, dict[str, Any]]) -> list[str]:
     all_codes = [
-        "PVS1", "PS1", "PS2", "PS3", "PS4",
-        "PM1", "PM2", "PM3", "PM4", "PM5", "PM6",
-        "PP1", "PP2", "PP3", "PP4", "PP5",
+        "PVS1",
+        "PS1",
+        "PS2",
+        "PS3",
+        "PS4",
+        "PM1",
+        "PM2",
+        "PM3",
+        "PM4",
+        "PM5",
+        "PM6",
+        "PP1",
+        "PP2",
+        "PP3",
+        "PP4",
+        "PP5",
         "BA1",
-        "BS1", "BS2", "BS3", "BS4",
-        "BP1", "BP2", "BP3", "BP4", "BP5", "BP6", "BP7",
+        "BS1",
+        "BS2",
+        "BS3",
+        "BS4",
+        "BP1",
+        "BP2",
+        "BP3",
+        "BP4",
+        "BP5",
+        "BP6",
+        "BP7",
     ]
     return [c for c in all_codes if c not in criteria]
 
@@ -1455,5 +1523,9 @@ def _investability_rating(
     if approved_count >= 1 or pipeline_count >= 3:
         return "MEDIUM — emerging therapeutic area with clinical validation."
     if druggable_targets >= 2:
-        return "EARLY — biologically validated but limited clinical precedent; high-risk/high-reward."
-    return "EXPLORATORY — limited evidence; suitable for academic or phenotypic discovery programmes."
+        return (
+            "EARLY — biologically validated but limited clinical precedent; high-risk/high-reward."
+        )
+    return (
+        "EXPLORATORY — limited evidence; suitable for academic or phenotypic discovery programmes."
+    )

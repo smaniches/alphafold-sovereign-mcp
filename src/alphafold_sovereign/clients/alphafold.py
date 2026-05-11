@@ -11,10 +11,11 @@ Reference:
   Nucleic Acids Res. 2022;50(D1):D439–D444.
   https://alphafold.ebi.ac.uk/
 """
+
 from __future__ import annotations
 
 import os
-from typing import Any
+from typing import Any, cast
 
 import structlog
 
@@ -54,10 +55,10 @@ class AlphaFoldClient(BaseAsyncClient):
             ``cifUrl``, ``paeImageUrl``, ``paeDocUrl``, ``amAnnotationsUrl``,
             ``confidenceVersion`` and more.
         """
-        data = await self._get(f"/prediction/{uniprot_id}")
-        if isinstance(data, list) and data:
-            return data[0]  # type: ignore[return-value]
-        return data
+        raw: Any = await self._get(f"/prediction/{uniprot_id}")
+        if isinstance(raw, list) and raw:
+            return cast("dict[str, Any]", raw[0])
+        return cast("dict[str, Any]", raw)
 
     async def get_pdb_bytes(self, uniprot_id: str) -> bytes:
         """Download the PDB-format structure file for a UniProt accession."""
@@ -101,7 +102,7 @@ class AlphaFoldClient(BaseAsyncClient):
         try:
             meta = await self.get_prediction(uniprot_id)
             return bool(meta.get("entryId"))
-        except Exception:  # noqa: BLE001
+        except Exception:
             return False
 
     async def search_by_taxonomy(
@@ -117,4 +118,5 @@ class AlphaFoldClient(BaseAsyncClient):
             "/predictions/taxid",
             params={"taxId": taxon_id, "size": min(page_size, 100)},
         )
-        return data if isinstance(data, list) else data.get("predictions", [])  # type: ignore[return-value]
+        raw_list: Any = data
+        return raw_list if isinstance(raw_list, list) else raw_list.get("predictions", [])

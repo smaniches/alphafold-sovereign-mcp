@@ -15,6 +15,7 @@ Reference:
   platform connecting phenotypes to genotypes across species.
   Nucleic Acids Res. 2017;45(D1):D712–D722.
 """
+
 from __future__ import annotations
 
 import re
@@ -143,7 +144,7 @@ class MONDOClient(BaseAsyncClient):
         # OLS4 wants the short_form, e.g. 'MONDO_0004995'
         short_form = mondo_id.replace(":", "_")
         data = await self._get(
-            f"/ontologies/mondo/terms",
+            "/ontologies/mondo/terms",
             params={"short_form": short_form, "size": 1},
         )
 
@@ -220,9 +221,7 @@ class MONDOClient(BaseAsyncClient):
     # Hierarchy
     # ------------------------------------------------------------------
 
-    async def ancestors(
-        self, mondo_id: str, *, limit: int = 50
-    ) -> list[OntologyTerm]:
+    async def ancestors(self, mondo_id: str, *, limit: int = 50) -> list[OntologyTerm]:
         """Return all ancestor terms (superclasses) of the given MONDO ID."""
         mondo_id = _normalise_mondo_id(mondo_id)
         short_form = mondo_id.replace(":", "_")
@@ -231,14 +230,9 @@ class MONDOClient(BaseAsyncClient):
             f"/ontologies/mondo/terms/{_url_encode(iri)}/ancestors",
             params={"size": limit},
         )
-        return [
-            self._term_to_ontology(t)
-            for t in data.get("_embedded", {}).get("terms", [])
-        ]
+        return [self._term_to_ontology(t) for t in data.get("_embedded", {}).get("terms", [])]
 
-    async def descendants(
-        self, mondo_id: str, *, limit: int = 50
-    ) -> list[OntologyTerm]:
+    async def descendants(self, mondo_id: str, *, limit: int = 50) -> list[OntologyTerm]:
         """Return direct children and all descendants of the given MONDO ID."""
         mondo_id = _normalise_mondo_id(mondo_id)
         short_form = mondo_id.replace(":", "_")
@@ -247,10 +241,7 @@ class MONDOClient(BaseAsyncClient):
             f"/ontologies/mondo/terms/{_url_encode(iri)}/descendants",
             params={"size": limit},
         )
-        return [
-            self._term_to_ontology(t)
-            for t in data.get("_embedded", {}).get("terms", [])
-        ]
+        return [self._term_to_ontology(t) for t in data.get("_embedded", {}).get("terms", [])]
 
     async def children(self, mondo_id: str) -> list[OntologyTerm]:
         """Return direct children (one hop) of the given MONDO ID."""
@@ -260,10 +251,7 @@ class MONDOClient(BaseAsyncClient):
         data = await self._get(
             f"/ontologies/mondo/terms/{_url_encode(iri)}/children",
         )
-        return [
-            self._term_to_ontology(t)
-            for t in data.get("_embedded", {}).get("terms", [])
-        ]
+        return [self._term_to_ontology(t) for t in data.get("_embedded", {}).get("terms", [])]
 
     # ------------------------------------------------------------------
     # Cross-reference resolution
@@ -289,7 +277,7 @@ class MONDOClient(BaseAsyncClient):
         short_form: str = raw.get("short_form", "")
         mondo_id = short_form.replace("_", ":").upper()
 
-        synonyms: list[str] = raw.get("synonyms", []) or []
+        synonyms: list[Any] = raw.get("synonyms", []) or []
         # OLS4 may nest synonyms as list-of-str or list-of-dict
         cleaned_synonyms: list[str] = []
         for s in synonyms:
@@ -302,7 +290,9 @@ class MONDOClient(BaseAsyncClient):
         xrefs = _extract_xrefs(xref_list)
 
         description = raw.get("description") or []
-        definition = description[0] if isinstance(description, list) and description else str(description)
+        definition = (
+            description[0] if isinstance(description, list) and description else str(description)
+        )
 
         return DiseaseRecord(
             mondo_id=mondo_id,
@@ -336,4 +326,5 @@ class MONDOClient(BaseAsyncClient):
 def _url_encode(s: str) -> str:
     """Double-encode a string for OLS4 IRI embedding in path segments."""
     from urllib.parse import quote
+
     return quote(quote(s, safe=""), safe="")

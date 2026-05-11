@@ -20,6 +20,7 @@ Authentication:
   Set the ``DISGENET_API_KEY`` environment variable before using this client.
   Register at https://www.disgenet.com/signup
 """
+
 from __future__ import annotations
 
 import os
@@ -115,7 +116,8 @@ class DisGeNETClient(BaseAsyncClient):
             return []
 
         results: list[dict[str, Any]] = []
-        for item in (data.get("payload") or data if isinstance(data, list) else []):
+        _d: Any = data
+        for item in _d.get("payload") or (_d if isinstance(_d, list) else []):
             if not isinstance(item, dict):
                 continue
             score = float(item.get("score", 0.0) or 0.0)
@@ -176,7 +178,8 @@ class DisGeNETClient(BaseAsyncClient):
             return []
 
         results: list[dict[str, Any]] = []
-        for item in (data.get("payload") or data if isinstance(data, list) else []):
+        _d: Any = data
+        for item in _d.get("payload") or (_d if isinstance(_d, list) else []):
             if not isinstance(item, dict):
                 continue
             score = float(item.get("score", 0.0) or 0.0)
@@ -231,7 +234,8 @@ class DisGeNETClient(BaseAsyncClient):
             return []
 
         results: list[dict[str, Any]] = []
-        for item in (data.get("payload") or data if isinstance(data, list) else []):
+        _d: Any = data
+        for item in _d.get("payload") or (_d if isinstance(_d, list) else []):
             if not isinstance(item, dict):
                 continue
             results.append(
@@ -293,7 +297,8 @@ class DisGeNETClient(BaseAsyncClient):
             return []
 
         results: list[dict[str, Any]] = []
-        for item in (data.get("payload") or data if isinstance(data, list) else []):
+        _d: Any = data
+        for item in _d.get("payload") or (_d if isinstance(_d, list) else []):
             if not isinstance(item, dict):
                 continue
             pval = float(item.get("p_value", 1.0) or 1.0)
@@ -345,4 +350,5 @@ class DisGeNETClient(BaseAsyncClient):
     async def _gather(*coros: Any) -> list[Any]:
         """Run coroutines concurrently."""
         import asyncio
+
         return list(await asyncio.gather(*coros))

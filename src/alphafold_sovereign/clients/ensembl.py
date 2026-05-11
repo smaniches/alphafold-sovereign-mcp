@@ -13,6 +13,7 @@ Reference:
   2022;50(D1):D988–D995.
   https://rest.ensembl.org
 """
+
 from __future__ import annotations
 
 import re
@@ -33,9 +34,8 @@ _ENSEMBL_CONFIG = UpstreamConfig(
 )
 
 _HGVS_GENE_RE = re.compile(
-    r"^(?P<gene>[A-Z][A-Z0-9_-]{1,})"      # BRCA1, TP53, etc.
-    r":(?:c\.|p\.|g\.|m\.|n\.|r\.)"        # HGVS type prefix
-,
+    r"^(?P<gene>[A-Z][A-Z0-9_-]{1,})"  # BRCA1, TP53, etc.
+    r":(?:c\.|p\.|g\.|m\.|n\.|r\.)",  # HGVS type prefix
     re.IGNORECASE,
 )
 
@@ -101,7 +101,8 @@ class EnsemblClient(BaseAsyncClient):
             return []
 
         results: list[dict[str, Any]] = []
-        for hit in data if isinstance(data, list) else []:
+        any_data: Any = data
+        for hit in any_data if isinstance(any_data, list) else []:
             for tc in hit.get("transcript_consequences", []):
                 results.append(self._parse_tc(tc))
         return results
@@ -278,9 +279,7 @@ class EnsemblClient(BaseAsyncClient):
     # Transcript → protein ID mapping
     # ------------------------------------------------------------------
 
-    async def transcript_protein(
-        self, transcript_id: str
-    ) -> dict[str, Any]:
+    async def transcript_protein(self, transcript_id: str) -> dict[str, Any]:
         """Resolve an Ensembl transcript ID to its canonical protein.
 
         Args:
@@ -295,9 +294,7 @@ class EnsemblClient(BaseAsyncClient):
                 params={"expand": 1, "xrefs": 1},
             )
         except Exception as exc:
-            logger.warning(
-                "ensembl.transcript.error", tid=transcript_id, exc=str(exc)
-            )
+            logger.warning("ensembl.transcript.error", tid=transcript_id, exc=str(exc))
             return {"transcript_id": transcript_id, "found": False}
 
         protein_id = data.get("Translation", {}).get("id", "")
@@ -319,8 +316,7 @@ class EnsemblClient(BaseAsyncClient):
         return [
             x.get("primary_id", "")
             for x in xrefs
-            if x.get("dbname", "").lower().startswith(db_prefix.lower())
-               and x.get("primary_id")
+            if x.get("dbname", "").lower().startswith(db_prefix.lower()) and x.get("primary_id")
         ]
 
     @staticmethod

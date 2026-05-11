@@ -15,6 +15,7 @@
 All tools are read-only, idempotent, and append a provenance footer
 with server version, request timestamp, and data-source identifiers.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -22,6 +23,7 @@ import json
 from datetime import datetime, timezone
 from typing import Any
 
+import httpx
 import structlog
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, ConfigDict, Field
@@ -32,10 +34,8 @@ from alphafold_sovereign.clients.hpo import HPOClient
 from alphafold_sovereign.clients.mondo import MONDOClient
 from alphafold_sovereign.clients.opentargets import OpenTargetsClient
 from alphafold_sovereign.domain.disease import (
-    DiseaseRecord,
     PathogenicityClass,
     TargetEvidenceScore,
-    VariantReport,
 )
 
 logger = structlog.get_logger(__name__)
@@ -125,6 +125,7 @@ COMMON_DISEASE_ROOTS: dict[str, dict[str, str]] = {
 # ---------------------------------------------------------------------------
 # Pydantic input models
 # ---------------------------------------------------------------------------
+
 
 class MONDOLookupInput(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
@@ -300,13 +301,16 @@ class OrphanDiseaseInput(BaseModel):
 class DiseaseSimilarityInput(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
     mondo_id_a: str = Field(..., description="First MONDO disease ID.", min_length=1, max_length=20)
-    mondo_id_b: str = Field(..., description="Second MONDO disease ID.", min_length=1, max_length=20)
+    mondo_id_b: str = Field(
+        ..., description="Second MONDO disease ID.", min_length=1, max_length=20
+    )
     target_limit: int = Field(default=10, ge=1, le=50)
 
 
 # ---------------------------------------------------------------------------
 # Provenance footer
 # ---------------------------------------------------------------------------
+
 
 def _provenance(**sources: str) -> str:
     ts = datetime.now(timezone.utc).isoformat()
@@ -317,6 +321,7 @@ def _provenance(**sources: str) -> str:
 # ---------------------------------------------------------------------------
 # Tool 1: MONDO disease lookup
 # ---------------------------------------------------------------------------
+
 
 @mcp.tool(
     annotations={
@@ -355,23 +360,21 @@ async def lookup_disease(params: MONDOLookupInput) -> str:
         }
         if params.include_hierarchy:
             result["hierarchy"] = {
-                "parents": [
-                    {"id": t.id, "label": t.label} for t in parents[:5]
-                ],
-                "children": [
-                    {"id": t.id, "label": t.label} for t in children[:10]
-                ],
+                "parents": [{"id": t.id, "label": t.label} for t in parents[:5]],
+                "children": [{"id": t.id, "label": t.label} for t in children[:10]],
             }
 
         output = json.dumps(result, indent=2)
         return output + _provenance(mondo="OLS4")
 
     except KeyError:
-        return json.dumps({
-            "status": "not_found",
-            "mondo_id": params.mondo_id,
-            "message": "No MONDO record found for this ID.",
-        })
+        return json.dumps(
+            {
+                "status": "not_found",
+                "mondo_id": params.mondo_id,
+                "message": "No MONDO record found for this ID.",
+            }
+        )
     except Exception as exc:
         logger.error("lookup_disease_failed", mondo_id=params.mondo_id, error=str(exc))
         return json.dumps({"status": "error", "error": str(exc)})
@@ -380,6 +383,7 @@ async def lookup_disease(params: MONDOLookupInput) -> str:
 # ---------------------------------------------------------------------------
 # Tool 2: MONDO disease search
 # ---------------------------------------------------------------------------
+
 
 @mcp.tool(
     annotations={
@@ -402,11 +406,13 @@ async def search_diseases(params: MONDOSearchInput) -> str:
         async with MONDOClient() as client:
             results = await client.search(params.query, limit=params.limit)
         if not results:
-            return json.dumps({
-                "status": "no_results",
-                "query": params.query,
-                "message": "No matching diseases found.",
-            })
+            return json.dumps(
+                {
+                    "status": "no_results",
+                    "query": params.query,
+                    "message": "No matching diseases found.",
+                }
+            )
         return json.dumps(
             {
                 "status": "success",
@@ -424,6 +430,7 @@ async def search_diseases(params: MONDOSearchInput) -> str:
 # ---------------------------------------------------------------------------
 # Tool 3: HPO phenotype lookup
 # ---------------------------------------------------------------------------
+
 
 @mcp.tool(
     annotations={
@@ -464,9 +471,7 @@ async def lookup_phenotype(params: HPOTermInput) -> str:
         }
         if params.include_diseases:
             result["associated_diseases"] = [d.to_dict() for d in diseases]
-            result["parent_terms"] = [
-                {"id": p.id, "label": p.label} for p in parents[:5]
-            ]
+            result["parent_terms"] = [{"id": p.id, "label": p.label} for p in parents[:5]]
 
         return json.dumps(result, indent=2) + _provenance(hpo="JAX-HPO")
 
@@ -478,6 +483,7 @@ async def lookup_phenotype(params: HPOTermInput) -> str:
 # ---------------------------------------------------------------------------
 # Tool 4: Gene phenotype profile
 # ---------------------------------------------------------------------------
+
 
 @mcp.tool(
     annotations={
@@ -538,6 +544,7 @@ async def get_gene_phenotype_profile(params: GenePhenotypeInput) -> str:
 # Tool 5: Disease → protein targets (Open Targets)
 # ---------------------------------------------------------------------------
 
+
 @mcp.tool(
     annotations={
         "title": "Disease Target Evidence",
@@ -569,7 +576,8 @@ async def get_disease_targets(params: DiseaseTargetsInput) -> str:
             )
 
         filtered = [
-            t for t in targets
+            t
+            for t in targets
             if t.overall_score >= params.min_score
             and (not params.include_tractable_only or t.tractable)
         ]
@@ -592,6 +600,7 @@ async def get_disease_targets(params: DiseaseTargetsInput) -> str:
 # ---------------------------------------------------------------------------
 # Tool 6: Protein target → diseases (Open Targets)
 # ---------------------------------------------------------------------------
+
 
 @mcp.tool(
     annotations={
@@ -641,6 +650,7 @@ async def get_target_diseases(params: TargetDiseaseInput) -> str:
 # Tool 7: Common disease target profiling
 # ---------------------------------------------------------------------------
 
+
 @mcp.tool(
     annotations={
         "title": "Common Disease Target Profile",
@@ -664,25 +674,29 @@ async def get_common_disease_targets(params: CommonDiseaseInput) -> str:
     """
     cat = params.category.lower().strip()
     if cat not in COMMON_DISEASE_ROOTS:
-        return json.dumps({
-            "status": "error",
-            "error": f"Unknown category '{cat}'. "
-                     f"Valid: {sorted(COMMON_DISEASE_ROOTS.keys())}",
-        })
+        return json.dumps(
+            {
+                "status": "error",
+                "error": f"Unknown category '{cat}'. Valid: {sorted(COMMON_DISEASE_ROOTS.keys())}",
+            }
+        )
 
     disease_map = COMMON_DISEASE_ROOTS[cat]
     if params.disease_name:
         # Filter to the specified disease within the category
         hit = {
-            k: v for k, v in disease_map.items()
+            k: v
+            for k, v in disease_map.items()
             if params.disease_name.lower().replace(" ", "_") in k
         }
         if not hit:
-            return json.dumps({
-                "status": "error",
-                "error": f"Disease '{params.disease_name}' not found in {cat}. "
-                         f"Available: {list(disease_map.keys())}",
-            })
+            return json.dumps(
+                {
+                    "status": "error",
+                    "error": f"Disease '{params.disease_name}' not found in {cat}. "
+                    f"Available: {list(disease_map.keys())}",
+                }
+            )
         disease_map = hit
 
     async with OpenTargetsClient() as ot:
@@ -717,6 +731,7 @@ async def get_common_disease_targets(params: CommonDiseaseInput) -> str:
 # Tool 8: Variant 3-D triage
 # ---------------------------------------------------------------------------
 
+
 @mcp.tool(
     annotations={
         "title": "Variant 3-D Structural Triage",
@@ -749,18 +764,22 @@ async def triage_variant_3d(params: VariantTriageInput) -> str:
 
     try:
         # -- Step 1: Parse gene + coding change from HGVS ---------------
-        gene_symbol, cdna_change = _parse_hgvs_gene(hgvs)
+        gene_symbol, _ = _parse_hgvs_gene(hgvs)
         if not gene_symbol:
-            return json.dumps({
-                "status": "error",
-                "error": f"Could not extract gene symbol from HGVS '{hgvs}'. "
-                         "Expected format: 'GENE:c.NNNx>y' e.g. 'BRCA1:c.181T>G'.",
-            })
+            return json.dumps(
+                {
+                    "status": "error",
+                    "error": f"Could not extract gene symbol from HGVS '{hgvs}'. "
+                    "Expected format: 'GENE:c.NNNx>y' e.g. 'BRCA1:c.181T>G'.",
+                }
+            )
 
         # -- Step 2: Parallel data fetch --------------------------------
         clinvar_coro = _fetch_clinvar(hgvs, gene_symbol)
         gnomad_coro = _fetch_gnomad(hgvs, gene_symbol) if params.include_gnomad else None
-        disease_coro = _fetch_disease_context(gene_symbol) if params.include_disease_context else None
+        disease_coro = (
+            _fetch_disease_context(gene_symbol) if params.include_disease_context else None
+        )
 
         coros = [clinvar_coro]
         if gnomad_coro:
@@ -774,8 +793,12 @@ async def triage_variant_3d(params: VariantTriageInput) -> str:
         fetched = await asyncio.gather(*coros, return_exceptions=True)
 
         clinvar_data: dict[str, Any] = fetched[0] if not isinstance(fetched[0], Exception) else {}
-        gnomad_data: dict[str, Any] = fetched[1] if len(fetched) > 1 and not isinstance(fetched[1], Exception) else {}
-        disease_data: dict[str, Any] = fetched[-1] if disease_coro and not isinstance(fetched[-1], Exception) else {}
+        gnomad_data: dict[str, Any] = (
+            fetched[1] if len(fetched) > 1 and not isinstance(fetched[1], Exception) else {}
+        )
+        disease_data: dict[str, Any] = (
+            fetched[-1] if disease_coro and not isinstance(fetched[-1], Exception) else {}
+        )
 
         # -- Step 3: Pathogenicity tier ---------------------------------
         clinvar_cls_raw = clinvar_data.get("classification", "Not provided")
@@ -824,6 +847,7 @@ async def triage_variant_3d(params: VariantTriageInput) -> str:
 # ---------------------------------------------------------------------------
 # Tool 9: Phenotype → protein structures
 # ---------------------------------------------------------------------------
+
 
 @mcp.tool(
     annotations={
@@ -877,20 +901,22 @@ async def phenotype_to_structures(params: PhenotypeToStructureInput) -> str:
         for disease, targets in zip(valid_diseases, target_results):
             if isinstance(targets, Exception):
                 continue
-            output.append({
-                "disease_id": disease.disease_id,
-                "disease_name": disease.disease_name,
-                "targets": [
-                    {
-                        "uniprot_id": t.uniprot_id,
-                        "gene_symbol": t.target_gene_symbol,
-                        "evidence_score": round(t.overall_score, 4),
-                        "known_drugs": t.drug_count,
-                    }
-                    for t in targets  # type: ignore[union-attr]
-                    if t.uniprot_id
-                ],
-            })
+            output.append(
+                {
+                    "disease_id": disease.disease_id,
+                    "disease_name": disease.disease_name,
+                    "targets": [
+                        {
+                            "uniprot_id": t.uniprot_id,
+                            "gene_symbol": t.target_gene_symbol,
+                            "evidence_score": round(t.overall_score, 4),
+                            "known_drugs": t.drug_count,
+                        }
+                        for t in targets  # type: ignore[union-attr]
+                        if t.uniprot_id
+                    ],
+                }
+            )
 
         return json.dumps(
             {
@@ -914,6 +940,7 @@ async def phenotype_to_structures(params: PhenotypeToStructureInput) -> str:
 # ---------------------------------------------------------------------------
 # Tool 10: Orphan disease atlas
 # ---------------------------------------------------------------------------
+
 
 @mcp.tool(
     annotations={
@@ -946,11 +973,13 @@ async def get_orphan_disease_atlas(params: OrphanDiseaseInput) -> str:
             search_results = await mondo_client.from_orphanet(params.orphanet_id)
 
         if not search_results:
-            return json.dumps({
-                "status": "not_found",
-                "orphanet_id": params.orphanet_id,
-                "message": f"No MONDO record found for Orphanet:{params.orphanet_id}.",
-            })
+            return json.dumps(
+                {
+                    "status": "not_found",
+                    "orphanet_id": params.orphanet_id,
+                    "message": f"No MONDO record found for Orphanet:{params.orphanet_id}.",
+                }
+            )
 
         mondo_id = search_results[0].mondo_id
 
@@ -988,6 +1017,7 @@ async def get_orphan_disease_atlas(params: OrphanDiseaseInput) -> str:
 # ---------------------------------------------------------------------------
 # Tool 11: Disease structural similarity
 # ---------------------------------------------------------------------------
+
 
 @mcp.tool(
     annotations={
@@ -1030,7 +1060,9 @@ async def compare_disease_target_overlap(params: DiseaseSimilarityInput) -> str:
         union_size = len(set(set_a) | set(set_b))
         jaccard = len(shared_ids) / union_size if union_size > 0 else 0.0
 
-        def _fmt(t: TargetEvidenceScore, other: dict[str, TargetEvidenceScore] | None = None) -> dict[str, Any]:
+        def _fmt(
+            t: TargetEvidenceScore, other: dict[str, TargetEvidenceScore] | None = None
+        ) -> dict[str, Any]:
             d = {
                 "ensembl_id": t.target_ensembl_id,
                 "gene_symbol": t.target_gene_symbol,
@@ -1059,13 +1091,21 @@ async def compare_disease_target_overlap(params: DiseaseSimilarityInput) -> str:
                 "unique_to_b_count": len(only_b_ids),
                 "shared_targets": shared,
                 "unique_to_a": [
-                    {"ensembl_id": e, "gene_symbol": set_a[e].target_gene_symbol,
-                     "uniprot_id": set_a[e].uniprot_id, "score": round(set_a[e].overall_score, 4)}
+                    {
+                        "ensembl_id": e,
+                        "gene_symbol": set_a[e].target_gene_symbol,
+                        "uniprot_id": set_a[e].uniprot_id,
+                        "score": round(set_a[e].overall_score, 4),
+                    }
                     for e in sorted(only_a_ids, key=lambda e: -set_a[e].overall_score)
                 ],
                 "unique_to_b": [
-                    {"ensembl_id": e, "gene_symbol": set_b[e].target_gene_symbol,
-                     "uniprot_id": set_b[e].uniprot_id, "score": round(set_b[e].overall_score, 4)}
+                    {
+                        "ensembl_id": e,
+                        "gene_symbol": set_b[e].target_gene_symbol,
+                        "uniprot_id": set_b[e].uniprot_id,
+                        "score": round(set_b[e].overall_score, 4),
+                    }
                     for e in sorted(only_b_ids, key=lambda e: -set_b[e].overall_score)
                 ],
                 "repurposing_note": (
@@ -1085,6 +1125,7 @@ async def compare_disease_target_overlap(params: DiseaseSimilarityInput) -> str:
 # ---------------------------------------------------------------------------
 # Tool 12: ICD-10 to MONDO resolution
 # ---------------------------------------------------------------------------
+
 
 class ICD10ToMONDOInput(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
@@ -1119,11 +1160,13 @@ async def resolve_icd10_to_mondo(params: ICD10ToMONDOInput) -> str:
             results = await client.from_icd10(params.icd10_code)
 
         if not results:
-            return json.dumps({
-                "status": "not_found",
-                "icd10_code": params.icd10_code,
-                "message": "No MONDO terms found for this ICD-10 code.",
-            })
+            return json.dumps(
+                {
+                    "status": "not_found",
+                    "icd10_code": params.icd10_code,
+                    "message": "No MONDO terms found for this ICD-10 code.",
+                }
+            )
 
         return json.dumps(
             {
@@ -1147,9 +1190,11 @@ async def resolve_icd10_to_mondo(params: ICD10ToMONDOInput) -> str:
 # Internal helpers
 # ---------------------------------------------------------------------------
 
+
 def _parse_hgvs_gene(hgvs: str) -> tuple[str, str]:
     """Extract gene symbol and c. notation from an HGVS expression."""
     import re
+
     # 'BRCA1:c.181T>G' or 'NM_007294.3:c.181T>G'
     match = re.match(r"^([A-Za-z][A-Za-z0-9_\-\.]*):(.+)$", hgvs)
     if match:
@@ -1195,22 +1240,14 @@ async def _omim_to_mondo(disease_id: str) -> str | None:
         return None
 
 
-_uniprot_http: "httpx.AsyncClient | None" = None
-
-
-def _get_uniprot_http() -> "httpx.AsyncClient":
-    global _uniprot_http  # noqa: PLW0603
-    import httpx  # noqa: PLC0415
-    if _uniprot_http is None:
-        _uniprot_http = httpx.AsyncClient(timeout=10.0)
-    return _uniprot_http
+_uniprot_http: httpx.AsyncClient = httpx.AsyncClient(timeout=10.0)
 
 
 async def _uniprot_to_ensembl(uniprot_id: str) -> str:
     """Resolve UniProt accession to Ensembl gene ID via UniProt REST API."""
     url = f"https://rest.uniprot.org/uniprotkb/{uniprot_id}.json"
     try:
-        resp = await _get_uniprot_http().get(url)
+        resp = await _uniprot_http.get(url)
         resp.raise_for_status()
         data = resp.json()
         for ref in data.get("dbReferences", []):
@@ -1224,7 +1261,8 @@ async def _uniprot_to_ensembl(uniprot_id: str) -> str:
 
 
 def _parse_clinvar_class(raw: str) -> PathogenicityClass:
-    from alphafold_sovereign.clients.clinvar import _parse_classification  # noqa: PLC0415
+    from alphafold_sovereign.clients.clinvar import _parse_classification
+
     return _parse_classification(raw)
 
 

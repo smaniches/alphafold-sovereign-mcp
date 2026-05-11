@@ -21,6 +21,7 @@ Tool inventory:
   4. export_research_dataset  — export to JSON for pandas/ML pipelines
   5. find_drug_gene_network   — traverse the accumulated drug-gene-disease graph
 """
+
 from __future__ import annotations
 
 import datetime
@@ -46,6 +47,7 @@ def _provenance(**meta: str) -> str:
 
 # ── Input models ──────────────────────────────────────────────────────────────
 
+
 class VariantQueryInput(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
@@ -57,12 +59,10 @@ class VariantQueryInput(BaseModel):
         None, description="ClinVar classification (e.g. 'Pathogenic')."
     )
     min_am_score: float | None = Field(
-        None, ge=0.0, le=1.0,
-        description="Minimum AlphaMissense score (0.564 = likely pathogenic)."
+        None, ge=0.0, le=1.0, description="Minimum AlphaMissense score (0.564 = likely pathogenic)."
     )
     max_gnomad_af: float | None = Field(
-        None, ge=0.0, le=1.0,
-        description="Maximum gnomAD allele frequency (0.001 = rare)."
+        None, ge=0.0, le=1.0, description="Maximum gnomAD allele frequency (0.001 = rare)."
     )
     limit: int = Field(default=50, ge=1, le=500)
 
@@ -74,8 +74,7 @@ class ProteinQueryInput(BaseModel):
         None, description="Druggability tier filter."
     )
     min_plddt: float | None = Field(
-        None, ge=0.0, le=100.0,
-        description="Minimum mean pLDDT confidence score."
+        None, ge=0.0, le=100.0, description="Minimum mean pLDDT confidence score."
     )
     limit: int = Field(default=50, ge=1, le=500)
 
@@ -107,6 +106,7 @@ class DrugNetworkInput(BaseModel):
 
 
 # ── Tools ─────────────────────────────────────────────────────────────────────
+
 
 @mcp.tool(
     annotations={

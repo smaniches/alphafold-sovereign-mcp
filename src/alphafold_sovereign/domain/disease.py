@@ -6,6 +6,7 @@ No I/O, no network, no MCP SDK — only types, validation, and serialisation.
 All downstream modules depend on these types; none depend on each other,
 ensuring a dependency-free domain layer.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -254,17 +255,13 @@ class VariantReport:
 
     # Population genetics
     gnomad_af_global: float | None = None
-    gnomad_af_by_population: tuple[PopulationFrequency, ...] = field(
-        default_factory=tuple
-    )
+    gnomad_af_by_population: tuple[PopulationFrequency, ...] = field(default_factory=tuple)
     gnomad_loeuf: float | None = None
     """LOEUF constraint score for the gene (lower = more constrained)."""
 
     # Disease associations
     top_diseases: tuple[DiseaseRecord, ...] = field(default_factory=tuple)
-    top_target_evidence: tuple[TargetEvidenceScore, ...] = field(
-        default_factory=tuple
-    )
+    top_target_evidence: tuple[TargetEvidenceScore, ...] = field(default_factory=tuple)
 
     # Provenance
     sources_queried: tuple[str, ...] = field(default_factory=tuple)
@@ -313,9 +310,7 @@ class VariantReport:
             },
             "population_genetics": {
                 "gnomad_af_global": self.gnomad_af_global,
-                "gnomad_af_by_population": [
-                    p.to_dict() for p in self.gnomad_af_by_population
-                ],
+                "gnomad_af_by_population": [p.to_dict() for p in self.gnomad_af_by_population],
                 "gnomad_loeuf": self.gnomad_loeuf,
             },
             "top_diseases": [d.to_dict() for d in self.top_diseases],

@@ -38,6 +38,7 @@ Usage:
   ...     await kg.store_variant_report(hgvs="BRCA1:c.181T>G", report={...})
   ...     df = await kg.query_variants(gene="BRCA1", tier="HIGH")
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -46,10 +47,10 @@ import hashlib
 import json
 import os
 import sqlite3
-import time
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, AsyncIterator
+from typing import Any
 
 import structlog
 from platformdirs import user_data_dir
@@ -96,7 +97,7 @@ class KnowledgeGraph:
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
-    async def __aenter__(self) -> "KnowledgeGraph":
+    async def __aenter__(self) -> KnowledgeGraph:
         await self.connect()
         return self
 
@@ -448,20 +449,35 @@ class KnowledgeGraph:
             await loop.run_in_executor(
                 None,
                 self._upsert_protein,
-                uniprot_id, gene_symbol, ensembl_gene_id, protein_name,
-                sequence_length, mean_plddt, confidence_tier, idr_fraction,
+                uniprot_id,
+                gene_symbol,
+                ensembl_gene_id,
+                protein_name,
+                sequence_length,
+                mean_plddt,
+                confidence_tier,
+                idr_fraction,
                 druggability_tier,
                 json.dumps(tda_fingerprint) if tda_fingerprint else None,
-                now, data_hash,
+                now,
+                data_hash,
             )
         return uniprot_id
 
     def _upsert_protein(
         self,
-        uniprot_id: str, gene_symbol: str, ensembl_gene_id: str, protein_name: str,
-        sequence_length: int | None, mean_plddt: float | None, confidence_tier: str,
-        idr_fraction: float | None, druggability_tier: str, tda_json: str | None,
-        now: str, data_hash: str,
+        uniprot_id: str,
+        gene_symbol: str,
+        ensembl_gene_id: str,
+        protein_name: str,
+        sequence_length: int | None,
+        mean_plddt: float | None,
+        confidence_tier: str,
+        idr_fraction: float | None,
+        druggability_tier: str,
+        tda_json: str | None,
+        now: str,
+        data_hash: str,
     ) -> None:
         assert self._conn is not None
         self._conn.execute(
@@ -483,9 +499,19 @@ class KnowledgeGraph:
                 data_hash = excluded.data_hash
             """,
             [
-                uniprot_id, gene_symbol, ensembl_gene_id, protein_name,
-                sequence_length, mean_plddt, confidence_tier, idr_fraction,
-                druggability_tier, tda_json, now, now, data_hash,
+                uniprot_id,
+                gene_symbol,
+                ensembl_gene_id,
+                protein_name,
+                sequence_length,
+                mean_plddt,
+                confidence_tier,
+                idr_fraction,
+                druggability_tier,
+                tda_json,
+                now,
+                now,
+                data_hash,
             ],
         )
         self._conn.commit()
@@ -528,39 +554,63 @@ class KnowledgeGraph:
             await loop.run_in_executor(
                 None,
                 self._upsert_variant,
-                hgvs, gene_symbol, uniprot_id or None, clinvar_id, clinvar_class,
-                gnomad_af, gnomad_ac, gnomad_an, homozygote_count,
-                alphamissense_score, vep_consequence, vep_impact,
-                sift_prediction, polyphen_prediction, cadd_phred,
-                clinical_tier, acmg_json, now, data_hash,
+                hgvs,
+                gene_symbol,
+                uniprot_id or None,
+                clinvar_id,
+                clinvar_class,
+                gnomad_af,
+                gnomad_ac,
+                gnomad_an,
+                homozygote_count,
+                alphamissense_score,
+                vep_consequence,
+                vep_impact,
+                sift_prediction,
+                polyphen_prediction,
+                cadd_phred,
+                clinical_tier,
+                acmg_json,
+                now,
+                data_hash,
             )
         return hgvs
 
     def _upsert_variant(
         self,
-        hgvs: str, gene_symbol: str, uniprot_id: str | None,
-        clinvar_id: str, clinvar_class: str,
-        gnomad_af: float | None, gnomad_ac: int | None, gnomad_an: int | None,
+        hgvs: str,
+        gene_symbol: str,
+        uniprot_id: str | None,
+        clinvar_id: str,
+        clinvar_class: str,
+        gnomad_af: float | None,
+        gnomad_ac: int | None,
+        gnomad_an: int | None,
         homozygote_count: int | None,
         alphamissense_score: float | None,
-        vep_consequence: str, vep_impact: str,
-        sift_prediction: str, polyphen_prediction: str,
+        vep_consequence: str,
+        vep_impact: str,
+        sift_prediction: str,
+        polyphen_prediction: str,
         cadd_phred: float | None,
-        clinical_tier: str, acmg_json: str | None,
-        now: str, data_hash: str,
+        clinical_tier: str,
+        acmg_json: str | None,
+        now: str,
+        data_hash: str,
     ) -> None:
         assert self._conn is not None
         clinvar_acmg_code = ""
         if clinvar_class:
             from alphafold_sovereign.domain.disease import PathogenicityClass
-            _MAP = {
+
+            _acmg_map = {
                 PathogenicityClass.PATHOGENIC.value: "P",
                 PathogenicityClass.LIKELY_PATHOGENIC.value: "LP",
                 PathogenicityClass.UNCERTAIN.value: "VUS",
                 PathogenicityClass.LIKELY_BENIGN.value: "LB",
                 PathogenicityClass.BENIGN.value: "B",
             }
-            clinvar_acmg_code = _MAP.get(clinvar_class, "NP")
+            clinvar_acmg_code = _acmg_map.get(clinvar_class, "NP")
 
         self._conn.execute(
             """
@@ -582,11 +632,27 @@ class KnowledgeGraph:
                 data_hash = excluded.data_hash
             """,
             [
-                hgvs, gene_symbol, uniprot_id, clinvar_id, clinvar_class,
-                clinvar_acmg_code, gnomad_af, gnomad_ac, gnomad_an,
-                homozygote_count, alphamissense_score,
-                vep_consequence, vep_impact, sift_prediction, polyphen_prediction,
-                cadd_phred, clinical_tier, acmg_json, now, now, data_hash,
+                hgvs,
+                gene_symbol,
+                uniprot_id,
+                clinvar_id,
+                clinvar_class,
+                clinvar_acmg_code,
+                gnomad_af,
+                gnomad_ac,
+                gnomad_an,
+                homozygote_count,
+                alphamissense_score,
+                vep_consequence,
+                vep_impact,
+                sift_prediction,
+                polyphen_prediction,
+                cadd_phred,
+                clinical_tier,
+                acmg_json,
+                now,
+                now,
+                data_hash,
             ],
         )
         self._conn.commit()
@@ -611,22 +677,31 @@ class KnowledgeGraph:
             await loop.run_in_executor(
                 None,
                 self._upsert_disease,
-                mondo_id, name, definition,
+                mondo_id,
+                name,
+                definition,
                 json.dumps(icd10_codes or []),
                 json.dumps(icd11_codes or []),
                 json.dumps(omim_ids or []),
                 json.dumps(orphanet_ids or []),
                 json.dumps(synonyms or []),
-                int(therapeutic_area), now,
+                int(therapeutic_area),
+                now,
             )
         return mondo_id
 
     def _upsert_disease(
         self,
-        mondo_id: str, name: str, definition: str,
-        icd10_json: str, icd11_json: str, omim_json: str,
-        orphanet_json: str, synonyms_json: str,
-        therapeutic_area: int, now: str,
+        mondo_id: str,
+        name: str,
+        definition: str,
+        icd10_json: str,
+        icd11_json: str,
+        omim_json: str,
+        orphanet_json: str,
+        synonyms_json: str,
+        therapeutic_area: int,
+        now: str,
     ) -> None:
         assert self._conn is not None
         self._conn.execute(
@@ -642,8 +717,17 @@ class KnowledgeGraph:
                 updated_at = excluded.updated_at
             """,
             [
-                mondo_id, name, definition, icd10_json, icd11_json, omim_json,
-                orphanet_json, synonyms_json, therapeutic_area, now, now,
+                mondo_id,
+                name,
+                definition,
+                icd10_json,
+                icd11_json,
+                omim_json,
+                orphanet_json,
+                synonyms_json,
+                therapeutic_area,
+                now,
+                now,
             ],
         )
         self._conn.commit()
@@ -672,19 +756,39 @@ class KnowledgeGraph:
             await loop.run_in_executor(
                 None,
                 self._upsert_drug,
-                chembl_id, pref_name, max_phase, max_phase_label,
-                first_approval, molecule_type, int(oral), int(parenteral),
-                int(black_box_warning), mechanism_of_action, usan_stem,
-                mw_freebase, alogp, now,
+                chembl_id,
+                pref_name,
+                max_phase,
+                max_phase_label,
+                first_approval,
+                molecule_type,
+                int(oral),
+                int(parenteral),
+                int(black_box_warning),
+                mechanism_of_action,
+                usan_stem,
+                mw_freebase,
+                alogp,
+                now,
             )
         return chembl_id
 
     def _upsert_drug(
         self,
-        chembl_id: str, pref_name: str, max_phase: int, max_phase_label: str,
-        first_approval: int | None, molecule_type: str,
-        oral: int, parenteral: int, bbw: int,
-        moa: str, usan_stem: str, mw: float | None, alogp: float | None, now: str,
+        chembl_id: str,
+        pref_name: str,
+        max_phase: int,
+        max_phase_label: str,
+        first_approval: int | None,
+        molecule_type: str,
+        oral: int,
+        parenteral: int,
+        bbw: int,
+        moa: str,
+        usan_stem: str,
+        mw: float | None,
+        alogp: float | None,
+        now: str,
     ) -> None:
         assert self._conn is not None
         self._conn.execute(
@@ -701,8 +805,21 @@ class KnowledgeGraph:
                 updated_at = excluded.updated_at
             """,
             [
-                chembl_id, pref_name, max_phase, max_phase_label, first_approval,
-                molecule_type, oral, parenteral, bbw, moa, usan_stem, mw, alogp, now, now,
+                chembl_id,
+                pref_name,
+                max_phase,
+                max_phase_label,
+                first_approval,
+                molecule_type,
+                oral,
+                parenteral,
+                bbw,
+                moa,
+                usan_stem,
+                mw,
+                alogp,
+                now,
+                now,
             ],
         )
         self._conn.commit()
@@ -733,17 +850,31 @@ class KnowledgeGraph:
             row_id = await loop.run_in_executor(
                 None,
                 self._insert_invocation,
-                tool_name, params_hash, params_json, result_hash, result_json,
-                duration_ms, error, session_id, request_id, now,
+                tool_name,
+                params_hash,
+                params_json,
+                result_hash,
+                result_json,
+                duration_ms,
+                error,
+                session_id,
+                request_id,
+                now,
             )
         return row_id
 
     def _insert_invocation(
         self,
-        tool_name: str, params_hash: str, params_json: str,
-        result_hash: str | None, result_json: str | None,
-        duration_ms: int | None, error: str | None,
-        session_id: str, request_id: str, now: str,
+        tool_name: str,
+        params_hash: str,
+        params_json: str,
+        result_hash: str | None,
+        result_json: str | None,
+        duration_ms: int | None,
+        error: str | None,
+        session_id: str,
+        request_id: str,
+        now: str,
     ) -> int:
         assert self._conn is not None
         cursor = self._conn.execute(
@@ -754,8 +885,17 @@ class KnowledgeGraph:
             VALUES (?,?,?,?,?,?,?,?,?,?,?)
             """,
             [
-                tool_name, params_hash, params_json, result_hash, result_json,
-                duration_ms, error, session_id, request_id, now, now,
+                tool_name,
+                params_hash,
+                params_json,
+                result_hash,
+                result_json,
+                duration_ms,
+                error,
+                session_id,
+                request_id,
+                now,
+                now,
             ],
         )
         self._conn.commit()
@@ -806,7 +946,9 @@ class KnowledgeGraph:
             values.append(max_gnomad_af)
 
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-        sql = f"SELECT * FROM variant_summary {where} ORDER BY alphamissense_score DESC LIMIT {limit}"
+        sql = (
+            f"SELECT * FROM variant_summary {where} ORDER BY alphamissense_score DESC LIMIT {limit}"
+        )
 
         async with self._lock:
             loop = asyncio.get_event_loop()
@@ -863,9 +1005,17 @@ class KnowledgeGraph:
     def _gather_stats(self) -> dict[str, Any]:
         assert self._conn is not None
         tables = [
-            "proteins", "variants", "diseases", "drugs", "genes",
-            "phenotypes", "protein_disease", "protein_drug",
-            "variant_disease", "gene_phenotype", "tool_invocations",
+            "proteins",
+            "variants",
+            "diseases",
+            "drugs",
+            "genes",
+            "phenotypes",
+            "protein_disease",
+            "protein_drug",
+            "variant_disease",
+            "gene_phenotype",
+            "tool_invocations",
         ]
         counts: dict[str, int] = {}
         for t in tables:
@@ -903,8 +1053,12 @@ class KnowledgeGraph:
             Dict mapping table name → list of row dicts.
         """
         default_tables = [
-            "proteins", "variants", "diseases", "drugs",
-            "protein_disease", "protein_drug",
+            "proteins",
+            "variants",
+            "diseases",
+            "drugs",
+            "protein_disease",
+            "protein_drug",
         ]
         selected = tables or default_tables
         result: dict[str, list[dict[str, Any]]] = {}

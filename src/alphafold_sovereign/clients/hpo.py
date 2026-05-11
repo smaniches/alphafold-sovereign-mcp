@@ -14,6 +14,7 @@ Reference:
   Köhler S et al. The Human Phenotype Ontology in 2021.
   Nucleic Acids Res. 2021;49(D1):D1207–D1217.
 """
+
 from __future__ import annotations
 
 import re
@@ -130,10 +131,7 @@ class HPOClient(BaseAsyncClient):
             "/hpo/search",
             params={"q": query, "max": max_results},
         )
-        return [
-            self._parse_term(t)
-            for t in data.get("terms", [])
-        ]
+        return [self._parse_term(t) for t in data.get("terms", [])]
 
     # ------------------------------------------------------------------
     # Disease ↔ phenotype associations
@@ -188,7 +186,7 @@ class HPOClient(BaseAsyncClient):
             List of ``PhenotypeAssociation`` objects.
         """
         data = await self._get(
-            f"/hpo/gene",
+            "/hpo/gene",
             params={"gene": gene_symbol},
         )
         associations: list[PhenotypeAssociation] = []
@@ -223,7 +221,7 @@ class HPOClient(BaseAsyncClient):
             List of ``PhenotypeAssociation`` objects.
         """
         data = await self._get(
-            f"/hpo/disease",
+            "/hpo/disease",
             params={"disease_id": disease_id},
         )
         associations: list[PhenotypeAssociation] = []
@@ -237,9 +235,7 @@ class HPOClient(BaseAsyncClient):
                         disease_name=data.get("disease", {}).get("diseaseName", ""),
                         frequency=item.get("frequency", {}).get("id", ""),
                         onset=item.get("onset", {}).get("id", "") if item.get("onset") else "",
-                        evidence_codes=tuple(
-                            e.get("id", "") for e in (item.get("evidence") or [])
-                        ),
+                        evidence_codes=tuple(e.get("id", "") for e in (item.get("evidence") or [])),
                     )
                 )
                 if len(associations) >= limit:
