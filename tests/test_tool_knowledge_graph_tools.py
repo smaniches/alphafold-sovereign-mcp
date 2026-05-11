@@ -291,24 +291,20 @@ async def test_traverse_network_gene_seed_no_recursion_at_max_hop() -> None:
 
 
 async def test_traverse_network_visited_dedup() -> None:
-    """Same protein added twice → already visited, branch 340 covered."""
+    """Duplicate proteins in _fetchall trigger visited short-circuit (line 340)."""
     mock_kg = MagicMock()
-    # Two genes both refer to the same protein UniProt ID
-    fetchall_count = {"n": 0}
-
-    def fake_fetchall(sql: str, params: list[Any]) -> list[dict[str, Any]]:
-        fetchall_count["n"] += 1
-        return [{"uniprot_id": "P38398", "gene_symbol": "BRCA1"}]
-
-    mock_kg._fetchall = fake_fetchall
+    mock_kg._fetchall = MagicMock(
+        return_value=[
+            {"uniprot_id": "P38398", "gene_symbol": "BRCA1"},
+            {"uniprot_id": "P38398", "gene_symbol": "BRCA1"},  # duplicate
+        ]
+    )
     mock_kg.query_variants = AsyncMock(return_value=[])
     mock_kg.query_proteins = AsyncMock(return_value=[])
 
-    # Use a gene seed that recurses to itself via protein P38398
-    # But P38398 starts with "P" so it's UniProt → calls query_proteins (empty)
-    # So the second expansion of the protein adds no new nodes.
     out = await _traverse_network(mock_kg, "BRCA1", max_hops=2)
-    assert "P38398" in {n.get("uniprot_id") for n in out["nodes"] if "uniprot_id" in n}
+    # Second expand call for P38398 hits the visited guard.
+    assert any(n.get("uniprot_id") == "P38398" for n in out["nodes"])
 
 
 async def test_traverse_network_visited_short_circuit() -> None:

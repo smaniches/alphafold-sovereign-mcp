@@ -417,6 +417,3 @@ def test_offline_mode_env_parsing(monkeypatch: pytest.MonkeyPatch) -> None:
     for falsy in ("0", "false", "no", ""):
         assert _parse(falsy) is False
 
-
-# Ensure asyncio mode is exercised even on `pytest-asyncio<0.23` defaults.
-pytest_plugins = ("pytest_asyncio",)
