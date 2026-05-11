@@ -80,7 +80,7 @@ jobs:
             --cov=src/alphafold_sovereign \
             --cov-report=term-missing \
             --cov-report=xml:coverage.xml \
-            --cov-fail-under=30 \
+            --cov-fail-under=60 \
             -v --tb=short
         env:
           PYTHONPATH: src
@@ -145,9 +145,13 @@ jobs:
             sbom-spdx.json
 
   # ── CodeQL ────────────────────────────────────────────────────────────────
+  # Runs on public repositories (free) and on private repos with GitHub
+  # Advanced Security enabled.  On private repos without GHAS this would
+  # fail with a permissions error, so we skip until the repo is public.
   codeql:
     name: CodeQL Analysis
     runs-on: ubuntu-latest
+    if: github.event.repository.private == false || github.repository_owner == 'topologica-ai'
     permissions:
       actions: read
       contents: read
@@ -158,7 +162,12 @@ jobs:
         with:
           languages: python
           queries: security-extended
+          # Scan only the production source tree; the archived monolith
+          # is excluded from coverage, lint, and security review.
+          source-root: src
       - uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:python"
 
   # ── MCP protocol validation ────────────────────────────────────────────────
   mcp-validate:
