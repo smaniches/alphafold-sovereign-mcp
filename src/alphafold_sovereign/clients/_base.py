@@ -1,17 +1,20 @@
 # SPDX-License-Identifier: Apache-2.0
-# Copyright 2024-2026 Santiago Maniches and TOPOLOGICA LLC
-"""Async HTTP base client with production-grade resilience.
+# Copyright 2024-2026 Santiago Maniches
+"""Async HTTP base client used by every upstream-API wrapper.
 
-Every upstream client inherits from ``BaseAsyncClient``.  The base class wires
-together:
+Every upstream client inherits from ``BaseAsyncClient``. The base class
+wires together:
 
 - ``httpx.AsyncClient`` (HTTP/2, connection pooling, keep-alive)
-- ``tenacity`` (exponential back-off with full jitter, configurable)
-- ``aiolimiter`` (per-host token-bucket rate limiting)
-- Circuit breaker (half-open probe after configurable cooldown)
-- Structured logging via ``structlog`` (request_id propagation)
-- Outbound domain allow-list (blocks all egress in air-gap mode)
-- Content hash verification for cached responses
+- ``tenacity`` exponential back-off with full jitter
+- ``aiolimiter`` per-host token-bucket rate limiting
+- A small circuit breaker (CLOSED / OPEN / HALF_OPEN) with a
+  configurable cooldown
+- Structured logging via ``structlog`` (request-id propagation)
+- An outbound-host allow-list that blocks all egress when
+  ``ALPHAFOLD_OFFLINE=1`` is set
+- SHA-256 content-hash verification for responses that the caller
+  passes through the cache layer
 """
 
 from __future__ import annotations

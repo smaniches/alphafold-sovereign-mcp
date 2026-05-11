@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-# Copyright 2024-2026 Santiago Maniches and TOPOLOGICA LLC
+# Copyright 2024-2026 Santiago Maniches
 """Entry point for `python -m alphafold_sovereign` and the console script.
 
 Launches the AlphaFold Sovereign MCP server over stdio transport

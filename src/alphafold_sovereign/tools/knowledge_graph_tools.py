@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-# Copyright 2024-2026 Santiago Maniches and TOPOLOGICA LLC
+# Copyright 2024-2026 Santiago Maniches
 """MCP tools for querying the local AlphaFold Sovereign Knowledge Graph.
 
 These tools expose the accumulated research intelligence stored in the local

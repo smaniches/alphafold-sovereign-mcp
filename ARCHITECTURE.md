@@ -11,9 +11,8 @@ threat model, see `docs/THREAT_MODEL.md`.
 2. **Auditable by default.** Every tool invocation produces a signed,
    content-addressed audit record. Nothing is optional except the
    exporter.
-3. **Open-core.** The Apache 2.0 codebase is the complete runnable
-   system. Enterprise Edition adds contractual guarantees and
-   integrations, not capabilities.
+3. **Single licence.** The codebase is Apache 2.0 — one licence,
+   no dual-licence funnel, no feature gated behind a paid edition.
 4. **Protocol-native.** We implement the full MCP 2025-06-18 surface:
    tools, resources, prompts, sampling, roots, progress, cancellation,
    and resource subscriptions. We do not paper over the spec.
@@ -231,14 +230,22 @@ See `docs/THREAT_MODEL.md` for the full STRIDE analysis.
 
 Key controls:
 
-- **Outbound allowlist** — in air-gap mode, all egress is blocked at
-  the `clients/_base.py` layer before a socket is opened.
+- **Outbound allowlist** — in air-gap mode (`ALPHAFOLD_OFFLINE=1`),
+  all egress is blocked at the `clients/_base.py` layer before a
+  socket is opened.
 - **Sequence-of-concern screening** — `security/screening.py` runs
-  before any deep enrichment of a protein sequence.
-- **Signed audit log** — every tool invocation is signed with an
-  ed25519 key; the log is append-only and tamper-evident.
-- **OAuth 2.1 + PKCE** — the HTTP transport requires a valid JWT;
-  capability tokens scope per-tool access.
-- **FIPS 140-3 mode** — when `ALPHAFOLD_FIPS=1`, the `cryptography`
-  library switches to the OpenSSL FIPS provider; all non-FIPS
-  algorithms raise at import time.
+  before any deep enrichment of a submitted protein sequence.
+- **Audit log** — every tool invocation is recorded in the
+  `tool_invocations` table with SHA-256 hashes of inputs and outputs
+  and a UTC timestamp. The log is append-only at the SQLite layer;
+  cryptographic signing of audit records is a tracked work item
+  (not yet implemented in the shipped codebase).
+
+Items on the roadmap but **not** yet implemented in the shipped
+codebase, listed here so the boundary is clear:
+
+- OAuth 2.1 + PKCE on the HTTP transport (the stdio transport, which
+  is what `claude-desktop` uses, has no separate auth — the client
+  process owns its capabilities).
+- A FIPS 140-3 build that switches `cryptography` to the OpenSSL FIPS
+  provider.

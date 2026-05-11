@@ -33,10 +33,10 @@ Current committers are listed in `CODEOWNERS`.
 
 | Name | Affiliation | Focus |
 |---|---|---|
-| Santiago Maniches | TOPOLOGICA LLC | Founding author, topology, biosecurity |
-| *(open seat)* | *(seeking: structural-biology)* | |
-| *(open seat)* | *(seeking: pharma / GxP compliance)* | |
-| *(open seat)* | *(seeking: defense / FedRAMP)* | |
+| Santiago Maniches | independent | Founding author |
+| *(open seat)* | — | Seeking: structural-biology background |
+| *(open seat)* | — | Seeking: clinical-genomics background |
+| *(open seat)* | — | Seeking: community / governance |
 
 TSC meets monthly (async via GitHub Discussions). Minutes are
 published in `docs/governance/`.

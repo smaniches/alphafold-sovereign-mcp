@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-# Copyright 2024-2026 Santiago Maniches and TOPOLOGICA LLC
+# Copyright 2024-2026 Santiago Maniches
 """DisGeNET async REST client.
 
 DisGeNET is a discovery platform containing collections of genes and variants

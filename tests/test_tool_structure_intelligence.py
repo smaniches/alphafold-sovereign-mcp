@@ -41,7 +41,7 @@ from alphafold_sovereign.tools.structure_intelligence import (
     _pocket_druggability_index,
     _pocket_druggability_label,
     _provenance,
-    _wasserstein_distance,
+    _fingerprint_distance,
     analyze_structural_confidence,
     compare_proteins_topologically,
     compute_topology_fingerprint,
@@ -158,22 +158,22 @@ def test_cross_reactivity_risk(identity: float, expected: str) -> None:
     assert expected in out
 
 
-def test_wasserstein_distance() -> None:
+def test_fingerprint_distance() -> None:
     a = [1.0, 0.0, 0.0]
     b = [0.0, 1.0, 0.0]
-    d = _wasserstein_distance(a, b)
+    d = _fingerprint_distance(a, b)
     assert 0 < d < 2
 
 
 def test_wasserstein_zero_norm() -> None:
     """When both vectors are zero, distance is 0."""
-    d = _wasserstein_distance([0.0, 0.0], [0.0, 0.0])
+    d = _fingerprint_distance([0.0, 0.0], [0.0, 0.0])
     assert d == 0.0
 
 
 def test_wasserstein_one_zero() -> None:
     """When one vector is zero, no normalization → use raw."""
-    d = _wasserstein_distance([0.0, 0.0], [1.0, 0.0])
+    d = _fingerprint_distance([0.0, 0.0], [1.0, 0.0])
     assert d > 0
 
 

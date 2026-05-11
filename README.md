@@ -1,38 +1,71 @@
 # AlphaFold Sovereign MCP
 
-**The sovereign, auditable Model Context Protocol server for structural biology.**
+A Model Context Protocol server that wraps AlphaFold DB and 13 other
+public biomedical data sources behind a set of MCP tool calls, and
+persists each result to a local SQLite knowledge graph for later
+querying.
+
+This is an unfunded, independent open-source project. It is not a
+service, not certified for any regulated use, and its outputs are
+research aids that should be reviewed by qualified humans before any
+clinical or regulatory use.
 
 [![CI](https://github.com/smaniches/alphafold-sovereign-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/smaniches/alphafold-sovereign-mcp/actions/workflows/ci.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](pyproject.toml)
 [![MCP Spec 2025-06-18](https://img.shields.io/badge/MCP-2025--06--18-purple)](https://modelcontextprotocol.io)
-[![Enterprise Edition](https://img.shields.io/badge/Enterprise_Edition-available-gold)](LICENSE-COMMERCIAL.md)
-
-AlphaFold DB + **14 bio data sources**, fused in one MCP call.  
-Persistent-homology TDA fingerprints. Precision-medicine variant triage. Air-gap sovereign deployment.  
-The only structural biology MCP server with a local relational knowledge graph.
 
 ---
 
-## Why AlphaFold Sovereign?
+## What this is
 
-| Capability | AlphaFold Sovereign | Other bio MCP servers |
-|---|---|---|
-| **Data sources fused per call** | 14 (AF, UniProt, MONDO, HPO, OT, ClinVar, gnomAD, DisGeNET, ChEMBL, Ensembl, InterPro, PDB, GO, HPA) | 1–3 |
-| **Patent-pending TDA fingerprints** | ✓ (Betti numbers, Wasserstein distance, R²=0.9992) | ✗ |
-| **Variant clinical report (ACMG draft)** | ✓ (8 sources → single call) | ✗ |
-| **Drug repurposing pipeline** | ✓ (OT evidence × ChEMBL phase score) | ✗ |
-| **Local relational knowledge graph** | ✓ (SQLite, full provenance, export to pandas) | ✗ |
-| **Air-gap / offline deployment** | ✓ (`ALPHAFOLD_OFFLINE=1`) | ✗ |
-| **21 CFR Part 11 audit trail** | ✓ (signed, timestamped, immutable) | ✗ |
-| **Cross-species structural divergence** | ✓ (Wasserstein distance + Ensembl orthologs) | ✗ |
-| **ACMG/AMP criteria auto-population** | ✓ (PVS1, PM2, PP3, BS1, BP4, PP5) | ✗ |
-| **Geometric binding-pocket scoring** | ✓ (alpha-sphere, druggability index) | ✗ |
-| **Defense-grade sovereignty stack** | ✓ (FedRAMP-aligned, FIPS, SBOM, SLSA L3) | ✗ |
+A Python MCP server that:
+
+- Wraps AlphaFold DB, UniProt, MONDO, HPO, Open Targets, ClinVar,
+  gnomAD, DisGeNET, ChEMBL, Ensembl, InterPro, RCSB PDB, Gene
+  Ontology, and Human Protein Atlas behind MCP tool calls. Each call
+  is a thin orchestration over those upstreams; the server does not
+  add scientific judgement.
+- Composes upstreams into multi-source workflows: variant
+  cross-reference reports, disease–target landscape summaries,
+  heuristic target-druggability scoring, drug-repurposing candidate
+  ranking, and cross-species structural-distance computation.
+- Persists every tool result to a local SQLite knowledge graph
+  (`storage/knowledge_graph.py`) so a research session accumulates a
+  queryable, exportable database.
+- Includes a topological-data-analysis (TDA) module that computes
+  persistent-homology fingerprints (Betti numbers β₀, β₁, β₂) over
+  Vietoris-Rips filtrations of Cα coordinates, and a
+  Wasserstein-distance comparator between fingerprints. The full
+  persistent-homology features require the optional `[tda]` extra
+  (`gudhi`).
+
+It targets `mcp-spec 2025-06-18` and runs on Python 3.10–3.13.
+
+## What this is **not**
+
+- It is **not** a hosted service or a SaaS.
+- It is **not** certified for any regulated use (HIPAA, GxP, 21 CFR
+  Part 11, FedRAMP, FIPS, SOC 2). The code structures audit logging
+  in a way that could later support such a certification, but no
+  such audit has been performed.
+- It does **not** train, fine-tune, or publish AlphaFold models — it
+  consumes AlphaFold DB's public REST API.
+- The "ACMG/AMP criteria" that `generate_variant_clinical_report`
+  produces are a **draft surface** of the upstream evidence the
+  server can fetch automatically. They are not a substitute for
+  clinical-laboratory variant review.
+- The "druggability tier" that `assess_target_druggability` returns is
+  a **heuristic** built from drug-precedent counts, Open Targets
+  tractability labels, pLDDT, and gnomAD constraint. It is not a
+  validated prediction.
+- "Structural distance" between proteins via TDA Wasserstein distance
+  measures *topological* similarity of the Cα point cloud. It is not
+  a sequence similarity, RMSD, or functional-equivalence measure.
 
 ---
 
-## Install in 60 seconds
+## Install
 
 ```bash
 # Via uvx (no install required)
@@ -41,14 +74,12 @@ uvx alphafold-sovereign-mcp
 # Via pip
 pip install alphafold-sovereign-mcp
 
-# With TDA (full persistent homology via gudhi)
+# With persistent-homology TDA (requires gudhi)
 pip install "alphafold-sovereign-mcp[tda]"
-
-# Via Docker
-docker run ghcr.io/smaniches/alphafold-sovereign-mcp:latest
 ```
 
 **Claude Desktop** — add to `claude_desktop_config.json`:
+
 ```json
 {
   "mcpServers": {
@@ -60,11 +91,17 @@ docker run ghcr.io/smaniches/alphafold-sovereign-mcp:latest
 }
 ```
 
+**Offline mode** — set `ALPHAFOLD_OFFLINE=1` to refuse all outbound
+HTTP and serve only from the local SQLite cache.
+
 ---
 
-## Tool Inventory (42 tools across 6 modules)
+## Tool inventory
 
-### Disease & Ontology (`tools/disease.py`)
+The server exposes 29 MCP tools across four modules. Each tool's
+input schema is a Pydantic model; results are JSON.
+
+### Disease & ontology (`tools/disease.py`)
 
 | Tool | What it does |
 |---|---|
@@ -74,144 +111,91 @@ docker run ghcr.io/smaniches/alphafold-sovereign-mcp:latest
 | `get_gene_phenotype_profile` | HPO phenotypes + gnomAD constraint for a gene |
 | `get_disease_targets` | Top drug targets for a MONDO disease (Open Targets) |
 | `get_target_diseases` | Top diseases for a UniProt target (Open Targets) |
-| `get_common_disease_targets` | Parallel profiling across 50+ curated MONDO diseases |
+| `get_common_disease_targets` | Parallel profiling across curated MONDO diseases |
 | `triage_variant_3d` | HGVS → ClinVar + gnomAD + MONDO disease context |
 | `phenotype_to_structures` | HPO → diseases → OT targets → UniProt IDs |
 | `get_orphan_disease_atlas` | Orphanet → MONDO → HPO + OT targets |
 | `compare_disease_target_overlap` | Jaccard similarity of target sets for two diseases |
 | `resolve_icd10_to_mondo` | ICD-10 code → MONDO disease record |
 
-### Precision Medicine (`tools/precision_medicine.py`)
+### Precision medicine (`tools/precision_medicine.py`)
 
 | Tool | What it does |
 |---|---|
-| `generate_variant_clinical_report` | HGVS → 8-source clinical report + draft ACMG criteria |
+| `generate_variant_clinical_report` | HGVS → multi-source report + draft ACMG/AMP criteria |
 | `assess_target_druggability` | UniProt → HOT/WARM/COLD/NOT_DRUGGABLE tier |
-| `synthesize_protein_dossier` | UniProt → complete intelligence briefing (7 sources) |
-| `map_disease_drug_landscape` | MONDO → approved drugs + pipeline + investability rating |
-| `classify_variant_acmg` | HGVS → PVS1/PM2/PP3/BS1/BP4 criteria checklist |
-| `find_drug_repurposing_candidates` | MONDO → ranked repurposing candidates (OT × ChEMBL) |
+| `synthesize_protein_dossier` | UniProt → multi-source briefing |
+| `map_disease_drug_landscape` | MONDO → approved drugs + pipeline + ChEMBL phase counts |
+| `classify_variant_acmg` | HGVS → ACMG/AMP criteria checklist (PVS1, PM2, PP3, BS1, BP4) |
+| `find_drug_repurposing_candidates` | MONDO → candidates ranked by OT evidence × ChEMBL phase |
 
-### Structure Intelligence (`tools/structure_intelligence.py`)
+The ACMG/AMP criteria produced are a **draft**: they reflect the
+upstream evidence the server can fetch automatically, and they
+are not a substitute for clinical-laboratory review.
+
+### Structure intelligence (`tools/structure_intelligence.py`)
 
 | Tool | What it does |
 |---|---|
-| `analyze_structural_confidence` | pLDDT + PAE domain map + druggability pre-screen |
-| `compute_topology_fingerprint` | **Patent-pending** 64-dim TDA fingerprint (Betti numbers β₀β₁β₂) |
+| `analyze_structural_confidence` | pLDDT distribution + PAE-derived domain map |
+| `compute_topology_fingerprint` | 64-dim TDA fingerprint (Betti numbers β₀ β₁ β₂) |
 | `compare_proteins_topologically` | Pairwise Wasserstein distance matrix for 2–10 proteins |
 | `find_evolutionary_structural_shifts` | Cross-species structural divergence (TDA + Ensembl orthologs) |
-| `score_binding_pocket_geometry` | Geometric pocket detection + druggability index |
-| `detect_intrinsically_disordered` | IDR map (linkers, tails, long IDRs) + clinical implications |
-| `find_evolutionary_structural_shifts` | Pandemic-prep: zoonotic spillover structural risk |
-| `compare_proteins_topologically` | Drug repurposing: structural topology similarity |
+| `score_binding_pocket_geometry` | Geometric pocket detection + heuristic druggability index |
+| `detect_intrinsically_disordered` | IDR map (linkers, tails, long IDRs) |
 
-### Knowledge Graph (`tools/knowledge_graph_tools.py`)
+### Knowledge graph (`tools/knowledge_graph_tools.py`)
 
 | Tool | What it does |
 |---|---|
 | `query_variant_database` | Search locally stored variant triage results |
 | `query_protein_database` | Search locally stored protein assessments |
 | `get_knowledge_graph_stats` | Database size, entity counts, last activity |
-| `export_research_dataset` | Export to JSON for pandas/ML pipelines |
-| `find_drug_gene_network` | Traverse the accumulated drug-gene-disease graph |
+| `export_research_dataset` | Export tables to JSON for pandas/ML pipelines |
+| `find_drug_gene_network` | Traverse the accumulated drug–gene–disease graph |
 
 ---
 
-## Signature Use Cases
+## Example usage
 
-### Precision Oncology Tumor Board
+### Clinical variant report
+
 ```
-User: "Classify BRCA1:c.181T>G for our variant board"
-
 generate_variant_clinical_report(hgvs="BRCA1:c.181T>G")
-→ ClinVar: Pathogenic (4-star expert review)
-→ gnomAD v4 AF: 0.00003 (extremely rare)
-→ AlphaMissense: 0.89 (likely pathogenic)
-→ Draft ACMG: PVS1 + PM2 + PP3 + PP5 → PATHOGENIC
-→ Open Targets: breast carcinoma score 0.93
-→ Drugs: olaparib (PARP inhibitor, approved Phase 4)
 ```
 
-### Drug Repurposing for Rare Disease
-```
-User: "Find repurposable drugs for Huntington's disease"
+The server resolves the HGVS, fetches ClinVar, gnomAD, AlphaMissense
+(via AlphaFold DB), Open Targets disease evidence, ChEMBL drug data,
+and Ensembl VEP consequence annotations, and returns a single JSON
+record with the cross-referenced fields plus the ACMG/AMP criteria
+that the available evidence supports.
 
+### Drug repurposing
+
+```
 find_drug_repurposing_candidates(disease_mondo_id="MONDO:0007739")
-→ Targets: HTT (OT score 0.97), CASP3, TBP...
-→ Candidates: pridopidine (Phase 2/3), laquinimod, cysteamine
-→ Composite score = OT evidence × clinical phase
 ```
 
-### Pandemic Preparedness
+Returns drugs whose Open Targets evidence connects them to the
+disease, ranked by a composite of OT evidence score × the maximum
+ChEMBL clinical phase reached against the target.
+
+### Cross-species structural divergence
+
 ```
-User: "How structurally conserved is ACE2 across zoonotic reservoirs?"
-
-find_evolutionary_structural_shifts(gene_symbol="ACE2",
-  target_species=["mus_musculus", "rhinolophus_ferrumequinum"])
-→ Horseshoe bat ACE2: 77% identity, drift=0.23 → MODERATE
-→ Mouse ACE2: 83% identity, drift=0.17 → MODERATE
-→ Cross-reactivity risk per species
-```
-
-### Target Selection Committee
-```
-User: "Is KRAS G12C a good drug target?"
-
-assess_target_druggability(uniprot_id="P01116")
-→ Tier: HOT
-→ 8 approved/clinical drugs (sotorasib, adagrasib, ...)
-→ OT tractability: small-molecule confirmed
-→ gnomAD LOEUF: 0.67 (tolerant to LoF → safe to inhibit)
-```
-
----
-
-## Unique Competitive Advantages
-
-### 1. The Only MCP with a Local Knowledge Graph
-Every tool result is automatically stored in SQLite with full provenance.
-Research accumulates and becomes instantly queryable without API calls:
-
-```python
-# After running variant reports across a gene panel:
-query_variant_database(tier="HIGH", gene="BRCA1", max_gnomad_af=0.001)
-# → All rare HIGH-tier BRCA1 variants from your research history
-
-# Export to pandas for ML:
-export_research_dataset(tables=["variants", "proteins"])
-# → pd.DataFrame(result["data"]["variants"])
-```
-
-### 2. Patent-Pending TDA Fingerprints (R²=0.9992)
-The only MCP server with persistent-homology topological fingerprints.
-Compare protein topology independent of sequence similarity or RMSD:
-
-```python
-compare_proteins_topologically(
-    uniprot_ids=["P38398", "P04637", "Q9Y243"]
+find_evolutionary_structural_shifts(
+    gene_symbol="ACE2",
+    target_species=["mus_musculus", "rhinolophus_ferrumequinum"]
 )
-# Returns 3×3 Wasserstein distance matrix
-# Distance < 0.1: shared binding-pocket topology → drug cross-reactivity risk
 ```
 
-### 3. 8-Source Clinical Variant Reports in One Call
-From HGVS to a clinical-board-ready synthesis in < 15 seconds,
-replacing hours of manual cross-database lookup.
-
-### 4. Air-Gap Sovereign Deployment
-```bash
-ALPHAFOLD_OFFLINE=1 uvx alphafold-sovereign-mcp
-# Serves from local cache only — zero egress
-# FIPS 140-3 Docker build available (Enterprise Edition)
-```
-
-### 5. Drug Repurposing as a First-Class Feature
-Ranked repurposing candidates scored by `OT evidence × clinical phase`,
-covering all FDA-approved drugs and Phase I–III pipeline via ChEMBL v34.
+For each species: fetches the ortholog (Ensembl), the AlphaFold
+structure, computes the TDA fingerprint, and returns the Wasserstein
+distance from the human structure along with sequence identity.
 
 ---
 
-## Data Sources
+## Data sources
 
 | Source | What we use | License |
 |---|---|---|
@@ -219,15 +203,18 @@ covering all FDA-approved drugs and Phase I–III pipeline via ChEMBL v34.
 | UniProt | Protein function, domains, GO | CC BY 4.0 |
 | MONDO (OLS4) | Disease ontology, ICD cross-refs | CC BY 4.0 |
 | HPO (JAX) | Phenotype terms, gene-disease links | hpo.jax.org |
-| Open Targets | Disease-target evidence | Apache 2.0 |
+| Open Targets | Disease–target evidence | Apache 2.0 |
 | ClinVar (NCBI) | Variant pathogenicity | Public domain |
 | gnomAD v4 | Population allele frequencies | ODbL |
-| DisGeNET | Gene-disease association scores | CC BY-NC-SA 4.0 (free API key) |
+| DisGeNET | Gene–disease association scores | CC BY-NC-SA 4.0 |
 | ChEMBL v34 (EMBL-EBI) | Drug bioactivity, MoA, ADMET | CC BY-SA 3.0 |
 | Ensembl (EMBL-EBI) | VEP, orthologs, gene lookup | Apache 2.0 |
 | InterPro | Domain + family annotations | CC0 |
 | RCSB PDB | Experimental structures | CC0 |
 | Gene Ontology | Biological process, molecular function | CC BY 4.0 |
+| Human Protein Atlas | Tissue expression | CC BY-SA 3.0 |
+
+See [`NOTICE`](NOTICE) for full attributions.
 
 ---
 
@@ -235,62 +222,53 @@ covering all FDA-approved drugs and Phase I–III pipeline via ChEMBL v34.
 
 ```
 clients/_base.py
-  ├── Air-gap enforcement (before socket)
+  ├── Air-gap enforcement (refuses sockets when ALPHAFOLD_OFFLINE=1)
   ├── Token-bucket rate limiting (aiolimiter)
   ├── Exponential backoff with jitter (tenacity)
-  ├── Circuit breaker (CLOSED/OPEN/HALF_OPEN)
-  └── Content-addressed SHA-256 dedup
+  ├── Circuit breaker (CLOSED / OPEN / HALF_OPEN)
+  └── Content-addressed SHA-256 dedup of upstream responses
 
 storage/knowledge_graph.py
-  ├── SQLite WAL mode (ACID, embedded)
+  ├── SQLite WAL mode (embedded, ACID)
   ├── 6 entity tables: proteins, variants, diseases, drugs, genes, phenotypes
   ├── 4 relationship tables: protein_disease, protein_drug, variant_disease, gene_phenotype
-  ├── tool_invocations audit table (SHA-256 input+output, timestamps)
+  ├── tool_invocations audit table (SHA-256 of input + output, timestamps)
   └── Analytical views: variant_summary, drug_landscape
 
 domain/disease.py
   └── Pure Python frozen dataclasses (PathogenicityClass, VariantReport, ...)
 ```
 
----
-
-## Enterprise Edition
-
-The **Commercial Enterprise Edition** adds contractual guarantees for regulated industries:
-
-| Feature | Community | Enterprise |
-|---|---|---|
-| All 42 MCP tools | ✓ | ✓ |
-| Local knowledge graph | ✓ | ✓ |
-| SSO / SCIM provisioning | ✗ | ✓ |
-| FedRAMP-aligned FIPS 140-3 build | ✗ | ✓ |
-| 21 CFR Part 11 audit log export | ✗ | ✓ |
-| SOC 2 Type II report | ✗ | ✓ |
-| Air-gap bundle (50GB proteome snapshot) | ✗ | ✓ |
-| Contractual warranty + IP indemnification | ✗ | ✓ |
-| Priority/Mission-Critical SLA | ✗ | ✓ |
-| Federated MCP mesh (multi-site) | ✗ | ✓ |
-
-**→ enterprise@topologica.ai**  
-**→ gov@topologica.ai** (government / defense / national labs)
+See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the full module map.
 
 ---
 
-## Security & Compliance
+## Testing & quality
 
-- Coordinated disclosure: **security@topologica.ai** (see [SECURITY.md](SECURITY.md))
-- HHS biosecurity framework alignment for sequence-of-concern screening
-- NIST SP 800-53 / 800-171 control mapping: `compliance/`
-- Supply-chain verification: `./scripts/replicate.sh`
-- SLSA Level 3 provenance, SBOM, cosign signing: planned Wave 6
+- 610 unit tests with respx-mocked upstreams; the full suite runs
+  hermetically in under 15 seconds on a laptop.
+- Coverage on the shipped surface (`src/alphafold_sovereign/clients`,
+  `domain`, `storage`, `server`, `tools`): **99% line + branch**, with
+  19 of 20 modules at 100%.
+- Lint: `ruff` (full ruleset, no per-file ignores on the production
+  tree). Type checking: `mypy --strict` on the domain, clients, and
+  storage subtrees.
+- Security: `bandit` plus CodeQL `security-extended`.
+- Supply chain: SBOM generation in CI; reproducible-build script at
+  `scripts/replicate.sh`.
+
+The full CI matrix (Python 3.10, 3.11, 3.12, 3.13 × Ubuntu, macOS)
+runs on every push. Test counts and coverage percentages above are
+the numbers a `git clone && uv run pytest` produces on the current
+HEAD; if you find a divergence, please open an issue.
 
 ---
 
 ## Contributing
 
-DCO sign-off required (`git commit -s`). No copyright assignment.  
-Coverage gate: ≥95% line / ≥90% branch for new modules.  
-Full guide: [CONTRIBUTING.md](CONTRIBUTING.md)
+DCO sign-off required (`git commit -s`). No copyright assignment.
+Coverage gate: ≥95% line / ≥90% branch for new modules.
+Full guide: [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ---
 
@@ -301,23 +279,17 @@ Full guide: [CONTRIBUTING.md](CONTRIBUTING.md)
   author    = {Maniches, Santiago},
   title     = {AlphaFold Sovereign MCP},
   year      = {2024},
-  publisher = {TOPOLOGICA LLC},
   url       = {https://github.com/smaniches/alphafold-sovereign-mcp},
   license   = {Apache-2.0},
   orcid     = {0009-0005-6480-1987}
 }
 ```
 
----
-
 ## License
 
-Copyright 2024-2026 Santiago Maniches and TOPOLOGICA LLC.
+Copyright 2024–2026 Santiago Maniches.
 
-Community edition: **Apache 2.0** — [LICENSE](LICENSE)  
-Enterprise Edition: **Commercial** — [LICENSE-COMMERCIAL.md](LICENSE-COMMERCIAL.md)  
-Patent reservation (drift tensor + TDA fingerprint): [PATENTS.md](PATENTS.md)
+Licensed under the Apache License, Version 2.0. See [`LICENSE`](LICENSE).
 
----
-
-*AlphaFold Sovereign MCP — Built for pharma. Hardened for sovereign deployment. Open for science.*
+Patent reservation: see [`PATENTS.md`](PATENTS.md).
+Trademark policy: see [`TRADEMARKS.md`](TRADEMARKS.md).

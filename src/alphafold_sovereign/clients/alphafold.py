@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-# Copyright 2024-2026 Santiago Maniches and TOPOLOGICA LLC
+# Copyright 2024-2026 Santiago Maniches
 """AlphaFold Database async client.
 
 Wraps the EBI AlphaFold DB v4 REST API, the AlphaMissense endpoint,

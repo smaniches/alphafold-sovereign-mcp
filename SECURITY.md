@@ -1,140 +1,110 @@
 # Security Policy
 
-The AlphaFold Sovereign MCP project takes security seriously. We are
-relied upon by pharmaceutical, clinical-research, defense, and
-intelligence users who operate under regulatory regimes where a
-single unreported vulnerability can cost lives or compromise national
-security. This document specifies how we receive, triage, and resolve
-security reports.
+This project is independent open-source software. Security reports
+are welcomed and handled with care, on a best-effort basis from a
+small group of volunteer maintainers.
 
-## Supported Versions
+## Supported versions
 
-We accept vulnerability reports against the following versions:
-
-| Version | Supported | Until |
-|---|---|---|
-| `main` branch | ✅ | always |
-| Latest minor release | ✅ | next minor release + 6 months |
-| Previous minor release | ✅ | next minor release + 6 months |
-| LTS releases (Enterprise Edition) | ✅ | 24 months from GA |
-| All other older releases | ❌ | — |
-
-## Coordinated Disclosure
-
-**Please do not file public GitHub issues for security vulnerabilities.**
-
-Send reports privately to one of:
-
-| Channel | Address |
+| Version | Supported |
 |---|---|
-| Email | `security@topologica.ai` |
-| GitHub Security Advisories | <https://github.com/smaniches/alphafold-sovereign-mcp/security/advisories/new> |
+| `main` branch | ✓ |
+| Latest minor release | ✓ |
+| Previous minor release | ✓ (6 months after a new minor releases) |
+| All older releases | ✗ |
 
-Encrypt sensitive reports with our PGP key:
+## Coordinated disclosure
 
-- Fingerprint: *(to be published with the v1.0 GA release; until then,
-  use GitHub Security Advisories, which encrypt at rest)*
-- Key location: `https://topologica.ai/security/pgp.asc`
+**Please do not file public GitHub issues for security
+vulnerabilities.**
 
-When in doubt, write to `security@topologica.ai`. We confirm receipt
-within **24 hours** for any submission, weekdays or weekends.
+Use GitHub Security Advisories instead:
 
-## What to Include
+<https://github.com/smaniches/alphafold-sovereign-mcp/security/advisories/new>
 
-A complete report contains:
+GitHub Security Advisories are encrypted at rest and visible only to
+the project maintainers until publication.
 
-1. **Affected version(s)** and configuration (transport, OS, auth
-   mode, deployment topology).
-2. **Vulnerability class** — CWE if known, or a one-line description.
-3. **Proof of concept** — minimal reproduction. We accept attachments,
-   private gists, signed PRs to a security advisory draft, or video.
-4. **Impact** — what an attacker gains. Specify confidentiality,
-   integrity, availability, or compliance impact (e.g., breaks 21 CFR
-   Part 11 audit-trail immutability).
-5. **Suggested mitigation** if you have one. Optional.
+Acknowledgement of receipt: best-effort, typically within a few
+business days. This is a volunteer project; we cannot guarantee a
+24-hour response and we will not pretend otherwise.
+
+## What to include
+
+A useful report contains:
+
+1. **Affected version(s)** and configuration (transport, OS,
+   deployment topology).
+2. **Vulnerability class** — CWE if known, or a short description.
+3. **Proof of concept** — minimal reproduction. Attachments, private
+   gists, or a draft pull request against a security advisory are all
+   fine.
+4. **Impact** — what an attacker gains.
+5. **Suggested mitigation**, if any. Optional.
 6. **Whether you wish to be credited** in the published advisory, and
-   how (handle, real name, employer, ORCID, etc.).
+   how.
 
-## Our Response SLA
+## Triage approach
 
-| Severity (CVSS v4) | First response | Investigation | Patch & advisory |
-|---|---|---|---|
-| Critical (≥ 9.0) | 24 hours | 72 hours | 7 days |
-| High (7.0–8.9) | 48 hours | 7 days | 30 days |
-| Medium (4.0–6.9) | 5 business days | 30 days | next minor release |
-| Low (< 4.0) | 10 business days | 60 days | next minor release |
+The project does not promise an SLA. In practice we triage
+vulnerabilities by impact:
 
-We will keep you informed at every step. If we cannot meet the above
-SLA for any reason, we will tell you in writing why, and propose a
-revised plan.
+- Remote code execution, secret/credential exposure, integrity
+  compromise of the local SQLite knowledge graph, or sandbox-escape
+  bugs: investigated and patched as a priority.
+- DoS, panic-on-input, or upstream-API misuse: investigated; patched
+  in the next minor release where possible.
+- Reports against archived modules under `_archive/legacy/`: noted
+  but not actively patched, since those modules are deprecated.
 
-## Defensive-Bio Reports — Special Handling
+## Defensive biology
 
-This project ships sequence-of-concern screening tooling aligned with
-the HHS *Framework for Nucleic Acid Synthesis Screening*. Reports
-related to that tooling — whether bypasses, false negatives, or
-suspected misuse — are routed immediately to a small bioethics-aware
-response cell. We respond within **24 hours** regardless of CVSS
-score because operational misuse can have consequences beyond
-software.
+If your report relates to sequence-of-concern screening or related
+tooling — bypasses, false negatives, suspected misuse — please use
+the GitHub Security Advisory channel and mark it as
+biosecurity-sensitive in the report body. We will route it through
+the project's coordinated-disclosure process before any public
+discussion.
 
-If your report concerns suspected operational misuse (rather than a
-software defect), you may CC `biosec@topologica.ai`.
-
-## Safe Harbor
+## Safe harbor
 
 We will not pursue legal action against researchers who:
 
 1. Make a good-faith effort to comply with this policy.
 2. Avoid privacy violations, destruction of data, and interruption or
-   degradation of our services and our users' services.
-3. Give us a reasonable time to investigate and resolve the issue
-   before any public disclosure.
+   degradation of services and users' services.
+3. Give the project a reasonable time to investigate and resolve the
+   issue before public disclosure.
 4. Do not exploit a vulnerability beyond the minimum necessary to
    demonstrate it.
 
-This safe-harbor commitment is binding on TOPOLOGICA LLC and on its
-Enterprise customers via the standard Enterprise Edition contract.
+## Disclosure window
 
-## Disclosure Timeline
+Default disclosure window: **90 days** from initial report to public
+advisory, extendable by mutual agreement. Critical vulnerabilities
+actively exploited in the wild may be disclosed faster with
+coordination.
 
-Our default is a **90-day disclosure window** from initial report to
-public CVE publication, extendable by mutual agreement. After the
-window expires we publish the advisory regardless of whether all
-downstream users have patched, because silence helps no one.
+## Credit
 
-Critical vulnerabilities exploited in the wild may be disclosed
-faster, with explicit coordination with the reporter, CISA's KEV
-program, and major downstream packagers (Linux distros, conda-forge,
-cloud marketplaces).
+Every researcher who reports a confirmed vulnerability is credited in
+the published advisory with their preferred name and link, unless
+they request anonymity.
 
-## Hall of Fame
+No bug bounty is offered.
 
-We list every researcher who reports a confirmed vulnerability in the
-**SECURITY HALL OF FAME** appended to each release advisory, with
-their preferred name and link, unless they request anonymity.
+## Supply-chain provenance
 
-No bug bounty is offered at this time. The Enterprise Edition
-contract may add one; ask `enterprise@topologica.ai`.
+Every release publishes:
 
-## Supply-Chain Provenance
+- A **CycloneDX** SBOM.
+- A reproducible-build verification script at
+  `scripts/replicate.sh`.
 
-Every release ships with:
-
-- **CycloneDX** and **SPDX** Software Bills of Materials.
-- **SLSA Level 3** build-provenance attestations.
-- **Sigstore / cosign** keyless signatures (Fulcio + Rekor).
-- **Reproducible-build verification scripts** under `scripts/replicate.sh`
-  (POSIX) and `scripts/replicate.ps1` (Windows).
-
-Verify a release before deploying with:
-
-```bash
-./scripts/replicate.sh <version>
-```
-
-Any discrepancy is itself a security issue under this policy.
+Cosign signatures and SLSA build-provenance attestations are tracked
+work items on the roadmap; they are not yet emitted by the release
+pipeline.
 
 ---
 
-*Last updated: 2026-05-10*
+*Last updated: 2026-05-11*

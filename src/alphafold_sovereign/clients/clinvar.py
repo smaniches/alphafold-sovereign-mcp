@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-# Copyright 2024-2026 Santiago Maniches and TOPOLOGICA LLC
+# Copyright 2024-2026 Santiago Maniches
 """ClinVar async client via NCBI E-utilities.
 
 ClinVar is the NCBI archive of variants and their clinical interpretations.

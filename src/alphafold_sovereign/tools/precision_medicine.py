@@ -1,25 +1,33 @@
 # SPDX-License-Identifier: Apache-2.0
-# Copyright 2024-2026 Santiago Maniches and TOPOLOGICA LLC
-"""Precision Medicine flagship tools for AlphaFold Sovereign MCP.
+# Copyright 2024-2026 Santiago Maniches
+"""Precision-medicine MCP tools.
 
-These tools are the clinical-grade synthesis layer that no other structural
-biology MCP provides.  Each tool fuses data from multiple independent sources
-into a single, actionable, citable answer — replacing hours of manual
-cross-database lookups with a single MCP call.
+These tools compose multiple upstream APIs into per-call synthesis
+reports. They do not add scientific judgement; they assemble what the
+upstreams say in one place.
 
 Tool inventory:
-  1. generate_variant_clinical_report  — HGVS → 8-source synthesis report
-  2. assess_target_druggability         — UniProt → HOT/WARM/COLD tier
-  3. synthesize_protein_dossier         — UniProt → complete intelligence briefing
-  4. find_drug_repurposing_candidates   — disease → structurally-informed drug candidates
-  5. classify_variant_acmg              — HGVS → draft ACMG/AMP criteria checklist
+  1. generate_variant_clinical_report  — HGVS → multi-source variant report
+  2. assess_target_druggability         — UniProt → heuristic HOT/WARM/COLD/NOT_DRUGGABLE
+  3. synthesize_protein_dossier         — UniProt → multi-source briefing
+  4. find_drug_repurposing_candidates   — MONDO → ranked drug candidates
+  5. classify_variant_acmg              — HGVS → **draft** ACMG/AMP criteria
   6. map_disease_drug_landscape         — MONDO → approved + pipeline drugs
-  7. compare_target_selectivity         — two UniProt IDs → selectivity profile
-  8. generate_clinical_trial_signal     — gene symbol → active trial landscape
 
-This module is the reference implementation of what precision-medicine-grade
-MCP tooling looks like.  Designed to be cited in regulatory filings, clinical
-variant boards, and drug discovery decision memos.
+Important caveats:
+
+* The ACMG/AMP criteria emitted by `classify_variant_acmg` and the
+  ACMG section of `generate_variant_clinical_report` are a **draft
+  surface** of the upstream evidence (AlphaMissense, ClinVar, gnomAD,
+  Ensembl VEP). They are not a substitute for clinical-laboratory
+  review and must not be used as a diagnostic.
+* The "druggability tier" returned by `assess_target_druggability` is a
+  small hand-tuned heuristic (drug-precedent counts + Open Targets
+  tractability labels + pLDDT + gnomAD LOEUF). It is not a validated
+  predictive model.
+* The "composite repurposing score" returned by
+  `find_drug_repurposing_candidates` is ``OT evidence × ChEMBL max
+  clinical phase``. It is a ranking aid, not an efficacy prediction.
 """
 
 from __future__ import annotations
@@ -376,11 +384,14 @@ def _druggability_tier(
 async def generate_variant_clinical_report(
     params: VariantClinicalReportInput,
 ) -> dict[str, Any]:
-    """Generate a clinical-grade variant interpretation report.
+    """Generate a multi-source variant interpretation report.
 
-    Fuses evidence from 8 independent databases into a single structured
-    report suitable for variant classification boards and precision oncology
-    tumor boards:
+    Cross-references evidence from up to eight upstream databases for a
+    single HGVS variant into one structured report. The report is a
+    *research aid*: it surfaces the upstream evidence and the
+    ACMG/AMP criteria that the available evidence supports, but it is
+    not a clinical interpretation and must not be used as a diagnostic
+    without independent review by a qualified clinical laboratory.
 
     1. **Ensembl VEP** — functional consequence, SIFT/PolyPhen/CADD predictions
     2. **ClinVar** — clinical pathogenicity classifications and review status

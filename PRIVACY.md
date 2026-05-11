@@ -1,10 +1,10 @@
 # Privacy Policy
 
-## What This Software Is
+## What this software is
 
-AlphaFold Sovereign MCP is a **local-first, on-premises software
-tool.** It is not a SaaS. The software runs on your infrastructure,
-under your control.
+AlphaFold Sovereign MCP is local-first, on-premises software. It is
+not a SaaS. The software runs on your infrastructure, under your
+control.
 
 ## Data This Software Processes
 
@@ -66,19 +66,19 @@ unless you explicitly configure an exporter.
 
 If you deploy this software in the European Economic Area, you are
 the data controller for any personal data that passes through it.
-TOPOLOGICA LLC is a data processor only under the optional managed
-service offering. A GDPR Data Processing Agreement is available to
-Enterprise Edition customers at `legal@topologica.ai`.
+This software, by itself, does not constitute a data processor — the
+software runs on your infrastructure and the upstream APIs it calls
+(EBI, NIH, NCBI, etc.) have their own privacy notices (linked above).
 
 ## HIPAA
 
-This software does not process Protected Health Information. If your
-organization's policies require a Business Associate Agreement despite
-no PHI processing, a BAA template is available to Enterprise Edition
-customers.
+This software does not process Protected Health Information.
 
 ## Contact
 
-`privacy@topologica.ai` · TOPOLOGICA LLC
+Privacy questions: open a
+[GitHub Discussion](https://github.com/smaniches/alphafold-sovereign-mcp/discussions)
+or, for sensitive issues, follow the coordinated-disclosure process
+in [`SECURITY.md`](./SECURITY.md).
 
-*Last updated: 2026-05-10*
+*Last updated: 2026-05-11*

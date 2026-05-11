@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-# Copyright 2024-2026 Santiago Maniches and TOPOLOGICA LLC
+# Copyright 2024-2026 Santiago Maniches
 """AlphaFold Sovereign Knowledge Graph — local relational provenance store.
 
 This module implements the persistent local knowledge graph that transforms

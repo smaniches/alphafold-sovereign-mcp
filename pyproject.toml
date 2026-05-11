@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-# Copyright 2024-2026 Santiago Maniches and TOPOLOGICA LLC
+# Copyright 2024-2026 Santiago Maniches
 
 [build-system]
 requires = ["hatchling>=1.27"]
@@ -10,7 +10,7 @@ build-backend = "hatchling.build"
 [project]
 name = "alphafold-sovereign-mcp"
 version = "1.1.0"
-description = "The sovereign, auditable MCP server for structural biology — AlphaFold DB + 14 bio data sources, persistent-homology TDA, precision-medicine variant triage, defense-grade sovereignty stack."
+description = "MCP server wrapping AlphaFold DB and 13 other biomedical data sources, with a local SQLite knowledge graph."
 readme = "README.md"
 license = {text = "Apache-2.0"}
 requires-python = ">=3.10"
@@ -32,12 +32,10 @@ keywords = [
     "precision-medicine",
     "drug-discovery",
     "disease-ontology",
-    "sovereign-ai",
-    "air-gap",
-    "fedramp",
+    "knowledge-graph",
 ]
 classifiers = [
-    "Development Status :: 5 - Production/Stable",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
     "Intended Audience :: Healthcare Industry",
     "Intended Audience :: Information Technology",

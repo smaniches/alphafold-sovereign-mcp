@@ -1,19 +1,12 @@
 # SPDX-License-Identifier: Apache-2.0
-# Copyright 2024-2026 Santiago Maniches and TOPOLOGICA LLC
-"""AlphaFold Sovereign MCP — the sovereign, auditable MCP server for structural biology.
+# Copyright 2024-2026 Santiago Maniches
+"""AlphaFold Sovereign MCP.
 
-Fuses AlphaFold DB with 14 bio data sources under one MCP interface:
-persistent-homology TDA, precision-medicine variant triage, defense-grade
-sovereignty stack, and a local relational knowledge graph.
+A Model Context Protocol server that wraps AlphaFold DB and 13 other
+public biomedical data sources behind MCP tool calls, and persists
+each result to a local SQLite knowledge graph for later querying.
 
-Apache 2.0 community edition.
-Commercial Enterprise Edition → enterprise@topologica.ai
-
-Mathematical foundation:
-    Protein structure P exists in configuration manifold M.
-    Topological invariants H_k(P) computed via Vietoris-Rips filtration.
-    Betti numbers β₀, β₁, β₂ form a 64-dimensional fingerprint vector.
-    Drift tensor R² = 0.9992 (patent-pending, TOPOLOGICA LLC).
+Licensed under Apache 2.0.  See `LICENSE`.
 """
 
 from __future__ import annotations
@@ -23,15 +16,11 @@ __author__ = "Santiago Maniches"
 __author_email__ = "santiago@topologica.ai"
 __license__ = "Apache-2.0"
 __orcid__ = "0009-0005-6480-1987"
-__company__ = "TOPOLOGICA LLC"
-__patent_status__ = "PENDING — drift tensor + topological fingerprint (see PATENTS.md)"
 
 __all__ = [
     "__author__",
     "__author_email__",
-    "__company__",
     "__license__",
     "__orcid__",
-    "__patent_status__",
     "__version__",
 ]

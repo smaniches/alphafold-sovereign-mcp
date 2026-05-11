@@ -152,8 +152,9 @@ A reviewer will not start until all of these are true:
       updated.
 - [ ] If the change touches biosecurity screening, a bioethics-aware
       reviewer is requested.
-- [ ] If the change touches the audit trail, a 21 CFR Part 11 review
-      is requested.
+- [ ] If the change touches the audit trail (`tool_invocations`
+      table, SHA-256 input/output hashing, etc.), the audit
+      semantics are documented in the PR description.
 - [ ] CHANGELOG.md has a Keep-a-Changelog entry under `## [Unreleased]`.
 - [ ] No new tracked secrets, no new outbound endpoints without an
       allowlist entry.
@@ -187,15 +188,13 @@ merged PRs, or a single foundational contribution like adding a new
 data-source family) earns an invitation to the maintainers' team.
 See [`GOVERNANCE.md`](./GOVERNANCE.md) for the formal process.
 
-## Asking for Help
+## Asking for help
 
 | Question | Where |
 |---|---|
 | "How do I do X?" | GitHub Discussions |
 | "Is this a bug?" | GitHub Issues |
-| "Is this a security issue?" | `security@topologica.ai` |
-| "Can my company sponsor a feature?" | `enterprise@topologica.ai` |
-| "Who do I talk to about partnership?" | `partnerships@topologica.ai` |
+| "Is this a security issue?" | See [`SECURITY.md`](./SECURITY.md) (use GitHub Security Advisories) |
 
 ---
 

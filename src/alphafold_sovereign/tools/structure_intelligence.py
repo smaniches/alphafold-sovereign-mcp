@@ -1,31 +1,36 @@
 # SPDX-License-Identifier: Apache-2.0
-# Copyright 2024-2026 Santiago Maniches and TOPOLOGICA LLC
-"""Structure Intelligence tools for AlphaFold Sovereign MCP.
+# Copyright 2024-2026 Santiago Maniches
+"""Structure-intelligence MCP tools.
 
-These tools turn raw AlphaFold structures into actionable biological insight
-using the patent-pending TDA (topological data analysis) methodology from
-TOPOLOGICA LLC, combined with cross-species evolutionary analysis and
-geometric pocket detection.
+These tools take raw AlphaFold structures (PDB text and PAE arrays from
+AlphaFold DB) and derive a small set of summaries from them:
 
-What makes this module unique in the MCP ecosystem:
-  1. Persistent-homology topological fingerprints (drift tensor R²=0.9992)
-  2. Cross-species structural divergence using Wasserstein distance
-  3. Geometric binding-pocket scoring from AF coordinate geometry
-  4. PAE-informed inter-domain boundary detection
-  5. Structural entropy (information-theoretic residue variability)
+* pLDDT / PAE confidence-and-domain maps,
+* a 64-dimensional topological-data-analysis (TDA) fingerprint
+  (Betti numbers β₀, β₁, β₂ from a Vietoris-Rips filtration of Cα
+  coordinates, computed with `gudhi` when the optional `[tda]` extra
+  is installed; a coarse fallback without persistent homology
+  otherwise — see ``_compute_lightweight_tda``),
+* a pairwise distance matrix between TDA fingerprints (the
+  implementation is an L2 distance on length-normalised fingerprint
+  vectors — it is **not** an optimal-transport Wasserstein distance;
+  see ``_fingerprint_distance``),
+* a geometric pocket-detection heuristic, and
+* an intrinsic-disorder-region map.
+
+All tools are read-only. Tools that require outbound HTTP raise when
+``ALPHAFOLD_OFFLINE=1`` and the requested structure is not in the
+local cache.
 
 Tool inventory:
   1. analyze_structural_confidence       — pLDDT + PAE domain map
-  2. compute_topology_fingerprint        — TDA Betti numbers + landscape
-  3. compare_proteins_topologically      — Wasserstein structural distance matrix
-  4. find_evolutionary_structural_shifts — Cross-species TDA divergence
-  5. score_binding_pocket_geometry       — Geometric druggability from AF coords
-  6. detect_intrinsically_disordered     — IDP region map + functional context
-  7. assess_structural_novelty           — AlphaFold DB coverage + confidence tier
-  8. identify_allosteric_sites           — PAE-based correlated motion map
-
-All tools are read-only and compatible with air-gap deployment when
-AF structures are locally cached.
+  2. compute_topology_fingerprint        — TDA Betti numbers (β₀, β₁, β₂)
+  3. compare_proteins_topologically      — Pairwise fingerprint-distance matrix
+  4. find_evolutionary_structural_shifts — Cross-species TDA fingerprint compare
+  5. score_binding_pocket_geometry       — Heuristic pocket detection + score
+  6. detect_intrinsically_disordered     — IDR region map
+  7. assess_structural_novelty           — AlphaFold-coverage and confidence summary
+  8. identify_allosteric_sites           — PAE-based long-range coupling map
 """
 
 from __future__ import annotations
@@ -218,18 +223,23 @@ def _compute_tda_fingerprint(
     ca_coords: np.ndarray,
     max_dimension: int = 2,
 ) -> dict[str, Any]:
-    """Compute persistent-homology TDA fingerprint from Cα coordinates.
+    """Compute a topological fingerprint from Cα coordinates.
 
-    This is the patent-pending TOPOLOGICA methodology (drift tensor R²=0.9992).
-    Uses Vietoris-Rips filtration with Euclidean metric.
+    Builds a Vietoris-Rips complex over the Cα point cloud with a
+    Euclidean metric and reads off the persistent-homology Betti
+    numbers (β₀, β₁, β₂) using `gudhi`. If `gudhi` is not installed,
+    falls back to a coarse heuristic (see ``_fallback_tda_fingerprint``)
+    that does not compute persistent homology.
 
     Args:
         ca_coords: (N, 3) array of Cα coordinates.
-        max_dimension: Maximum homology dimension (default 2: β0, β1, β2).
+        max_dimension: Maximum homology dimension (default 2: β₀, β₁, β₂).
 
     Returns:
-        Dict with Betti numbers, persistence landscapes, and
-        a 64-dimensional topological fingerprint vector.
+        Dict with Betti numbers, a (truncated) persistence summary, and
+        a 64-dimensional fingerprint vector. The fingerprint vector is
+        a fixed-length feature used for downstream pairwise comparison;
+        it is not a published embedding from a peer-reviewed method.
     """
     try:
         import gudhi
@@ -300,18 +310,19 @@ def _compute_tda_fingerprint(
         "fingerprint_dimension": 64,
         "n_residues_used": len(ca_coords),
         "max_filtration_length_angstrom": max_edge_length,
-        "methodology": (
-            "Vietoris-Rips persistent homology (GUDHI). "
-            "Patent-pending drift tensor methodology — TOPOLOGICA LLC."
-        ),
+        "methodology": "Vietoris-Rips persistent homology via gudhi.",
     }
 
 
 def _fallback_tda_fingerprint(ca_coords: np.ndarray) -> dict[str, Any]:
-    """Lightweight TDA approximation when gudhi is not installed.
+    """Coarse fallback fingerprint when gudhi is not installed.
 
-    Computes distance-matrix statistics as a proxy for topological features.
-    Sufficient for ranking; install gudhi for full patent-pending computation.
+    Computes a few distance-matrix statistics (mean, std, min, max,
+    histogram bins) as a proxy for topological features. This is **not**
+    persistent homology and the returned ``betti_numbers`` field beyond
+    β₀ is set to zero. Install gudhi (``pip install
+    alphafold-sovereign-mcp[tda]``) for the real persistent-homology
+    computation.
     """
     if len(ca_coords) < 2:
         return {"betti_numbers": [], "fingerprint_vector": [0.0] * 64, "gudhi_available": False}
@@ -348,8 +359,16 @@ def _fallback_tda_fingerprint(ca_coords: np.ndarray) -> dict[str, Any]:
     }
 
 
-def _wasserstein_distance(fp_a: list[float], fp_b: list[float]) -> float:
-    """Approximate L2 Wasserstein distance between two fingerprint vectors."""
+def _fingerprint_distance(fp_a: list[float], fp_b: list[float]) -> float:
+    """L2 distance between length-normalised TDA fingerprint vectors.
+
+    This is *not* the optimal-transport (Wasserstein) distance between
+    persistence diagrams.  It is a cheap, deterministic surrogate over
+    the fixed-length fingerprint vector that the project uses for
+    pairwise ranking only.  When `gudhi` is available, a true
+    persistence-diagram Wasserstein distance can be plugged in here in
+    a future revision.
+    """
     a = np.array(fp_a, dtype=float)
     b = np.array(fp_b, dtype=float)
     norm_a = np.linalg.norm(a)
@@ -466,23 +485,28 @@ async def analyze_structural_confidence(
 async def compute_topology_fingerprint(
     params: UniProtInput,
 ) -> dict[str, Any]:
-    """Compute the patent-pending topological fingerprint for a protein structure.
+    """Compute a topological fingerprint for a protein structure.
 
-    Uses persistent homology (Vietoris-Rips filtration) on the Cα coordinate
-    cloud to generate a 64-dimensional topological fingerprint vector.
+    Uses persistent homology (Vietoris-Rips filtration) over the Cα
+    coordinate cloud to derive a 64-dimensional fingerprint vector and
+    Betti numbers β₀, β₁, β₂. Requires `gudhi` (install with
+    ``pip install alphafold-sovereign-mcp[tda]``); without `gudhi`, a
+    coarse fallback runs that does **not** compute persistent homology
+    (see ``_fallback_tda_fingerprint``).
 
-    The fingerprint encodes:
-    - **β₀ (connected components)**: compact globular domains vs. extended chains
-    - **β₁ (loops/handles)**: α-helices, β-barrel handles, ring-like folds
-    - **β₂ (voids/cavities)**: enclosed binding pockets, barrel interiors
+    What the Betti numbers count, intuitively:
 
-    Unlike sequence similarity or RMSD, topological features are:
-    - Invariant to rigid-body rotation/translation
-    - Robust to coordinate noise (low pLDDT regions)
-    - Comparable across remote homologs with <20% sequence identity
+    - **β₀** — connected components of the Vietoris-Rips complex at the
+      chosen filtration scale. Distinguishes single-domain from
+      multi-domain or fragmented chains.
+    - **β₁** — 1-dimensional holes / loops. Picks up ring-like
+      topology (e.g. β-barrels, large macrocycles).
+    - **β₂** — 2-dimensional voids. Picks up enclosed cavities.
 
-    The drift tensor (R²=0.9992 in benchmark) enables quantitative comparison
-    of conformational states, predicted mutant structures, and evolutionary drift.
+    Topological features are invariant to rigid-body rotation and
+    translation. They are *not* a substitute for sequence alignment,
+    RMSD, or functional homology assessment; they are a coarse,
+    geometry-only summary.
 
     Args:
         params.uniprot_id: UniProt accession.
@@ -524,7 +548,7 @@ async def compute_topology_fingerprint(
 
 @mcp.tool(
     annotations={
-        "title": "Compare Proteins Topologically (Wasserstein Distance)",
+        "title": "Compare Proteins Topologically (TDA Fingerprint Distance)",
         "readOnlyHint": True,
         "idempotentHint": True,
         "openWorldHint": False,
@@ -533,20 +557,26 @@ async def compute_topology_fingerprint(
 async def compare_proteins_topologically(
     params: MultiProteinInput,
 ) -> dict[str, Any]:
-    """Compare multiple proteins using topological fingerprint distances.
+    """Compare multiple proteins using a TDA-fingerprint distance.
 
-    Computes a pairwise Wasserstein distance matrix between the TDA
-    fingerprints of all provided proteins.  Distance = 0 means topologically
-    identical; distance → 1 means maximally distinct topology.
+    Computes a pairwise distance matrix between the TDA fingerprints of
+    the provided proteins.  Distance metric: L2 distance between
+    length-normalised 64-dimensional fingerprint vectors (see
+    ``_fingerprint_distance``).  Distance = 0 means identical
+    fingerprints; larger values mean more divergent fingerprints.  This
+    is **not** a Wasserstein distance between persistence diagrams.
 
     Applications:
-    - **Drug repurposing**: proteins with low distance may share binding-pocket topology
-    - **Off-target prediction**: kinase family members with near-zero distance
-    - **Evolutionary analysis**: species-level structural drift quantification
-    - **Patient variant impact**: mutant vs. wild-type topological difference
+    Possible uses (all of which require independent validation
+    before any downstream use):
 
-    This is the reference implementation of topological protein comparison —
-    the first publicly available MCP server with this capability.
+    - Drug-repurposing triage: proteins with low fingerprint distance
+      may share gross topology.
+    - Off-target screening: family members with near-zero distance.
+    - Cross-species comparison of the same gene's structure.
+
+    None of these are direct functional or sequence-similarity
+    measures.
 
     Args:
         params.uniprot_ids: 2–10 UniProt accessions.
@@ -591,7 +621,7 @@ async def compare_proteins_topologically(
             if i == j:
                 row.append(0.0)
             else:
-                d = _wasserstein_distance(fingerprints[valid_ids[i]], fingerprints[valid_ids[j]])
+                d = _fingerprint_distance(fingerprints[valid_ids[i]], fingerprints[valid_ids[j]])
                 row.append(round(d, 6))
         matrix.append(row)
 
@@ -605,7 +635,7 @@ async def compare_proteins_topologically(
         "distance_matrix": {
             "proteins": valid_ids,
             "matrix": matrix,
-            "metric": "L2 Wasserstein (normalised fingerprint vectors)",
+            "metric": "L2 distance over length-normalised TDA fingerprint vectors (not Wasserstein on persistence diagrams)",
         },
         "most_topologically_similar": most_similar,
         "protein_metadata": protein_meta,
