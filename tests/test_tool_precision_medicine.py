@@ -665,6 +665,45 @@ async def test_generate_variant_report_no_gene_symbol(
     assert out["gene_constraint"]["pLI"] is None
 
 
+async def test_generate_variant_report_non_canonical_skipped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Non-canonical VEP entries are skipped (branch 519->518)."""
+    mocks = _patch_clients(monkeypatch)
+    mocks["ensembl"].vep_hgvs = AsyncMock(
+        return_value=[
+            {
+                "canonical": False,
+                "consequence_terms": ["missense_variant"],
+                "seq_region_name": "17",
+                "start": 1,
+                "allele_string": "A/G",
+            },
+            {
+                "canonical": True,
+                "consequence_terms": ["missense_variant"],
+                "seq_region_name": "17",
+                "start": 2,
+                "allele_string": "C/T",
+                "amino_acids": "R/H",
+            },
+        ]
+    )
+    mocks["ensembl"].gene_lookup = AsyncMock(return_value={})
+    mocks["clinvar"].search_by_hgvs = AsyncMock(return_value=[])
+    mocks["gnomad"].variant_frequencies = AsyncMock(return_value={})
+    mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
+    mocks["disgenet"].gene_disease_associations = AsyncMock(return_value=[])
+    mocks["opentargets"].associated_diseases = AsyncMock(return_value=[])
+
+    out = await generate_variant_clinical_report(
+        VariantClinicalReportInput(
+            hgvs="BRCA1:c.181T>G", include_drug_context=False
+        )
+    )
+    assert out["functional_consequence"]["amino_acids"] == "R/H"
+
+
 async def test_generate_variant_report_ot_diseases_exception(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

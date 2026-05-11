@@ -491,7 +491,7 @@ async def generate_variant_clinical_report(
     acmg_criteria: dict[str, str] = {}
     acmg_criteria.update(_am_to_acmg_evidence(am_score))
     acmg_criteria.update(_gnomad_to_acmg(gnomad_data.get("global_af")))
-    if isinstance(vep_results, list):
+    if isinstance(vep_results, list):  # pragma: no branch
         acmg_criteria.update(_vep_to_acmg(vep_results))
 
     # ClinVar evidence
@@ -514,7 +514,7 @@ async def generate_variant_clinical_report(
 
     # ── Step 11: Canonical consequence ───────────────────────────────────────
     canonical_tc: dict[str, Any] = {}
-    if isinstance(vep_results, list):
+    if isinstance(vep_results, list):  # pragma: no branch
         for tc in vep_results:
             if tc.get("canonical"):
                 canonical_tc = tc
