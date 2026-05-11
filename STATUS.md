@@ -57,8 +57,9 @@ expectation of what this project is and is not.
 - **No clinical geneticist has reviewed the ACMG mapping.** The
   implementation follows the 2015 Richards et al. guidelines but no
   independent expert has signed off on the criterion-by-criterion
-  mapping. Use ``generate_variant_clinical_report`` as a research
-  aid, never as clinical decision support.
+  mapping. Use ``generate_variant_clinical_report`` or
+  ``classify_variant_acmg`` as a research aid, never as clinical
+  decision support.
 - **The druggability tier scoring is a heuristic.** Cut-offs for the
   HOT / WARM / COLD / NOT_DRUGGABLE buckets were chosen by the author
   based on rough literature priors. They have not been calibrated

@@ -22,8 +22,8 @@ project author. No clinical geneticist has signed off on the
 criterion-by-criterion mapping.
 
 **Impact:** Variant classifications produced by
-``generate_variant_clinical_report`` may be **incorrect** in ways that
-unit tests cannot catch.
+``generate_variant_clinical_report`` and ``classify_variant_acmg``
+may be **incorrect** in ways that unit tests cannot catch.
 
 **Mitigation:** Treat the report as a literature aggregator, not as a
 clinical call. Re-derive each ACMG criterion from the cited primary
