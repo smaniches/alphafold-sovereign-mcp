@@ -63,6 +63,11 @@ It targets `mcp-spec 2025-06-18` and runs on Python 3.10–3.13.
   measures *topological* similarity of the Cα point cloud. It is not
   a sequence similarity, RMSD, or functional-equivalence measure.
 
+For a complete, itemised list of known limitations (with module
+references, impact, and planned resolution), see [`LIMITATIONS.md`](LIMITATIONS.md).
+For the high-level posture — what is engineering-validated vs. what is
+not yet scientifically validated — see [`STATUS.md`](STATUS.md).
+
 ---
 
 ## Install
