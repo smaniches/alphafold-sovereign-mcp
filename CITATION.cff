@@ -28,13 +28,10 @@ authors:
 license: Apache-2.0
 repository-code: "https://github.com/smaniches/alphafold-sovereign-mcp"
 url: "https://smaniches.github.io/alphafold-sovereign-mcp/"
-# A Zenodo DOI is minted automatically when a GitHub Release is
-# published, provided the repository is linked at
-# https://zenodo.org/account/settings/github/. After cutting the
-# v1.1.0-rc1 release on GitHub, replace the line below with the
-# minted DOI (format: 10.5281/zenodo.<id>). Until then the field is
-# absent so tools that consume CITATION.cff do not surface a fake DOI.
-# doi: "10.5281/zenodo.XXXXXXX"
+# Concept DOI minted by Zenodo on the v1.1.0-rc1 release.  The
+# concept DOI always resolves to the latest version; specific-version
+# DOIs are also available on the Zenodo record page.
+doi: "10.5281/zenodo.20134774"
 keywords:
   - alphafold
   - protein-structure
