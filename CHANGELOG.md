@@ -7,10 +7,40 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [Unreleased]
+## [1.1.0-rc1] — 2026-05-11
+
+First release candidate that ships the refactored modular tree alongside
+the full audit-readiness kit (`STATUS.md`, `LIMITATIONS.md`, `AUDIT.md`,
+threat model, examples, mkdocs site).
+
+### Added — release-ready surface
+- `examples/` with three documented end-to-end transcripts:
+  variant triage (BRCA1 c.5266dupC), target characterisation (EGFR),
+  and drug-discovery (Imatinib → BCR-ABL).
+- mkdocs-material documentation site deployed to GitHub Pages at
+  `https://smaniches.github.io/alphafold-sovereign-mcp/`.
+- `AUDIT.md`, `docs/threat-model.md` (STRIDE × MCP server surface),
+  `INCIDENT_RESPONSE.md`.
+- `smithery.yaml` and `server.json` so the server is discoverable in
+  the Smithery registry and the official MCP server registry.
+- `.well-known/security.txt` (RFC 9116) and `.well-known/mcp.json`.
+- `noxfile.py` with `lint`, `type`, `test`, `cov`, `mutate`, `docs`,
+  `build` sessions.
+- `--self-test` and `--version` CLI flags. `alphafold-sovereign
+  --self-test` boots the server in offline mode and verifies the
+  deterministic logic of `generate_variant_clinical_report` on a known
+  variant.
+- Pre-registered 10-prompt benchmark under `benchmarks/` with
+  SHA-256-committed prompt manifest and a deterministic re-run verifier.
+- Mutation testing via `mutmut`; per-module mutation scores published
+  to `docs/quality/mutation-scores.md`.
+- Release workflow with SLSA L3 provenance attestations and
+  `cosign`-signed artefacts.
+- OpenSSF Scorecard workflow; badge in README.
+- Zenodo DOI integration via GitHub releases; DOI added to
+  `CITATION.cff`.
 
 ### Changed — language scrub for open release
-
 - Removed marketing and overclaim language from the README, docstrings,
   and module headers. Specifically:
   - Dropped claims of "drift tensor R²=0.9992" — there is no benchmark
@@ -39,7 +69,6 @@ Versioning: [Semantic Versioning](https://semver.org/).
   vulnerabilities.
 
 ### Changed — test surface
-
 - 610 unit tests, hermetic (respx-mocked upstreams), runs in under 15
   seconds on a laptop.
 - Coverage on the shipped surface: **99% line + branch**, with 19 of
@@ -51,7 +80,6 @@ Versioning: [Semantic Versioning](https://semver.org/).
   (free tier of GitHub-hosted runners).
 
 ### Fixed
-
 - SQL injection (CWE-89) in `storage/knowledge_graph.py`: parameterised
   `LIMIT` clauses and added the `_ALLOWED_TABLES` allow-list guarding
   `export_to_dict(tables=...)`.
@@ -67,13 +95,26 @@ Versioning: [Semantic Versioning](https://semver.org/).
   a sync method (`kg._fetchall`); calling it synchronously now.
 
 ### Removed
-
 - `_archive/legacy/` — the original monolithic `alphafold_mcp.py`
   (5,840 LOC) and its supporting modules moved here. Not packaged in
   the wheel; excluded from lint, type, coverage, and security tooling.
   Tracked for deletion in v2.0.
 - `tests/verify_config.py` — a one-off helper with a hardcoded Windows
   path; not a test.
+
+### Known limitations (see `LIMITATIONS.md`)
+- ACMG criterion mapping has not been reviewed by an independent
+  clinical geneticist (L1).
+- Druggability tier thresholds are unvalidated heuristics (L2).
+- Upstream API schemas are not pinned (L3).
+- No production deployment experience yet (L4).
+- macOS Python 3.11 test flake (L5).
+- Single-maintainer bus factor (L6).
+- No real-world correctness telemetry (L7).
+
+---
+
+## [Unreleased]
 
 ---
 
@@ -91,5 +132,6 @@ Versioning: [Semantic Versioning](https://semver.org/).
 - Multi-mode local cache (`sovereign` / `readonly` / `disabled`).
 - HTML5 API documentation.
 
-[Unreleased]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.0-rc1...HEAD
+[1.1.0-rc1]: https://github.com/smaniches/alphafold-sovereign-mcp/releases/tag/v1.1.0-rc1
 [1.0.0]: https://github.com/smaniches/alphafold-sovereign-mcp/releases/tag/v1.0.0

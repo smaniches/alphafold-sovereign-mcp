@@ -1,0 +1,72 @@
+# Smithery MCP registry manifest — https://smithery.ai/docs/registry
+#
+# Smithery is a registry / installer for MCP servers. This manifest
+# lets users install and configure this server via `smithery install
+# alphafold-sovereign-mcp`.
+
+name: alphafold-sovereign-mcp
+description: >-
+  MCP server wrapping AlphaFold DB and 13 other biomedical data sources
+  (UniProt, Open Targets, ChEMBL, Ensembl VEP, ClinVar, gnomAD, MONDO,
+  HPO, DisGeNET, RCSB PDB, InterPro, Gene Ontology, Human Protein
+  Atlas) behind MCP tool calls. Persists each result to a local SQLite
+  knowledge graph for later querying. Engineering-grade (610 tests,
+  99% branch coverage) but scientific outputs are research aids that
+  must be reviewed by qualified humans before clinical use — see
+  STATUS.md and LIMITATIONS.md.
+version: "1.1.0-rc1"
+homepage: https://github.com/smaniches/alphafold-sovereign-mcp
+license: Apache-2.0
+author:
+  name: Santiago Maniches
+  orcid: "0009-0005-6480-1987"
+keywords:
+  - alphafold
+  - bioinformatics
+  - clinical-research
+  - drug-discovery
+  - knowledge-graph
+  - mcp-server
+  - protein-structure
+  - variant-classification
+
+# Transport configuration — stdio for Claude Desktop and other
+# stdio-based MCP clients. Streamable HTTP + OAuth is on the roadmap
+# (see STATUS.md "Roadmap to v1.2.0").
+transport:
+  type: stdio
+  command: alphafold-sovereign-mcp
+  args: []
+
+# Environment variables the server honours.
+env:
+  ALPHAFOLD_OFFLINE:
+    description: >-
+      If set to "1", "true", or "yes", the server refuses all outbound
+      HTTP calls and serves only from the local SQLite cache. Useful
+      for air-gap deployments and the deterministic --self-test.
+    required: false
+    default: ""
+  ALPHAFOLD_ALLOW_HOSTS:
+    description: >-
+      Comma-separated allowlist of upstream hostnames the server may
+      contact. If unset, all listed upstreams are reachable. Used in
+      sovereign / partial-air-gap deployments.
+    required: false
+    default: ""
+
+# Discoverability tags.
+tags:
+  - bioinformatics
+  - clinical-research
+  - drug-discovery
+  - knowledge-graph
+  - protein-structure
+
+# Where to read more.
+links:
+  documentation: https://smaniches.github.io/alphafold-sovereign-mcp/
+  source: https://github.com/smaniches/alphafold-sovereign-mcp
+  issues: https://github.com/smaniches/alphafold-sovereign-mcp/issues
+  security: https://github.com/smaniches/alphafold-sovereign-mcp/security/policy
+  citation: https://github.com/smaniches/alphafold-sovereign-mcp/blob/main/CITATION.cff

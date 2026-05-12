@@ -11,9 +11,23 @@ research aids that should be reviewed by qualified humans before any
 clinical or regulatory use.
 
 [![CI](https://github.com/smaniches/alphafold-sovereign-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/smaniches/alphafold-sovereign-mcp/actions/workflows/ci.yml)
+[![Docs](https://github.com/smaniches/alphafold-sovereign-mcp/actions/workflows/docs.yml/badge.svg)](https://smaniches.github.io/alphafold-sovereign-mcp/)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/smaniches/alphafold-sovereign-mcp/badge)](https://api.securityscorecards.dev/projects/github.com/smaniches/alphafold-sovereign-mcp)
+[![Release](https://img.shields.io/github/v/release/smaniches/alphafold-sovereign-mcp?include_prereleases&sort=semver)](https://github.com/smaniches/alphafold-sovereign-mcp/releases)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](pyproject.toml)
 [![MCP Spec 2025-06-18](https://img.shields.io/badge/MCP-2025--06--18-purple)](https://modelcontextprotocol.io)
+[![Tests](https://img.shields.io/badge/tests-610%20passing-success)](https://github.com/smaniches/alphafold-sovereign-mcp/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/badge/coverage-99%25-brightgreen)](https://github.com/smaniches/alphafold-sovereign-mcp/actions/workflows/ci.yml)
+[![ORCID](https://img.shields.io/badge/ORCID-0009--0005--6480--1987-A6CE39?logo=orcid&logoColor=white)](https://orcid.org/0009-0005-6480-1987)
+<!-- Add when the Zenodo release is published:
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.XXXXXXX.svg)](https://doi.org/10.5281/zenodo.XXXXXXX)
+-->
+
+**Status:** `v1.1.0-rc1` — release candidate. Engineering-grade
+(610 tests, 99% branch coverage, full legal kit). Scientifically
+unvalidated by independent domain experts — see
+[`STATUS.md`](STATUS.md) and [`LIMITATIONS.md`](LIMITATIONS.md).
 
 ---
 
@@ -72,32 +86,69 @@ not yet scientifically validated — see [`STATUS.md`](STATUS.md).
 
 ## Install
 
+> **No PyPI release yet.** v1.1.0-rc1 is intentionally
+> source-install only. PyPI publication is held back until the
+> v1.2.0 validation work lands (see [`STATUS.md`](STATUS.md)
+> §"Roadmap to v1.2.0"). The `pip install alphafold-sovereign-mcp`
+> command below will not work until then.
+
+### Install from source
+
 ```bash
-# Via uvx (no install required)
-uvx alphafold-sovereign-mcp
-
-# Via pip
-pip install alphafold-sovereign-mcp
-
-# With persistent-homology TDA (requires gudhi)
-pip install "alphafold-sovereign-mcp[tda]"
+git clone https://github.com/smaniches/alphafold-sovereign-mcp
+cd alphafold-sovereign-mcp
+uv pip install -e .
+# With persistent-homology TDA (requires gudhi):
+# uv pip install -e ".[tda]"
 ```
 
-**Claude Desktop** — add to `claude_desktop_config.json`:
+### Verify the install
+
+```bash
+alphafold-sovereign --version       # → 1.1.0-rc1
+alphafold-sovereign --self-test     # → PASS on the offline BRCA1 fixture
+```
+
+`--self-test` boots the server in offline mode and exercises the
+deterministic logic of `generate_variant_clinical_report` against a
+built-in `BRCA1:c.5266dupC` fixture. No network calls; returns exit
+code 0 on PASS, non-zero on FAIL.
+
+### Configure Claude Desktop
+
+Add to `claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
     "alphafold-sovereign": {
-      "command": "uvx",
-      "args": ["alphafold-sovereign-mcp"]
+      "command": "alphafold-sovereign-mcp",
+      "args": []
     }
   }
 }
 ```
 
-**Offline mode** — set `ALPHAFOLD_OFFLINE=1` to refuse all outbound
-HTTP and serve only from the local SQLite cache.
+Restart Claude Desktop and the tools become available in conversations.
+See the [`examples/`](examples/) directory for three end-to-end
+illustrations of what a session looks like.
+
+### Offline mode
+
+```bash
+ALPHAFOLD_OFFLINE=1 alphafold-sovereign-mcp
+```
+
+Refuses all outbound HTTP. Serves only from the local SQLite cache.
+
+### Future (planned, not active)
+
+```bash
+# Once published to PyPI in v1.2.0:
+pip install alphafold-sovereign-mcp
+# Or via uvx (no install required):
+uvx alphafold-sovereign-mcp
+```
 
 ---
 
@@ -162,6 +213,14 @@ are not a substitute for clinical-laboratory review.
 ---
 
 ## Example usage
+
+For three documented end-to-end illustrations of a Claude Desktop
+session against this server — variant triage on BRCA1 c.5266dupC,
+target characterisation on EGFR, and a drug-discovery walk-through
+on Imatinib → BCR-ABL → CML — see the [`examples/`](examples/)
+directory. Each example includes the user prompt, the tool calls
+the model issues, the server's response shape, and the model's
+paraphrased reply.
 
 ### Clinical variant report
 
@@ -279,16 +338,29 @@ Full guide: [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Citation
 
+Machine-readable metadata: [`CITATION.cff`](CITATION.cff) (GitHub
+renders a "Cite this repository" button in the sidebar that consumes
+this file).
+
 ```bibtex
-@software{maniches2024alphafold_sovereign,
+@software{maniches_alphafold_sovereign_mcp,
   author    = {Maniches, Santiago},
   title     = {AlphaFold Sovereign MCP},
-  year      = {2024},
+  year      = {2026},
+  version   = {1.1.0-rc1},
   url       = {https://github.com/smaniches/alphafold-sovereign-mcp},
   license   = {Apache-2.0},
   orcid     = {0009-0005-6480-1987}
+  % Add when the Zenodo release is published:
+  % doi   = {10.5281/zenodo.XXXXXXX}
 }
 ```
+
+When citing results derived from this software, please also cite the
+upstream data sources (AlphaFold DB, UniProt, Open Targets, ChEMBL,
+Ensembl, ClinVar, gnomAD, MONDO, HPO, DisGeNET, RCSB PDB, InterPro,
+Gene Ontology, Human Protein Atlas) according to their own citation
+requirements.
 
 ## License
 

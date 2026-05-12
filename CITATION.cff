@@ -8,16 +8,17 @@ message: >-
 type: software
 title: "AlphaFold Sovereign MCP"
 abstract: >-
-  A production-grade Model Context Protocol (MCP) server for
-  sovereign structural-biology analysis. Provides 25+ tools spanning
-  AlphaFold structure retrieval, persistent-homology topological data
-  analysis, disease-ontology integration (MONDO, HPO, ICD-10/11,
-  OMIM, Orphanet, Open Targets), variant triage (AlphaMissense,
-  ClinVar, gnomAD), sequence-of-concern biosecurity screening, and
-  federated multi-instance operation. Designed for pharmaceutical,
-  clinical-research, and national-security deployments requiring
-  air-gap installability, 21 CFR Part 11 audit trails, and
-  FIPS 140-3 cryptographic compliance.
+  An open-source Model Context Protocol (MCP) server that exposes
+  AlphaFold DB and 13 other public biomedical data sources (UniProt,
+  Open Targets, ChEMBL, Ensembl VEP, ClinVar, gnomAD, MONDO, HPO,
+  DisGeNET, RCSB PDB, InterPro, Gene Ontology, Human Protein Atlas)
+  as tool calls a Claude (or other MCP-capable) client can invoke
+  directly. Persists each result to a local SQLite knowledge graph for
+  later querying. The server is engineering-grade (610 tests, 99% line
+  + branch coverage) but its scientific outputs — draft ACMG/AMP
+  evidence and a heuristic druggability tier — have NOT been reviewed
+  by independent domain experts and must be treated as research aids,
+  not as clinical decision support. See LIMITATIONS.md.
 authors:
   - family-names: Maniches
     given-names: Santiago
@@ -26,7 +27,14 @@ authors:
     email: "santiago@topologica.ai"
 license: Apache-2.0
 repository-code: "https://github.com/smaniches/alphafold-sovereign-mcp"
-url: "https://docs.topologica.ai"
+url: "https://smaniches.github.io/alphafold-sovereign-mcp/"
+# A Zenodo DOI is minted automatically when a GitHub Release is
+# published, provided the repository is linked at
+# https://zenodo.org/account/settings/github/. After cutting the
+# v1.1.0-rc1 release on GitHub, replace the line below with the
+# minted DOI (format: 10.5281/zenodo.<id>). Until then the field is
+# absent so tools that consume CITATION.cff do not surface a fake DOI.
+# doi: "10.5281/zenodo.XXXXXXX"
 keywords:
   - alphafold
   - protein-structure
@@ -41,10 +49,8 @@ keywords:
   - biosecurity
   - drug-discovery
   - clinical-research
-  - FedRAMP
-  - FIPS-140-3
-version: "1.0.0"
-date-released: "2026-05-10"
+version: "1.1.0-rc1"
+date-released: "2026-05-11"
 references:
   - type: software
     title: "AlphaFold Protein Structure Database"
