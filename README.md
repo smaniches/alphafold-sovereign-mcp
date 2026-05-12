@@ -14,6 +14,7 @@ clinical or regulatory use.
 [![Docs](https://github.com/smaniches/alphafold-sovereign-mcp/actions/workflows/docs.yml/badge.svg)](https://smaniches.github.io/alphafold-sovereign-mcp/)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/smaniches/alphafold-sovereign-mcp/badge)](https://api.securityscorecards.dev/projects/github.com/smaniches/alphafold-sovereign-mcp)
 [![Release](https://img.shields.io/github/v/release/smaniches/alphafold-sovereign-mcp?include_prereleases&sort=semver)](https://github.com/smaniches/alphafold-sovereign-mcp/releases)
+[![PyPI](https://img.shields.io/pypi/v/alphafold-sovereign-mcp?include_prereleases&label=PyPI)](https://pypi.org/project/alphafold-sovereign-mcp/)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](pyproject.toml)
 [![MCP Spec 2025-06-18](https://img.shields.io/badge/MCP-2025--06--18-purple)](https://modelcontextprotocol.io)
@@ -84,13 +85,27 @@ not yet scientifically validated — see [`STATUS.md`](STATUS.md).
 
 ## Install
 
-> **No PyPI release yet.** v1.1.0-rc1 is intentionally
-> source-install only. PyPI publication is held back until the
-> v1.2.0 validation work lands (see [`STATUS.md`](STATUS.md)
-> §"Roadmap to v1.2.0"). The `pip install alphafold-sovereign-mcp`
-> command below will not work until then.
+### From PyPI (recommended)
 
-### Install from source
+`v1.1.0-rc1` is a release candidate, so `pip` needs the `--pre` flag:
+
+```bash
+pip install --pre alphafold-sovereign-mcp
+```
+
+Or run it without installing using `uvx`:
+
+```bash
+uvx --prerelease=allow --from alphafold-sovereign-mcp==1.1.0rc1 alphafold-sovereign-mcp
+```
+
+Every release on PyPI is built by the `release.yml` workflow under
+OIDC Trusted Publishing, attached to a signed GitHub Release with
+SLSA L3 build provenance and Sigstore (`cosign`) signatures, and
+mirrored to a Zenodo DOI. Verify the supply chain with
+`scripts/replicate.sh`.
+
+### From source
 
 ```bash
 git clone https://github.com/smaniches/alphafold-sovereign-mcp
@@ -139,14 +154,14 @@ ALPHAFOLD_OFFLINE=1 alphafold-sovereign-mcp
 
 Refuses all outbound HTTP. Serves only from the local SQLite cache.
 
-### Future (planned, not active)
+### Stable-only `pip install`
 
-```bash
-# Once published to PyPI in v1.2.0:
-pip install alphafold-sovereign-mcp
-# Or via uvx (no install required):
-uvx alphafold-sovereign-mcp
-```
+Once the project graduates from release-candidate to a final `1.1.0`
+(or higher) — i.e., after the v1.2.0 scientific-validation milestones
+in [`STATUS.md`](STATUS.md) are met — `pip install
+alphafold-sovereign-mcp` will pick up the stable release without the
+`--pre` flag. Until then, `--pre` (or `uvx --prerelease=allow`) is
+required.
 
 ---
 
