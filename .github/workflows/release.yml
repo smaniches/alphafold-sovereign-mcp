@@ -13,8 +13,8 @@ on:
         type: string
 
 permissions:
-  contents: write   # for gh release create + asset upload
-  id-token: write   # for cosign keyless signing via OIDC
+  contents: write       # for gh release create + asset upload
+  id-token: write       # for cosign keyless signing via OIDC + PyPI trusted publishing
   attestations: write   # for SLSA build provenance attestations
 
 jobs:
@@ -100,10 +100,36 @@ jobs:
             sbom.spdx.json
           retention-days: 7
 
-  # ── Sign artefacts (Sigstore cosign, keyless via OIDC) + publish release ─
-  publish:
+  # ── Publish to PyPI via Trusted Publishing (OIDC) ────────────────────────
+  # No API token required.  PyPI is configured at
+  # https://pypi.org/manage/account/publishing/ to accept publishes from
+  # this repo's ``release.yml`` running in the ``pypi`` environment.  The
+  # ``id-token: write`` permission lets the action mint a short-lived OIDC
+  # token that PyPI exchanges for upload authorisation.
+  publish-pypi:
     needs: [build, provenance, sbom]
-    name: Sign and publish release
+    name: Publish to PyPI (Trusted Publisher)
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/alphafold-sovereign-mcp/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - name: Publish wheel + sdist to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+          skip-existing: true     # safe re-runs of the same tag
+
+  # ── Sign artefacts (Sigstore cosign, keyless via OIDC) + publish release ─
+  publish-github:
+    needs: [build, provenance, sbom, publish-pypi]
+    name: Sign and publish GitHub Release
     runs-on: ubuntu-latest
     permissions:
       contents: write
