@@ -62,6 +62,9 @@ jobs:
       upload-assets: false   # we attach to the release in the next job
 
   # ── SBOM (CycloneDX + SPDX) ──────────────────────────────────────────────
+  # Uses a uv-managed venv rather than ``--system`` because Ubuntu 24.04
+  # runners mark their system Python as PEP-668 EXTERNALLY-MANAGED, which
+  # blocks ``uv pip install --system``.
   sbom:
     needs: [build]
     name: Generate SBOM (CycloneDX + SPDX)
@@ -77,15 +80,20 @@ jobs:
           version: "latest"
       - name: Set up Python
         run: uv python install 3.12
-      - name: Install SBOM tooling
-        run: uv pip install --system cyclonedx-bom
-      - name: Install package for dependency introspection
-        run: uv pip install --system dist/*.whl
+      - name: Create dedicated SBOM venv and install tooling + package
+        run: |
+          set -euo pipefail
+          uv venv .sbom-env --python 3.12
+          uv pip install --python .sbom-env/bin/python cyclonedx-bom
+          # Install the just-built wheel into the same venv so the
+          # CycloneDX "environment" command sees its real dep tree.
+          uv pip install --python .sbom-env/bin/python dist/*.whl
       - name: Generate CycloneDX JSON
         run: |
-          cyclonedx-py environment -o sbom.cyclonedx.json
+          .sbom-env/bin/cyclonedx-py environment -o sbom.cyclonedx.json
       - name: Generate SPDX JSON
-        # syft is a small static binary; install via the official action
+        # syft is a small static binary; install via the official action.
+        # It does not need the dedicated venv.
         uses: anchore/sbom-action@v0
         with:
           path: dist/
