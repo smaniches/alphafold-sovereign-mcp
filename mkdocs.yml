@@ -135,6 +135,7 @@ nav:
       - Limitations: limitations.md
       - Threat model: threat-model.md
       - Audit: audit.md
+      - Mutation testing: quality/mutation-scores.md
   - Project:
       - Changelog: changelog.md
       - Contributing: contributing.md

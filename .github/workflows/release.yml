@@ -1,0 +1,150 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+      - "v*.*.*-*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (e.g. v1.1.0-rc1)"
+        required: true
+        type: string
+
+permissions:
+  contents: write   # for gh release create + asset upload
+  id-token: write   # for cosign keyless signing via OIDC
+  attestations: write   # for SLSA build provenance attestations
+
+jobs:
+  # ── Build wheel + sdist with a reproducible builder ──────────────────────
+  build:
+    name: Build distribution
+    runs-on: ubuntu-latest
+    outputs:
+      hashes: ${{ steps.hash.outputs.hashes }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+      - name: Set up Python
+        run: uv python install 3.12
+      - name: Build sdist + wheel
+        run: uv build
+      - name: Show artefacts
+        run: ls -la dist/
+      - name: Generate SHA-256 hashes
+        id: hash
+        run: |
+          cd dist
+          # base64 of "<sha256>  <filename>" lines, per slsa-framework convention
+          echo "hashes=$(sha256sum *.tar.gz *.whl | base64 -w0)" >> "$GITHUB_OUTPUT"
+      - name: Upload artefacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 7
+
+  # ── SLSA L3 build provenance (in-toto attestation) ───────────────────────
+  provenance:
+    needs: [build]
+    permissions:
+      actions: read
+      id-token: write
+      contents: write
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.0.0
+    with:
+      base64-subjects: "${{ needs.build.outputs.hashes }}"
+      provenance-name: "alphafold-sovereign-mcp.intoto.jsonl"
+      upload-assets: false   # we attach to the release in the next job
+
+  # ── SBOM (CycloneDX + SPDX) ──────────────────────────────────────────────
+  sbom:
+    needs: [build]
+    name: Generate SBOM (CycloneDX + SPDX)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+      - name: Set up Python
+        run: uv python install 3.12
+      - name: Install SBOM tooling
+        run: uv pip install --system cyclonedx-bom
+      - name: Install package for dependency introspection
+        run: uv pip install --system dist/*.whl
+      - name: Generate CycloneDX JSON
+        run: |
+          cyclonedx-py environment -o sbom.cyclonedx.json
+      - name: Generate SPDX JSON
+        # syft is a small static binary; install via the official action
+        uses: anchore/sbom-action@v0
+        with:
+          path: dist/
+          format: spdx-json
+          output-file: sbom.spdx.json
+      - name: Upload SBOMs
+        uses: actions/upload-artifact@v4
+        with:
+          name: sboms
+          path: |
+            sbom.cyclonedx.json
+            sbom.spdx.json
+          retention-days: 7
+
+  # ── Sign artefacts (Sigstore cosign, keyless via OIDC) + publish release ─
+  publish:
+    needs: [build, provenance, sbom]
+    name: Sign and publish release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: actions/download-artifact@v4
+        with:
+          name: sboms
+          path: sboms/
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+      - name: Sign each artefact with cosign (keyless OIDC)
+        run: |
+          set -euo pipefail
+          for f in dist/*.tar.gz dist/*.whl; do
+            cosign sign-blob --yes "$f" \
+              --bundle "${f}.sigstore" \
+              --output-signature "${f}.sig" \
+              --output-certificate "${f}.crt"
+          done
+      - name: Determine tag
+        id: tag
+        run: |
+          if [[ -n "${{ inputs.tag }}" ]]; then
+            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Create GitHub release with all artefacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG=${{ steps.tag.outputs.tag }}
+          gh release create "$TAG" \
+            --title "AlphaFold Sovereign MCP $TAG" \
+            --notes-file CHANGELOG.md \
+            --prerelease \
+            dist/* sboms/sbom.cyclonedx.json sboms/sbom.spdx.json

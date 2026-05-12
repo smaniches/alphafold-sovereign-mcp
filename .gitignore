@@ -80,3 +80,7 @@ coverage.xml
 
 # mkdocs build output (deployed to gh-pages via CI)
 site/
+
+# benchmark results (one subdir per pinned prompts.jsonl SHA)
+benchmarks/results/*/
+!benchmarks/results/.gitkeep
