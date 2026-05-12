@@ -127,6 +127,9 @@ jobs:
           skip-existing: true     # safe re-runs of the same tag
 
   # ── Sign artefacts (Sigstore cosign, keyless via OIDC) + publish release ─
+  # Idempotent: works whether the GitHub Release already exists (e.g.
+  # because the user published it via the web UI before pushing the tag)
+  # or not (the workflow creates it from the tag push).
   publish-github:
     needs: [build, provenance, sbom, publish-pypi]
     name: Sign and publish GitHub Release
@@ -163,14 +166,22 @@ jobs:
           else
             echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
           fi
-      - name: Create GitHub release with all artefacts
+      - name: Create or upload to GitHub release (idempotent)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           TAG=${{ steps.tag.outputs.tag }}
-          gh release create "$TAG" \
-            --title "AlphaFold Sovereign MCP $TAG" \
-            --notes-file CHANGELOG.md \
-            --prerelease \
-            dist/* sboms/sbom.cyclonedx.json sboms/sbom.spdx.json
+          ASSETS=( dist/*.tar.gz dist/*.whl dist/*.sigstore dist/*.sig dist/*.crt sboms/sbom.cyclonedx.json sboms/sbom.spdx.json )
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists — uploading assets with --clobber."
+            gh release upload "$TAG" "${ASSETS[@]}" --clobber
+          else
+            echo "Creating release $TAG."
+            gh release create "$TAG" \
+              --title "AlphaFold Sovereign MCP $TAG" \
+              --notes-file CHANGELOG.md \
+              --prerelease \
+              "${ASSETS[@]}"
+          fi
