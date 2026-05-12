@@ -120,7 +120,9 @@ def _ensure_results_dir(prompts_sha: str) -> Path:
 
 
 def _now_iso() -> str:
-    return _dt.datetime.now(_dt.UTC).strftime("%Y%m%dT%H%M%SZ")
+    # Use ``timezone.utc`` for Python 3.10 compatibility (``datetime.UTC``
+    # is 3.11+).
+    return _dt.datetime.now(_dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
 
 def main(argv: list[str] | None = None) -> int:
