@@ -69,12 +69,12 @@ threat model, examples, mkdocs site).
   vulnerabilities.
 
 ### Changed — test surface
-- 610 unit tests, hermetic (respx-mocked upstreams), runs in under 15
+- 623 unit tests, hermetic (respx-mocked upstreams), runs in under 15
   seconds on a laptop.
-- Coverage on the shipped surface: **99% line + branch**, with 19 of
-  20 modules at 100%. The remaining gap is 1 statement and 2 partial
-  branches in `tools/knowledge_graph_tools.py` in a defensive
-  sync-fallback path.
+- Coverage on the shipped surface: **99% line + branch** (99.52%
+  measured), with 19 of 20 modules at 100%. The remaining gap is 1
+  statement and 2 partial branches in
+  `tools/knowledge_graph_tools.py` in a defensive sync-fallback path.
 - CI matrix: Python 3.10, 3.11, 3.12, 3.13 × Ubuntu, macOS.
 - CodeQL `security-extended` runs on every push to a public repo
   (free tier of GitHub-hosted runners).
