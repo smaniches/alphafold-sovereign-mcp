@@ -12,6 +12,7 @@
     "url": "https://github.com/smaniches/alphafold-sovereign-mcp.git"
   },
   "issues": "https://github.com/smaniches/alphafold-sovereign-mcp/issues",
+  "doi": "10.5281/zenodo.20134774",
   "protocol_version": "2025-06-18",
   "transports": [
     {
@@ -54,10 +55,14 @@
   "maturity": "release-candidate",
   "status_note": "v1.1.0-rc1 ships with engineering-grade tests (610 tests, 99% branch coverage) but its scientific outputs (ACMG draft, druggability tier) have NOT been validated by independent domain experts. See STATUS.md and LIMITATIONS.md.",
   "install": {
+    "pypi": {
+      "name": "alphafold-sovereign-mcp",
+      "url": "https://pypi.org/project/alphafold-sovereign-mcp/",
+      "command": "pip install --pre alphafold-sovereign-mcp"
+    },
     "from_source": {
       "command": "git clone https://github.com/smaniches/alphafold-sovereign-mcp && cd alphafold-sovereign-mcp && uv pip install -e ."
     },
-    "pypi": null,
     "verify": "alphafold-sovereign --self-test"
   }
 }
