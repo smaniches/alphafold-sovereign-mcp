@@ -334,6 +334,13 @@ Full guide: [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ---
 
+## Related MCP servers by the same author
+
+- [`uniprot-mcp`](https://github.com/smaniches/uniprot-mcp) — Model Context Protocol server for UniProt Swiss-Prot and TrEMBL (`pip install uniprot-mcp-server`).
+- [`semantic-scholar-mcp`](https://github.com/smaniches/semantic-scholar-mcp) — Semantic Scholar MCP server, 200M+ academic papers (`pip install s2-mcp-server`).
+
+---
+
 ## Citation
 
 Machine-readable metadata: [`CITATION.cff`](CITATION.cff) (GitHub
