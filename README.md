@@ -20,7 +20,7 @@ clinical or regulatory use.
 [![Tests](https://img.shields.io/badge/tests-610%20passing-success)](https://github.com/smaniches/alphafold-sovereign-mcp/actions/workflows/ci.yml)
 [![Coverage](https://img.shields.io/badge/coverage-99%25-brightgreen)](https://github.com/smaniches/alphafold-sovereign-mcp/actions/workflows/ci.yml)
 [![ORCID](https://img.shields.io/badge/ORCID-0009--0005--6480--1987-A6CE39?logo=orcid&logoColor=white)](https://orcid.org/0009-0005-6480-1987)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20134774.svg)](https://doi.org/10.5281/zenodo.20134774)
+[![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.20134774-3C5A99?logo=zenodo&logoColor=white)](https://doi.org/10.5281/zenodo.20134774)
 
 **Status:** `v1.1.0-rc1` — release candidate. Engineering-grade
 (610 tests, 99% branch coverage, full legal kit). Scientifically
