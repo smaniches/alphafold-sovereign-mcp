@@ -1,0 +1,146 @@
+site_name: AlphaFold Sovereign MCP
+site_description: >-
+  MCP server wrapping AlphaFold DB and 13 other biomedical data sources.
+  Engineering-grade infrastructure; scientifically unvalidated by
+  independent domain experts. v1.1.0-rc1.
+site_url: https://smaniches.github.io/alphafold-sovereign-mcp/
+site_author: Santiago Maniches
+repo_url: https://github.com/smaniches/alphafold-sovereign-mcp
+repo_name: smaniches/alphafold-sovereign-mcp
+edit_uri: edit/main/docs/
+copyright: >-
+  Copyright &copy; 2024–2026 Santiago Maniches.
+  Released under the Apache License 2.0.
+
+# ── Theme ────────────────────────────────────────────────────────────────
+theme:
+  name: material
+  language: en
+  features:
+    - announce.dismiss
+    - content.action.edit
+    - content.action.view
+    - content.code.annotate
+    - content.code.copy
+    - navigation.expand
+    - navigation.indexes
+    - navigation.instant
+    - navigation.sections
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.top
+    - navigation.tracking
+    - search.highlight
+    - search.share
+    - search.suggest
+    - toc.follow
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to light mode
+  icon:
+    logo: material/dna
+    repo: fontawesome/brands/github
+
+# ── Plugins ──────────────────────────────────────────────────────────────
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            docstring_style: google
+            show_source: false
+            show_root_heading: true
+            members_order: source
+            show_signature_annotations: true
+            separate_signature: true
+            line_length: 80
+
+# ── Markdown extensions ──────────────────────────────────────────────────
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets:
+      base_path:
+        - .
+        - docs
+        - examples
+      check_paths: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+
+# ── Extra footer links ───────────────────────────────────────────────────
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/smaniches/alphafold-sovereign-mcp
+      name: GitHub
+    - icon: fontawesome/brands/orcid
+      link: https://orcid.org/0009-0005-6480-1987
+      name: ORCID
+  status:
+    new: Recently added
+    deprecated: Deprecated
+
+# ── Navigation ───────────────────────────────────────────────────────────
+nav:
+  - Home: index.md
+  - Installation: installation.md
+  - Tool reference:
+      - Overview: tools/index.md
+      - Disease tools: tools/disease.md
+      - Precision-medicine tools: tools/precision-medicine.md
+      - Structure-intelligence tools: tools/structure-intelligence.md
+      - Knowledge-graph tools: tools/knowledge-graph.md
+  - Examples:
+      - Overview: examples/index.md
+      - "Variant triage (BRCA1)": examples/01-variant-triage.md
+      - "Target characterisation (EGFR)": examples/02-target-characterization.md
+      - "Drug discovery (Imatinib)": examples/03-drug-discovery.md
+  - Architecture: architecture.md
+  - Quality:
+      - Status: status.md
+      - Limitations: limitations.md
+      - Threat model: threat-model.md
+      - Audit: audit.md
+      - Mutation testing: quality/mutation-scores.md
+  - Project:
+      - Changelog: changelog.md
+      - Contributing: contributing.md
+      - Code of conduct: code-of-conduct.md
+      - Governance: governance.md
+      - Security: security.md
+      - Privacy: privacy.md
+      - Support: support.md

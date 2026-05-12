@@ -1,0 +1,24 @@
+# Pre-registered benchmark manifest for alphafold-sovereign-mcp v1.1.0-rc1
+#
+# The SHA-256 below pins the exact prompt set that was committed before
+# any benchmark run. Any change to the prompts must come with a new
+# manifest line dated and signed by the maintainer. Old runs against
+# old prompt SHAs remain comparable to themselves; runs across different
+# prompt SHAs are NOT comparable.
+#
+# To verify: `sha256sum benchmarks/prompts.jsonl` should match the
+# `prompts_sha256` line below.
+
+prompts_sha256: ed281466ed3bdf44a0f5e30eaf6ed5c83a95589139b690a1bc178aa867034d1c
+prompts_n: 10
+registered_at: 2026-05-11T15:00:00Z
+registered_by: Santiago Maniches <santiago@topologica.ai>
+registered_for_version: 1.1.0-rc1
+notes: >-
+  This is the v1 prompt set covering variant triage (3), target
+  druggability (3), structure intelligence (1), disease-target (1),
+  drug lookup (1), and knowledge graph (1). The prompts intentionally
+  use well-characterised entities (BRCA1, TP53, EGFR, ABL1, Imatinib,
+  CML) so a domain expert can audit the correctness of the server's
+  responses. See LIMITATIONS.md L1 and L2 for the scientific
+  validation status of these tools.

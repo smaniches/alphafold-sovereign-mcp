@@ -1,0 +1,17 @@
+{
+  "name": "alphafold-sovereign-mcp",
+  "version": "1.1.0-rc1",
+  "protocol_version": "2025-06-18",
+  "description": "MCP server wrapping AlphaFold DB and 13 other biomedical data sources.",
+  "vendor": "Santiago Maniches",
+  "license": "Apache-2.0",
+  "repository": "https://github.com/smaniches/alphafold-sovereign-mcp",
+  "documentation": "https://smaniches.github.io/alphafold-sovereign-mcp/",
+  "manifests": {
+    "smithery": "/smithery.yaml",
+    "mcp_server": "/server.json"
+  },
+  "maturity": "release-candidate",
+  "scientific_validation": "unvalidated",
+  "scientific_validation_note": "Engineering-grade (610 tests, 99% coverage). Scientific outputs (ACMG draft, druggability tier) have NOT been reviewed by independent domain experts. See STATUS.md and LIMITATIONS.md."
+}

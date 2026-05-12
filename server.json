@@ -1,0 +1,63 @@
+{
+  "$schema": "https://modelcontextprotocol.io/schemas/server.schema.json",
+  "name": "alphafold-sovereign-mcp",
+  "version": "1.1.0-rc1",
+  "description": "MCP server wrapping AlphaFold DB and 13 other biomedical data sources behind a set of MCP tool calls; persists each result to a local SQLite knowledge graph for later querying.",
+  "vendor": "Santiago Maniches",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/smaniches/alphafold-sovereign-mcp",
+  "documentation": "https://smaniches.github.io/alphafold-sovereign-mcp/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/smaniches/alphafold-sovereign-mcp.git"
+  },
+  "issues": "https://github.com/smaniches/alphafold-sovereign-mcp/issues",
+  "protocol_version": "2025-06-18",
+  "transports": [
+    {
+      "type": "stdio",
+      "command": "alphafold-sovereign-mcp"
+    }
+  ],
+  "capabilities": {
+    "tools": {
+      "listChanged": false
+    },
+    "resources": false,
+    "prompts": false,
+    "logging": false
+  },
+  "categories": [
+    "bioinformatics",
+    "scientific-research",
+    "knowledge-base"
+  ],
+  "tags": [
+    "alphafold",
+    "uniprot",
+    "open-targets",
+    "chembl",
+    "clinvar",
+    "gnomad",
+    "ensembl",
+    "rcsb-pdb",
+    "interpro",
+    "mondo",
+    "hpo",
+    "disgenet",
+    "gene-ontology",
+    "human-protein-atlas",
+    "variant-classification",
+    "drug-discovery",
+    "knowledge-graph"
+  ],
+  "maturity": "release-candidate",
+  "status_note": "v1.1.0-rc1 ships with engineering-grade tests (610 tests, 99% branch coverage) but its scientific outputs (ACMG draft, druggability tier) have NOT been validated by independent domain experts. See STATUS.md and LIMITATIONS.md.",
+  "install": {
+    "from_source": {
+      "command": "git clone https://github.com/smaniches/alphafold-sovereign-mcp && cd alphafold-sovereign-mcp && uv pip install -e ."
+    },
+    "pypi": null,
+    "verify": "alphafold-sovereign --self-test"
+  }
+}
