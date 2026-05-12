@@ -17,7 +17,7 @@ env:
   UV_CACHE_DIR: /tmp/.uv-cache
 
 jobs:
-  # ── Lint & Format ──────────────────────────────────────────────────────────
+  # ── Lint & Format ──────────────────────────────────────────────────────────────────
   lint:
     name: Lint (ruff)
     runs-on: ubuntu-latest
@@ -33,7 +33,7 @@ jobs:
       - name: Run ruff format check
         run: uv run ruff format --check src/alphafold_sovereign/clients/ src/alphafold_sovereign/domain/ src/alphafold_sovereign/tools/ src/alphafold_sovereign/storage/
 
-  # ── Type checking ──────────────────────────────────────────────────────────
+  # ── Type checking ───────────────────────────────────────────────────────────────────
   typecheck:
     name: Type Check (mypy)
     runs-on: ubuntu-latest
@@ -52,7 +52,7 @@ jobs:
             src/alphafold_sovereign/storage/ \
             --config-file pyproject.toml
 
-  # ── Test matrix ────────────────────────────────────────────────────────────
+  # ── Test matrix ───────────────────────────────────────────────────────────────────────
   test:
     name: Tests (Python ${{ matrix.python-version }}, ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -80,7 +80,7 @@ jobs:
             --cov=src/alphafold_sovereign \
             --cov-report=term-missing \
             --cov-report=xml:coverage.xml \
-            --cov-fail-under=60 \
+            --cov-fail-under=99 \
             -v --tb=short
         env:
           PYTHONPATH: src
@@ -92,7 +92,7 @@ jobs:
           flags: unit
           fail_ci_if_error: false
 
-  # ── Security scanning ──────────────────────────────────────────────────────
+  # ── Security scanning ───────────────────────────────────────────────────────────────
   security:
     name: Security Scan
     runs-on: ubuntu-latest
@@ -121,7 +121,7 @@ jobs:
             bandit-results.json
             pip-audit-results.json
 
-  # ── SBOM generation ────────────────────────────────────────────────────────
+  # ── SBOM generation ───────────────────────────────────────────────────────────────────
   sbom:
     name: Generate SBOM
     runs-on: ubuntu-latest
@@ -144,7 +144,7 @@ jobs:
             sbom-cyclonedx.json
             sbom-spdx.json
 
-  # ── CodeQL ────────────────────────────────────────────────────────────────
+  # ── CodeQL ────────────────────────────────────────────────────────────────────────────────────
   # Runs on public repositories (free) and on private repos with GitHub
   # Advanced Security enabled.  On private repos without GHAS this would
   # fail with a permissions error, so we skip until the repo is public.
@@ -169,7 +169,7 @@ jobs:
         with:
           category: "/language:python"
 
-  # ── MCP protocol validation ────────────────────────────────────────────────
+  # ── MCP protocol validation ─────────────────────────────────────────────────────────────────
   mcp-validate:
     name: MCP Schema Validation
     runs-on: ubuntu-latest
@@ -194,7 +194,7 @@ jobs:
         env:
           PYTHONPATH: src
 
-  # ── Build check ────────────────────────────────────────────────────────────
+  # ── Build check ────────────────────────────────────────────────────────────────────────
   build:
     name: Build Distribution
     runs-on: ubuntu-latest
@@ -220,7 +220,7 @@ jobs:
           name: dist
           path: dist/
 
-  # ── All-green gate ─────────────────────────────────────────────────────────
+  # ── All-green gate ─────────────────────────────────────────────────────────────────────
   all-checks:
     name: All Checks Pass
     needs: [lint, typecheck, test, security, mcp-validate, build]

@@ -75,7 +75,7 @@ def cov(session: nox.Session) -> None:
         "--cov=src/alphafold_sovereign",
         "--cov-report=term-missing",
         "--cov-report=xml:coverage.xml",
-        "--cov-fail-under=60",
+        "--cov-fail-under=99",
         "-q",
     )
 
