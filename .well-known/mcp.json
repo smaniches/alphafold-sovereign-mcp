@@ -7,11 +7,13 @@
   "license": "Apache-2.0",
   "repository": "https://github.com/smaniches/alphafold-sovereign-mcp",
   "documentation": "https://smaniches.github.io/alphafold-sovereign-mcp/",
+  "pypi": "https://pypi.org/project/alphafold-sovereign-mcp/",
+  "doi": "10.5281/zenodo.20134774",
   "manifests": {
     "smithery": "/smithery.yaml",
     "mcp_server": "/server.json"
   },
   "maturity": "release-candidate",
   "scientific_validation": "unvalidated",
-  "scientific_validation_note": "Engineering-grade (610 tests, 99% coverage). Scientific outputs (ACMG draft, druggability tier) have NOT been reviewed by independent domain experts. See STATUS.md and LIMITATIONS.md."
+  "scientific_validation_note": "Engineering-grade (623 tests, 99% coverage). Scientific outputs (ACMG draft, druggability tier) have NOT been reviewed by independent domain experts. See STATUS.md and LIMITATIONS.md."
 }

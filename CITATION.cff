@@ -14,7 +14,7 @@ abstract: >-
   DisGeNET, RCSB PDB, InterPro, Gene Ontology, Human Protein Atlas)
   as tool calls a Claude (or other MCP-capable) client can invoke
   directly. Persists each result to a local SQLite knowledge graph for
-  later querying. The server is engineering-grade (610 tests, 99% line
+  later querying. The server is engineering-grade (623 tests, 99% line
   + branch coverage) but its scientific outputs — draft ACMG/AMP
   evidence and a heuristic druggability tier — have NOT been reviewed
   by independent domain experts and must be treated as research aids,

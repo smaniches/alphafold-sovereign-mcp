@@ -14,7 +14,7 @@ Any of the following:
 |---|---|
 | **Security** | A vulnerability is reported via private disclosure. A secret is accidentally committed. A dependency is found to be backdoored. |
 | **Data integrity** | A user reports that the server produced systematically wrong output (e.g., wrong ACMG criteria for a class of variants). |
-| **Supply chain** | A release artefact's checksum/signature does not verify against the SLSA provenance. PyPI account is compromised (does not apply to v1.1.0-rc1 since we are not on PyPI). |
+| **Supply chain** | A release artefact's checksum/signature does not verify against the SLSA provenance. The PyPI Trusted-Publisher OIDC config is compromised (would let an attacker upload a malicious release under our name). A maintainer's GitHub credentials are exposed. |
 | **Outage** (informational only, no SLA) | Upstream API change breaks tool output. Server cannot start on a supported platform. |
 
 ## Severities
@@ -47,7 +47,7 @@ contractual commitments.
        └──────────┬──────────┘
                   ▼
        ┌─────────────────────┐         ┌──────────────────────┐
-       │ Stabilise:           │ ◄────── │ Coordinated          │
+       │ Stabilise:           │ ◀────── │ Coordinated          │
        │  - mitigate or roll  │         │ disclosure (private  │
        │    back              │         │ until fix is ready)  │
        │  - communicate       │         └──────────────────────┘
@@ -79,6 +79,7 @@ contractual commitments.
 | Affected users | GitHub Release notes; CHANGELOG.md; STATUS.md if posture changes |
 | Public audit log | `AUDIT.md` (post-resolution summary) |
 | Subscribers / watchers | GitHub repo "watch" notifications |
+| PyPI users | PyPI yanks the affected version; release notes carry the disclosure |
 
 ## Postmortem template
 
@@ -133,4 +134,4 @@ written. As of v1.1.0-rc1 there are none.
 
 ---
 
-Last updated: 2026-05-11.
+Last updated: 2026-05-12.

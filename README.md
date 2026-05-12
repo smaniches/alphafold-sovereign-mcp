@@ -18,13 +18,13 @@ clinical or regulatory use.
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](pyproject.toml)
 [![MCP Spec 2025-06-18](https://img.shields.io/badge/MCP-2025--06--18-purple)](https://modelcontextprotocol.io)
-[![Tests](https://img.shields.io/badge/tests-610%20passing-success)](https://github.com/smaniches/alphafold-sovereign-mcp/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/tests-623%20passing-success)](https://github.com/smaniches/alphafold-sovereign-mcp/actions/workflows/ci.yml)
 [![Coverage](https://img.shields.io/badge/coverage-99%25-brightgreen)](https://github.com/smaniches/alphafold-sovereign-mcp/actions/workflows/ci.yml)
 [![ORCID](https://img.shields.io/badge/ORCID-0009--0005--6480--1987-A6CE39?logo=orcid&logoColor=white)](https://orcid.org/0009-0005-6480-1987)
 [![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.20134774-3C5A99?logo=zenodo&logoColor=white)](https://doi.org/10.5281/zenodo.20134774)
 
 **Status:** `v1.1.0-rc1` — release candidate. Engineering-grade
-(610 tests, 99% branch coverage, full legal kit). Scientifically
+(623 tests, 99% branch coverage, full legal kit). Scientifically
 unvalidated by independent domain experts — see
 [`STATUS.md`](STATUS.md) and [`LIMITATIONS.md`](LIMITATIONS.md).
 
@@ -322,7 +322,7 @@ See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the full module map.
 
 ## Testing & quality
 
-- 610 unit tests with respx-mocked upstreams; the full suite runs
+- 623 unit tests with respx-mocked upstreams; the full suite runs
   hermetically in under 15 seconds on a laptop.
 - Coverage on the shipped surface (`src/alphafold_sovereign/clients`,
   `domain`, `storage`, `server`, `tools`): **99% line + branch**, with

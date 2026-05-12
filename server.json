@@ -53,7 +53,7 @@
     "knowledge-graph"
   ],
   "maturity": "release-candidate",
-  "status_note": "v1.1.0-rc1 ships with engineering-grade tests (610 tests, 99% branch coverage) but its scientific outputs (ACMG draft, druggability tier) have NOT been validated by independent domain experts. See STATUS.md and LIMITATIONS.md.",
+  "status_note": "v1.1.0-rc1 ships with engineering-grade tests (623 tests, 99% branch coverage) but its scientific outputs (ACMG draft, druggability tier) have NOT been validated by independent domain experts. See STATUS.md and LIMITATIONS.md.",
   "install": {
     "pypi": {
       "name": "alphafold-sovereign-mcp",

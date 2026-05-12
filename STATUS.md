@@ -21,7 +21,7 @@ expectation of what this project is and is not.
   single module reused by every upstream client.
 
 ### Test suite
-- **610 tests** across 20 modules.
+- **623 tests** across 20 modules.
 - **99% line + branch coverage** on the shipped surface
   (``src/alphafold_sovereign/``, excluding the archived monolith).
 - Tests use ``respx`` to mock HTTP semantics (not just return values),
@@ -34,10 +34,20 @@ expectation of what this project is and is not.
 ### Security & supply chain
 - Bandit + Safety + pip-audit on every PR.
 - CodeQL ``security-extended`` on every push (public repo).
-- SBOM (CycloneDX) generated on every release tag.
+- SBOM (CycloneDX + SPDX) generated on every release tag.
+- SLSA L3 in-toto build provenance + Sigstore (``cosign``) keyless
+  signing of every release artefact.
+- PyPI publishing via OIDC Trusted Publishing (no API tokens stored
+  in repo secrets).
 - SQL parameterised everywhere; CWE-89 closed.
-- No proprietary, paid, or trademarked strings; pure Apache 2.0 +
-  optional commercial-license addendum.
+
+### Distribution
+- Published to PyPI at https://pypi.org/project/alphafold-sovereign-mcp/
+  (release-candidate channel; use ``pip install --pre``).
+- Zenodo concept DOI: 10.5281/zenodo.20134774 — minted automatically
+  on every GitHub Release.
+- mkdocs documentation site auto-deploys to GitHub Pages on every
+  push to main.
 
 ### CI matrix
 - Python 3.10 / 3.11 / 3.12 / 3.13 on Ubuntu and macOS.
@@ -45,9 +55,11 @@ expectation of what this project is and is not.
   build (sdist + wheel), MCP schema validation.
 
 ### Legal kit
-- Apache 2.0 (``LICENSE``) + ``LICENSE-COMMERCIAL.md`` (dual licence).
+- Apache 2.0 (``LICENSE``). Pure Apache 2.0 — no commercial-edition
+  carve-out.
 - ``NOTICE``, ``PATENTS``, ``TRADEMARKS``, ``CONTRIBUTING``,
-  ``SECURITY``, ``CODE_OF_CONDUCT``, ``GOVERNANCE``.
+  ``SECURITY``, ``CODE_OF_CONDUCT``, ``GOVERNANCE``,
+  ``INCIDENT_RESPONSE``, ``AUDIT``, ``PRIVACY``, ``SUPPORT``.
 
 ---
 
@@ -129,5 +141,5 @@ planned, sequenced steps are:
 
 ## Last updated
 
-2026-05-11. This document is part of the repo; PRs to correct or
+2026-05-12. This document is part of the repo; PRs to correct or
 expand it are welcome.
