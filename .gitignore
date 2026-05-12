@@ -77,3 +77,6 @@ insert_*.py
 # uv: ephemeral verify env created by CI build job
 .verify-env/
 coverage.xml
+
+# mkdocs build output (deployed to gh-pages via CI)
+site/
