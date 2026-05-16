@@ -80,3 +80,36 @@ def test_upstream_error_message() -> None:
     assert isinstance(err, Exception)
     assert err.status == 503
     assert err.upstream == "AlphaFold"
+
+
+@pytest.mark.unit
+async def test_request_lazily_enters_when_used_outside_context() -> None:
+    """``_request`` is usable without an ``async with`` block: on first use it
+    lazily calls ``__aenter__`` to construct the httpx client.
+
+    Every other test drives clients through ``async with``, so this lazy-init
+    arm is otherwise never executed. Driving the circuit breaker OPEN lets the
+    request short-circuit immediately after the lazy init, with no network
+    call, so the test stays deterministic and offline.
+    """
+    import time
+
+    from alphafold_sovereign.clients._base import BaseAsyncClient, CircuitOpenError
+
+    class _Probe(BaseAsyncClient):
+        upstream_name = "probe"
+        config = UpstreamConfig(base_url="https://example.invalid")
+
+    client = _Probe()
+    assert client._client is None  # type: ignore[attr-defined]
+
+    # Force the breaker OPEN so _request raises right after the lazy __aenter__.
+    client._circuit._state = CircuitState.OPEN  # type: ignore[attr-defined]
+    client._circuit._opened_at = time.monotonic()  # type: ignore[attr-defined]
+
+    with pytest.raises(CircuitOpenError):
+        await client._request("GET", "/ping")
+
+    # The lazy-init arm ran: the httpx client now exists. Close it cleanly.
+    assert client._client is not None  # type: ignore[attr-defined]
+    await client.__aexit__()

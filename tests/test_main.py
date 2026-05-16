@@ -80,3 +80,36 @@ def test_self_test_function_directly() -> None:
 
     rc = entry._run_self_test()
     assert rc == 0
+
+
+@pytest.mark.unit
+def test_self_test_reports_failure_when_acmg_helper_regresses(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """``_run_self_test`` returns 1 and reports every failing fixture when the
+    ACMG helper functions regress.
+
+    The passing path (exercised by ``test_self_test_function_directly``) never
+    enters the failure-reporting branch. Monkeypatching all three helpers to
+    return an empty mapping makes every one of the five fixtures fail, which
+    drives ``_run_self_test`` through that branch. This verifies the self-test
+    can actually detect a regression, which is the whole point of shipping it.
+    """
+    from alphafold_sovereign import __main__ as entry
+    from alphafold_sovereign.tools import precision_medicine
+
+    def _empty(*_args: object, **_kwargs: object) -> dict[str, object]:
+        return {}
+
+    monkeypatch.setattr(precision_medicine, "_vep_to_acmg", _empty)
+    monkeypatch.setattr(precision_medicine, "_gnomad_to_acmg", _empty)
+    monkeypatch.setattr(precision_medicine, "_am_to_acmg_evidence", _empty)
+
+    rc = entry._run_self_test()
+    err = capsys.readouterr().err
+
+    assert rc == 1
+    assert "SELF-TEST FAIL" in err
+    # All five fixtures (PVS1, PM2, PP3, BP4, BS1) must be reported as failed.
+    assert err.count("  - ") == 5
