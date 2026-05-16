@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from alphafold_sovereign.domain.disease import PathogenicityClass
+from alphafold_sovereign.domain.disease import DiseaseRecord, PathogenicityClass
 from alphafold_sovereign.tools import precision_medicine as pm
 from alphafold_sovereign.tools.precision_medicine import (
     ACMGVariantInput,
@@ -1124,8 +1124,10 @@ async def test_map_disease_drug_landscape_success(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     mocks = _patch_clients(monkeypatch)
-    mondo_result = MagicMock()
-    mondo_result.label = "Breast cancer"
+    # spec=DiseaseRecord so the mock carries the real attribute set:
+    # lookup returns a DiseaseRecord (.name), never a .label.
+    mondo_result = MagicMock(spec=DiseaseRecord)
+    mondo_result.name = "breast cancer"
     mocks["mondo"].lookup = AsyncMock(return_value=mondo_result)
 
     target = MagicMock()
@@ -1145,6 +1147,8 @@ async def test_map_disease_drug_landscape_success(
         DiseaseDrugLandscapeInput(disease_mondo_id="MONDO:0007254")
     )
     assert out["disease"]["mondo_id"] == "MONDO:0007254"
+    # D3 regression: the human-readable label, not the raw MONDO CURIE.
+    assert out["disease"]["name"] == "breast cancer"
     assert out["competitive_intelligence"]["approved_count"] == 1
 
 
@@ -1166,8 +1170,8 @@ async def test_map_disease_drug_landscape_chembl_exception(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     mocks = _patch_clients(monkeypatch)
-    mondo_result = MagicMock()
-    mondo_result.label = "X"
+    mondo_result = MagicMock(spec=DiseaseRecord)
+    mondo_result.name = "X"
     mocks["mondo"].lookup = AsyncMock(return_value=mondo_result)
     mocks["opentargets"].associated_targets = AsyncMock(side_effect=RuntimeError("ot fail"))
     mocks["chembl"].drug_indications = AsyncMock(side_effect=RuntimeError("c fail"))

@@ -998,7 +998,7 @@ async def map_disease_drug_landscape(
     if isinstance(mondo_result, Exception):
         log.warning("mondo.failed", exc=str(mondo_result))
     else:
-        disease_name = getattr(mondo_result, "label", "") or mid
+        disease_name = getattr(mondo_result, "name", "") or mid
 
     top_targets = []
     if not isinstance(ot_targets, Exception):
