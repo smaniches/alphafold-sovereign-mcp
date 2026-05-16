@@ -238,7 +238,8 @@ class BaseAsyncClient:
         json: Any = None,
         extra_headers: dict[str, str] | None = None,
     ) -> httpx.Response:
-        assert self._client is not None, "Use as async context manager"
+        if self._client is None:
+            await self.__aenter__()
 
         full_url = str(self._client.base_url.copy_with(path=path))
         self._check_air_gap(full_url)

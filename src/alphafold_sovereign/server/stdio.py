@@ -11,9 +11,15 @@ OAuth land in Wave 3 (``server/http.py``).
 from __future__ import annotations
 
 import os
+import sys
 from typing import TYPE_CHECKING
 
 import structlog
+
+# Redirect all structlog output to stderr so stdout carries only MCP
+# JSON-RPC frames. Claude Desktop treats ANY non-JSON byte on stdout
+# as a protocol error.
+structlog.configure(logger_factory=structlog.PrintLoggerFactory(file=sys.stderr))
 
 logger = structlog.get_logger(__name__)
 
