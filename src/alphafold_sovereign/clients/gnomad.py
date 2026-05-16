@@ -75,11 +75,11 @@ query Variant($variantId: String!, $datasetId: DatasetId!) {
 """
 
 _GENE_CONSTRAINT_QUERY = """
-query GeneConstraint($geneSymbol: String!, $datasetId: DatasetId!) {
+query GeneConstraint($geneSymbol: String!) {
   gene(gene_symbol: $geneSymbol, reference_genome: GRCh38) {
     gnomad_constraint {
       pLI
-      loeuf
+      loeuf: oe_lof_upper
       mis_z
       oe_lof_upper
     }
@@ -236,7 +236,7 @@ class GnomADClient(BaseAsyncClient):
         data = await self._graphql(
             self._GQL_PATH,
             _GENE_CONSTRAINT_QUERY,
-            {"geneSymbol": gene_symbol, "datasetId": self.dataset},
+            {"geneSymbol": gene_symbol},
         )
         constraint = (data.get("gene") or {}).get("gnomad_constraint") or {}
         if not constraint:

@@ -33,21 +33,20 @@ _OT_CONFIG = UpstreamConfig(
 # ── GraphQL queries ────────────────────────────────────────────────────────
 
 _ASSOCIATED_DISEASES_QUERY = """
-query AssociatedDiseases($ensemblId: String!, $size: Int!) {
+query AssociatedDiseases($ensemblId: String!, $page: Pagination!) {
   target(ensemblId: $ensemblId) {
     id
     approvedSymbol
     proteinIds { id source }
-    associatedDiseases(size: $size) {
+    associatedDiseases(page: $page) {
       rows {
         disease {
           id
           name
-          ontology { isTherapeuticArea }
         }
         score
         datatypeScores {
-          componentId
+          id
           score
         }
       }
@@ -57,11 +56,11 @@ query AssociatedDiseases($ensemblId: String!, $size: Int!) {
 """
 
 _DISEASE_TARGETS_QUERY = """
-query DiseaseTargets($efoId: String!, $size: Int!) {
+query DiseaseTargets($efoId: String!, $page: Pagination!) {
   disease(efoId: $efoId) {
     id
     name
-    associatedTargets(size: $size) {
+    associatedTargets(page: $page) {
       rows {
         target {
           id
@@ -75,7 +74,7 @@ query DiseaseTargets($efoId: String!, $size: Int!) {
         }
         score
         datatypeScores {
-          componentId
+          id
           score
         }
       }
@@ -88,7 +87,7 @@ _DRUG_COUNT_QUERY = """
 query TargetDrugs($ensemblId: String!) {
   target(ensemblId: $ensemblId) {
     id
-    knownDrugs { count }
+    drugAndClinicalCandidates { count }
     tractability {
       label
       modality
@@ -100,11 +99,8 @@ query TargetDrugs($ensemblId: String!) {
 
 _UNIPROT_TO_ENSEMBL_QUERY = """
 query UniProtToEnsembl($uniprotId: String!) {
-  targets(
-    ensemblIds: []
-    filter: { proteinId: $uniprotId }
-  ) {
-    hits { id approvedSymbol }
+  search(queryString: $uniprotId, entityNames: ["target"]) {
+    hits { id entity name }
   }
 }
 """
@@ -146,7 +142,7 @@ class OpenTargetsClient(BaseAsyncClient):
         data = await self._graphql(
             self._GQL_PATH,
             _ASSOCIATED_DISEASES_QUERY,
-            {"ensemblId": ensembl_id, "size": limit},
+            {"ensemblId": ensembl_id, "page": {"index": 0, "size": limit}},
         )
         target = data.get("target") or {}
         symbol: str = target.get("approvedSymbol", "")
@@ -178,7 +174,7 @@ class OpenTargetsClient(BaseAsyncClient):
         data = await self._graphql(
             self._GQL_PATH,
             _DISEASE_TARGETS_QUERY,
-            {"efoId": disease_id, "size": limit},
+            {"efoId": disease_id, "page": {"index": 0, "size": limit}},
         )
         disease = data.get("disease") or {}
         disease_name: str = disease.get("name", "")
@@ -231,11 +227,41 @@ class OpenTargetsClient(BaseAsyncClient):
         )
         target = data.get("target") or {}
         return {
-            "drug_count": target.get("knownDrugs", {}).get("count", 0),
+            "drug_count": (target.get("drugAndClinicalCandidates") or {}).get("count", 0),
             "tractability_labels": [
                 t.get("label", "") for t in (target.get("tractability") or []) if t.get("value")
             ],
         }
+
+    # ------------------------------------------------------------------
+    # UniProt / symbol -> Ensembl target resolution
+    # ------------------------------------------------------------------
+
+    async def resolve_target(self, query: str) -> dict[str, str]:
+        """Resolve a UniProt accession or gene symbol to an Open Targets target.
+
+        Open Targets keys all target data on Ensembl gene IDs. This helper
+        uses the Open Targets full-text search index (which indexes gene
+        symbols, names, and UniProt cross-references) to map a UniProt
+        accession or symbol to its Ensembl gene ID and approved symbol.
+
+        Args:
+            query: UniProt accession (e.g. ``'P01116'``) or gene symbol.
+
+        Returns:
+            Dict with ``ensembl_id`` and ``symbol``; empty dict if no
+            target hit is found.
+        """
+        data = await self._graphql(
+            self._GQL_PATH,
+            _UNIPROT_TO_ENSEMBL_QUERY,
+            {"uniprotId": query},
+        )
+        hits = (data.get("search") or {}).get("hits") or []
+        for hit in hits:
+            if hit.get("entity") == "target" and hit.get("id"):
+                return {"ensembl_id": hit["id"], "symbol": hit.get("name", "")}
+        return {}
 
     # ------------------------------------------------------------------
     # Helpers
@@ -250,7 +276,7 @@ class OpenTargetsClient(BaseAsyncClient):
 
     @staticmethod
     def _datatype_scores(rows: list[dict[str, Any]]) -> dict[str, float]:
-        return {r["componentId"]: float(r.get("score", 0.0)) for r in rows}
+        return {r["id"]: float(r.get("score", 0.0)) for r in rows if r.get("id")}
 
     @staticmethod
     def _row_to_score(

@@ -674,33 +674,36 @@ async def assess_target_druggability(
         )
         drug_count = len(approved_drugs)
 
-    # Open Targets tractability
-    ot_tractability: dict[str, Any] = {}
+    # Resolve UniProt accession -> Open Targets target (Ensembl ID + symbol).
+    # Open Targets keys all target data on Ensembl gene IDs, not UniProt IDs.
+    ot_resolved: dict[str, str] = {}
     try:
-        ot_tractability = await _opentargets().drug_count_and_tractability(uid)
-        tractability_labels = ot_tractability.get("tractability_labels", [])
-        if not drug_count:
-            drug_count = ot_tractability.get("drug_count", 0)
+        ot_resolved = await _opentargets().resolve_target(uid)
     except Exception as exc:
-        log.warning("ot.tractability.failed", exc=str(exc))
+        log.warning("ot.resolve.failed", exc=str(exc))
+    ensembl_id = ot_resolved.get("ensembl_id", "")
+    gene_symbol = ot_resolved.get("symbol", "")
 
-    # gnomAD constraint — need gene symbol; fetch via Ensembl
+    # Open Targets tractability (keyed on the resolved Ensembl gene ID)
+    ot_tractability: dict[str, Any] = {}
+    if ensembl_id:
+        try:
+            ot_tractability = await _opentargets().drug_count_and_tractability(ensembl_id)
+            tractability_labels = ot_tractability.get("tractability_labels", [])
+            if not drug_count:
+                drug_count = ot_tractability.get("drug_count", 0)
+        except Exception as exc:
+            log.warning("ot.tractability.failed", exc=str(exc))
+
+    # gnomAD constraint (keyed on the HGNC gene symbol resolved above)
     gene_constraint: dict[str, Any] = {}
     loeuf: float | None = None
-
-    # Use Ensembl to find gene symbol from UniProt
-    try:
-        target_data = isinstance(chembl_target, dict) and chembl_target
-        gene_symbol = ""
-        if target_data and target_data.get("pref_name"):
-            # Best effort: use target name as symbol
-            gene_symbol = target_data.get("pref_name", "").split(" ")[0].upper()[:10]
-
-        if gene_symbol:
+    if gene_symbol:
+        try:
             gene_constraint = await _gnomad().gene_constraint(gene_symbol)
             loeuf = gene_constraint.get("loeuf")
-    except Exception as exc:
-        log.warning("constraint.failed", exc=str(exc))
+        except Exception as exc:
+            log.warning("constraint.failed", exc=str(exc))
 
     # Druggability tier
     tier, rationale = _druggability_tier(
@@ -800,10 +803,19 @@ async def synthesize_protein_dossier(
     log = logger.bind(uniprot_id=uid, gene=sym, depth=params.depth)
     log.info("start.dossier")
 
+    # Open Targets keys target data on Ensembl gene IDs. Resolve the
+    # UniProt accession to an Ensembl ID before the parallel fan-out.
+    ot_resolved: dict[str, str] = {}
+    try:
+        ot_resolved = await _opentargets().resolve_target(uid)
+    except Exception as exc:
+        log.warning("ot.resolve.failed", exc=str(exc))
+    ensembl_id = ot_resolved.get("ensembl_id", "")
+
     # Parallel evidence gathering
     tasks: dict[str, Any] = {
-        "ot_diseases": _opentargets().associated_diseases(uid, limit=10),
-        "ot_tractability": _opentargets().drug_count_and_tractability(uid),
+        "ot_diseases": _opentargets().associated_diseases(ensembl_id, limit=10),
+        "ot_tractability": _opentargets().drug_count_and_tractability(ensembl_id),
         "disgenet": _disgenet().gene_disease_associations(sym, min_score=0.1, limit=10),
         "gene_constraint": _gnomad().gene_constraint(sym),
         "clinvar_variants": _clinvar().search_gene(sym, limit=5),
@@ -971,9 +983,13 @@ async def map_disease_drug_landscape(
     log = logger.bind(disease=mid, tool="map_disease_drug_landscape")
     log.info("start")
 
+    # Open Targets and ChEMBL key disease data on underscore-form IDs
+    # (e.g. MONDO_0007254), not the colon form used in the public API.
+    ot_disease_id = mid.replace("MONDO:", "MONDO_")
+
     # Parallel: MONDO lookup + OT targets
     mondo_task = _mondo().lookup(mid)
-    ot_targets_task = _opentargets().associated_targets(mid, limit=20)
+    ot_targets_task = _opentargets().associated_targets(ot_disease_id, limit=20)
 
     (mondo_result, ot_targets), _ = await asyncio.gather(
         asyncio.gather(mondo_task, ot_targets_task, return_exceptions=True),
@@ -991,7 +1007,7 @@ async def map_disease_drug_landscape(
         top_targets = [t.to_dict() if hasattr(t, "to_dict") else t for t in ot_targets[:10]]
 
     # ChEMBL drug indications for this disease
-    efo_id = mid.replace("MONDO:", "MONDO_")
+    efo_id = ot_disease_id
     chembl_drugs: list[dict[str, Any]] = []
     try:
         chembl_drugs = await _chembl().drug_indications(efo_id=efo_id, limit=20)
@@ -1253,8 +1269,11 @@ async def find_drug_repurposing_candidates(
     log = logger.bind(disease=mid, tool="find_drug_repurposing_candidates")
     log.info("start")
 
+    # Open Targets keys disease data on underscore-form IDs (MONDO_xxxxxxx).
+    ot_disease_id = mid.replace("MONDO:", "MONDO_")
+
     # Step 1: OT top targets for disease
-    ot_targets = await _opentargets().associated_targets(mid, limit=params.target_limit)
+    ot_targets = await _opentargets().associated_targets(ot_disease_id, limit=params.target_limit)
     if not ot_targets:
         return {
             "disease_mondo_id": mid,
