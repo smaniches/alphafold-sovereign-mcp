@@ -331,3 +331,65 @@ async def test_parse_summary_skips_non_dict_payload(
         rows = await client.search_by_hgvs("BRCA1:c.1A>T")
     assert len(rows) == 1
     assert rows[0]["variation_id"] == "1"
+
+
+# ---------------------------------------------------------------------------
+# _build_search_term  (D2 regression)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("hgvs", "expected"),
+    [
+        # Gene-relative HGVS -> gene-scoped term (robust to RefSeq drift).
+        ("BRCA1:c.181T>G", "BRCA1[gene] AND c.181T>G"),
+        ("TP53:p.Arg248Trp", "TP53[gene] AND p.Arg248Trp"),
+        # RefSeq prefix has no gene token -> free-text passthrough.
+        ("NM_007294.3:c.181T>G", "NM_007294.3:c.181T>G"),
+        # No colon -> free-text passthrough.
+        ("rs80357064", "rs80357064"),
+    ],
+)
+def test_build_search_term(hgvs: str, expected: str) -> None:
+    assert ClinVarClient._build_search_term(hgvs) == expected
+
+
+async def test_search_by_hgvs_builds_gene_scoped_term(
+    respx_mock: respx.MockRouter,
+) -> None:
+    """Regression for D2: a gene-relative HGVS is searched as
+    ``<gene>[gene] AND <change>`` (the old ``[Variant Name]`` query matched
+    only ClinVar's canonical names and returned zero hits), and the exact
+    change match is ranked first ahead of the nearby variants the
+    gene-scoped token search also returns.
+    """
+    search_route = respx_mock.get(
+        "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi",
+    ).mock(
+        return_value=httpx.Response(
+            200, json={"esearchresult": {"idlist": ["99999", "17661"]}}
+        ),
+    )
+    respx_mock.get(
+        "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi",
+    ).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "result": {
+                    # A nearby variant the gene-scoped search also matches.
+                    "99999": {"uid": "99999", "title": "NM_007294.4(BRCA1):c.313T>G"},
+                    # The exact target, deliberately second in the payload.
+                    "17661": {"uid": "17661", "title": "NM_007294.4(BRCA1):c.181T>G"},
+                }
+            },
+        ),
+    )
+    async with ClinVarClient() as client:
+        rows = await client.search_by_hgvs("BRCA1:c.181T>G")
+    term = search_route.calls.last.request.url.params["term"]
+    assert term == "BRCA1[gene] AND c.181T>G"
+    assert "[Variant Name]" not in term
+    # Both variants are returned; the exact change match is ranked first.
+    assert len(rows) == 2
+    assert rows[0]["variation_id"] == "17661"
