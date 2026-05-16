@@ -117,48 +117,94 @@ class BindingPocketInput(BaseModel):
 # ── AF structure fetcher (uses existing fetcher infrastructure) ───────────────
 
 
-async def _fetch_af_structure(uniprot_id: str) -> dict[str, Any] | None:
-    """Fetch AlphaFold structure coordinates via the AF DB API."""
+async def _af_prediction_summary(uniprot_id: str) -> dict[str, Any] | None:
+    """Fetch the AlphaFold DB prediction summary for an accession.
+
+    Returns the first prediction entry from ``/api/prediction/{id}``.
+    That entry carries the advertised file URLs (``pdbUrl`` and
+    ``paeDocUrl``) alongside ``meanPlddt`` and ``uniprotSequence``.
+
+    File URLs are read from this entry rather than constructed.
+    AlphaFold DB has moved the model-version suffix over time (``_v4``
+    to ``_v6``), so a hand-built file URL goes stale and returns 404.
+    The summary always advertises the current URL.
+
+    Returns ``None`` when the accession has no AlphaFold model or the
+    request fails.
+    """
     import httpx
 
-    url = f"https://alphafold.ebi.ac.uk/files/AF-{uniprot_id}-F1-model_v4.pdb"
+    url = f"https://alphafold.ebi.ac.uk/api/prediction/{uniprot_id}"
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.get(url)
-            if resp.status_code != 200:
-                return None
-            return {"pdb_text": resp.text, "uniprot_id": uniprot_id}
+        if resp.status_code != 200:
+            return None
+        entries = resp.json()
+    except Exception as exc:
+        logger.warning("af.summary.failed", uniprot_id=uniprot_id, exc=str(exc))
+        return None
+    return entries[0] if entries else None
+
+
+async def _fetch_af_structure(uniprot_id: str) -> dict[str, Any] | None:
+    """Fetch AlphaFold structure coordinates via the AF DB API.
+
+    Resolves the PDB file URL from the prediction summary's advertised
+    ``pdbUrl`` rather than constructing it, so the fetch tracks the
+    current AlphaFold DB model version automatically.
+    """
+    import httpx
+
+    summary = await _af_prediction_summary(uniprot_id)
+    if not summary:
+        return None
+    pdb_url = summary.get("pdbUrl")
+    if not pdb_url:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.get(pdb_url)
+        if resp.status_code != 200:
+            return None
+        return {"pdb_text": resp.text, "uniprot_id": uniprot_id}
     except Exception as exc:
         logger.warning("af.fetch.failed", uniprot_id=uniprot_id, exc=str(exc))
         return None
 
 
 async def _fetch_af_plddt(uniprot_id: str) -> dict[str, Any] | None:
-    """Fetch per-residue pLDDT + PAE from AF DB."""
+    """Fetch per-residue pLDDT + PAE from AF DB.
+
+    Reads ``meanPlddt`` and the advertised ``paeDocUrl`` from the
+    prediction summary, then fetches the PAE document at that URL. The
+    PAE URL is read from the summary rather than constructed, so the
+    fetch tracks the current AlphaFold DB model version.
+    """
     import httpx
-
-    base = "https://alphafold.ebi.ac.uk"
-    plddt_url = f"{base}/files/AF-{uniprot_id}-F1-predicted_aligned_error_v4.json"
-    summary_url = f"{base}/api/prediction/{uniprot_id}"
-
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        summary_resp, pae_resp = await asyncio.gather(
-            client.get(summary_url),
-            client.get(plddt_url),
-            return_exceptions=True,
-        )
 
     result: dict[str, Any] = {"uniprot_id": uniprot_id}
 
-    if isinstance(summary_resp, httpx.Response) and summary_resp.status_code == 200:
-        entries = summary_resp.json()
-        if entries:
-            entry = entries[0]
-            result["mean_plddt"] = entry.get("meanPlddt")
-            result["model_url"] = entry.get("pdbUrl", "")
-            result["sequence_length"] = len(entry.get("uniprotSequence", ""))
+    summary = await _af_prediction_summary(uniprot_id)
+    if not summary:
+        return result
 
-    if isinstance(pae_resp, httpx.Response) and pae_resp.status_code == 200:
+    result["mean_plddt"] = summary.get("meanPlddt")
+    result["model_url"] = summary.get("pdbUrl", "")
+    result["sequence_length"] = len(summary.get("uniprotSequence", ""))
+
+    pae_url = summary.get("paeDocUrl")
+    if not pae_url:
+        return result
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            pae_resp = await client.get(pae_url)
+    except Exception as exc:
+        logger.warning("af.pae.failed", uniprot_id=uniprot_id, exc=str(exc))
+        return result
+
+    if pae_resp.status_code == 200:
         pae_data = pae_resp.json()
         if isinstance(pae_data, list) and pae_data:
             pae_matrix = np.array(pae_data[0].get("predicted_aligned_error", []))

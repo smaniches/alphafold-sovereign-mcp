@@ -17,6 +17,7 @@ from alphafold_sovereign.tools.structure_intelligence import (
     EvolutionaryInput,
     MultiProteinInput,
     UniProtInput,
+    _af_prediction_summary,
     _classify_idr_protein,
     _classify_idr_segment,
     _compute_tda_fingerprint,
@@ -546,207 +547,218 @@ def test_find_most_similar_pair_multiple() -> None:
 
 
 # ---------------------------------------------------------------------------
-# AF fetch helpers
+# AF prediction summary + fetch helpers
 # ---------------------------------------------------------------------------
+
+
+def _make_client(handler):
+    """Build a fake httpx.AsyncClient whose .get(url) delegates to handler(url)."""
+
+    class _Client:
+        def __init__(self, *_a: Any, **_kw: Any) -> None:
+            pass
+
+        async def __aenter__(self) -> Any:
+            return self
+
+        async def __aexit__(self, *_: Any) -> None:
+            return None
+
+        async def get(self, url: str) -> Any:
+            return handler(url)
+
+    return _Client
+
+
+def _resp(status: int = 200, *, json_body: Any = None, text: str = "") -> Any:
+    """Minimal stand-in for httpx.Response with status_code, .json(), .text."""
+    r = MagicMock(spec=httpx.Response)
+    r.status_code = status
+    r.json.return_value = json_body
+    r.text = text
+    return r
+
+
+def _patch_summary(monkeypatch: pytest.MonkeyPatch, value: Any) -> None:
+    """Force _af_prediction_summary to return a fixed value."""
+
+    async def _fake(_uid: str) -> Any:
+        return value
+
+    monkeypatch.setattr(si, "_af_prediction_summary", _fake)
+
+
+# --- _af_prediction_summary -------------------------------------------------
+
+
+async def test_af_prediction_summary_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    entry = {"pdbUrl": "https://alphafold.ebi.ac.uk/files/AF-P12345-F1-model_v6.pdb"}
+    monkeypatch.setattr("httpx.AsyncClient", _make_client(lambda _u: _resp(json_body=[entry])))
+    out = await _af_prediction_summary("P12345")
+    assert out == entry
+
+
+async def test_af_prediction_summary_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("httpx.AsyncClient", _make_client(lambda _u: _resp(status=404)))
+    assert await _af_prediction_summary("P00000") is None
+
+
+async def test_af_prediction_summary_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("httpx.AsyncClient", _make_client(lambda _u: _resp(json_body=[])))
+    assert await _af_prediction_summary("P12345") is None
+
+
+async def test_af_prediction_summary_exception(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _boom(_url: str) -> Any:
+        raise httpx.ConnectError("network")
+
+    monkeypatch.setattr("httpx.AsyncClient", _make_client(_boom))
+    assert await _af_prediction_summary("P12345") is None
+
+
+# --- _fetch_af_structure ----------------------------------------------------
 
 
 async def test_fetch_af_structure_success(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_text = _make_pdb(5)
-
-    class _Resp:
-        status_code = 200
-        text = fake_text
-
-    class _Client:
-        def __init__(self, *_a: Any, **_kw: Any) -> None:
-            pass
-
-        async def __aenter__(self) -> Any:
-            return self
-
-        async def __aexit__(self, *_: Any) -> None:
-            return None
-
-        async def get(self, url: str) -> Any:
-            return _Resp()
-
-    monkeypatch.setattr("httpx.AsyncClient", _Client)
+    _patch_summary(monkeypatch, {"pdbUrl": "https://alphafold.ebi.ac.uk/files/x_v6.pdb"})
+    monkeypatch.setattr("httpx.AsyncClient", _make_client(lambda _u: _resp(text=fake_text)))
     out = await _fetch_af_structure("P12345")
     assert out is not None
     assert out["pdb_text"] == fake_text
+    assert out["uniprot_id"] == "P12345"
 
 
-async def test_fetch_af_structure_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
-    class _Resp:
-        status_code = 404
+async def test_fetch_af_structure_no_summary(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_summary(monkeypatch, None)
+    assert await _fetch_af_structure("P00000") is None
 
-    class _Client:
-        def __init__(self, *_a: Any, **_kw: Any) -> None:
-            pass
 
-        async def __aenter__(self) -> Any:
-            return self
+async def test_fetch_af_structure_no_pdb_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Summary present but advertises no pdbUrl."""
+    _patch_summary(monkeypatch, {"meanPlddt": 80.0})
+    assert await _fetch_af_structure("P12345") is None
 
-        async def __aexit__(self, *_: Any) -> None:
-            return None
 
-        async def get(self, url: str) -> Any:
-            return _Resp()
-
-    monkeypatch.setattr("httpx.AsyncClient", _Client)
-    out = await _fetch_af_structure("P00000")
-    assert out is None
+async def test_fetch_af_structure_pdb_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_summary(monkeypatch, {"pdbUrl": "https://alphafold.ebi.ac.uk/files/x_v6.pdb"})
+    monkeypatch.setattr("httpx.AsyncClient", _make_client(lambda _u: _resp(status=404)))
+    assert await _fetch_af_structure("P12345") is None
 
 
 async def test_fetch_af_structure_exception(monkeypatch: pytest.MonkeyPatch) -> None:
-    class _Client:
-        def __init__(self, *_a: Any, **_kw: Any) -> None:
-            pass
+    _patch_summary(monkeypatch, {"pdbUrl": "https://alphafold.ebi.ac.uk/files/x_v6.pdb"})
 
-        async def __aenter__(self) -> Any:
-            return self
+    def _boom(_url: str) -> Any:
+        raise httpx.ConnectError("network")
 
-        async def __aexit__(self, *_: Any) -> None:
-            return None
+    monkeypatch.setattr("httpx.AsyncClient", _make_client(_boom))
+    assert await _fetch_af_structure("P12345") is None
 
-        async def get(self, url: str) -> Any:
-            raise httpx.ConnectError("network")
 
-    monkeypatch.setattr("httpx.AsyncClient", _Client)
-    out = await _fetch_af_structure("P12345")
-    assert out is None
+# --- _fetch_af_plddt --------------------------------------------------------
 
 
 async def test_fetch_af_plddt_success(monkeypatch: pytest.MonkeyPatch) -> None:
-    summary_resp = MagicMock(spec=httpx.Response)
-    summary_resp.status_code = 200
-    summary_resp.json.return_value = [
-        {"meanPlddt": 85.0, "pdbUrl": "http://x", "uniprotSequence": "MKTV"}
-    ]
-    pae_resp = MagicMock(spec=httpx.Response)
-    pae_resp.status_code = 200
-    pae_resp.json.return_value = [{"predicted_aligned_error": [[1.0, 2.0], [2.0, 1.0]]}]
-
-    class _Client:
-        def __init__(self, *_a: Any, **_kw: Any) -> None:
-            pass
-
-        async def __aenter__(self) -> Any:
-            return self
-
-        async def __aexit__(self, *_: Any) -> None:
-            return None
-
-        async def get(self, url: str) -> Any:
-            if "predicted_aligned_error" in url:
-                return pae_resp
-            return summary_resp
-
-    monkeypatch.setattr("httpx.AsyncClient", _Client)
+    _patch_summary(
+        monkeypatch,
+        {
+            "meanPlddt": 85.0,
+            "pdbUrl": "https://alphafold.ebi.ac.uk/files/x_v6.pdb",
+            "paeDocUrl": "https://alphafold.ebi.ac.uk/files/x_pae_v6.json",
+            "uniprotSequence": "MKTV",
+        },
+    )
+    pae_body = [{"predicted_aligned_error": [[1.0, 2.0], [2.0, 1.0]]}]
+    monkeypatch.setattr("httpx.AsyncClient", _make_client(lambda _u: _resp(json_body=pae_body)))
     out = await _fetch_af_plddt("P12345")
     assert out is not None
     assert out["mean_plddt"] == 85.0
+    assert out["sequence_length"] == 4
+    assert out["pae_mean"] == 1.5
 
 
-async def test_fetch_af_plddt_exceptions(monkeypatch: pytest.MonkeyPatch) -> None:
-    class _Client:
-        def __init__(self, *_a: Any, **_kw: Any) -> None:
-            pass
+async def test_fetch_af_plddt_no_summary(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_summary(monkeypatch, None)
+    out = await _fetch_af_plddt("P00000")
+    assert out == {"uniprot_id": "P00000"}
 
-        async def __aenter__(self) -> Any:
-            return self
 
-        async def __aexit__(self, *_: Any) -> None:
-            return None
-
-        async def get(self, url: str) -> Any:
-            raise httpx.ConnectError("oops")
-
-    monkeypatch.setattr("httpx.AsyncClient", _Client)
+async def test_fetch_af_plddt_no_pae_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Summary present but advertises no paeDocUrl."""
+    _patch_summary(monkeypatch, {"meanPlddt": 85.0, "pdbUrl": "http://x", "uniprotSequence": "MK"})
     out = await _fetch_af_plddt("P12345")
-    # All requests fail → result is {uniprot_id} only
-    assert out == {"uniprot_id": "P12345"}
-
-
-async def test_fetch_af_plddt_empty_responses(monkeypatch: pytest.MonkeyPatch) -> None:
-    summary_resp = MagicMock(spec=httpx.Response)
-    summary_resp.status_code = 200
-    summary_resp.json.return_value = []
-    pae_resp = MagicMock(spec=httpx.Response)
-    pae_resp.status_code = 200
-    pae_resp.json.return_value = []
-
-    class _Client:
-        def __init__(self, *_a: Any, **_kw: Any) -> None:
-            pass
-
-        async def __aenter__(self) -> Any:
-            return self
-
-        async def __aexit__(self, *_: Any) -> None:
-            return None
-
-        async def get(self, url: str) -> Any:
-            if "predicted_aligned_error" in url:
-                return pae_resp
-            return summary_resp
-
-    monkeypatch.setattr("httpx.AsyncClient", _Client)
-    out = await _fetch_af_plddt("P12345")
-    assert "mean_plddt" not in out
-
-
-async def test_fetch_af_plddt_pae_empty_matrix(monkeypatch: pytest.MonkeyPatch) -> None:
-    summary_resp = MagicMock(spec=httpx.Response)
-    summary_resp.status_code = 200
-    summary_resp.json.return_value = [
-        {"meanPlddt": 85.0, "pdbUrl": "http://x", "uniprotSequence": "MKTV"}
-    ]
-    pae_resp = MagicMock(spec=httpx.Response)
-    pae_resp.status_code = 200
-    pae_resp.json.return_value = [{"predicted_aligned_error": []}]
-
-    class _Client:
-        def __init__(self, *_a: Any, **_kw: Any) -> None:
-            pass
-
-        async def __aenter__(self) -> Any:
-            return self
-
-        async def __aexit__(self, *_: Any) -> None:
-            return None
-
-        async def get(self, url: str) -> Any:
-            if "predicted_aligned_error" in url:
-                return pae_resp
-            return summary_resp
-
-    monkeypatch.setattr("httpx.AsyncClient", _Client)
-    out = await _fetch_af_plddt("P12345")
+    assert out["mean_plddt"] == 85.0
     assert "pae_mean" not in out
 
 
-async def test_fetch_af_plddt_404(monkeypatch: pytest.MonkeyPatch) -> None:
-    bad_resp = MagicMock(spec=httpx.Response)
-    bad_resp.status_code = 404
+async def test_fetch_af_plddt_pae_exception(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_summary(
+        monkeypatch,
+        {
+            "meanPlddt": 85.0,
+            "pdbUrl": "http://x",
+            "paeDocUrl": "http://pae",
+            "uniprotSequence": "MK",
+        },
+    )
 
-    class _Client:
-        def __init__(self, *_a: Any, **_kw: Any) -> None:
-            pass
+    def _boom(_url: str) -> Any:
+        raise httpx.ConnectError("oops")
 
-        async def __aenter__(self) -> Any:
-            return self
+    monkeypatch.setattr("httpx.AsyncClient", _make_client(_boom))
+    out = await _fetch_af_plddt("P12345")
+    assert out["mean_plddt"] == 85.0
+    assert "pae_mean" not in out
 
-        async def __aexit__(self, *_: Any) -> None:
-            return None
 
-        async def get(self, url: str) -> Any:
-            return bad_resp
+async def test_fetch_af_plddt_pae_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_summary(
+        monkeypatch,
+        {
+            "meanPlddt": 85.0,
+            "pdbUrl": "http://x",
+            "paeDocUrl": "http://pae",
+            "uniprotSequence": "MK",
+        },
+    )
+    monkeypatch.setattr("httpx.AsyncClient", _make_client(lambda _u: _resp(status=404)))
+    out = await _fetch_af_plddt("P12345")
+    assert out["mean_plddt"] == 85.0
+    assert "pae_mean" not in out
 
-    monkeypatch.setattr("httpx.AsyncClient", _Client)
-    out = await _fetch_af_plddt("P00000")
-    # No data parsed → only uniprot_id key
-    assert set(out.keys()) == {"uniprot_id"}
+
+async def test_fetch_af_plddt_pae_empty_list(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_summary(
+        monkeypatch,
+        {
+            "meanPlddt": 85.0,
+            "pdbUrl": "http://x",
+            "paeDocUrl": "http://pae",
+            "uniprotSequence": "MK",
+        },
+    )
+    monkeypatch.setattr("httpx.AsyncClient", _make_client(lambda _u: _resp(json_body=[])))
+    out = await _fetch_af_plddt("P12345")
+    assert "pae_mean" not in out
+    assert "pae_matrix_shape" not in out
+
+
+async def test_fetch_af_plddt_pae_empty_matrix(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_summary(
+        monkeypatch,
+        {
+            "meanPlddt": 85.0,
+            "pdbUrl": "http://x",
+            "paeDocUrl": "http://pae",
+            "uniprotSequence": "MK",
+        },
+    )
+    pae_body = [{"predicted_aligned_error": []}]
+    monkeypatch.setattr("httpx.AsyncClient", _make_client(lambda _u: _resp(json_body=pae_body)))
+    out = await _fetch_af_plddt("P12345")
+    assert out["pae_matrix_shape"] == [0]
+    assert "pae_mean" not in out
 
 
 # ---------------------------------------------------------------------------
