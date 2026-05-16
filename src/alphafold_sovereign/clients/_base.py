@@ -240,6 +240,7 @@ class BaseAsyncClient:
     ) -> httpx.Response:
         if self._client is None:
             await self.__aenter__()
+        assert self._client is not None  # narrow type for mypy after lazy init
 
         full_url = str(self._client.base_url.copy_with(path=path))
         self._check_air_gap(full_url)
