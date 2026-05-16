@@ -45,6 +45,22 @@ _REFSEQ_RE = re.compile(
 )
 
 
+def _first_uniprot(value: Any) -> str:
+    """Normalise a VEP ``swissprot`` cross-reference to one accession.
+
+    Ensembl VEP returns the SwissProt cross-reference as a list, e.g.
+    ``['P38398.280']`` (the trailing ``.280`` is the UniProt sequence
+    version). This collapses the list to its first element and leaves the
+    version suffix intact for the caller to strip if required. Returns an
+    empty string when no accession is present.
+    """
+    if isinstance(value, list):
+        return str(value[0]) if value else ""
+    if isinstance(value, str):
+        return value
+    return ""
+
+
 class EnsemblClient(BaseAsyncClient):
     """
     Async REST client for Ensembl Variant Effect Predictor and gene data.
@@ -82,12 +98,13 @@ class EnsemblClient(BaseAsyncClient):
             ``biotype``, ``impact``, ``consequence_terms``,
             ``protein_id``, ``protein_start``, ``amino_acids``, ``codons``,
             ``polyphen_score``, ``sift_score``, ``cadd_phred``,
-            ``sift_prediction``, ``polyphen_prediction``.
+            ``sift_prediction``, ``polyphen_prediction``, ``swissprot``.
         """
         params: dict[str, Any] = {
             "canonical": int(canonical),
             "numbers": 1,
             "protein": 1,
+            "uniprot": 1,
             "xref_refseq": 1,
             "Genoverse": 0,
         }
@@ -331,6 +348,7 @@ class EnsemblClient(BaseAsyncClient):
             "impact": tc.get("impact", ""),
             "consequence_terms": tc.get("consequence_terms", []),
             "protein_id": tc.get("protein_id", ""),
+            "swissprot": _first_uniprot(tc.get("swissprot")),
             "protein_start": tc.get("protein_start"),
             "amino_acids": tc.get("amino_acids", ""),
             "codons": tc.get("codons", ""),

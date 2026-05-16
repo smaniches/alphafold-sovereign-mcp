@@ -4,11 +4,13 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import httpx
 import pytest
 import respx
 
-from alphafold_sovereign.clients.ensembl import EnsemblClient
+from alphafold_sovereign.clients.ensembl import EnsemblClient, _first_uniprot
 
 
 # ---------------------------------------------------------------------------
@@ -42,6 +44,7 @@ def test_parse_tc_minimal_dict() -> None:
     assert parsed["sift_score"] is None
     assert parsed["cadd_phred"] is None
     assert parsed["protein_start"] is None
+    assert parsed["swissprot"] == ""
 
 
 def test_parse_tc_full_payload() -> None:
@@ -54,6 +57,7 @@ def test_parse_tc_full_payload() -> None:
         "impact": "HIGH",
         "consequence_terms": ["missense_variant"],
         "protein_id": "ENSP1",
+        "swissprot": ["P38398.280"],
         "protein_start": 61,
         "amino_acids": "A/B",
         "codons": "GCC/GCG",
@@ -74,6 +78,7 @@ def test_parse_tc_full_payload() -> None:
     parsed = EnsemblClient._parse_tc(tc)
     assert parsed["canonical"] is True
     assert parsed["protein_start"] == 61
+    assert parsed["swissprot"] == "P38398.280"
     assert parsed["cadd_phred"] == 27.3
     assert parsed["spliceai_ds_max"] == 0.85
 
@@ -81,6 +86,26 @@ def test_parse_tc_full_payload() -> None:
 def test_parse_tc_handles_extra_none() -> None:
     parsed = EnsemblClient._parse_tc({"transcript_id": "T", "extra": None})
     assert parsed["cadd_phred"] is None
+
+
+# ---------------------------------------------------------------------------
+# _first_uniprot (static helper)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (["P38398.280"], "P38398.280"),
+        (["P38398.280", "Q9Y6K9"], "P38398.280"),
+        ([], ""),
+        ("P12345", "P12345"),
+        (None, ""),
+        (123, ""),
+    ],
+)
+def test_first_uniprot(value: Any, expected: str) -> None:
+    assert _first_uniprot(value) == expected
 
 
 # ---------------------------------------------------------------------------
@@ -153,6 +178,7 @@ async def test_vep_hgvs_canonical_false_kwarg(
     async with EnsemblClient() as client:
         assert await client.vep_hgvs("X:c.1A>T", canonical=False) == []
     assert "canonical=0" in str(route.calls.last.request.url)
+    assert "uniprot=1" in str(route.calls.last.request.url)
 
 
 async def test_vep_hgvs_error_returns_empty(respx_mock: respx.MockRouter) -> None:
