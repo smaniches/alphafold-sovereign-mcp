@@ -41,6 +41,7 @@ import structlog
 from pydantic import BaseModel, ConfigDict, Field
 
 from alphafold_sovereign import __version__
+from alphafold_sovereign.clients.alphafold import AlphaFoldClient
 from alphafold_sovereign.clients.chembl import ChEMBLClient
 from alphafold_sovereign.clients.clinvar import ClinVarClient
 from alphafold_sovereign.clients.disgenet import DisGeNETClient
@@ -99,6 +100,12 @@ def _chembl() -> ChEMBLClient:
     if "chembl" not in _CLIENTS:
         _CLIENTS["chembl"] = ChEMBLClient()
     return _CLIENTS["chembl"]  # type: ignore[return-value]
+
+
+def _alphafold() -> AlphaFoldClient:
+    if "alphafold" not in _CLIENTS:
+        _CLIENTS["alphafold"] = AlphaFoldClient()
+    return _CLIENTS["alphafold"]  # type: ignore[return-value]
 
 
 # ── Provenance footer ─────────────────────────────────────────────────────────
@@ -276,6 +283,55 @@ def _am_to_acmg_evidence(am_score: float | None) -> dict[str, str]:
     if am_score <= 0.340:
         return {"BP4": f"AlphaMissense={am_score:.3f} — likely benign (≤0.340)"}
     return {}
+
+
+def _protein_variant_from_vep(consequence: dict[str, Any]) -> str | None:
+    """Build an AlphaMissense ``protein_variant`` key from a VEP consequence.
+
+    AlphaMissense identifies a substitution as ``<ref><pos><alt>`` in
+    single-letter form, e.g. ``C61G``. Returns ``None`` when the consequence
+    is not a single-residue missense substitution: no amino-acid change, a
+    multi-residue change, or no protein position.
+    """
+    amino_acids = (consequence.get("amino_acids") or "").strip()
+    ref_aa, _, alt_aa = amino_acids.partition("/")
+    if len(ref_aa) != 1 or len(alt_aa) != 1 or not ref_aa.isalpha() or not alt_aa.isalpha():
+        return None
+    position = consequence.get("protein_start")
+    try:
+        position_int = int(position)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    return f"{ref_aa.upper()}{position_int}{alt_aa.upper()}"
+
+
+async def _alphamissense_for_variant(
+    gene_symbol: str | None, vep_results: list[dict[str, Any]]
+) -> float | None:
+    """Resolve the AlphaMissense pathogenicity score for a variant.
+
+    Resolves the gene to a UniProt accession, builds the substitution key
+    from the canonical VEP consequence, and looks it up in the AlphaFold DB
+    AlphaMissense annotations. Returns ``None`` when the gene has no UniProt
+    accession, the variant is not a single-residue missense substitution, or
+    AlphaFold DB has no annotation for it.
+    """
+    if not gene_symbol:
+        return None
+    canonical = next((tc for tc in vep_results if tc.get("canonical")), {})
+    protein_variant = _protein_variant_from_vep(canonical)
+    if not protein_variant:
+        return None
+    try:
+        gene_info = await _ensembl().gene_lookup(gene_symbol)
+        uniprot_ids = gene_info.get("uniprot_ids", [])
+        if not uniprot_ids:
+            return None
+        record = await _alphafold().alphamissense_score(uniprot_ids[0], protein_variant)
+    except Exception as exc:
+        logger.warning("alphamissense.failed", gene=gene_symbol, exc=str(exc))
+        return None
+    return record.get("am_pathogenicity") if record else None
 
 
 def _gnomad_to_acmg(af: float | None) -> dict[str, str]:
@@ -493,8 +549,11 @@ async def generate_variant_clinical_report(
         "classification", PathogenicityClass.NOT_PROVIDED.value
     )
 
-    # ── Step 8: AlphaMissense from gnomAD payload ─────────────────────────────
-    am_score: float | None = gnomad_data.get("alphamissense_score")
+    # ── Step 8: AlphaMissense pathogenicity (AlphaFold DB) ─────────────────────────────
+    am_score: float | None = await _alphamissense_for_variant(
+        gene_symbol,
+        vep_results,  # type: ignore[arg-type]
+    )
 
     # ── Step 9: Draft ACMG criteria ───────────────────────────────────────────
     acmg_criteria: dict[str, str] = {}
@@ -1123,7 +1182,10 @@ async def classify_variant_acmg(
         except Exception:
             pass
 
-    am_score: float | None = gnomad_data.get("alphamissense_score")
+    am_score: float | None = await _alphamissense_for_variant(
+        gene_symbol,
+        vep_results,  # type: ignore[arg-type]
+    )
     global_af: float | None = gnomad_data.get("global_af")
     clinvar_record = clinvar_results[0] if clinvar_results else None
     clinvar_class = (clinvar_record or {}).get(

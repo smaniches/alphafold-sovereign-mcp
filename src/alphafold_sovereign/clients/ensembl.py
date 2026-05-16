@@ -80,7 +80,7 @@ class EnsemblClient(BaseAsyncClient):
             List of consequence dicts, each with keys:
             ``transcript_id``, ``gene_id``, ``gene_symbol``,
             ``biotype``, ``impact``, ``consequence_terms``,
-            ``protein_id``, ``amino_acids``, ``codons``,
+            ``protein_id``, ``protein_start``, ``amino_acids``, ``codons``,
             ``polyphen_score``, ``sift_score``, ``cadd_phred``,
             ``sift_prediction``, ``polyphen_prediction``.
         """
@@ -331,6 +331,7 @@ class EnsemblClient(BaseAsyncClient):
             "impact": tc.get("impact", ""),
             "consequence_terms": tc.get("consequence_terms", []),
             "protein_id": tc.get("protein_id", ""),
+            "protein_start": tc.get("protein_start"),
             "amino_acids": tc.get("amino_acids", ""),
             "codons": tc.get("codons", ""),
             "hgvsp": tc.get("hgvsp", ""),

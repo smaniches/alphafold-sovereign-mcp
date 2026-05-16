@@ -21,6 +21,8 @@ from alphafold_sovereign.tools.precision_medicine import (
     VariantClinicalReportInput,
     _acmg_code,
     _acmg_strength,
+    _alphafold,
+    _alphamissense_for_variant,
     _am_to_acmg_evidence,
     _build_gnomad_id,
     _chembl,
@@ -37,6 +39,7 @@ from alphafold_sovereign.tools.precision_medicine import (
     _mondo,
     _narrative_summary,
     _opentargets,
+    _protein_variant_from_vep,
     _provenance,
     _tier_explanation,
     _vep_to_acmg,
@@ -444,6 +447,7 @@ def test_lazy_singletons_create_once() -> None:
     assert _opentargets() is _opentargets()
     assert _disgenet() is _disgenet()
     assert _chembl() is _chembl()
+    assert _alphafold() is _alphafold()
 
 
 # ---------------------------------------------------------------------------
@@ -484,7 +488,16 @@ def _patch_clients(monkeypatch: pytest.MonkeyPatch) -> dict[str, MagicMock]:
     """Patch all client accessors to return mocks. Returns the mock dict."""
     mocks: dict[str, MagicMock] = {}
 
-    for name in ("ensembl", "clinvar", "gnomad", "mondo", "opentargets", "disgenet", "chembl"):
+    for name in (
+        "ensembl",
+        "clinvar",
+        "gnomad",
+        "mondo",
+        "opentargets",
+        "disgenet",
+        "chembl",
+        "alphafold",
+    ):
         mock = MagicMock()
         mocks[name] = mock
         monkeypatch.setattr(
@@ -496,6 +509,9 @@ def _patch_clients(monkeypatch: pytest.MonkeyPatch) -> dict[str, MagicMock]:
     mocks["opentargets"].resolve_target = AsyncMock(
         return_value={"ensembl_id": "ENSG_TEST", "symbol": "TESTGENE"}
     )
+    # AlphaMissense lookups default to "no annotation"; tests that exercise
+    # the AlphaMissense path override this with a concrete record.
+    mocks["alphafold"].alphamissense_score = AsyncMock(return_value=None)
     return mocks
 
 
@@ -753,6 +769,132 @@ async def test_generate_variant_report_gnomad_variant_freq_exception(
         )
     )
     assert out["population_genetics"]["global_af"] is None
+
+
+# ---------------------------------------------------------------------------
+# AlphaMissense helpers
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("consequence", "expected"),
+    [
+        ({"amino_acids": "C/G", "protein_start": 61}, "C61G"),
+        ({"amino_acids": "c/g", "protein_start": 61}, "C61G"),
+        ({"amino_acids": "C/G", "protein_start": "61"}, "C61G"),
+        ({"amino_acids": "", "protein_start": 61}, None),
+        ({"amino_acids": "CC/G", "protein_start": 61}, None),
+        ({"amino_acids": "C", "protein_start": 61}, None),
+        ({"amino_acids": "C/G"}, None),
+        ({"amino_acids": "C/G", "protein_start": None}, None),
+        ({"amino_acids": "C/G", "protein_start": "x"}, None),
+    ],
+)
+def test_protein_variant_from_vep(
+    consequence: dict[str, Any], expected: str | None
+) -> None:
+    assert _protein_variant_from_vep(consequence) == expected
+
+
+def _missense_vep() -> list[dict[str, Any]]:
+    return [
+        {
+            "canonical": True,
+            "consequence_terms": ["missense_variant"],
+            "amino_acids": "C/G",
+            "protein_start": 61,
+        }
+    ]
+
+
+async def test_alphamissense_for_variant_no_gene() -> None:
+    assert await _alphamissense_for_variant(None, _missense_vep()) is None
+
+
+async def test_alphamissense_for_variant_not_missense() -> None:
+    """A non-missense canonical consequence yields no AlphaMissense lookup."""
+    vep = [{"canonical": True, "consequence_terms": ["stop_gained"]}]
+    assert await _alphamissense_for_variant("BRCA1", vep) is None
+
+
+async def test_alphamissense_for_variant_no_uniprot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_clients(monkeypatch)
+    mocks["ensembl"].gene_lookup = AsyncMock(return_value={"uniprot_ids": []})
+    assert await _alphamissense_for_variant("BRCA1", _missense_vep()) is None
+
+
+async def test_alphamissense_for_variant_found(monkeypatch: pytest.MonkeyPatch) -> None:
+    mocks = _patch_clients(monkeypatch)
+    mocks["ensembl"].gene_lookup = AsyncMock(return_value={"uniprot_ids": ["P38398"]})
+    mocks["alphafold"].alphamissense_score = AsyncMock(
+        return_value={
+            "protein_variant": "C61G",
+            "am_pathogenicity": 0.99,
+            "am_class": "LPath",
+        }
+    )
+    assert await _alphamissense_for_variant("BRCA1", _missense_vep()) == 0.99
+
+
+async def test_alphamissense_for_variant_no_record(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_clients(monkeypatch)
+    mocks["ensembl"].gene_lookup = AsyncMock(return_value={"uniprot_ids": ["P38398"]})
+    mocks["alphafold"].alphamissense_score = AsyncMock(return_value=None)
+    assert await _alphamissense_for_variant("BRCA1", _missense_vep()) is None
+
+
+async def test_alphamissense_for_variant_lookup_exception(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_clients(monkeypatch)
+    mocks["ensembl"].gene_lookup = AsyncMock(side_effect=RuntimeError("ensembl fail"))
+    assert await _alphamissense_for_variant("BRCA1", _missense_vep()) is None
+
+
+async def test_generate_variant_report_alphamissense_scored(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A missense variant with a protein position resolves an AlphaMissense
+    score from AlphaFold DB into the report and its ACMG criteria."""
+    mocks = _patch_clients(monkeypatch)
+    mocks["ensembl"].vep_hgvs = AsyncMock(
+        return_value=[
+            {
+                "canonical": True,
+                "consequence_terms": ["missense_variant"],
+                "amino_acids": "C/G",
+                "protein_start": 61,
+                "seq_region_name": "17",
+                "start": 43094692,
+                "allele_string": "T/G",
+            }
+        ]
+    )
+    mocks["ensembl"].gene_lookup = AsyncMock(
+        return_value={"ensembl_gene_id": "ENSG0001", "uniprot_ids": ["P38398"]}
+    )
+    mocks["clinvar"].search_by_hgvs = AsyncMock(return_value=[])
+    mocks["gnomad"].variant_frequencies = AsyncMock(return_value={})
+    mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
+    mocks["disgenet"].gene_disease_associations = AsyncMock(return_value=[])
+    mocks["opentargets"].associated_diseases = AsyncMock(return_value=[])
+    mocks["alphafold"].alphamissense_score = AsyncMock(
+        return_value={
+            "protein_variant": "C61G",
+            "am_pathogenicity": 0.9904,
+            "am_class": "LPath",
+        }
+    )
+
+    out = await generate_variant_clinical_report(
+        VariantClinicalReportInput(hgvs="BRCA1:c.181T>G", include_drug_context=False)
+    )
+    assert out["population_genetics"]["alphamissense_score"] == 0.9904
+    assert "PP3" in out["acmg_criteria_draft"]["criteria"]
 
 
 # ---------------------------------------------------------------------------

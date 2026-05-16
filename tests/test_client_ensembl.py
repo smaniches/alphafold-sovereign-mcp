@@ -41,6 +41,7 @@ def test_parse_tc_minimal_dict() -> None:
     assert parsed["consequence_terms"] == []
     assert parsed["sift_score"] is None
     assert parsed["cadd_phred"] is None
+    assert parsed["protein_start"] is None
 
 
 def test_parse_tc_full_payload() -> None:
@@ -53,6 +54,7 @@ def test_parse_tc_full_payload() -> None:
         "impact": "HIGH",
         "consequence_terms": ["missense_variant"],
         "protein_id": "ENSP1",
+        "protein_start": 61,
         "amino_acids": "A/B",
         "codons": "GCC/GCG",
         "hgvsp": "ENSP1:p.A1B",
@@ -71,6 +73,7 @@ def test_parse_tc_full_payload() -> None:
     }
     parsed = EnsemblClient._parse_tc(tc)
     assert parsed["canonical"] is True
+    assert parsed["protein_start"] == 61
     assert parsed["cadd_phred"] == 27.3
     assert parsed["spliceai_ds_max"] == 0.85
 

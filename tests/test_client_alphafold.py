@@ -11,7 +11,7 @@ from __future__ import annotations
 import httpx
 import respx
 
-from alphafold_sovereign.clients.alphafold import AlphaFoldClient
+from alphafold_sovereign.clients.alphafold import AlphaFoldClient, _parse_alphamissense_csv
 
 
 # ---------------------------------------------------------------------------
@@ -137,28 +137,29 @@ async def test_get_alphamissense_returns_predictions(respx_mock: respx.MockRoute
                 {
                     "entryId": "AF-P04637-F1",
                     "amAnnotationsUrl": (
-                        "https://alphafold.ebi.ac.uk/files/AF-P04637-F1-am-annotations.json"
+                        "https://alphafold.ebi.ac.uk/files/AF-P04637-F1-aa-substitutions.csv"
                     ),
                 }
             ],
         ),
     )
     respx_mock.get(
-        "https://alphafold.ebi.ac.uk/api/AF-P04637-F1-am-annotations.json"
+        "https://alphafold.ebi.ac.uk/api/AF-P04637-F1-aa-substitutions.csv"
     ).mock(
         return_value=httpx.Response(
             200,
-            json={
-                "accession": "P04637",
-                "predictions": [
-                    {"protein_variant": "M1A", "am_pathogenicity": 0.92, "am_class": "likely_pathogenic"},
-                ],
-            },
+            content=b"protein_variant,am_pathogenicity,am_class\nM1A,0.92,LPath\nM1C,0.10,LBen\n",
         ),
     )
     async with AlphaFoldClient() as client:
         am = await client.get_alphamissense("P04637")
     assert am["accession"] == "P04637"
+    assert len(am["predictions"]) == 2
+    assert am["predictions"][0] == {
+        "protein_variant": "M1A",
+        "am_pathogenicity": 0.92,
+        "am_class": "LPath",
+    }
 
 
 async def test_get_alphamissense_when_url_missing(respx_mock: respx.MockRouter) -> None:
@@ -168,6 +169,86 @@ async def test_get_alphamissense_when_url_missing(respx_mock: respx.MockRouter) 
     async with AlphaFoldClient() as client:
         am = await client.get_alphamissense("NO_AM")
     assert am == {}
+
+
+def test_parse_alphamissense_csv_skips_bad_rows() -> None:
+    csv_bytes = (
+        b"protein_variant,am_pathogenicity,am_class\n"
+        b"M1A,0.92,LPath\n"
+        b",0.50,Amb\n"
+        b"M1C,not-a-number,Amb\n"
+        b"M1D,0.10,LBen\n"
+    )
+    predictions = _parse_alphamissense_csv(csv_bytes)
+    assert [p["protein_variant"] for p in predictions] == ["M1A", "M1D"]
+    assert predictions[0]["am_pathogenicity"] == 0.92
+
+
+def test_parse_alphamissense_csv_missing_score_column() -> None:
+    predictions = _parse_alphamissense_csv(b"protein_variant,am_class\nM1A,LPath\n")
+    assert predictions == []
+
+
+async def test_alphamissense_score_found(respx_mock: respx.MockRouter) -> None:
+    respx_mock.get("https://alphafold.ebi.ac.uk/api/prediction/P38398").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {
+                    "entryId": "AF-P38398-F1",
+                    "amAnnotationsUrl": (
+                        "https://alphafold.ebi.ac.uk/files/AF-P38398-F1-aa-substitutions.csv"
+                    ),
+                }
+            ],
+        ),
+    )
+    respx_mock.get(
+        "https://alphafold.ebi.ac.uk/api/AF-P38398-F1-aa-substitutions.csv"
+    ).mock(
+        return_value=httpx.Response(
+            200, content=b"protein_variant,am_pathogenicity,am_class\nC61G,0.9904,LPath\n"
+        ),
+    )
+    async with AlphaFoldClient() as client:
+        hit = await client.alphamissense_score("P38398", "c61g")
+    assert hit is not None
+    assert hit["am_pathogenicity"] == 0.9904
+
+
+async def test_alphamissense_score_not_found(respx_mock: respx.MockRouter) -> None:
+    respx_mock.get("https://alphafold.ebi.ac.uk/api/prediction/P38398").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {
+                    "entryId": "AF-P38398-F1",
+                    "amAnnotationsUrl": (
+                        "https://alphafold.ebi.ac.uk/files/AF-P38398-F1-aa-substitutions.csv"
+                    ),
+                }
+            ],
+        ),
+    )
+    respx_mock.get(
+        "https://alphafold.ebi.ac.uk/api/AF-P38398-F1-aa-substitutions.csv"
+    ).mock(
+        return_value=httpx.Response(
+            200, content=b"protein_variant,am_pathogenicity,am_class\nC61G,0.9904,LPath\n"
+        ),
+    )
+    async with AlphaFoldClient() as client:
+        miss = await client.alphamissense_score("P38398", "M1A")
+    assert miss is None
+
+
+async def test_alphamissense_score_no_annotations(respx_mock: respx.MockRouter) -> None:
+    respx_mock.get("https://alphafold.ebi.ac.uk/api/prediction/NO_AM").mock(
+        return_value=httpx.Response(200, json=[{"entryId": "x"}]),
+    )
+    async with AlphaFoldClient() as client:
+        miss = await client.alphamissense_score("NO_AM", "M1A")
+    assert miss is None
 
 
 # ---------------------------------------------------------------------------
