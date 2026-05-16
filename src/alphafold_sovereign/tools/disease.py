@@ -25,7 +25,6 @@ from typing import Any
 
 import httpx
 import structlog
-from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, ConfigDict, Field
 
 from alphafold_sovereign.clients.clinvar import ClinVarClient
@@ -37,13 +36,9 @@ from alphafold_sovereign.domain.disease import (
     PathogenicityClass,
     TargetEvidenceScore,
 )
+from alphafold_sovereign.server.app import mcp
 
 logger = structlog.get_logger(__name__)
-
-# ---------------------------------------------------------------------------
-# MCP server instance (imported by the transport layer)
-# ---------------------------------------------------------------------------
-mcp = FastMCP("alphafold_sovereign_disease")
 
 _SERVER_VERSION = "1.1.0"
 

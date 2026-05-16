@@ -38,7 +38,6 @@ import re
 from typing import Any, Literal
 
 import structlog
-from fastmcp import FastMCP
 from pydantic import BaseModel, ConfigDict, Field
 
 from alphafold_sovereign import __version__
@@ -50,10 +49,9 @@ from alphafold_sovereign.clients.gnomad import GnomADClient
 from alphafold_sovereign.clients.mondo import MONDOClient
 from alphafold_sovereign.clients.opentargets import OpenTargetsClient
 from alphafold_sovereign.domain.disease import PathogenicityClass
+from alphafold_sovereign.server.app import mcp
 
 logger = structlog.get_logger(__name__)
-
-mcp: FastMCP = FastMCP("alphafold_sovereign_precision_medicine")
 
 
 # ── Shared client singletons (initialised on first use) ──────────────────────

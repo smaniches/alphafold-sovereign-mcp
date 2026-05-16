@@ -42,15 +42,13 @@ from typing import Any
 
 import numpy as np
 import structlog
-from fastmcp import FastMCP
 from pydantic import BaseModel, ConfigDict, Field
 
 from alphafold_sovereign import __version__
 from alphafold_sovereign.clients.ensembl import EnsemblClient
+from alphafold_sovereign.server.app import mcp
 
 logger = structlog.get_logger(__name__)
-
-mcp: FastMCP = FastMCP("alphafold_sovereign_structure_intelligence")
 
 
 def _provenance(**meta: str) -> str:

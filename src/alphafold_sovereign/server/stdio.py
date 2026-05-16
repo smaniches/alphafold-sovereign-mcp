@@ -25,15 +25,17 @@ logger = structlog.get_logger(__name__)
 
 
 def _build_server() -> object:
-    """Import each tool module so its `@mcp.tool()` decorators register.
+    """Import every tool module, then return the shared FastMCP application.
 
-    Each tool module owns its own ``FastMCP`` instance named ``mcp``; we
-    pick the first one and rely on the side-effect imports of the others
-    to register against it.  In a future wave, all tools migrate onto a
-    single shared ``FastMCP`` instance owned by this module.
+    All four tool modules (``precision_medicine``, ``structure_intelligence``,
+    ``disease``, ``knowledge_graph_tools``) decorate the single ``mcp``
+    instance defined in ``alphafold_sovereign.server.app``. Importing the
+    modules here is a deliberate side-effecting import: it runs their
+    ``@mcp.tool()`` decorators, populating the shared application's tool
+    registry. The imports are deferred so module-level imports of
+    ``server.stdio`` stay cheap.
     """
-    # Side-effect imports register each tool's @mcp.tool() decorators.
-    # Deferred so module-level imports of `server.stdio` stay cheap.
+    from alphafold_sovereign.server.app import mcp  # noqa: PLC0415
     from alphafold_sovereign.tools import (  # noqa: F401, PLC0415
         disease,
         knowledge_graph_tools,
@@ -41,9 +43,7 @@ def _build_server() -> object:
         structure_intelligence,
     )
 
-    # Use the precision-medicine module's FastMCP server as the primary entry
-    # point — every other tool module decorates the same global namespace.
-    return precision_medicine.mcp
+    return mcp
 
 
 def run_stdio() -> None:

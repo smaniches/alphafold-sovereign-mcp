@@ -12,13 +12,23 @@ import structlog
 from alphafold_sovereign.server import stdio
 
 
-def test_build_server_returns_fastmcp_instance() -> None:
-    """``_build_server`` returns the precision-medicine FastMCP server."""
+def test_build_server_returns_shared_fastmcp_app() -> None:
+    """``_build_server`` returns the one shared FastMCP application, and
+    every tool module decorates that same instance."""
     server = stdio._build_server()
-    # The precision-medicine module owns the canonical ``mcp`` instance.
-    from alphafold_sovereign.tools import precision_medicine
+    from alphafold_sovereign.server.app import mcp
+    from alphafold_sovereign.tools import (
+        disease,
+        knowledge_graph_tools,
+        precision_medicine,
+        structure_intelligence,
+    )
 
-    assert server is precision_medicine.mcp
+    assert server is mcp
+    assert precision_medicine.mcp is mcp
+    assert structure_intelligence.mcp is mcp
+    assert disease.mcp is mcp
+    assert knowledge_graph_tools.mcp is mcp
 
 
 def test_run_stdio_offline_truthy(
