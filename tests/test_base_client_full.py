@@ -416,4 +416,3 @@ def test_offline_mode_env_parsing(monkeypatch: pytest.MonkeyPatch) -> None:
 
     for falsy in ("0", "false", "no", ""):
         assert _parse(falsy) is False
-

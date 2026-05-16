@@ -31,7 +31,7 @@ jobs:
       - name: Run ruff check
         run: uv run ruff check src/alphafold_sovereign/clients/ src/alphafold_sovereign/domain/ src/alphafold_sovereign/tools/ src/alphafold_sovereign/storage/ --output-format=github
       - name: Run ruff format check
-        run: uv run ruff format --check src/alphafold_sovereign/clients/ src/alphafold_sovereign/domain/ src/alphafold_sovereign/tools/ src/alphafold_sovereign/storage/
+        run: uv run ruff format --check .
 
   # ── Type checking ───────────────────────────────────────────────────────────────────
   typecheck:

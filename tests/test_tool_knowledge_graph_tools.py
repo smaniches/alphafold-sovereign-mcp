@@ -115,9 +115,7 @@ async def test_query_protein_database_filtered(kg_db_path: Path) -> None:
             druggability_tier="HOT",
         )
 
-    out = await query_protein_database(
-        ProteinQueryInput(druggability_tier="HOT", min_plddt=70.0)
-    )
+    out = await query_protein_database(ProteinQueryInput(druggability_tier="HOT", min_plddt=70.0))
     assert out["result_count"] == 1
 
 

@@ -94,9 +94,7 @@ def test_plddt_tier(score: float | None, expected: str) -> None:
     assert _plddt_tier(score) == expected
 
 
-@pytest.mark.parametrize(
-    "tier", ["VERY_HIGH", "HIGH", "LOW", "VERY_LOW", "UNKNOWN", "UNRELATED"]
-)
+@pytest.mark.parametrize("tier", ["VERY_HIGH", "HIGH", "LOW", "VERY_LOW", "UNKNOWN", "UNRELATED"])
 def test_plddt_tier_explanation(tier: str) -> None:
     out = _plddt_tier_explanation(tier)
     assert isinstance(out, str)
@@ -211,9 +209,7 @@ def test_parse_pdb_full_malformed() -> None:
 def test_extract_plddt_from_pdb_deduplicated() -> None:
     pdb = _make_pdb(3, plddt=75.0)
     # Add a duplicate Cα entry — same (chain, resnum)
-    duplicate_line = (
-        "ATOM      1  CA  ALA A   1     0.000   0.000   0.000  1.00 75.00           C"
-    )
+    duplicate_line = "ATOM      1  CA  ALA A   1     0.000   0.000   0.000  1.00 75.00           C"
     pdb = duplicate_line + "\n" + pdb
     plddts = _extract_plddt_from_pdb(pdb)
     # Original 3 residues + duplicate (resnum=1) collides with line 1
@@ -501,10 +497,7 @@ def test_geometric_pocket_detection_normal() -> None:
     rng = np.random.RandomState(0)
     n = 50
     coords = rng.randn(n, 3) * 10
-    residues = [
-        {"chain": "A", "resnum": i + 1, "resname": "ALA", "plddt": 80.0}
-        for i in range(n)
-    ]
+    residues = [{"chain": "A", "resnum": i + 1, "resname": "ALA", "plddt": 80.0} for i in range(n)]
     pockets = _geometric_pocket_detection(coords, residues, min_residues=4)
     assert isinstance(pockets, list)
 
@@ -514,10 +507,7 @@ def test_geometric_pocket_detection_low_plddt() -> None:
     rng = np.random.RandomState(1)
     n = 50
     coords = rng.randn(n, 3) * 10
-    residues = [
-        {"chain": "A", "resnum": i + 1, "resname": "ALA", "plddt": 30.0}
-        for i in range(n)
-    ]
+    residues = [{"chain": "A", "resnum": i + 1, "resname": "ALA", "plddt": 30.0} for i in range(n)]
     pockets = _geometric_pocket_detection(coords, residues, min_residues=4)
     assert pockets == []
 
@@ -526,10 +516,7 @@ def test_geometric_pocket_detection_no_buried() -> None:
     """Not enough buried residues after surface filtering → returns empty list."""
     # 20 residues, min_residues=15. Buried ~ 40% = 8 < 15.
     coords = np.array([[i * 5.0, 0.0, 0.0] for i in range(20)])
-    residues = [
-        {"chain": "A", "resnum": i + 1, "resname": "ALA", "plddt": 80.0}
-        for i in range(20)
-    ]
+    residues = [{"chain": "A", "resnum": i + 1, "resname": "ALA", "plddt": 80.0} for i in range(20)]
     pockets = _geometric_pocket_detection(coords, residues, min_residues=15)
     assert pockets == []
 
@@ -638,9 +625,7 @@ async def test_fetch_af_plddt_success(monkeypatch: pytest.MonkeyPatch) -> None:
     ]
     pae_resp = MagicMock(spec=httpx.Response)
     pae_resp.status_code = 200
-    pae_resp.json.return_value = [
-        {"predicted_aligned_error": [[1.0, 2.0], [2.0, 1.0]]}
-    ]
+    pae_resp.json.return_value = [{"predicted_aligned_error": [[1.0, 2.0], [2.0, 1.0]]}]
 
     class _Client:
         def __init__(self, *_a: Any, **_kw: Any) -> None:
@@ -883,9 +868,7 @@ async def test_compare_proteins_topologically_success(
         return None
 
     monkeypatch.setattr(si, "_fetch_af_structure", fake_fetch)
-    out = await compare_proteins_topologically(
-        MultiProteinInput(uniprot_ids=["P12345", "P67890"])
-    )
+    out = await compare_proteins_topologically(MultiProteinInput(uniprot_ids=["P12345", "P67890"]))
     assert "distance_matrix" in out
 
 
@@ -898,9 +881,7 @@ async def test_compare_proteins_topologically_mix_errors(
         return None
 
     monkeypatch.setattr(si, "_fetch_af_structure", fake_fetch)
-    out = await compare_proteins_topologically(
-        MultiProteinInput(uniprot_ids=["P12345", "P67890"])
-    )
+    out = await compare_proteins_topologically(MultiProteinInput(uniprot_ids=["P12345", "P67890"]))
     assert "P67890" in out["proteins_failed"]
 
 
@@ -913,9 +894,7 @@ async def test_compare_proteins_topologically_no_ca(
         return {"pdb_text": "NOTHING", "uniprot_id": uid}
 
     monkeypatch.setattr(si, "_fetch_af_structure", fake_fetch)
-    out = await compare_proteins_topologically(
-        MultiProteinInput(uniprot_ids=["P12345", "P67890"])
-    )
+    out = await compare_proteins_topologically(MultiProteinInput(uniprot_ids=["P12345", "P67890"]))
     assert "P12345" in out["proteins_failed"]
 
 
@@ -926,9 +905,7 @@ async def test_compare_proteins_topologically_exception(
         raise RuntimeError("fetch fail")
 
     monkeypatch.setattr(si, "_fetch_af_structure", fake_fetch)
-    out = await compare_proteins_topologically(
-        MultiProteinInput(uniprot_ids=["P12345", "P67890"])
-    )
+    out = await compare_proteins_topologically(MultiProteinInput(uniprot_ids=["P12345", "P67890"]))
     assert out["proteins_failed"]
 
 
@@ -944,9 +921,7 @@ async def test_evolutionary_shifts_no_orthologs(
     mock_ensembl.orthologs = AsyncMock(return_value=[])
     monkeypatch.setattr(si, "EnsemblClient", lambda: mock_ensembl)
 
-    out = await find_evolutionary_structural_shifts(
-        EvolutionaryInput(gene_symbol="BRCA1")
-    )
+    out = await find_evolutionary_structural_shifts(EvolutionaryInput(gene_symbol="BRCA1"))
     assert "error" in out
 
 
@@ -964,9 +939,7 @@ async def test_evolutionary_shifts_success(monkeypatch: pytest.MonkeyPatch) -> N
             }
         ]
     )
-    mock_ensembl.gene_lookup = AsyncMock(
-        return_value={"uniprot_ids": ["P12345"], "found": True}
-    )
+    mock_ensembl.gene_lookup = AsyncMock(return_value={"uniprot_ids": ["P12345"], "found": True})
     monkeypatch.setattr(si, "EnsemblClient", lambda: mock_ensembl)
 
     async def fake_fetch(uid: str) -> dict[str, Any]:
@@ -974,9 +947,7 @@ async def test_evolutionary_shifts_success(monkeypatch: pytest.MonkeyPatch) -> N
 
     monkeypatch.setattr(si, "_fetch_af_structure", fake_fetch)
 
-    out = await find_evolutionary_structural_shifts(
-        EvolutionaryInput(gene_symbol="BRCA1")
-    )
+    out = await find_evolutionary_structural_shifts(EvolutionaryInput(gene_symbol="BRCA1"))
     assert out["species_compared"] == 1
 
 
@@ -984,16 +955,12 @@ async def test_evolutionary_shifts_no_uniprot(monkeypatch: pytest.MonkeyPatch) -
     """No human UniProt → no human fingerprint."""
     mock_ensembl = MagicMock()
     mock_ensembl.orthologs = AsyncMock(
-        return_value=[
-            {"species": "mus_musculus", "gene_id": "G", "identity": 70.0}
-        ]
+        return_value=[{"species": "mus_musculus", "gene_id": "G", "identity": 70.0}]
     )
     mock_ensembl.gene_lookup = AsyncMock(return_value={"uniprot_ids": []})
     monkeypatch.setattr(si, "EnsemblClient", lambda: mock_ensembl)
 
-    out = await find_evolutionary_structural_shifts(
-        EvolutionaryInput(gene_symbol="BRCA1")
-    )
+    out = await find_evolutionary_structural_shifts(EvolutionaryInput(gene_symbol="BRCA1"))
     assert out["human_uniprot_id"] == ""
 
 
@@ -1002,9 +969,7 @@ async def test_evolutionary_shifts_no_human_structure(
 ) -> None:
     mock_ensembl = MagicMock()
     mock_ensembl.orthologs = AsyncMock(
-        return_value=[
-            {"species": "mus_musculus", "gene_id": "G", "identity": 70.0}
-        ]
+        return_value=[{"species": "mus_musculus", "gene_id": "G", "identity": 70.0}]
     )
     mock_ensembl.gene_lookup = AsyncMock(return_value={"uniprot_ids": ["P12345"]})
     monkeypatch.setattr(si, "EnsemblClient", lambda: mock_ensembl)
@@ -1013,9 +978,7 @@ async def test_evolutionary_shifts_no_human_structure(
         return None
 
     monkeypatch.setattr(si, "_fetch_af_structure", fake_fetch)
-    out = await find_evolutionary_structural_shifts(
-        EvolutionaryInput(gene_symbol="BRCA1")
-    )
+    out = await find_evolutionary_structural_shifts(EvolutionaryInput(gene_symbol="BRCA1"))
     assert out["species_compared"] == 1
 
 
@@ -1025,9 +988,7 @@ async def test_evolutionary_shifts_empty_human_ca(
     """Human structure exists but has no Cα atoms."""
     mock_ensembl = MagicMock()
     mock_ensembl.orthologs = AsyncMock(
-        return_value=[
-            {"species": "mus_musculus", "gene_id": "G", "identity": 70.0}
-        ]
+        return_value=[{"species": "mus_musculus", "gene_id": "G", "identity": 70.0}]
     )
     mock_ensembl.gene_lookup = AsyncMock(return_value={"uniprot_ids": ["P12345"]})
     monkeypatch.setattr(si, "EnsemblClient", lambda: mock_ensembl)
@@ -1036,9 +997,7 @@ async def test_evolutionary_shifts_empty_human_ca(
         return {"pdb_text": "NO CA", "uniprot_id": uid}
 
     monkeypatch.setattr(si, "_fetch_af_structure", fake_fetch)
-    out = await find_evolutionary_structural_shifts(
-        EvolutionaryInput(gene_symbol="BRCA1")
-    )
+    out = await find_evolutionary_structural_shifts(EvolutionaryInput(gene_symbol="BRCA1"))
     assert out["species_compared"] == 1
 
 
@@ -1048,9 +1007,7 @@ async def test_evolutionary_shifts_ortholog_no_gene_id(
     """Ortholog has no gene_id → no structural_drift computed."""
     mock_ensembl = MagicMock()
     mock_ensembl.orthologs = AsyncMock(
-        return_value=[
-            {"species": "mus_musculus", "gene_id": "", "identity": 70.0}
-        ]
+        return_value=[{"species": "mus_musculus", "gene_id": "", "identity": 70.0}]
     )
     mock_ensembl.gene_lookup = AsyncMock(return_value={"uniprot_ids": ["P12345"]})
     monkeypatch.setattr(si, "EnsemblClient", lambda: mock_ensembl)
@@ -1059,9 +1016,7 @@ async def test_evolutionary_shifts_ortholog_no_gene_id(
         return {"pdb_text": _make_pdb(10), "uniprot_id": uid}
 
     monkeypatch.setattr(si, "_fetch_af_structure", fake_fetch)
-    out = await find_evolutionary_structural_shifts(
-        EvolutionaryInput(gene_symbol="BRCA1")
-    )
+    out = await find_evolutionary_structural_shifts(EvolutionaryInput(gene_symbol="BRCA1"))
     assert out["evolutionary_profile"][0]["structural_drift_estimate"] is None
 
 
@@ -1077,9 +1032,7 @@ async def test_score_binding_pocket_no_structure(
         return None
 
     monkeypatch.setattr(si, "_fetch_af_structure", fake_fetch)
-    out = await score_binding_pocket_geometry(
-        BindingPocketInput(uniprot_id="P12345")
-    )
+    out = await score_binding_pocket_geometry(BindingPocketInput(uniprot_id="P12345"))
     assert "error" in out
 
 
@@ -1090,9 +1043,7 @@ async def test_score_binding_pocket_too_short(
         return {"pdb_text": _make_pdb(5), "uniprot_id": uid}
 
     monkeypatch.setattr(si, "_fetch_af_structure", fake_fetch)
-    out = await score_binding_pocket_geometry(
-        BindingPocketInput(uniprot_id="P12345")
-    )
+    out = await score_binding_pocket_geometry(BindingPocketInput(uniprot_id="P12345"))
     assert "error" in out
 
 
@@ -1111,9 +1062,7 @@ async def test_score_binding_pocket_normal(monkeypatch: pytest.MonkeyPatch) -> N
         return {"pdb_text": pdb, "uniprot_id": uid}
 
     monkeypatch.setattr(si, "_fetch_af_structure", fake_fetch)
-    out = await score_binding_pocket_geometry(
-        BindingPocketInput(uniprot_id="P12345")
-    )
+    out = await score_binding_pocket_geometry(BindingPocketInput(uniprot_id="P12345"))
     assert "putative_pockets" in out
 
 

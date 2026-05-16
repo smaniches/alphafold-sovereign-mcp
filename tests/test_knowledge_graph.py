@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2024-2026 Santiago Maniches and TOPOLOGICA LLC
 """Unit tests for the local knowledge graph (SQLite provenance store)."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -75,9 +76,7 @@ async def test_store_protein_round_trip(akg: KnowledgeGraph) -> None:
 async def test_store_protein_upsert(akg: KnowledgeGraph) -> None:
     """Second store_protein call should update, not duplicate."""
     await akg.store_protein(uniprot_id="P12345", gene_symbol="BRCA1")
-    await akg.store_protein(
-        uniprot_id="P12345", gene_symbol="BRCA1", mean_plddt=80.0
-    )
+    await akg.store_protein(uniprot_id="P12345", gene_symbol="BRCA1", mean_plddt=80.0)
     rows = await akg.query_proteins(min_plddt=79.0)
     assert any(r["uniprot_id"] == "P12345" for r in rows)
 
@@ -333,8 +332,7 @@ async def test_query_drug_landscape_min_phase_only(akg: KnowledgeGraph) -> None:
         ["P38398", "CHEMBL1201585", "CHEMBL_T1", "IC50", now],
     )
     akg._conn.execute(
-        "INSERT INTO protein_disease (uniprot_id, mondo_id, source, created_at) "
-        "VALUES (?,?,?,?)",
+        "INSERT INTO protein_disease (uniprot_id, mondo_id, source, created_at) VALUES (?,?,?,?)",
         ["P38398", "MONDO:0007254", "opentargets", now],
     )
     akg._conn.commit()
@@ -368,20 +366,15 @@ async def test_query_drug_landscape_with_mondo_filter(akg: KnowledgeGraph) -> No
     )
     # Only link to breast carcinoma
     akg._conn.execute(
-        "INSERT INTO protein_disease (uniprot_id, mondo_id, source, created_at) "
-        "VALUES (?,?,?,?)",
+        "INSERT INTO protein_disease (uniprot_id, mondo_id, source, created_at) VALUES (?,?,?,?)",
         ["P38398", "MONDO:0007254", "opentargets", now],
     )
     akg._conn.commit()
 
-    breast_rows = await akg.query_drug_landscape(
-        mondo_id="MONDO:0007254", min_phase=4
-    )
+    breast_rows = await akg.query_drug_landscape(mondo_id="MONDO:0007254", min_phase=4)
     assert any(r["chembl_id"] == "CHEMBL1201585" for r in breast_rows)
 
-    ovarian_rows = await akg.query_drug_landscape(
-        mondo_id="MONDO:0008170", min_phase=4
-    )
+    ovarian_rows = await akg.query_drug_landscape(mondo_id="MONDO:0008170", min_phase=4)
     assert all(r["chembl_id"] != "CHEMBL1201585" for r in ovarian_rows)
 
 

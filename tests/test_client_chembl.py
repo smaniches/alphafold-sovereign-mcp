@@ -292,9 +292,7 @@ async def test_approved_drugs_include_clinical(respx_mock: respx.MockRouter) -> 
 
 
 async def test_drug_indications_by_efo(respx_mock: respx.MockRouter) -> None:
-    route = respx_mock.get(
-        "https://www.ebi.ac.uk/chembl/api/data/drug_indication.json"
-    ).mock(
+    route = respx_mock.get("https://www.ebi.ac.uk/chembl/api/data/drug_indication.json").mock(
         return_value=httpx.Response(
             200,
             json={

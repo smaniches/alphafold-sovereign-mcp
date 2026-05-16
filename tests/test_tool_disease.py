@@ -82,9 +82,7 @@ def _phenotype_assoc(disease_id: str = "OMIM:600100", name: str = "X") -> Phenot
     )
 
 
-def _disease_by_phenotype(
-    disease_id: str = "OMIM:600100", name: str = "X"
-) -> DiseaseByPhenotype:
+def _disease_by_phenotype(disease_id: str = "OMIM:600100", name: str = "X") -> DiseaseByPhenotype:
     return DiseaseByPhenotype(
         disease_id=disease_id,
         disease_name=name,
@@ -93,7 +91,9 @@ def _disease_by_phenotype(
     )
 
 
-def _evidence_score(ensembl_id: str = "ENSG000001", gene: str = "FOO", uniprot: str = "P1") -> TargetEvidenceScore:
+def _evidence_score(
+    ensembl_id: str = "ENSG000001", gene: str = "FOO", uniprot: str = "P1"
+) -> TargetEvidenceScore:
     return TargetEvidenceScore(
         target_ensembl_id=ensembl_id,
         target_gene_symbol=gene,
@@ -231,7 +231,9 @@ async def test_lookup_disease_no_hierarchy(monkeypatch: pytest.MonkeyPatch) -> N
     mock_client.children = AsyncMock(return_value=[])
     _patch_client_class(monkeypatch, "alphafold_sovereign.tools.disease.MONDOClient", mock_client)
 
-    result = await lookup_disease(MONDOLookupInput(mondo_id="MONDO:0001234", include_hierarchy=False))
+    result = await lookup_disease(
+        MONDOLookupInput(mondo_id="MONDO:0001234", include_hierarchy=False)
+    )
     parsed = json.loads(result.split("---")[0].strip())
     assert parsed["status"] == "success"
     assert "hierarchy" not in parsed
@@ -357,7 +359,9 @@ async def test_gene_phenotype_profile_full(monkeypatch: pytest.MonkeyPatch) -> N
     gnomad_client.gene_constraint = AsyncMock(return_value={"loeuf": 0.3})
 
     _patch_client_class(monkeypatch, "alphafold_sovereign.tools.disease.HPOClient", hpo_client)
-    _patch_client_class(monkeypatch, "alphafold_sovereign.tools.disease.GnomADClient", gnomad_client)
+    _patch_client_class(
+        monkeypatch, "alphafold_sovereign.tools.disease.GnomADClient", gnomad_client
+    )
 
     out = await get_gene_phenotype_profile(GenePhenotypeInput(gene_symbol="BRCA1"))
     parsed = json.loads(out.split("---")[0].strip())
@@ -372,7 +376,9 @@ async def test_gene_phenotype_profile_no_constraint(monkeypatch: pytest.MonkeyPa
     gnomad_client = MagicMock()
     gnomad_client.gene_constraint = AsyncMock(return_value={})
     _patch_client_class(monkeypatch, "alphafold_sovereign.tools.disease.HPOClient", hpo_client)
-    _patch_client_class(monkeypatch, "alphafold_sovereign.tools.disease.GnomADClient", gnomad_client)
+    _patch_client_class(
+        monkeypatch, "alphafold_sovereign.tools.disease.GnomADClient", gnomad_client
+    )
 
     out = await get_gene_phenotype_profile(
         GenePhenotypeInput(gene_symbol="X", include_constraint=False)
@@ -388,7 +394,9 @@ async def test_gene_phenotype_profile_exceptions(monkeypatch: pytest.MonkeyPatch
     gnomad_client = MagicMock()
     gnomad_client.gene_constraint = AsyncMock(side_effect=RuntimeError("err2"))
     _patch_client_class(monkeypatch, "alphafold_sovereign.tools.disease.HPOClient", hpo_client)
-    _patch_client_class(monkeypatch, "alphafold_sovereign.tools.disease.GnomADClient", gnomad_client)
+    _patch_client_class(
+        monkeypatch, "alphafold_sovereign.tools.disease.GnomADClient", gnomad_client
+    )
 
     out = await get_gene_phenotype_profile(GenePhenotypeInput(gene_symbol="X"))
     parsed = json.loads(out.split("---")[0].strip())
@@ -406,9 +414,7 @@ async def test_gene_phenotype_profile_outer_error(monkeypatch: pytest.MonkeyPatc
         async def __aexit__(self, *_: object) -> None:
             return None
 
-    monkeypatch.setattr(
-        "alphafold_sovereign.tools.disease.HPOClient", lambda *a, **kw: _Boom()
-    )
+    monkeypatch.setattr("alphafold_sovereign.tools.disease.HPOClient", lambda *a, **kw: _Boom())
     out = await get_gene_phenotype_profile(GenePhenotypeInput(gene_symbol="X"))
     parsed = json.loads(out)
     assert parsed["status"] == "error"
@@ -491,9 +497,7 @@ async def test_get_target_diseases_with_explicit_ensembl(monkeypatch: pytest.Mon
         monkeypatch, "alphafold_sovereign.tools.disease.OpenTargetsClient", mock_client
     )
 
-    out = await get_target_diseases(
-        TargetDiseaseInput(uniprot_id="P38398", ensembl_id="ENSG0001")
-    )
+    out = await get_target_diseases(TargetDiseaseInput(uniprot_id="P38398", ensembl_id="ENSG0001"))
     parsed = json.loads(out.split("---")[0].strip())
     assert parsed["ensembl_id"] == "ENSG0001"
     assert parsed["total_returned"] == 1
@@ -503,9 +507,7 @@ async def test_get_target_diseases_via_uniprot_lookup(monkeypatch: pytest.Monkey
     async def fake_resolve(uniprot_id: str) -> str:
         return "ENSG_lookup"
 
-    monkeypatch.setattr(
-        "alphafold_sovereign.tools.disease._uniprot_to_ensembl", fake_resolve
-    )
+    monkeypatch.setattr("alphafold_sovereign.tools.disease._uniprot_to_ensembl", fake_resolve)
 
     score = MagicMock()
     score.to_dict.return_value = {"x": 1}
@@ -542,14 +544,14 @@ async def test_get_target_diseases_error(monkeypatch: pytest.MonkeyPatch) -> Non
 
 
 async def test_get_common_disease_targets_invalid_category() -> None:
-    out = await get_common_disease_targets(
-        CommonDiseaseInput(category="not_a_real_category")
-    )
+    out = await get_common_disease_targets(CommonDiseaseInput(category="not_a_real_category"))
     parsed = json.loads(out)
     assert parsed["status"] == "error"
 
 
-async def test_get_common_disease_targets_invalid_disease_name(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_get_common_disease_targets_invalid_disease_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     out = await get_common_disease_targets(
         CommonDiseaseInput(category="oncology", disease_name="not_present_disease")
     )
@@ -817,9 +819,7 @@ async def test_phenotype_to_structures_outer_error(monkeypatch: pytest.MonkeyPat
         async def __aexit__(self, *_: object) -> None:
             return None
 
-    monkeypatch.setattr(
-        "alphafold_sovereign.tools.disease.HPOClient", lambda *a, **kw: _Boom()
-    )
+    monkeypatch.setattr("alphafold_sovereign.tools.disease.HPOClient", lambda *a, **kw: _Boom())
     out = await phenotype_to_structures(PhenotypeToStructureInput(hpo_id="HP:0001"))
     parsed = json.loads(out)
     assert parsed["status"] == "error"
@@ -899,9 +899,7 @@ async def test_orphan_atlas_outer_error(monkeypatch: pytest.MonkeyPatch) -> None
         async def __aexit__(self, *_: object) -> None:
             return None
 
-    monkeypatch.setattr(
-        "alphafold_sovereign.tools.disease.MONDOClient", lambda *a, **kw: _Boom()
-    )
+    monkeypatch.setattr("alphafold_sovereign.tools.disease.MONDOClient", lambda *a, **kw: _Boom())
     out = await get_orphan_disease_atlas(OrphanDiseaseInput(orphanet_id="79318"))
     parsed = json.loads(out)
     assert parsed["status"] == "error"
@@ -1092,9 +1090,7 @@ async def test_omim_to_mondo_exception(monkeypatch: pytest.MonkeyPatch) -> None:
         async def __aexit__(self, *_: object) -> None:
             return None
 
-    monkeypatch.setattr(
-        "alphafold_sovereign.tools.disease.MONDOClient", lambda *a, **kw: _Boom()
-    )
+    monkeypatch.setattr("alphafold_sovereign.tools.disease.MONDOClient", lambda *a, **kw: _Boom())
     out = await _omim_to_mondo("OMIM:9999")
     assert out is None
 
@@ -1145,9 +1141,7 @@ async def test_uniprot_to_ensembl_property_no_gene_id_key(monkeypatch: pytest.Mo
     """Hit the branch where dbReferences has Ensembl entry but no 'gene ID' property."""
     fake_resp = MagicMock()
     fake_resp.json.return_value = {
-        "dbReferences": [
-            {"type": "Ensembl", "properties": [{"key": "other", "value": "X"}]}
-        ]
+        "dbReferences": [{"type": "Ensembl", "properties": [{"key": "other", "value": "X"}]}]
     }
     fake_resp.raise_for_status = MagicMock()
 

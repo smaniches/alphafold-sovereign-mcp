@@ -30,6 +30,7 @@ paths_to_exclude = [
 # Test command mutmut runs to evaluate each mutant.
 runner = "pytest tests/ -q -x --tb=no -p no:cacheprovider"
 
+
 # Don't mutate SPDX/copyright headers, docstrings, type-only constructs.
 def pre_mutation(context) -> None:  # noqa: ANN001
     """Skip mutation of lines that are pure SPDX/header noise."""

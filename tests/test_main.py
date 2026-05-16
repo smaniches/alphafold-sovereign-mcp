@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2024-2026 Santiago Maniches and TOPOLOGICA LLC
 """Smoke tests for __main__.py entry point and package metadata."""
+
 from __future__ import annotations
 
 import importlib
@@ -11,6 +12,7 @@ import pytest
 @pytest.mark.unit
 def test_package_version() -> None:
     import alphafold_sovereign
+
     assert hasattr(alphafold_sovereign, "__version__")
     assert alphafold_sovereign.__version__  # non-empty
 
@@ -18,6 +20,7 @@ def test_package_version() -> None:
 @pytest.mark.unit
 def test_package_license() -> None:
     import alphafold_sovereign
+
     assert getattr(alphafold_sovereign, "__license__", "").startswith("Apache")
 
 

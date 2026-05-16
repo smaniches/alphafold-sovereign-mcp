@@ -88,12 +88,8 @@ def test_run_stdio_offline_falsy(monkeypatch: pytest.MonkeyPatch) -> None:
     assert captured["allow_hosts"] == ""
 
 
-@pytest.mark.parametrize(
-    "raw", ["true", "TRUE", "yes", "YES", "1"]
-)
-def test_run_stdio_offline_parsing_truthy(
-    monkeypatch: pytest.MonkeyPatch, raw: str
-) -> None:
+@pytest.mark.parametrize("raw", ["true", "TRUE", "yes", "YES", "1"])
+def test_run_stdio_offline_parsing_truthy(monkeypatch: pytest.MonkeyPatch, raw: str) -> None:
     monkeypatch.setenv("ALPHAFOLD_OFFLINE", raw)
 
     captured: dict[str, Any] = {}
@@ -114,6 +110,4 @@ def test_run_stdio_offline_parsing_truthy(
 
 def test_logger_is_structlog_bound() -> None:
     """The module-level ``logger`` is a structlog BoundLoggerLazyProxy."""
-    assert isinstance(stdio.logger, structlog.stdlib.BoundLogger) or hasattr(
-        stdio.logger, "info"
-    )
+    assert isinstance(stdio.logger, structlog.stdlib.BoundLogger) or hasattr(stdio.logger, "info")

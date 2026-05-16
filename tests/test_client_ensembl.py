@@ -183,9 +183,7 @@ async def test_gene_lookup_full_payload(respx_mock: respx.MockRouter) -> None:
                 "seq_region_name": "17",
                 "start": 100,
                 "end": 200,
-                "Xref": [
-                    {"dbname": "Uniprot/SWISSPROT", "primary_id": "P38398"}
-                ],
+                "Xref": [{"dbname": "Uniprot/SWISSPROT", "primary_id": "P38398"}],
             },
         ),
     )
@@ -352,16 +350,8 @@ async def test_orthologs_limit_breaks_outer_loop(
             200,
             json={
                 "data": [
-                    {
-                        "homologies": [
-                            {"type": "x", "target": {"species": "mouse", "id": "M"}}
-                        ]
-                    },
-                    {
-                        "homologies": [
-                            {"type": "y", "target": {"species": "rat", "id": "R"}}
-                        ]
-                    },
+                    {"homologies": [{"type": "x", "target": {"species": "mouse", "id": "M"}}]},
+                    {"homologies": [{"type": "y", "target": {"species": "rat", "id": "R"}}]},
                 ]
             },
         ),
@@ -410,9 +400,7 @@ async def test_orthologs_filter_skips_non_matching(
         ),
     )
     async with EnsemblClient() as client:
-        rows = await client.orthologs(
-            "BRCA1", target_species=["mus_musculus"]
-        )
+        rows = await client.orthologs("BRCA1", target_species=["mus_musculus"])
     assert [r["species"] for r in rows] == ["mus_musculus"]
 
 

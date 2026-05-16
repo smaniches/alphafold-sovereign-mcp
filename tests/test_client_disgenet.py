@@ -70,9 +70,7 @@ async def test_gda_dict_payload_with_filter(respx_mock: respx.MockRouter) -> Non
         ),
     )
     async with DisGeNETClient(api_key="k") as client:
-        rows = await client.gene_disease_associations(
-            "BRCA1", min_score=0.5, limit=10
-        )
+        rows = await client.gene_disease_associations("BRCA1", min_score=0.5, limit=10)
     assert len(rows) == 1
     assert rows[0]["disease_id"] == "C0001"
     assert rows[0]["score"] == 0.95
@@ -176,9 +174,9 @@ async def test_disease_gene_associations_no_api_key(
     respx_mock: respx.MockRouter, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.delenv("DISGENET_API_KEY", raising=False)
-    route = respx_mock.get(
-        "https://api.disgenet.com/api/v1/gda/disease"
-    ).mock(return_value=httpx.Response(200, json={"payload": []}))
+    route = respx_mock.get("https://api.disgenet.com/api/v1/gda/disease").mock(
+        return_value=httpx.Response(200, json={"payload": []})
+    )
     async with DisGeNETClient() as client:
         await client.disease_gene_associations("C1")
     assert "api_key" not in str(route.calls.last.request.url)
@@ -229,9 +227,9 @@ async def test_vda_no_api_key(
     respx_mock: respx.MockRouter, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.delenv("DISGENET_API_KEY", raising=False)
-    route = respx_mock.get(
-        "https://api.disgenet.com/api/v1/vda/variant"
-    ).mock(return_value=httpx.Response(200, json={"payload": []}))
+    route = respx_mock.get("https://api.disgenet.com/api/v1/vda/variant").mock(
+        return_value=httpx.Response(200, json={"payload": []})
+    )
     async with DisGeNETClient() as client:
         await client.variant_disease_associations("rs1")
     assert "api_key" not in str(route.calls.last.request.url)
@@ -289,9 +287,9 @@ async def test_enrichment_no_api_key(
     respx_mock: respx.MockRouter, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.delenv("DISGENET_API_KEY", raising=False)
-    route = respx_mock.get(
-        "https://api.disgenet.com/api/v1/enrichment/gene"
-    ).mock(return_value=httpx.Response(200, json={"payload": []}))
+    route = respx_mock.get("https://api.disgenet.com/api/v1/enrichment/gene").mock(
+        return_value=httpx.Response(200, json={"payload": []})
+    )
     async with DisGeNETClient() as client:
         await client.enrichment(["BRCA1"])
     assert "api_key" not in str(route.calls.last.request.url)
@@ -306,9 +304,9 @@ async def test_enrichment_error(respx_mock: respx.MockRouter) -> None:
 
 
 async def test_enrichment_caps_at_100_inputs(respx_mock: respx.MockRouter) -> None:
-    route = respx_mock.get(
-        "https://api.disgenet.com/api/v1/enrichment/gene"
-    ).mock(return_value=httpx.Response(200, json={"payload": []}))
+    route = respx_mock.get("https://api.disgenet.com/api/v1/enrichment/gene").mock(
+        return_value=httpx.Response(200, json={"payload": []})
+    )
     async with DisGeNETClient(api_key="k") as client:
         # Pass 150 genes — should be truncated to 100.
         await client.enrichment([f"G{i}" for i in range(150)])
@@ -344,9 +342,7 @@ async def test_shared_genes_intersection(respx_mock: respx.MockRouter) -> None:
             },
         ),
     ]
-    respx_mock.get(
-        "https://api.disgenet.com/api/v1/gda/disease"
-    ).mock(side_effect=responses)
+    respx_mock.get("https://api.disgenet.com/api/v1/gda/disease").mock(side_effect=responses)
 
     async with DisGeNETClient(api_key="k") as client:
         shared = await client.shared_genes("C1", "C2", min_score=0.1)
