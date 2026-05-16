@@ -76,15 +76,23 @@ class AlphaFoldClient(BaseAsyncClient):
     async def get_pae(self, uniprot_id: str) -> dict[str, Any]:
         """Fetch the Predicted Aligned Error (PAE) JSON for a UniProt accession.
 
+        AlphaFold DB serves the PAE document as a single-element JSON
+        array; this method unwraps it to the inner object, the same way
+        ``get_prediction`` unwraps the prediction-metadata array.
+
         Returns:
-            Raw PAE JSON dict with ``predicted_aligned_error`` (residue × residue
-            matrix) and ``max_predicted_aligned_error``.
+            PAE JSON dict with ``predicted_aligned_error`` (residue ×
+            residue matrix) and ``max_predicted_aligned_error``; an empty
+            dict when the accession advertises no PAE document.
         """
         meta = await self.get_prediction(uniprot_id)
         pae_url = meta.get("paeDocUrl", "")
         if not pae_url:
             return {}
-        return await self._get(_validate_af_file_url(pae_url))
+        raw: Any = await self._get(_validate_af_file_url(pae_url))
+        if isinstance(raw, list):
+            return cast("dict[str, Any]", raw[0]) if raw else {}
+        return cast("dict[str, Any]", raw)
 
     async def get_alphamissense(self, uniprot_id: str) -> dict[str, Any]:
         """Fetch AlphaMissense per-substitution pathogenicity annotations.

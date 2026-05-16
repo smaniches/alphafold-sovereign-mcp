@@ -45,6 +45,7 @@ import structlog
 from pydantic import BaseModel, ConfigDict, Field
 
 from alphafold_sovereign import __version__
+from alphafold_sovereign.clients.alphafold import AlphaFoldClient
 from alphafold_sovereign.clients.ensembl import EnsemblClient
 from alphafold_sovereign.server.app import mcp
 
@@ -117,104 +118,79 @@ class BindingPocketInput(BaseModel):
 # ── AF structure fetcher (uses existing fetcher infrastructure) ───────────────
 
 
-async def _af_prediction_summary(uniprot_id: str) -> dict[str, Any] | None:
-    """Fetch the AlphaFold DB prediction summary for an accession.
+_CLIENTS: dict[str, Any] = {}
 
-    Returns the first prediction entry from ``/api/prediction/{id}``.
-    That entry carries the advertised file URLs (``pdbUrl`` and
-    ``paeDocUrl``) alongside ``meanPlddt`` and ``uniprotSequence``.
 
-    File URLs are read from this entry rather than constructed.
-    AlphaFold DB has moved the model-version suffix over time (``_v4``
-    to ``_v6``), so a hand-built file URL goes stale and returns 404.
-    The summary always advertises the current URL.
-
-    Returns ``None`` when the accession has no AlphaFold model or the
-    request fails.
-    """
-    import httpx
-
-    url = f"https://alphafold.ebi.ac.uk/api/prediction/{uniprot_id}"
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.get(url)
-        if resp.status_code != 200:
-            return None
-        entries = resp.json()
-    except Exception as exc:
-        logger.warning("af.summary.failed", uniprot_id=uniprot_id, exc=str(exc))
-        return None
-    return entries[0] if entries else None
+def _alphafold() -> AlphaFoldClient:
+    """Return the process-wide AlphaFold DB client (lazily constructed)."""
+    if "alphafold" not in _CLIENTS:
+        _CLIENTS["alphafold"] = AlphaFoldClient()
+    return _CLIENTS["alphafold"]  # type: ignore[return-value]
 
 
 async def _fetch_af_structure(uniprot_id: str) -> dict[str, Any] | None:
-    """Fetch AlphaFold structure coordinates via the AF DB API.
+    """Fetch AlphaFold structure coordinates for a UniProt accession.
 
-    Resolves the PDB file URL from the prediction summary's advertised
-    ``pdbUrl`` rather than constructing it, so the fetch tracks the
-    current AlphaFold DB model version automatically.
+    Routes through AlphaFoldClient, so the request shares the client's
+    rate limiter, retry policy, circuit breaker, air-gap enforcement,
+    and the advertised-file-URL host guard. Returns None when the
+    accession has no AlphaFold model.
     """
-    import httpx
-
-    summary = await _af_prediction_summary(uniprot_id)
-    if not summary:
-        return None
-    pdb_url = summary.get("pdbUrl")
-    if not pdb_url:
-        return None
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.get(pdb_url)
-        if resp.status_code != 200:
-            return None
-        return {"pdb_text": resp.text, "uniprot_id": uniprot_id}
+        pdb_bytes = await _alphafold().get_pdb_bytes(uniprot_id)
     except Exception as exc:
         logger.warning("af.fetch.failed", uniprot_id=uniprot_id, exc=str(exc))
         return None
+    if not pdb_bytes:
+        return None
+    return {
+        "pdb_text": pdb_bytes.decode("utf-8", errors="replace"),
+        "uniprot_id": uniprot_id,
+    }
 
 
 async def _fetch_af_plddt(uniprot_id: str) -> dict[str, Any] | None:
-    """Fetch per-residue pLDDT + PAE from AF DB.
+    """Fetch the pLDDT summary and PAE matrix for a UniProt accession.
 
-    Reads ``meanPlddt`` and the advertised ``paeDocUrl`` from the
-    prediction summary, then fetches the PAE document at that URL. The
-    PAE URL is read from the summary rather than constructed, so the
-    fetch tracks the current AlphaFold DB model version.
+    Routes through AlphaFoldClient. Reads the global pLDDT confidence
+    from the prediction metadata (the ``globalMetricValue`` field; the
+    older ``meanPlddt`` field is absent from the current AlphaFold DB
+    schema) and the PAE matrix from the advertised PAE document.
+
+    Returns None when the accession has no AlphaFold model, so callers
+    can distinguish "no structure" from a structure with missing
+    fields.
     """
-    import httpx
+    client = _alphafold()
+    try:
+        meta = await client.get_prediction(uniprot_id)
+    except Exception as exc:
+        logger.warning("af.summary.failed", uniprot_id=uniprot_id, exc=str(exc))
+        return None
+    if not isinstance(meta, dict) or not meta.get("entryId"):
+        return None
 
-    result: dict[str, Any] = {"uniprot_id": uniprot_id}
-
-    summary = await _af_prediction_summary(uniprot_id)
-    if not summary:
-        return result
-
-    result["mean_plddt"] = summary.get("meanPlddt")
-    result["model_url"] = summary.get("pdbUrl", "")
-    result["sequence_length"] = len(summary.get("uniprotSequence", ""))
-
-    pae_url = summary.get("paeDocUrl")
-    if not pae_url:
-        return result
+    result: dict[str, Any] = {
+        "uniprot_id": uniprot_id,
+        "mean_plddt": meta.get("globalMetricValue"),
+        "model_url": meta.get("pdbUrl", ""),
+        "sequence_length": len(meta.get("uniprotSequence", "")),
+    }
 
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            pae_resp = await client.get(pae_url)
+        pae_doc = await client.get_pae(uniprot_id)
     except Exception as exc:
         logger.warning("af.pae.failed", uniprot_id=uniprot_id, exc=str(exc))
         return result
 
-    if pae_resp.status_code == 200:
-        pae_data = pae_resp.json()
-        if isinstance(pae_data, list) and pae_data:
-            pae_matrix = np.array(pae_data[0].get("predicted_aligned_error", []))
-            result["pae_matrix_shape"] = list(pae_matrix.shape)
-            if pae_matrix.size > 0:
-                result["pae_mean"] = float(np.mean(pae_matrix))
-                result["pae_max"] = float(np.max(pae_matrix))
-                # Inter-domain: regions where PAE is high (>15 Å) between segments
-                result["high_pae_pairs"] = _find_high_pae_pairs(pae_matrix, threshold=15.0)
-                result["domain_boundaries"] = _detect_domain_boundaries(pae_matrix)
+    pae_matrix = np.array(pae_doc.get("predicted_aligned_error", []))
+    if pae_matrix.size > 0:
+        result["pae_matrix_shape"] = list(pae_matrix.shape)
+        result["pae_mean"] = float(np.mean(pae_matrix))
+        result["pae_max"] = float(np.max(pae_matrix))
+        # Inter-domain: regions where PAE is high (>15 Å) between segments
+        result["high_pae_pairs"] = _find_high_pae_pairs(pae_matrix, threshold=15.0)
+        result["domain_boundaries"] = _detect_domain_boundaries(pae_matrix)
 
     return result
 

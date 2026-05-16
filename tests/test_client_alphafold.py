@@ -112,10 +112,12 @@ async def test_get_pae_returns_json(respx_mock: respx.MockRouter) -> None:
     respx_mock.get("https://alphafold.ebi.ac.uk/files/AF-P12345-F1-pae.json").mock(
         return_value=httpx.Response(
             200,
-            json={
-                "predicted_aligned_error": [[0, 1], [1, 0]],
-                "max_predicted_aligned_error": 31.75,
-            },
+            json=[
+                {
+                    "predicted_aligned_error": [[0, 1], [1, 0]],
+                    "max_predicted_aligned_error": 31.75,
+                }
+            ],
         ),
     )
     async with AlphaFoldClient() as client:
@@ -129,6 +131,51 @@ async def test_get_pae_when_pae_url_missing(respx_mock: respx.MockRouter) -> Non
     )
     async with AlphaFoldClient() as client:
         pae = await client.get_pae("NO_PAE")
+    assert pae == {}
+
+
+async def test_get_pae_dict_passthrough(respx_mock: respx.MockRouter) -> None:
+    """A PAE document already served as a bare object is returned as-is."""
+    respx_mock.get("https://alphafold.ebi.ac.uk/api/prediction/P22222").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {
+                    "entryId": "AF-P22222-F1",
+                    "paeDocUrl": "https://alphafold.ebi.ac.uk/files/AF-P22222-F1-pae.json",
+                }
+            ],
+        ),
+    )
+    respx_mock.get("https://alphafold.ebi.ac.uk/files/AF-P22222-F1-pae.json").mock(
+        return_value=httpx.Response(
+            200,
+            json={"predicted_aligned_error": [[0, 1], [1, 0]], "max_predicted_aligned_error": 9.0},
+        ),
+    )
+    async with AlphaFoldClient() as client:
+        pae = await client.get_pae("P22222")
+    assert pae["max_predicted_aligned_error"] == 9.0
+
+
+async def test_get_pae_empty_list(respx_mock: respx.MockRouter) -> None:
+    """An empty-array PAE document collapses to an empty dict."""
+    respx_mock.get("https://alphafold.ebi.ac.uk/api/prediction/P33333").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {
+                    "entryId": "AF-P33333-F1",
+                    "paeDocUrl": "https://alphafold.ebi.ac.uk/files/AF-P33333-F1-pae.json",
+                }
+            ],
+        ),
+    )
+    respx_mock.get("https://alphafold.ebi.ac.uk/files/AF-P33333-F1-pae.json").mock(
+        return_value=httpx.Response(200, json=[]),
+    )
+    async with AlphaFoldClient() as client:
+        pae = await client.get_pae("P33333")
     assert pae == {}
 
 
