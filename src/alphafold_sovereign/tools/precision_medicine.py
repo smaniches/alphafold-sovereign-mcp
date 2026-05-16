@@ -310,24 +310,27 @@ async def _alphamissense_for_variant(
 ) -> float | None:
     """Resolve the AlphaMissense pathogenicity score for a variant.
 
-    Resolves the gene to a UniProt accession, builds the substitution key
-    from the canonical VEP consequence, and looks it up in the AlphaFold DB
-    AlphaMissense annotations. Returns ``None`` when the gene has no UniProt
-    accession, the variant is not a single-residue missense substitution, or
-    AlphaFold DB has no annotation for it.
+    Builds the substitution key from the canonical VEP consequence, reads
+    the SwissProt accession that Ensembl VEP attaches to that same
+    consequence, and looks the substitution up in the AlphaFold DB
+    AlphaMissense annotations. Returns ``None`` when the variant is not a
+    single-residue missense substitution, the canonical consequence
+    carries no SwissProt accession, or AlphaFold DB has no annotation for
+    it.
+
+    ``gene_symbol`` is retained for log context only; the UniProt
+    accession is resolved from the VEP consequence, so a RefSeq-form HGVS
+    with no parseable gene symbol still resolves AlphaMissense.
     """
-    if not gene_symbol:
-        return None
     canonical = next((tc for tc in vep_results if tc.get("canonical")), {})
     protein_variant = _protein_variant_from_vep(canonical)
     if not protein_variant:
         return None
+    uniprot_id = (canonical.get("swissprot") or "").split(".")[0]
+    if not uniprot_id:
+        return None
     try:
-        gene_info = await _ensembl().gene_lookup(gene_symbol)
-        uniprot_ids = gene_info.get("uniprot_ids", [])
-        if not uniprot_ids:
-            return None
-        record = await _alphafold().alphamissense_score(uniprot_ids[0], protein_variant)
+        record = await _alphafold().alphamissense_score(uniprot_id, protein_variant)
     except Exception as exc:
         logger.warning("alphamissense.failed", gene=gene_symbol, exc=str(exc))
         return None

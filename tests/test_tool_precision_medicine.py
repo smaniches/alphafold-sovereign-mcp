@@ -770,19 +770,16 @@ def test_protein_variant_from_vep(consequence: dict[str, Any], expected: str | N
     assert _protein_variant_from_vep(consequence) == expected
 
 
-def _missense_vep() -> list[dict[str, Any]]:
-    return [
-        {
-            "canonical": True,
-            "consequence_terms": ["missense_variant"],
-            "amino_acids": "C/G",
-            "protein_start": 61,
-        }
-    ]
-
-
-async def test_alphamissense_for_variant_no_gene() -> None:
-    assert await _alphamissense_for_variant(None, _missense_vep()) is None
+def _missense_vep(swissprot: str | None = None) -> list[dict[str, Any]]:
+    tc: dict[str, Any] = {
+        "canonical": True,
+        "consequence_terms": ["missense_variant"],
+        "amino_acids": "C/G",
+        "protein_start": 61,
+    }
+    if swissprot is not None:
+        tc["swissprot"] = swissprot
+    return [tc]
 
 
 async def test_alphamissense_for_variant_not_missense() -> None:
@@ -791,17 +788,14 @@ async def test_alphamissense_for_variant_not_missense() -> None:
     assert await _alphamissense_for_variant("BRCA1", vep) is None
 
 
-async def test_alphamissense_for_variant_no_uniprot(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    mocks = _patch_clients(monkeypatch)
-    mocks["ensembl"].gene_lookup = AsyncMock(return_value={"uniprot_ids": []})
+async def test_alphamissense_for_variant_no_swissprot() -> None:
+    """A canonical consequence without a SwissProt accession yields None."""
     assert await _alphamissense_for_variant("BRCA1", _missense_vep()) is None
 
 
 async def test_alphamissense_for_variant_found(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A SwissProt accession with a version suffix is stripped before lookup."""
     mocks = _patch_clients(monkeypatch)
-    mocks["ensembl"].gene_lookup = AsyncMock(return_value={"uniprot_ids": ["P38398"]})
     mocks["alphafold"].alphamissense_score = AsyncMock(
         return_value={
             "protein_variant": "C61G",
@@ -809,24 +803,23 @@ async def test_alphamissense_for_variant_found(monkeypatch: pytest.MonkeyPatch) 
             "am_class": "LPath",
         }
     )
-    assert await _alphamissense_for_variant("BRCA1", _missense_vep()) == 0.99
+    score = await _alphamissense_for_variant("BRCA1", _missense_vep("P38398.280"))
+    assert score == 0.99
+    mocks["alphafold"].alphamissense_score.assert_awaited_once_with("P38398", "C61G")
 
 
-async def test_alphamissense_for_variant_no_record(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_alphamissense_for_variant_no_record(monkeypatch: pytest.MonkeyPatch) -> None:
     mocks = _patch_clients(monkeypatch)
-    mocks["ensembl"].gene_lookup = AsyncMock(return_value={"uniprot_ids": ["P38398"]})
     mocks["alphafold"].alphamissense_score = AsyncMock(return_value=None)
-    assert await _alphamissense_for_variant("BRCA1", _missense_vep()) is None
+    assert await _alphamissense_for_variant("BRCA1", _missense_vep("P38398")) is None
 
 
-async def test_alphamissense_for_variant_lookup_exception(
+async def test_alphamissense_for_variant_score_exception(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     mocks = _patch_clients(monkeypatch)
-    mocks["ensembl"].gene_lookup = AsyncMock(side_effect=RuntimeError("ensembl fail"))
-    assert await _alphamissense_for_variant("BRCA1", _missense_vep()) is None
+    mocks["alphafold"].alphamissense_score = AsyncMock(side_effect=RuntimeError("af fail"))
+    assert await _alphamissense_for_variant("BRCA1", _missense_vep("P38398")) is None
 
 
 async def test_generate_variant_report_alphamissense_scored(
@@ -842,6 +835,7 @@ async def test_generate_variant_report_alphamissense_scored(
                 "consequence_terms": ["missense_variant"],
                 "amino_acids": "C/G",
                 "protein_start": 61,
+                "swissprot": "P38398.280",
                 "seq_region_name": "17",
                 "start": 43094692,
                 "allele_string": "T/G",
