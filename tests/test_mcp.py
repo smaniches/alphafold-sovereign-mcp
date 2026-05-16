@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2024-2026 Santiago Maniches and TOPOLOGICA LLC
 """MCP tool schema smoke tests — verify all tool modules import cleanly."""
+
 from __future__ import annotations
 
 import pytest

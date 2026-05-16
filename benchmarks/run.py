@@ -68,7 +68,11 @@ def _verify_manifest() -> str:
 
 
 def _load_prompts() -> list[dict[str, Any]]:
-    return [json.loads(line) for line in PROMPTS.read_text(encoding="utf-8").splitlines() if line.strip()]
+    return [
+        json.loads(line)
+        for line in PROMPTS.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
 
 
 def _run_one_prompt(p: dict[str, Any]) -> dict[str, Any]:
@@ -90,6 +94,7 @@ def _run_one_prompt(p: dict[str, Any]) -> dict[str, Any]:
             precision_medicine,
             structure_intelligence,
         )
+
         modules = {
             m.__name__.rsplit(".", 1)[-1]: m
             for m in [disease, knowledge_graph_tools, precision_medicine, structure_intelligence]
@@ -129,7 +134,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--list", action="store_true", help="List prompt IDs and exit.")
     parser.add_argument("--id", help="Run only the prompt with this ID.")
-    parser.add_argument("--offline", action="store_true", help="Set ALPHAFOLD_OFFLINE=1 for this run.")
+    parser.add_argument(
+        "--offline", action="store_true", help="Set ALPHAFOLD_OFFLINE=1 for this run."
+    )
     args = parser.parse_args(argv)
 
     prompts_sha = _verify_manifest()

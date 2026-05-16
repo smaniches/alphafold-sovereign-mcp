@@ -303,9 +303,7 @@ def _encoded_iri(short_form: str) -> str:
 
 async def test_ancestors(respx_mock: respx.MockRouter) -> None:
     iri = _encoded_iri("MONDO_0004995")
-    respx_mock.get(
-        f"https://www.ebi.ac.uk/ols4/api/ontologies/mondo/terms/{iri}/ancestors"
-    ).mock(
+    respx_mock.get(f"https://www.ebi.ac.uk/ols4/api/ontologies/mondo/terms/{iri}/ancestors").mock(
         return_value=httpx.Response(
             200,
             json={
@@ -333,9 +331,7 @@ async def test_descendants_handles_non_list_description(
     respx_mock: respx.MockRouter,
 ) -> None:
     iri = _encoded_iri("MONDO_0004995")
-    respx_mock.get(
-        f"https://www.ebi.ac.uk/ols4/api/ontologies/mondo/terms/{iri}/descendants"
-    ).mock(
+    respx_mock.get(f"https://www.ebi.ac.uk/ols4/api/ontologies/mondo/terms/{iri}/descendants").mock(
         return_value=httpx.Response(
             200,
             json={
@@ -359,9 +355,7 @@ async def test_descendants_handles_non_list_description(
 
 async def test_children(respx_mock: respx.MockRouter) -> None:
     iri = _encoded_iri("MONDO_0004995")
-    respx_mock.get(
-        f"https://www.ebi.ac.uk/ols4/api/ontologies/mondo/terms/{iri}/children"
-    ).mock(
+    respx_mock.get(f"https://www.ebi.ac.uk/ols4/api/ontologies/mondo/terms/{iri}/children").mock(
         return_value=httpx.Response(
             200,
             json={"_embedded": {"terms": []}},

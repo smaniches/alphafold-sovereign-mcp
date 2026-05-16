@@ -128,9 +128,7 @@ def test_gnomad_to_acmg(af: float | None, expected_key: str | None) -> None:
 
 
 def test_vep_to_acmg_pvs1() -> None:
-    out = _vep_to_acmg(
-        [{"canonical": True, "consequence_terms": ["stop_gained"]}]
-    )
+    out = _vep_to_acmg([{"canonical": True, "consequence_terms": ["stop_gained"]}])
     assert "PVS1" in out
 
 
@@ -557,9 +555,7 @@ async def test_generate_variant_report_full(monkeypatch: pytest.MonkeyPatch) -> 
         ]
     )
 
-    out = await generate_variant_clinical_report(
-        VariantClinicalReportInput(hgvs="BRCA1:c.181T>G")
-    )
+    out = await generate_variant_clinical_report(VariantClinicalReportInput(hgvs="BRCA1:c.181T>G"))
     assert out["clinical_tier"] == "HIGH"
     assert out["gene_symbol"] == "BRCA1"
     assert "drug_context" in out
@@ -595,9 +591,7 @@ async def test_generate_variant_report_with_exceptions(
     mocks["clinvar"].search_by_hgvs = AsyncMock(side_effect=RuntimeError("cv fail"))
     mocks["gnomad"].variant_frequencies = AsyncMock(side_effect=RuntimeError("g fail"))
     mocks["gnomad"].gene_constraint = AsyncMock(side_effect=RuntimeError("c fail"))
-    mocks["disgenet"].gene_disease_associations = AsyncMock(
-        side_effect=RuntimeError("d fail")
-    )
+    mocks["disgenet"].gene_disease_associations = AsyncMock(side_effect=RuntimeError("d fail"))
 
     out = await generate_variant_clinical_report(
         VariantClinicalReportInput(hgvs="BRCA1:c.181T>G", include_drug_context=False)
@@ -618,13 +612,9 @@ async def test_generate_variant_report_drug_context_failure(
     mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
     mocks["disgenet"].gene_disease_associations = AsyncMock(return_value=[])
     mocks["opentargets"].associated_diseases = AsyncMock(return_value=[])
-    mocks["chembl"].find_repurposable_drugs = AsyncMock(
-        side_effect=RuntimeError("drug fail")
-    )
+    mocks["chembl"].find_repurposable_drugs = AsyncMock(side_effect=RuntimeError("drug fail"))
 
-    out = await generate_variant_clinical_report(
-        VariantClinicalReportInput(hgvs="BRCA1:c.181T>G")
-    )
+    out = await generate_variant_clinical_report(VariantClinicalReportInput(hgvs="BRCA1:c.181T>G"))
     assert out["drug_context"]["repurposing_candidates"] == []
 
 
@@ -641,9 +631,7 @@ async def test_generate_variant_report_no_ensembl_id(
     mocks["disgenet"].gene_disease_associations = AsyncMock(return_value=[])
 
     out = await generate_variant_clinical_report(
-        VariantClinicalReportInput(
-            hgvs="BRCA1:c.181T>G", include_drug_context=False
-        )
+        VariantClinicalReportInput(hgvs="BRCA1:c.181T>G", include_drug_context=False)
     )
     assert out["disease_associations"]["open_targets_top_diseases"] == []
 
@@ -662,9 +650,7 @@ async def test_generate_variant_report_drug_context_no_uniprot(
     mocks["disgenet"].gene_disease_associations = AsyncMock(return_value=[])
     mocks["opentargets"].associated_diseases = AsyncMock(return_value=[])
 
-    out = await generate_variant_clinical_report(
-        VariantClinicalReportInput(hgvs="BRCA1:c.181T>G")
-    )
+    out = await generate_variant_clinical_report(VariantClinicalReportInput(hgvs="BRCA1:c.181T>G"))
     assert out["drug_context"]["repurposing_candidates"] == []
 
 
@@ -678,9 +664,7 @@ async def test_generate_variant_report_no_gene_symbol(
     mocks["gnomad"].variant_frequencies = AsyncMock(return_value={})
 
     out = await generate_variant_clinical_report(
-        VariantClinicalReportInput(
-            hgvs="NM_007294.3:c.181T>G", include_drug_context=False
-        )
+        VariantClinicalReportInput(hgvs="NM_007294.3:c.181T>G", include_drug_context=False)
     )
     # No gene → no constraint, no disease
     assert out["gene_constraint"]["pLI"] is None
@@ -718,9 +702,7 @@ async def test_generate_variant_report_non_canonical_skipped(
     mocks["opentargets"].associated_diseases = AsyncMock(return_value=[])
 
     out = await generate_variant_clinical_report(
-        VariantClinicalReportInput(
-            hgvs="BRCA1:c.181T>G", include_drug_context=False
-        )
+        VariantClinicalReportInput(hgvs="BRCA1:c.181T>G", include_drug_context=False)
     )
     assert out["functional_consequence"]["amino_acids"] == "R/H"
 
@@ -741,9 +723,7 @@ async def test_generate_variant_report_ot_diseases_exception(
     mocks["opentargets"].associated_diseases = AsyncMock(side_effect=RuntimeError("ot fail"))
 
     out = await generate_variant_clinical_report(
-        VariantClinicalReportInput(
-            hgvs="BRCA1:c.181T>G", include_drug_context=False
-        )
+        VariantClinicalReportInput(hgvs="BRCA1:c.181T>G", include_drug_context=False)
     )
     assert out["disease_associations"]["open_targets_top_diseases"] == []
 
@@ -756,17 +736,13 @@ async def test_generate_variant_report_gnomad_variant_freq_exception(
     mocks["ensembl"].vep_hgvs = AsyncMock(return_value=_make_vep_result())
     mocks["ensembl"].gene_lookup = AsyncMock(return_value={})
     mocks["clinvar"].search_by_hgvs = AsyncMock(return_value=[])
-    mocks["gnomad"].variant_frequencies = AsyncMock(
-        side_effect=RuntimeError("var freq fail")
-    )
+    mocks["gnomad"].variant_frequencies = AsyncMock(side_effect=RuntimeError("var freq fail"))
     mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
     mocks["disgenet"].gene_disease_associations = AsyncMock(return_value=[])
     mocks["opentargets"].associated_diseases = AsyncMock(return_value=[])
 
     out = await generate_variant_clinical_report(
-        VariantClinicalReportInput(
-            hgvs="BRCA1:c.181T>G", include_drug_context=False
-        )
+        VariantClinicalReportInput(hgvs="BRCA1:c.181T>G", include_drug_context=False)
     )
     assert out["population_genetics"]["global_af"] is None
 
@@ -790,9 +766,7 @@ async def test_generate_variant_report_gnomad_variant_freq_exception(
         ({"amino_acids": "C/G", "protein_start": "x"}, None),
     ],
 )
-def test_protein_variant_from_vep(
-    consequence: dict[str, Any], expected: str | None
-) -> None:
+def test_protein_variant_from_vep(consequence: dict[str, Any], expected: str | None) -> None:
     assert _protein_variant_from_vep(consequence) == expected
 
 
@@ -1034,9 +1008,7 @@ async def test_synthesize_protein_dossier_comprehensive(
     mocks["gnomad"].gene_constraint = AsyncMock(
         return_value={"pLI": 0.99, "loeuf": 0.2, "mis_z": 3.5, "interpretation": "x"}
     )
-    mocks["clinvar"].search_gene = AsyncMock(
-        return_value=[{"variation_id": "v1"}]
-    )
+    mocks["clinvar"].search_gene = AsyncMock(return_value=[{"variation_id": "v1"}])
     mocks["ensembl"].gene_lookup = AsyncMock(
         return_value={
             "ensembl_gene_id": "ENSG0001",
@@ -1046,9 +1018,7 @@ async def test_synthesize_protein_dossier_comprehensive(
     mocks["ensembl"].orthologs = AsyncMock(
         return_value=[{"species": "mus_musculus", "identity": 95.0}]
     )
-    mocks["chembl"].target_by_uniprot = AsyncMock(
-        return_value={"chembl_id": "CHEMBL_TGT"}
-    )
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value={"chembl_id": "CHEMBL_TGT"})
     mocks["chembl"].approved_drugs = AsyncMock(
         return_value=[
             {
@@ -1090,9 +1060,7 @@ async def test_synthesize_protein_dossier_with_exceptions(
 ) -> None:
     mocks = _patch_clients(monkeypatch)
     mocks["opentargets"].associated_diseases = AsyncMock(side_effect=RuntimeError("e"))
-    mocks["opentargets"].drug_count_and_tractability = AsyncMock(
-        side_effect=RuntimeError("e")
-    )
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(side_effect=RuntimeError("e"))
     mocks["disgenet"].gene_disease_associations = AsyncMock(side_effect=RuntimeError("e"))
     mocks["gnomad"].gene_constraint = AsyncMock(side_effect=RuntimeError("e"))
     mocks["clinvar"].search_gene = AsyncMock(side_effect=RuntimeError("e"))
@@ -1230,9 +1198,7 @@ async def test_synthesize_protein_dossier_orthologs_exception(
     mocks["chembl"].target_by_uniprot = AsyncMock(return_value=None)
 
     out = await synthesize_protein_dossier(
-        ProteinDossierInput(
-            uniprot_id="P38398", gene_symbol="BRCA1", depth="comprehensive"
-        )
+        ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="comprehensive")
     )
     assert out["cross_species_orthologs"] == []
 
@@ -1394,9 +1360,7 @@ async def test_classify_variant_acmg_clinvar_pathogenic_only(
     mocks = _patch_clients(monkeypatch)
     mocks["ensembl"].vep_hgvs = AsyncMock(return_value=[])
     mocks["clinvar"].search_by_hgvs = AsyncMock(
-        return_value=[
-            {"classification": "Pathogenic", "review_status": "x"}
-        ]
+        return_value=[{"classification": "Pathogenic", "review_status": "x"}]
     )
     mocks["gnomad"].variant_frequencies = AsyncMock(return_value={})
     mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
@@ -1411,9 +1375,7 @@ async def test_classify_variant_acmg_clinvar_likely_pathogenic(
     mocks = _patch_clients(monkeypatch)
     mocks["ensembl"].vep_hgvs = AsyncMock(return_value=[])
     mocks["clinvar"].search_by_hgvs = AsyncMock(
-        return_value=[
-            {"classification": "Likely pathogenic", "review_status": "x"}
-        ]
+        return_value=[{"classification": "Likely pathogenic", "review_status": "x"}]
     )
     mocks["gnomad"].variant_frequencies = AsyncMock(return_value={})
     mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
@@ -1788,9 +1750,7 @@ async def test_find_drug_repurposing_gather_exception(
     async def fake_gather(*coros: Any, **kwargs: Any) -> Any:
         # Force the gather call inside the candidate building loop to
         # return exception objects (the first call gathers our helpers)
-        called_for_helpers = (
-            len(coros) >= 1 and len(kwargs) > 0 and kwargs.get("return_exceptions")
-        )
+        called_for_helpers = len(coros) >= 1 and len(kwargs) > 0 and kwargs.get("return_exceptions")
         if called_for_helpers and len(coros) == 1:
             # Drain the coro before returning
             for c in coros:

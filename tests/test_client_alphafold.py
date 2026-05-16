@@ -107,7 +107,10 @@ async def test_get_pae_returns_json(respx_mock: respx.MockRouter) -> None:
     respx_mock.get("https://alphafold.ebi.ac.uk/api/AF-P12345-F1-pae.json").mock(
         return_value=httpx.Response(
             200,
-            json={"predicted_aligned_error": [[0, 1], [1, 0]], "max_predicted_aligned_error": 31.75},
+            json={
+                "predicted_aligned_error": [[0, 1], [1, 0]],
+                "max_predicted_aligned_error": 31.75,
+            },
         ),
     )
     async with AlphaFoldClient() as client:
@@ -143,9 +146,7 @@ async def test_get_alphamissense_returns_predictions(respx_mock: respx.MockRoute
             ],
         ),
     )
-    respx_mock.get(
-        "https://alphafold.ebi.ac.uk/api/AF-P04637-F1-aa-substitutions.csv"
-    ).mock(
+    respx_mock.get("https://alphafold.ebi.ac.uk/api/AF-P04637-F1-aa-substitutions.csv").mock(
         return_value=httpx.Response(
             200,
             content=b"protein_variant,am_pathogenicity,am_class\nM1A,0.92,LPath\nM1C,0.10,LBen\n",
@@ -203,9 +204,7 @@ async def test_alphamissense_score_found(respx_mock: respx.MockRouter) -> None:
             ],
         ),
     )
-    respx_mock.get(
-        "https://alphafold.ebi.ac.uk/api/AF-P38398-F1-aa-substitutions.csv"
-    ).mock(
+    respx_mock.get("https://alphafold.ebi.ac.uk/api/AF-P38398-F1-aa-substitutions.csv").mock(
         return_value=httpx.Response(
             200, content=b"protein_variant,am_pathogenicity,am_class\nC61G,0.9904,LPath\n"
         ),
@@ -230,9 +229,7 @@ async def test_alphamissense_score_not_found(respx_mock: respx.MockRouter) -> No
             ],
         ),
     )
-    respx_mock.get(
-        "https://alphafold.ebi.ac.uk/api/AF-P38398-F1-aa-substitutions.csv"
-    ).mock(
+    respx_mock.get("https://alphafold.ebi.ac.uk/api/AF-P38398-F1-aa-substitutions.csv").mock(
         return_value=httpx.Response(
             200, content=b"protein_variant,am_pathogenicity,am_class\nC61G,0.9904,LPath\n"
         ),

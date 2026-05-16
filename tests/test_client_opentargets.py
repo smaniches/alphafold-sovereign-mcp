@@ -87,9 +87,7 @@ async def test_associated_diseases_full_flow(
                     "target": {
                         "id": "ENSG0001",
                         "approvedSymbol": "BRCA1",
-                        "proteinIds": [
-                            {"id": "P38398", "source": "uniprot_swissprot"}
-                        ],
+                        "proteinIds": [{"id": "P38398", "source": "uniprot_swissprot"}],
                         "associatedDiseases": {
                             "rows": [
                                 {
@@ -284,7 +282,11 @@ async def test_drug_count_and_tractability_null_tractability(
     respx_mock.post(_GQL_URL).mock(
         return_value=httpx.Response(
             200,
-            json={"data": {"target": {"drugAndClinicalCandidates": {"count": 0}, "tractability": None}}},
+            json={
+                "data": {
+                    "target": {"drugAndClinicalCandidates": {"count": 0}, "tractability": None}
+                }
+            },
         ),
     )
     async with OpenTargetsClient() as client:
@@ -305,9 +307,7 @@ async def test_resolve_target_found(respx_mock: respx.MockRouter) -> None:
             json={
                 "data": {
                     "search": {
-                        "hits": [
-                            {"id": "ENSG00000133703", "entity": "target", "name": "KRAS"}
-                        ]
+                        "hits": [{"id": "ENSG00000133703", "entity": "target", "name": "KRAS"}]
                     }
                 }
             },
@@ -328,9 +328,7 @@ async def test_resolve_target_skips_non_target_hits(
             json={
                 "data": {
                     "search": {
-                        "hits": [
-                            {"id": "EFO_0000305", "entity": "disease", "name": "breast"}
-                        ]
+                        "hits": [{"id": "EFO_0000305", "entity": "disease", "name": "breast"}]
                     }
                 }
             },

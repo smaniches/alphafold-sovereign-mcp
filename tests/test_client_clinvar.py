@@ -155,9 +155,7 @@ async def test_search_by_hgvs_with_api_key_passes_param(
     search_route = respx_mock.get(
         "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi",
     ).mock(
-        return_value=httpx.Response(
-            200, json={"esearchresult": {"idlist": ["77"]}}
-        ),
+        return_value=httpx.Response(200, json={"esearchresult": {"idlist": ["77"]}}),
     )
     summary_route = respx_mock.get(
         "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi",
@@ -244,9 +242,7 @@ async def test_search_gene_empty(respx_mock: respx.MockRouter) -> None:
     respx_mock.get(
         "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi",
     ).mock(
-        return_value=httpx.Response(
-            200, json={"esearchresult": {"idlist": []}}
-        ),
+        return_value=httpx.Response(200, json={"esearchresult": {"idlist": []}}),
     )
     async with ClinVarClient() as client:
         assert await client.search_gene("UNKNOWNGENE") == []
@@ -260,9 +256,7 @@ async def test_search_gene_with_api_key(
     search_route = respx_mock.get(
         "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi",
     ).mock(
-        return_value=httpx.Response(
-            200, json={"esearchresult": {"idlist": []}}
-        ),
+        return_value=httpx.Response(200, json={"esearchresult": {"idlist": []}}),
     )
     async with ClinVarClient() as client:
         assert await client.search_gene("BRCA1") == []
@@ -366,9 +360,7 @@ async def test_search_by_hgvs_builds_gene_scoped_term(
     search_route = respx_mock.get(
         "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi",
     ).mock(
-        return_value=httpx.Response(
-            200, json={"esearchresult": {"idlist": ["99999", "17661"]}}
-        ),
+        return_value=httpx.Response(200, json={"esearchresult": {"idlist": ["99999", "17661"]}}),
     )
     respx_mock.get(
         "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi",

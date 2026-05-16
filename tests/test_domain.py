@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2024-2026 Santiago Maniches and TOPOLOGICA LLC
 """Unit tests for domain types — pure Python, no I/O."""
+
 from __future__ import annotations
 
 import pytest
@@ -282,9 +283,7 @@ def test_variant_report_to_dict_full() -> None:
     assert d["pathogenicity"]["clinvar_classification"] == "Pathogenic"
     assert d["pathogenicity"]["clinvar_review_status"] == "reviewed by expert panel"
     assert d["pathogenicity"]["clinvar_variation_id"] == "55480"
-    assert d["pathogenicity"]["clinvar_conditions"] == [
-        "Breast-ovarian cancer, familial 1"
-    ]
+    assert d["pathogenicity"]["clinvar_conditions"] == ["Breast-ovarian cancer, familial 1"]
     # Nested population_genetics block
     assert d["population_genetics"]["gnomad_af_global"] == 1e-5
     assert d["population_genetics"]["gnomad_loeuf"] == 0.5
