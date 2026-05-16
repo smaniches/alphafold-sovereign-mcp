@@ -47,7 +47,7 @@ jobs:
         run: uv python install 3.12
 
       - name: Install package + docs deps
-        run: uv pip install --system -e ".[docs]"
+        run: uv sync --extra docs
 
       - name: Build (non-strict; warnings are OK while content stabilises)
         run: uv run mkdocs build --clean
