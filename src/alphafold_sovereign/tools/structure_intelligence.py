@@ -452,7 +452,7 @@ async def analyze_structural_confidence(
         return {
             "uniprot_id": uid,
             "error": "AlphaFold structure not found in database.",
-            "note": "Only human proteome + model organisms are covered by AF DB v4.",
+            "note": "Only human proteome + model organisms are covered by AF DB v6.",
         }
 
     plddt = result.get("mean_plddt")
@@ -487,7 +487,7 @@ async def analyze_structural_confidence(
             ),
         },
         "model_url": result.get("model_url", ""),
-        "provenance": _provenance(alphafold_db="v4", plddt_version="v4"),
+        "provenance": _provenance(alphafold_db="v6", plddt_version="v6"),
     }
 
 
@@ -559,7 +559,7 @@ async def compute_topology_fingerprint(
             "structural similarity between any two proteins, regardless of sequence identity. "
             "Store in your knowledge graph for rapid cross-protein screening."
         ),
-        "provenance": _provenance(alphafold_db="v4", methodology="VR-persistent-homology"),
+        "provenance": _provenance(alphafold_db="v6", methodology="VR-persistent-homology"),
     }
 
 
@@ -664,7 +664,7 @@ async def compare_proteins_topologically(
             "Distance 0.1–0.4: related topology (same superfold, different features). "
             "Distance > 0.4: distinct topology (different fold class)."
         ),
-        "provenance": _provenance(alphafold_db="v4", methodology="VR-persistent-homology"),
+        "provenance": _provenance(alphafold_db="v6", methodology="VR-persistent-homology"),
     }
 
 
@@ -776,7 +776,7 @@ async def find_evolutionary_structural_shifts(
                 "High drift may invalidate preclinical safety findings."
             ),
         },
-        "provenance": _provenance(ensembl="current", alphafold_db="v4"),
+        "provenance": _provenance(ensembl="current", alphafold_db="v6"),
     }
 
 
@@ -846,7 +846,7 @@ async def score_binding_pocket_geometry(
         "putative_pockets": pockets[:10],
         "n_pockets_found": len(pockets),
         "methodology": (
-            "Alpha-sphere geometric clustering on Cα coordinates from AlphaFold DB v4. "
+            "Alpha-sphere geometric clustering on Cα coordinates from AlphaFold DB v6. "
             "High-confidence residues (B-factor proxy > 70) only. "
             "Druggability index = compactness × burial × pocket_size / 100."
         ),
@@ -854,7 +854,7 @@ async def score_binding_pocket_geometry(
             "For production use, validate with fpocket, P2Rank, or DoGSiteScorer. "
             "This tool provides rapid pocket pre-screening without external software dependencies."
         ),
-        "provenance": _provenance(alphafold_db="v4", method="geometric-clustering"),
+        "provenance": _provenance(alphafold_db="v6", method="geometric-clustering"),
     }
 
 
@@ -928,7 +928,7 @@ async def detect_intrinsically_disordered(
             else "CONVENTIONAL: ordered structure is suitable for classical SBDD approaches."
         ),
         "reference": "Ruff KM & Pappu RV (2021) J Mol Biol 433:167208. doi:10.1016/j.jmb.2021.167208",
-        "provenance": _provenance(alphafold_db="v4", plddt_cutoff="50"),
+        "provenance": _provenance(alphafold_db="v6", plddt_cutoff="50"),
     }
 
 

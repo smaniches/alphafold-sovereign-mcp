@@ -13,20 +13,20 @@ clinical or regulatory use.
 [![CI](https://github.com/smaniches/alphafold-sovereign-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/smaniches/alphafold-sovereign-mcp/actions/workflows/ci.yml)
 [![Docs](https://github.com/smaniches/alphafold-sovereign-mcp/actions/workflows/docs.yml/badge.svg)](https://smaniches.github.io/alphafold-sovereign-mcp/)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/smaniches/alphafold-sovereign-mcp/badge)](https://api.securityscorecards.dev/projects/github.com/smaniches/alphafold-sovereign-mcp)
-[![Release](https://img.shields.io/github/v/release/smaniches/alphafold-sovereign-mcp?include_prereleases&sort=semver)](https://github.com/smaniches/alphafold-sovereign-mcp/releases)
-[![PyPI](https://img.shields.io/pypi/v/alphafold-sovereign-mcp?include_prereleases&label=PyPI)](https://pypi.org/project/alphafold-sovereign-mcp/)
+[![Release](https://img.shields.io/github/v/release/smaniches/alphafold-sovereign-mcp?sort=semver)](https://github.com/smaniches/alphafold-sovereign-mcp/releases)
+[![PyPI](https://img.shields.io/pypi/v/alphafold-sovereign-mcp?label=PyPI)](https://pypi.org/project/alphafold-sovereign-mcp/)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](pyproject.toml)
 [![MCP Spec 2025-06-18](https://img.shields.io/badge/MCP-2025--06--18-purple)](https://modelcontextprotocol.io)
-[![Tests](https://img.shields.io/badge/tests-623%20passing-success)](https://github.com/smaniches/alphafold-sovereign-mcp/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/badge/coverage-99%25-brightgreen)](https://github.com/smaniches/alphafold-sovereign-mcp/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/tests-677%20passing-success)](https://github.com/smaniches/alphafold-sovereign-mcp/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)](https://github.com/smaniches/alphafold-sovereign-mcp/actions/workflows/ci.yml)
 [![ORCID](https://img.shields.io/badge/ORCID-0009--0005--6480--1987-A6CE39?logo=orcid&logoColor=white)](https://orcid.org/0009-0005-6480-1987)
 [![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.20134774-3C5A99?logo=zenodo&logoColor=white)](https://doi.org/10.5281/zenodo.20134774)
 
-**Status:** `v1.1.0-rc1` — release candidate. Engineering-grade
-(623 tests, 99% branch coverage, full legal kit). Scientifically
-unvalidated by independent domain experts — see
-[`STATUS.md`](STATUS.md) and [`LIMITATIONS.md`](LIMITATIONS.md).
+**Status:** `v1.1.0`. Engineering-grade (677 tests, 100% line and
+branch coverage, full legal kit). Not yet scientifically validated by
+independent domain experts; see [`STATUS.md`](STATUS.md) and
+[`LIMITATIONS.md`](LIMITATIONS.md).
 
 ---
 
@@ -48,8 +48,8 @@ A Python MCP server that:
   queryable, exportable database.
 - Includes a topological-data-analysis (TDA) module that computes
   persistent-homology fingerprints (Betti numbers β₀, β₁, β₂) over
-  Vietoris-Rips filtrations of Cα coordinates, and a
-  Wasserstein-distance comparator between fingerprints. The full
+  Vietoris-Rips filtrations of Cα coordinates, and an
+  L2-distance comparator between those fingerprint vectors. The full
   persistent-homology features require the optional `[tda]` extra
   (`gudhi`).
 
@@ -72,9 +72,16 @@ It targets `mcp-spec 2025-06-18` and runs on Python 3.10–3.13.
   a **heuristic** built from drug-precedent counts, Open Targets
   tractability labels, pLDDT, and gnomAD constraint. It is not a
   validated prediction.
-- "Structural distance" between proteins via TDA Wasserstein distance
-  measures *topological* similarity of the Cα point cloud. It is not
-  a sequence similarity, RMSD, or functional-equivalence measure.
+- "Structural distance" between proteins is an L2 distance on
+  length-normalised TDA fingerprint vectors. It measures *topological*
+  similarity of the Cα point cloud. It is not a sequence similarity,
+  RMSD, optimal-transport Wasserstein distance, or
+  functional-equivalence measure.
+- The AlphaFold structures consumed here are *predicted* models with
+  per-residue pLDDT confidence, not experimental structures. Low-pLDDT
+  regions are unreliable; some proteins (BRCA1 among them) are largely
+  low-confidence, and structural inference over those regions should
+  be treated with caution.
 
 For a complete, itemised list of known limitations (with module
 references, impact, and planned resolution), see [`LIMITATIONS.md`](LIMITATIONS.md).
@@ -87,16 +94,14 @@ not yet scientifically validated — see [`STATUS.md`](STATUS.md).
 
 ### From PyPI (recommended)
 
-`v1.1.0-rc1` is a release candidate, so `pip` needs the `--pre` flag:
-
 ```bash
-pip install --pre alphafold-sovereign-mcp
+pip install alphafold-sovereign-mcp
 ```
 
 Or run it without installing using `uvx`:
 
 ```bash
-uvx --prerelease=allow --from alphafold-sovereign-mcp==1.1.0rc1 alphafold-sovereign-mcp
+uvx --from alphafold-sovereign-mcp alphafold-sovereign-mcp
 ```
 
 Every release on PyPI is built by the `release.yml` workflow under
@@ -118,7 +123,7 @@ uv pip install -e .
 ### Verify the install
 
 ```bash
-alphafold-sovereign --version       # → 1.1.0-rc1
+alphafold-sovereign --version       # → 1.1.0
 alphafold-sovereign --self-test     # → PASS on the offline BRCA1 fixture
 ```
 
@@ -153,15 +158,6 @@ ALPHAFOLD_OFFLINE=1 alphafold-sovereign-mcp
 ```
 
 Refuses all outbound HTTP. Serves only from the local SQLite cache.
-
-### Stable-only `pip install`
-
-Once the project graduates from release-candidate to a final `1.1.0`
-(or higher) — i.e., after the v1.2.0 scientific-validation milestones
-in [`STATUS.md`](STATUS.md) are met — `pip install
-alphafold-sovereign-mcp` will pick up the stable release without the
-`--pre` flag. Until then, `--pre` (or `uvx --prerelease=allow`) is
-required.
 
 ---
 
@@ -208,7 +204,7 @@ are not a substitute for clinical-laboratory review.
 |---|---|
 | `analyze_structural_confidence` | pLDDT distribution + PAE-derived domain map |
 | `compute_topology_fingerprint` | 64-dim TDA fingerprint (Betti numbers β₀ β₁ β₂) |
-| `compare_proteins_topologically` | Pairwise Wasserstein distance matrix for 2–10 proteins |
+| `compare_proteins_topologically` | Pairwise L2 fingerprint-distance matrix for 2–10 proteins |
 | `find_evolutionary_structural_shifts` | Cross-species structural divergence (TDA + Ensembl orthologs) |
 | `score_binding_pocket_geometry` | Geometric pocket detection + heuristic druggability index |
 | `detect_intrinsically_disordered` | IDR map (linkers, tails, long IDRs) |
@@ -267,7 +263,7 @@ find_evolutionary_structural_shifts(
 ```
 
 For each species: fetches the ortholog (Ensembl), the AlphaFold
-structure, computes the TDA fingerprint, and returns the Wasserstein
+structure, computes the TDA fingerprint, and returns the L2 fingerprint
 distance from the human structure along with sequence identity.
 
 ---
@@ -276,7 +272,7 @@ distance from the human structure along with sequence identity.
 
 | Source | What we use | License |
 |---|---|---|
-| AlphaFold DB v4 (EBI/DeepMind) | Structures, pLDDT, PAE, AlphaMissense | CC BY 4.0 |
+| AlphaFold DB v6 (EBI/DeepMind) | Structures, pLDDT, PAE, AlphaMissense | CC BY 4.0 |
 | UniProt | Protein function, domains, GO | CC BY 4.0 |
 | MONDO (OLS4) | Disease ontology, ICD cross-refs | CC BY 4.0 |
 | HPO (JAX) | Phenotype terms, gene-disease links | hpo.jax.org |
@@ -322,11 +318,11 @@ See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the full module map.
 
 ## Testing & quality
 
-- 623 unit tests with respx-mocked upstreams; the full suite runs
-  hermetically in under 15 seconds on a laptop.
+- 677 unit tests with respx-mocked upstreams; the full suite runs
+  hermetically in under a minute on a laptop.
 - Coverage on the shipped surface (`src/alphafold_sovereign/clients`,
-  `domain`, `storage`, `server`, `tools`): **99% line + branch**, with
-  19 of 20 modules at 100%.
+  `domain`, `storage`, `server`, `tools`): **100% line + branch**,
+  every shipped module at 100%.
 - Lint: `ruff` (full ruleset, no per-file ignores on the production
   tree). Type checking: `mypy --strict` on the domain, clients, and
   storage subtrees.
@@ -344,7 +340,7 @@ HEAD; if you find a divergence, please open an issue.
 ## Contributing
 
 DCO sign-off required (`git commit -s`). No copyright assignment.
-Coverage gate: ≥95% line / ≥90% branch for new modules.
+Coverage gate: CI enforces 100% line and branch coverage on the shipped surface.
 Full guide: [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ---
@@ -367,7 +363,7 @@ this file).
   author    = {Maniches, Santiago},
   title     = {AlphaFold Sovereign MCP},
   year      = {2026},
-  version   = {1.1.0-rc1},
+  version   = {1.1.0},
   url       = {https://github.com/smaniches/alphafold-sovereign-mcp},
   license   = {Apache-2.0},
   orcid     = {0009-0005-6480-1987},
