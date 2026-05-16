@@ -1,6 +1,6 @@
 # Project Status
 
-**Version:** v1.1.0-rc1 (release candidate)
+**Version:** v1.1.0
 **Stage:** Early open source. Engineering-grade infrastructure;
 scientifically unvalidated by independent domain experts.
 
@@ -21,8 +21,8 @@ expectation of what this project is and is not.
   single module reused by every upstream client.
 
 ### Test suite
-- **623 tests** across 20 modules.
-- **99% line + branch coverage** on the shipped surface
+- **677 tests** across 20 modules.
+- **100% line + branch coverage** on the shipped surface
   (``src/alphafold_sovereign/``, excluding the archived monolith).
 - Tests use ``respx`` to mock HTTP semantics (not just return values),
   ``hypothesis`` for property tests on parsers, and ``pytest-asyncio``
@@ -43,7 +43,7 @@ expectation of what this project is and is not.
 
 ### Distribution
 - Published to PyPI at https://pypi.org/project/alphafold-sovereign-mcp/
-  (release-candidate channel; use ``pip install --pre``).
+  (install with ``pip install alphafold-sovereign-mcp``).
 - Zenodo concept DOI: 10.5281/zenodo.20134774 — minted automatically
   on every GitHub Release.
 - mkdocs documentation site auto-deploys to GitHub Pages on every
@@ -99,8 +99,9 @@ expectation of what this project is and is not.
 - **Single maintainer.** No bus factor > 1.
 - **No external contributors yet.** Review process is documented in
   ``CONTRIBUTING.md`` but has not been exercised.
-- **No formal release cadence.** v1.1.0-rc1 is a release candidate;
-  a real v1.1.0 will be tagged after community feedback.
+- **No formal release cadence.** v1.1.0 is the current release;
+  later versions will be tagged as the validation milestones below
+  are met.
 
 ---
 
@@ -141,5 +142,5 @@ planned, sequenced steps are:
 
 ## Last updated
 
-2026-05-12. This document is part of the repo; PRs to correct or
+2026-05-16. This document is part of the repo; PRs to correct or
 expand it are welcome.

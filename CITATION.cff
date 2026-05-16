@@ -14,7 +14,7 @@ abstract: >-
   DisGeNET, RCSB PDB, InterPro, Gene Ontology, Human Protein Atlas)
   as tool calls a Claude (or other MCP-capable) client can invoke
   directly. Persists each result to a local SQLite knowledge graph for
-  later querying. The server is engineering-grade (623 tests, 99% line
+  later querying. The server is engineering-grade (677 tests, 100% line
   + branch coverage) but its scientific outputs — draft ACMG/AMP
   evidence and a heuristic druggability tier — have NOT been reviewed
   by independent domain experts and must be treated as research aids,
@@ -28,7 +28,7 @@ authors:
 license: Apache-2.0
 repository-code: "https://github.com/smaniches/alphafold-sovereign-mcp"
 url: "https://smaniches.github.io/alphafold-sovereign-mcp/"
-# Concept DOI minted by Zenodo on the v1.1.0-rc1 release.  The
+# Concept DOI minted by Zenodo on the v1.1.0 release.  The
 # concept DOI always resolves to the latest version; specific-version
 # DOIs are also available on the Zenodo record page.
 doi: "10.5281/zenodo.20134774"
@@ -46,7 +46,7 @@ keywords:
   - biosecurity
   - drug-discovery
   - clinical-research
-version: "1.1.0-rc1"
+version: "1.1.0"
 date-released: "2026-05-11"
 references:
   - type: software

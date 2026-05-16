@@ -319,8 +319,11 @@ async def _alphamissense_for_variant(
     it.
 
     ``gene_symbol`` is retained for log context only; the UniProt
-    accession is resolved from the VEP consequence, so a RefSeq-form HGVS
-    with no parseable gene symbol still resolves AlphaMissense.
+    accession is resolved from the VEP consequence itself, so this
+    function no longer requires a parseable gene symbol. End-to-end
+    resolution for a RefSeq-form HGVS then depends only on Ensembl VEP
+    accepting that HGVS string and returning a canonical missense
+    consequence carrying a SwissProt accession.
     """
     canonical = next((tc for tc in vep_results if tc.get("canonical")), {})
     protein_variant = _protein_variant_from_vep(canonical)
@@ -673,7 +676,7 @@ async def generate_variant_clinical_report(
         ensembl_vep="GRCh38",
         clinvar="current",
         gnomad="v4",
-        alphamissense="v1",
+        alphamissense="2023",
     )
 
     log.info("complete", tier=tier)
@@ -704,7 +707,8 @@ async def assess_target_druggability(
     3. **Structural confidence** — AF2 pLDDT (ordered → analysable binding pockets)
     4. **Population constraint** — gnomAD LOEUF (highly constrained → safety risk on inhibition)
 
-    This replaces weeks of manual database triage for target selection committees.
+    It assembles existing public-database evidence into one tier; it does
+    not add scientific judgement and is not a validated predictive model.
 
     Args:
         params.uniprot_id: UniProt accession.
@@ -835,14 +839,10 @@ async def synthesize_protein_dossier(
 ) -> dict[str, Any]:
     """Generate a complete protein intelligence dossier from 7 data sources.
 
-    This is the single most powerful tool in AlphaFold Sovereign: it replaces
-    a week of wet-lab literature review with a 15-second cross-database synthesis.
-    The output is a structured intelligence briefing suitable for:
-    - Target identification committees (pharma R&D)
-    - Drug repurposing working groups
-    - Grant applications (NIH R01, DARPA-BTO, BARDA)
-    - Clinical variant review boards
-    - Biosecurity threat assessments
+    It assembles disease associations, drug precedent, population
+    constraint, ClinVar variants, and cross-species orthologs for one
+    protein into a single structured record. It composes upstream
+    databases; it does not add scientific judgement.
 
     Sources fused in parallel:
       - **Open Targets**: disease associations + tractability + drug count
