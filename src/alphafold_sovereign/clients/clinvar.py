@@ -13,6 +13,7 @@ Reference:
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 import structlog
@@ -86,7 +87,7 @@ class ClinVarClient(BaseAsyncClient):
         """
         params: dict[str, Any] = {
             "db": "clinvar",
-            "term": f"{hgvs}[Variant Name]",
+            "term": self._build_search_term(hgvs),
             "retmode": "json",
             "retmax": 10,
         }
@@ -96,7 +97,12 @@ class ClinVarClient(BaseAsyncClient):
         ids = data.get("esearchresult", {}).get("idlist", [])
         if not ids:
             return []
-        return await self._fetch_summaries(ids)
+        summaries = await self._fetch_summaries(ids)
+        # The gene-scoped search also returns nearby variants; surface the
+        # exact change match (when present) first so callers can take row[0].
+        change = hgvs.partition(":")[2].strip()
+        summaries.sort(key=lambda s: change not in s.get("name", ""))
+        return summaries
 
     async def get_variant(self, variation_id: str) -> dict[str, Any]:
         """Fetch a ClinVar variant by its numeric variation ID.
@@ -145,6 +151,29 @@ class ClinVarClient(BaseAsyncClient):
     # ------------------------------------------------------------------
     # Internal
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _build_search_term(hgvs: str) -> str:
+        """Translate an HGVS expression into a robust ClinVar esearch term.
+
+        ClinVar's ``[Variant Name]`` field only matches the database's own
+        canonical names such as ``NM_007294.4(BRCA1):c.181T>G``. A
+        gene-relative expression never matches that field, and a pinned
+        RefSeq version (``NM_007294.3`` against the current ``.4``) silently
+        misses. When the prefix is a gene symbol we query
+        ``<gene>[gene] AND <change>``, which is robust to RefSeq version
+        drift; a bare RefSeq prefix carries no gene token, so we fall back
+        to a free-text search of the whole expression.
+        """
+        if ":" not in hgvs:
+            return hgvs
+        prefix, _, change = hgvs.partition(":")
+        prefix, change = prefix.strip(), change.strip()
+        # RefSeq accessions (NM_, NP_, NC_, NG_, XM_, ...) carry an
+        # underscore; gene symbols do not.
+        if re.match(r"[A-Z]{2}_\d", prefix):
+            return hgvs
+        return f"{prefix}[gene] AND {change}"
 
     async def _fetch_summaries(self, ids: list[str]) -> list[dict[str, Any]]:
         """Batch-fetch esummary records for a list of variation IDs."""
