@@ -38,15 +38,15 @@ def test_extract_uniprot_none() -> None:
 
 def test_datatype_scores_builds_dict() -> None:
     rows = [
-        {"componentId": "genetic_association", "score": 0.7},
-        {"componentId": "literature", "score": 0.2},
+        {"id": "genetic_association", "score": 0.7},
+        {"id": "literature", "score": 0.2},
     ]
     out = OpenTargetsClient._datatype_scores(rows)
     assert out == {"genetic_association": 0.7, "literature": 0.2}
 
 
 def test_datatype_scores_default_when_missing() -> None:
-    rows = [{"componentId": "x"}]
+    rows = [{"id": "x"}]
     out = OpenTargetsClient._datatype_scores(rows)
     assert out == {"x": 0.0}
 
@@ -56,7 +56,7 @@ def test_row_to_score_full() -> None:
         "disease": {"id": "MONDO:1", "name": "Cancer"},
         "score": 0.85,
         "datatypeScores": [
-            {"componentId": "genetic_association", "score": 0.5},
+            {"id": "genetic_association", "score": 0.5},
         ],
     }
     score = OpenTargetsClient._row_to_score(row, "ENSG1", "BRCA1", "P38398")
@@ -97,7 +97,7 @@ async def test_associated_diseases_full_flow(
                                     "score": 0.9,
                                     "datatypeScores": [
                                         {
-                                            "componentId": "genetic_association",
+                                            "id": "genetic_association",
                                             "score": 0.8,
                                         }
                                     ],
@@ -184,11 +184,11 @@ async def test_associated_targets_full_flow(respx_mock: respx.MockRouter) -> Non
                                     "score": 0.95,
                                     "datatypeScores": [
                                         {
-                                            "componentId": "genetic_association",
+                                            "id": "genetic_association",
                                             "score": 0.9,
                                         },
                                         {
-                                            "componentId": "known_drug",
+                                            "id": "known_drug",
                                             "score": 0.4,
                                         },
                                     ],
@@ -250,7 +250,7 @@ async def test_drug_count_and_tractability(respx_mock: respx.MockRouter) -> None
             json={
                 "data": {
                     "target": {
-                        "knownDrugs": {"count": 5},
+                        "drugAndClinicalCandidates": {"count": 5},
                         "tractability": [
                             {"label": "A", "value": True},
                             {"label": "B", "value": False},
@@ -284,9 +284,68 @@ async def test_drug_count_and_tractability_null_tractability(
     respx_mock.post(_GQL_URL).mock(
         return_value=httpx.Response(
             200,
-            json={"data": {"target": {"knownDrugs": {"count": 0}, "tractability": None}}},
+            json={"data": {"target": {"drugAndClinicalCandidates": {"count": 0}, "tractability": None}}},
         ),
     )
     async with OpenTargetsClient() as client:
         info = await client.drug_count_and_tractability("ENSG1")
     assert info["tractability_labels"] == []
+
+
+# ---------------------------------------------------------------------------
+# resolve_target
+# ---------------------------------------------------------------------------
+
+
+async def test_resolve_target_found(respx_mock: respx.MockRouter) -> None:
+    """A UniProt accession resolves to its Ensembl gene ID and symbol."""
+    respx_mock.post(_GQL_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "data": {
+                    "search": {
+                        "hits": [
+                            {"id": "ENSG00000133703", "entity": "target", "name": "KRAS"}
+                        ]
+                    }
+                }
+            },
+        ),
+    )
+    async with OpenTargetsClient() as client:
+        resolved = await client.resolve_target("P01116")
+    assert resolved == {"ensembl_id": "ENSG00000133703", "symbol": "KRAS"}
+
+
+async def test_resolve_target_skips_non_target_hits(
+    respx_mock: respx.MockRouter,
+) -> None:
+    """Non-target hits are skipped; with no target hit an empty dict is returned."""
+    respx_mock.post(_GQL_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "data": {
+                    "search": {
+                        "hits": [
+                            {"id": "EFO_0000305", "entity": "disease", "name": "breast"}
+                        ]
+                    }
+                }
+            },
+        ),
+    )
+    async with OpenTargetsClient() as client:
+        resolved = await client.resolve_target("not-a-target")
+    assert resolved == {}
+
+
+async def test_resolve_target_null_search(respx_mock: respx.MockRouter) -> None:
+    """A null search payload yields an empty dict without raising."""
+    respx_mock.post(_GQL_URL).mock(
+        return_value=httpx.Response(200, json={"data": {"search": None}}),
+    )
+    async with OpenTargetsClient() as client:
+        resolved = await client.resolve_target("P01116")
+    assert resolved == {}

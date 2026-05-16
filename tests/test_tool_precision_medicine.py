@@ -491,6 +491,11 @@ def _patch_clients(monkeypatch: pytest.MonkeyPatch) -> dict[str, MagicMock]:
             f"alphafold_sovereign.tools.precision_medicine._{name}", lambda m=mock: m
         )
 
+    # assess_target_druggability and synthesize_protein_dossier resolve the
+    # UniProt accession to an Ensembl target before any other Open Targets call.
+    mocks["opentargets"].resolve_target = AsyncMock(
+        return_value={"ensembl_id": "ENSG_TEST", "symbol": "TESTGENE"}
+    )
     return mocks
 
 
@@ -825,7 +830,7 @@ async def test_assess_target_druggability_no_drug_count_from_chembl(
 async def test_assess_target_druggability_gnomad_constraint_exception(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """gnomad.gene_constraint raises after pref_name → gene_symbol built."""
+    """gnomad.gene_constraint raises after resolve_target supplies the gene symbol."""
     mocks = _patch_clients(monkeypatch)
     mocks["chembl"].target_by_uniprot = AsyncMock(
         return_value={"chembl_id": "CHEMBL_TGT", "pref_name": "BRCA1 protein"}
@@ -838,6 +843,24 @@ async def test_assess_target_druggability_gnomad_constraint_exception(
 
     out = await assess_target_druggability(DruggabilityInput(uniprot_id="P38398"))
     assert out["druggability_tier"] == "NOT_DRUGGABLE"
+
+
+async def test_assess_target_druggability_resolve_exception(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """resolve_target raising leaves OT/gnomAD evidence empty without failing the tool."""
+    mocks = _patch_clients(monkeypatch)
+    mocks["opentargets"].resolve_target = AsyncMock(side_effect=RuntimeError("resolve fail"))
+    mocks["chembl"].target_by_uniprot = AsyncMock(
+        return_value={"chembl_id": "CHEMBL_TGT", "pref_name": "X"}
+    )
+    mocks["chembl"].approved_drugs = AsyncMock(
+        return_value=[{"molecule_chembl_id": "CHEMBL1", "max_phase": 4}] * 2
+    )
+
+    out = await assess_target_druggability(DruggabilityInput(uniprot_id="P38398"))
+    assert out["evidence"]["drug_count"] == 2
+    assert out["evidence"]["gene_constraint"]["loeuf"] is None
 
 
 # ---------------------------------------------------------------------------
@@ -1070,6 +1093,26 @@ async def test_synthesize_protein_dossier_orthologs_exception(
         )
     )
     assert out["cross_species_orthologs"] == []
+
+
+async def test_synthesize_protein_dossier_resolve_exception(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """resolve_target raising still yields a dossier (Ensembl ID falls back to empty)."""
+    mocks = _patch_clients(monkeypatch)
+    mocks["opentargets"].resolve_target = AsyncMock(side_effect=RuntimeError("resolve fail"))
+    mocks["opentargets"].associated_diseases = AsyncMock(return_value=[])
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(return_value={})
+    mocks["disgenet"].gene_disease_associations = AsyncMock(return_value=[])
+    mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
+    mocks["clinvar"].search_gene = AsyncMock(return_value=[])
+    mocks["ensembl"].gene_lookup = AsyncMock(return_value={})
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value=None)
+
+    out = await synthesize_protein_dossier(
+        ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1")
+    )
+    assert out["target"]["gene_symbol"] == "BRCA1"
 
 
 # ---------------------------------------------------------------------------

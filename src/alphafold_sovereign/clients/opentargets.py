@@ -276,7 +276,7 @@ class OpenTargetsClient(BaseAsyncClient):
 
     @staticmethod
     def _datatype_scores(rows: list[dict[str, Any]]) -> dict[str, float]:
-        return {r["id"]: float(r.get("score", 0.0)) for r in rows if r.get("id")}
+        return {r["id"]: float(r.get("score", 0.0)) for r in rows}
 
     @staticmethod
     def _row_to_score(
