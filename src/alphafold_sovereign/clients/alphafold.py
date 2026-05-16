@@ -14,6 +14,8 @@ Reference:
 
 from __future__ import annotations
 
+import csv
+import io
 import os
 from typing import Any, cast
 
@@ -84,18 +86,52 @@ class AlphaFoldClient(BaseAsyncClient):
         return await self._get(path)
 
     async def get_alphamissense(self, uniprot_id: str) -> dict[str, Any]:
-        """Fetch AlphaMissense per-residue pathogenicity annotations.
+        """Fetch AlphaMissense per-substitution pathogenicity annotations.
+
+        AlphaFold DB serves these as a CSV file (one row per amino-acid
+        substitution) at the ``amAnnotationsUrl`` advertised in the
+        prediction metadata. The CSV header is
+        ``protein_variant,am_pathogenicity,am_class``.
 
         Returns:
             Dict with ``accession`` and ``predictions`` (list of dicts with
-            ``protein_variant``, ``am_pathogenicity``, ``am_class``).
+            ``protein_variant``, ``am_pathogenicity`` (float) and
+            ``am_class``). Empty dict if the accession has no AlphaMissense
+            annotations.
         """
         meta = await self.get_prediction(uniprot_id)
         am_url = meta.get("amAnnotationsUrl", "")
         if not am_url:
             return {}
         path = am_url.replace(_AF_FILES, "").replace(_AF_BASE, "")
-        return await self._get(path)
+        raw = await self._get_bytes(path)
+        return {
+            "accession": uniprot_id,
+            "predictions": _parse_alphamissense_csv(raw),
+        }
+
+    async def alphamissense_score(
+        self, uniprot_id: str, protein_variant: str
+    ) -> dict[str, Any] | None:
+        """Return the AlphaMissense prediction for one amino-acid substitution.
+
+        Args:
+            uniprot_id: UniProt accession, e.g. ``'P38398'``.
+            protein_variant: Substitution in single-letter form, e.g.
+                ``'C61G'`` (reference residue, 1-based position, alternate
+                residue).
+
+        Returns:
+            Dict with ``protein_variant``, ``am_pathogenicity`` (float) and
+            ``am_class``; or ``None`` when the protein has no AlphaMissense
+            annotations or the substitution is not present.
+        """
+        annotations = await self.get_alphamissense(uniprot_id)
+        target = protein_variant.strip().upper()
+        for pred in annotations.get("predictions", []):
+            if pred["protein_variant"].upper() == target:
+                return pred  # type: ignore[no-any-return]
+        return None
 
     async def check_availability(self, uniprot_id: str) -> bool:
         """Return True if AlphaFold DB has a prediction for the given accession."""
@@ -120,3 +156,30 @@ class AlphaFoldClient(BaseAsyncClient):
         )
         raw_list: Any = data
         return raw_list if isinstance(raw_list, list) else raw_list.get("predictions", [])
+
+
+def _parse_alphamissense_csv(raw: bytes) -> list[dict[str, Any]]:
+    """Parse an AlphaFold DB amino-acid-substitutions CSV.
+
+    The file header is ``protein_variant,am_pathogenicity,am_class``. Rows
+    with a missing variant key or a non-numeric pathogenicity value are
+    skipped rather than raising.
+    """
+    text = raw.decode("utf-8", errors="replace")
+    predictions: list[dict[str, Any]] = []
+    for row in csv.DictReader(io.StringIO(text)):
+        variant = (row.get("protein_variant") or "").strip()
+        if not variant:
+            continue
+        try:
+            score = float(row["am_pathogenicity"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        predictions.append(
+            {
+                "protein_variant": variant,
+                "am_pathogenicity": score,
+                "am_class": (row.get("am_class") or "").strip(),
+            }
+        )
+    return predictions

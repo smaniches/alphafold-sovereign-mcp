@@ -67,7 +67,7 @@ async def test_variant_frequencies_not_found(respx_mock: respx.MockRouter) -> No
 
 
 async def test_variant_frequencies_full_payload(respx_mock: respx.MockRouter) -> None:
-    """Exercise: exome branch, AlphaMissense parsed, every population filter."""
+    """Exercise: exome branch and every population filter."""
     respx_mock.post("https://gnomad.broadinstitute.org/api").mock(
         return_value=httpx.Response(
             200,
@@ -100,11 +100,6 @@ async def test_variant_frequencies_full_payload(respx_mock: respx.MockRouter) ->
                                 {"id": "afr", "ac": None, "an": None, "ac_hom": None},
                             ],
                         },
-                        "in_silico_predictors": [
-                            {"id": "AlphaMissense", "value": "0.91", "flags": []},
-                            # Different predictor — skipped
-                            {"id": "PolyPhen", "value": "0.5", "flags": []},
-                        ],
                     }
                 }
             },
@@ -113,7 +108,6 @@ async def test_variant_frequencies_full_payload(respx_mock: respx.MockRouter) ->
     async with GnomADClient() as client:
         result = await client.variant_frequencies("13-32936732-G-T")
     assert result["found"] is True
-    assert result["alphamissense_score"] == 0.91
     assert result["global_af"] == 0.00002
     populations = result["populations"]
     # We expect exactly 3 entries: nfe, unknown, afr
@@ -124,7 +118,7 @@ async def test_variant_frequencies_full_payload(respx_mock: respx.MockRouter) ->
 
 
 async def test_variant_frequencies_falls_back_to_genome(respx_mock: respx.MockRouter) -> None:
-    """If exome is null, use genome data; null in_silico_predictors → am=None."""
+    """If exome is null, use genome data."""
     respx_mock.post("https://gnomad.broadinstitute.org/api").mock(
         return_value=httpx.Response(
             200,
@@ -140,7 +134,6 @@ async def test_variant_frequencies_falls_back_to_genome(respx_mock: respx.MockRo
                             "ac_hom": None,
                             "populations": [],
                         },
-                        "in_silico_predictors": None,
                     }
                 }
             },
@@ -150,32 +143,6 @@ async def test_variant_frequencies_falls_back_to_genome(respx_mock: respx.MockRo
         result = await client.variant_frequencies("1-1-A-G")
     assert result["found"] is True
     assert result["global_af"] == 0.0
-    assert result["alphamissense_score"] is None
-
-
-async def test_variant_frequencies_alphamissense_value_error(
-    respx_mock: respx.MockRouter,
-) -> None:
-    """A non-numeric AlphaMissense value should be silently ignored."""
-    respx_mock.post("https://gnomad.broadinstitute.org/api").mock(
-        return_value=httpx.Response(
-            200,
-            json={
-                "data": {
-                    "variant": {
-                        "variantId": "1-1-A-G",
-                        "exome": {"ac": 1, "an": 10, "af": 0.1, "populations": []},
-                        "in_silico_predictors": [
-                            {"id": "alphamissense", "value": "not-a-float"},
-                        ],
-                    }
-                }
-            },
-        ),
-    )
-    async with GnomADClient() as client:
-        result = await client.variant_frequencies("1-1-A-G")
-    assert result["alphamissense_score"] is None
 
 
 async def test_variant_frequencies_no_cohort_data(respx_mock: respx.MockRouter) -> None:

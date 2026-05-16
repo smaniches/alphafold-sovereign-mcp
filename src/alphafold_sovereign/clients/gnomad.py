@@ -65,11 +65,6 @@ query Variant($variantId: String!, $datasetId: DatasetId!) {
         ac_hom
       }
     }
-    in_silico_predictors {
-      id
-      value
-      flags
-    }
   }
 }
 """
@@ -188,15 +183,6 @@ class GnomADClient(BaseAsyncClient):
                 )
             )
 
-        # In-silico predictors (AlphaMissense if present)
-        am_score: float | None = None
-        for pred in variant.get("in_silico_predictors") or []:
-            if pred.get("id", "").lower() == "alphamissense":
-                try:
-                    am_score = float(pred["value"])
-                except (TypeError, ValueError):
-                    pass
-
         return {
             "variant_id": variant_id,
             "found": True,
@@ -210,7 +196,6 @@ class GnomADClient(BaseAsyncClient):
             "global_an": global_an,
             "homozygote_count": cohort.get("ac_hom", 0),
             "populations": [p.to_dict() for p in populations],
-            "alphamissense_score": am_score,
         }
 
     # ------------------------------------------------------------------
