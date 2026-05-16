@@ -9,9 +9,14 @@ both the happy-path return values and the empty / not-found branches.
 from __future__ import annotations
 
 import httpx
+import pytest
 import respx
 
-from alphafold_sovereign.clients.alphafold import AlphaFoldClient, _parse_alphamissense_csv
+from alphafold_sovereign.clients.alphafold import (
+    AlphaFoldClient,
+    _parse_alphamissense_csv,
+    _validate_af_file_url,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -70,7 +75,7 @@ async def test_get_pdb_bytes_with_files_url(respx_mock: respx.MockRouter) -> Non
             ],
         ),
     )
-    respx_mock.get("https://alphafold.ebi.ac.uk/api/AF-P04637-F1-model_v4.pdb").mock(
+    respx_mock.get("https://alphafold.ebi.ac.uk/files/AF-P04637-F1-model_v4.pdb").mock(
         return_value=httpx.Response(200, content=b"ATOM 1 N MET A 1"),
     )
     async with AlphaFoldClient() as client:
@@ -104,7 +109,7 @@ async def test_get_pae_returns_json(respx_mock: respx.MockRouter) -> None:
             ],
         ),
     )
-    respx_mock.get("https://alphafold.ebi.ac.uk/api/AF-P12345-F1-pae.json").mock(
+    respx_mock.get("https://alphafold.ebi.ac.uk/files/AF-P12345-F1-pae.json").mock(
         return_value=httpx.Response(
             200,
             json={
@@ -146,7 +151,7 @@ async def test_get_alphamissense_returns_predictions(respx_mock: respx.MockRoute
             ],
         ),
     )
-    respx_mock.get("https://alphafold.ebi.ac.uk/api/AF-P04637-F1-aa-substitutions.csv").mock(
+    respx_mock.get("https://alphafold.ebi.ac.uk/files/AF-P04637-F1-aa-substitutions.csv").mock(
         return_value=httpx.Response(
             200,
             content=b"protein_variant,am_pathogenicity,am_class\nM1A,0.92,LPath\nM1C,0.10,LBen\n",
@@ -204,7 +209,7 @@ async def test_alphamissense_score_found(respx_mock: respx.MockRouter) -> None:
             ],
         ),
     )
-    respx_mock.get("https://alphafold.ebi.ac.uk/api/AF-P38398-F1-aa-substitutions.csv").mock(
+    respx_mock.get("https://alphafold.ebi.ac.uk/files/AF-P38398-F1-aa-substitutions.csv").mock(
         return_value=httpx.Response(
             200, content=b"protein_variant,am_pathogenicity,am_class\nC61G,0.9904,LPath\n"
         ),
@@ -229,7 +234,7 @@ async def test_alphamissense_score_not_found(respx_mock: respx.MockRouter) -> No
             ],
         ),
     )
-    respx_mock.get("https://alphafold.ebi.ac.uk/api/AF-P38398-F1-aa-substitutions.csv").mock(
+    respx_mock.get("https://alphafold.ebi.ac.uk/files/AF-P38398-F1-aa-substitutions.csv").mock(
         return_value=httpx.Response(
             200, content=b"protein_variant,am_pathogenicity,am_class\nC61G,0.9904,LPath\n"
         ),
@@ -305,3 +310,57 @@ async def test_search_by_taxonomy_extracts_predictions_when_dict_response(
     async with AlphaFoldClient() as client:
         results = await client.search_by_taxonomy(9606, page_size=500)  # exercise min() clamp
     assert results[0]["entryId"] == "AF-A0A2-F1"
+
+
+# ---------------------------------------------------------------------------
+# Regression: AlphaFold DB file-URL resolution (F1a)
+# ---------------------------------------------------------------------------
+
+
+def test_validate_af_file_url_accepts_af_host() -> None:
+    """An HTTPS URL on the AlphaFold DB host is returned unchanged."""
+    url = "https://alphafold.ebi.ac.uk/files/AF-P38398-F1-model_v6.pdb"
+    assert _validate_af_file_url(url) == url
+
+
+def test_validate_af_file_url_rejects_foreign_host() -> None:
+    """A URL on any other host is rejected with a ValueError naming it."""
+    with pytest.raises(ValueError, match="unexpected host"):
+        _validate_af_file_url("https://example.org/files/AF-P38398-F1-model_v6.pdb")
+
+
+def test_validate_af_file_url_rejects_non_https() -> None:
+    """An HTTP (non-TLS) URL on the AlphaFold DB host is also rejected."""
+    with pytest.raises(ValueError, match="unexpected host"):
+        _validate_af_file_url("http://alphafold.ebi.ac.uk/files/AF-P38398-F1-model_v6.pdb")
+
+
+async def test_alphamissense_fetches_advertised_files_url_verbatim(
+    respx_mock: respx.MockRouter,
+) -> None:
+    """Regression: the AlphaMissense CSV is fetched at the exact URL the
+    prediction metadata advertises, not at a path re-resolved against the
+    ``/api`` base.
+
+    Before the fix, ``get_alphamissense`` stripped the host from the
+    advertised ``/files/`` URL and refetched the path against the ``/api``
+    base, producing a 404 on the live server. This test pins the contract:
+    the advertised ``/files/`` route must be the route that is called.
+    """
+    am_url = "https://alphafold.ebi.ac.uk/files/AF-P38398-F1-aa-substitutions.csv"
+    respx_mock.get("https://alphafold.ebi.ac.uk/api/prediction/P38398").mock(
+        return_value=httpx.Response(
+            200, json=[{"entryId": "AF-P38398-F1", "amAnnotationsUrl": am_url}]
+        ),
+    )
+    files_route = respx_mock.get(am_url).mock(
+        return_value=httpx.Response(
+            200,
+            content=b"protein_variant,am_pathogenicity,am_class\nC61G,0.9904,LPath\n",
+        ),
+    )
+    async with AlphaFoldClient() as client:
+        hit = await client.alphamissense_score("P38398", "C61G")
+    assert files_route.called, "client must fetch the advertised /files/ URL verbatim"
+    assert hit is not None
+    assert hit["am_pathogenicity"] == 0.9904

@@ -18,6 +18,7 @@ import csv
 import io
 import os
 from typing import Any, cast
+from urllib.parse import urlsplit
 
 import structlog
 
@@ -26,7 +27,9 @@ from alphafold_sovereign.clients._base import BaseAsyncClient, UpstreamConfig
 logger = structlog.get_logger(__name__)
 
 _AF_BASE = "https://alphafold.ebi.ac.uk/api"
-_AF_FILES = "https://alphafold.ebi.ac.uk/files"
+# Host that must serve every AlphaFold DB file URL. Derived from _AF_BASE
+# so the expected host has a single source of truth.
+_AF_HOST = urlsplit(_AF_BASE).hostname or ""
 
 _AF_CONFIG = UpstreamConfig(
     base_url=_AF_BASE,
@@ -68,8 +71,7 @@ class AlphaFoldClient(BaseAsyncClient):
         pdb_url = meta.get("pdbUrl", "")
         if not pdb_url:
             return b""
-        path = pdb_url.replace(_AF_FILES, "").replace(_AF_BASE, "")
-        return await self._get_bytes(path)
+        return await self._get_bytes(_validate_af_file_url(pdb_url))
 
     async def get_pae(self, uniprot_id: str) -> dict[str, Any]:
         """Fetch the Predicted Aligned Error (PAE) JSON for a UniProt accession.
@@ -82,8 +84,7 @@ class AlphaFoldClient(BaseAsyncClient):
         pae_url = meta.get("paeDocUrl", "")
         if not pae_url:
             return {}
-        path = pae_url.replace(_AF_FILES, "").replace(_AF_BASE, "")
-        return await self._get(path)
+        return await self._get(_validate_af_file_url(pae_url))
 
     async def get_alphamissense(self, uniprot_id: str) -> dict[str, Any]:
         """Fetch AlphaMissense per-substitution pathogenicity annotations.
@@ -103,8 +104,7 @@ class AlphaFoldClient(BaseAsyncClient):
         am_url = meta.get("amAnnotationsUrl", "")
         if not am_url:
             return {}
-        path = am_url.replace(_AF_FILES, "").replace(_AF_BASE, "")
-        raw = await self._get_bytes(path)
+        raw = await self._get_bytes(_validate_af_file_url(am_url))
         return {
             "accession": uniprot_id,
             "predictions": _parse_alphamissense_csv(raw),
@@ -156,6 +156,48 @@ class AlphaFoldClient(BaseAsyncClient):
         )
         raw_list: Any = data
         return raw_list if isinstance(raw_list, list) else raw_list.get("predictions", [])
+
+
+def _validate_af_file_url(url: str) -> str:
+    """Return ``url`` unchanged when it is an AlphaFold DB file URL.
+
+    AlphaFold DB prediction metadata advertises absolute URLs for the PDB
+    model, the PAE matrix, and the AlphaMissense substitutions CSV. Those
+    resources are served from a host and path prefix distinct from the JSON
+    API base, so they must be fetched verbatim. This guard rejects any
+    advertised URL that is not an HTTPS URL on the AlphaFold DB host, so a
+    changed or malformed upstream response fails loudly here instead of
+    triggering a request to an unintended location.
+
+    Args:
+        url: A non-empty absolute URL taken from prediction metadata.
+
+    Returns:
+        ``url`` unchanged, when its scheme is ``https`` and its host equals
+        the AlphaFold DB host derived from ``_AF_BASE``.
+
+    Raises:
+        ValueError: when ``url`` is not an HTTPS URL on the AlphaFold DB
+            host. The message names the expected host and the offending URL.
+
+    Complexity:
+        O(len(url)) for a single URL parse.
+
+    Example::
+
+        >>> _validate_af_file_url(
+        ...     "https://alphafold.ebi.ac.uk/files/AF-P38398-F1-model_v6.pdb"
+        ... )
+        'https://alphafold.ebi.ac.uk/files/AF-P38398-F1-model_v6.pdb'
+    """
+    parts = urlsplit(url)
+    host = parts.hostname or ""
+    if parts.scheme != "https" or host != _AF_HOST:
+        raise ValueError(
+            f"AlphaFold DB advertised a file URL on an unexpected host: "
+            f"expected an https URL on {_AF_HOST!r}, got {url!r}."
+        )
+    return url
 
 
 def _parse_alphamissense_csv(raw: bytes) -> list[dict[str, Any]]:

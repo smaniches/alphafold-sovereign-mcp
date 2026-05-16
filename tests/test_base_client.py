@@ -114,3 +114,35 @@ async def test_request_lazily_enters_when_used_outside_context() -> None:
     # The lazy-init arm ran: the httpx client now exists. Close it cleanly.
     assert client._client is not None  # type: ignore[attr-defined]
     await client.__aexit__()
+
+
+# ── Absolute-URL branch: air-gap check uses real target host (F1a) ───────────
+
+
+@pytest.mark.unit
+async def test_request_air_gap_uses_absolute_url_host(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When ``path`` is an absolute URL the air-gap check inspects that URL's
+    host, not the client's ``base_url`` host.
+
+    Regression for the AlphaFold ``/files/`` fix: the probe client's
+    ``base_url`` is on a different host than the requested URL; offline mode
+    is forced on so the request is refused before any socket is opened, and
+    the error names the *requested* host, proving the absolute-URL branch ran.
+
+    Complexity: O(len(url)) -- one startswith check, no I/O.
+    """
+    import alphafold_sovereign.clients._base as base_mod
+    from alphafold_sovereign.clients._base import AirGapError, BaseAsyncClient
+
+    monkeypatch.setattr(base_mod, "_OFFLINE_MODE", True)
+    monkeypatch.setattr(base_mod, "_ALWAYS_ALLOWED", frozenset())
+
+    class _Probe(BaseAsyncClient):
+        upstream_name = "probe"
+        config = UpstreamConfig(base_url="https://api.example.com")
+
+    async with _Probe() as client:
+        with pytest.raises(AirGapError, match="files.example.org"):
+            await client._request("GET", "https://files.example.org/data.csv")

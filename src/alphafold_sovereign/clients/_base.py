@@ -242,7 +242,16 @@ class BaseAsyncClient:
             await self.__aenter__()
         assert self._client is not None  # narrow type for mypy after lazy init
 
-        full_url = str(self._client.base_url.copy_with(path=path))
+        # ``path`` is normally a relative reference resolved against
+        # base_url. Some upstreams (AlphaFold DB) advertise absolute file
+        # URLs on a host/path prefix distinct from their JSON API base;
+        # httpx.request() already fetches an absolute URL verbatim and
+        # merges a relative one, so only the air-gap pre-check needs to
+        # distinguish the two cases to inspect the real target host.
+        if path.startswith(("http://", "https://")):
+            full_url = path
+        else:
+            full_url = str(self._client.base_url.copy_with(path=path))
         self._check_air_gap(full_url)
 
         if not await self._circuit.allow_request():
