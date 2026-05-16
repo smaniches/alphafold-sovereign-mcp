@@ -56,6 +56,23 @@ _MAX_PHASE: dict[int, str] = {
 }
 
 
+def _coerce_phase(value: Any) -> float:
+    """Coerce a ChEMBL ``max_phase`` value to a float.
+
+    ChEMBL serves ``max_phase`` as a JSON string (e.g. ``"4.0"``), a number,
+    or ``null``. ``int("4.0")`` raises ``ValueError``; inside ``approved_drugs``
+    that exception was absorbed by ``asyncio.gather(return_exceptions=True)``
+    and silently dropped every drug. This coercion accepts any of those forms
+    and returns ``0.0`` for anything unparseable.
+    """
+    if value is None:
+        return 0.0
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 class ChEMBLClient(BaseAsyncClient):
     """
     Async REST client for ChEMBL drug/bioactivity data.
@@ -255,7 +272,7 @@ class ChEMBLClient(BaseAsyncClient):
         for cid, drug in zip(target_ids, molecule_results):
             if drug is None or isinstance(drug, BaseException):
                 continue
-            max_phase = int(drug.get("max_phase") or 0)
+            max_phase = _coerce_phase(drug.get("max_phase"))
             if max_phase < min_phase:
                 continue
             mechs = [
@@ -295,10 +312,14 @@ class ChEMBLClient(BaseAsyncClient):
         params: dict[str, Any] = {
             "limit": min(limit, 200),
             "format": "json",
-            "order_by": "-max_phase_for_indication",
+            # ChEMBL's orderable field is ``max_phase_for_ind``;
+            # ``-max_phase_for_indication`` returns HTTP 400.
+            "order_by": "-max_phase_for_ind",
         }
         if efo_id:
-            params["efo_id"] = efo_id.replace("MONDO:", "MONDO_").replace("EFO:", "EFO_")
+            # ChEMBL stores ontology IDs in native colon form (``EFO:0000305``);
+            # rewriting the colon to an underscore returns zero rows.
+            params["efo_id"] = efo_id
         elif mesh_heading:
             params["mesh_heading"] = mesh_heading
         else:
@@ -312,7 +333,7 @@ class ChEMBLClient(BaseAsyncClient):
             {
                 "molecule_chembl_id": i.get("molecule_chembl_id", ""),
                 "pref_name": i.get("molecule_pref_name") or "",
-                "max_phase_for_indication": i.get("max_phase_for_indication"),
+                "max_phase_for_indication": i.get("max_phase_for_ind"),
                 "efo_id": i.get("efo_id", ""),
                 "efo_term": i.get("efo_term", ""),
                 "mesh_id": i.get("mesh_id", ""),
@@ -386,7 +407,7 @@ class ChEMBLClient(BaseAsyncClient):
 
         target_id = target["chembl_id"]
         drugs = await self.approved_drugs(target_id, include_clinical=(max_phase < 4))
-        repurposable = [d for d in drugs if int(d.get("max_phase", 0) or 0) >= max_phase]
+        repurposable = [d for d in drugs if _coerce_phase(d.get("max_phase")) >= max_phase]
         return repurposable[:limit]
 
     # ------------------------------------------------------------------
@@ -402,11 +423,12 @@ class ChEMBLClient(BaseAsyncClient):
         except Exception:
             return None
         props = data.get("molecule_properties") or {}
+        phase = _coerce_phase(data.get("max_phase"))
         return {
             "molecule_chembl_id": data.get("molecule_chembl_id", chembl_id),
             "pref_name": data.get("pref_name") or "",
-            "max_phase": data.get("max_phase", 0),
-            "max_phase_label": _MAX_PHASE.get(int(data.get("max_phase") or 0), "Unknown"),
+            "max_phase": phase,
+            "max_phase_label": _MAX_PHASE.get(int(phase), "Unknown"),
             "first_approval": data.get("first_approval"),
             "usan_stem": data.get("usan_stem") or "",
             "indication_class": data.get("indication_class") or "",

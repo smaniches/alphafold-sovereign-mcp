@@ -13,7 +13,7 @@ import httpx
 import pytest
 import respx
 
-from alphafold_sovereign.clients.chembl import ChEMBLClient
+from alphafold_sovereign.clients.chembl import ChEMBLClient, _coerce_phase
 
 
 # ---------------------------------------------------------------------------
@@ -211,7 +211,7 @@ async def test_approved_drugs_clinical_filter(respx_mock: respx.MockRouter) -> N
             json={
                 "molecule_chembl_id": "CHEMBL_A",
                 "pref_name": "Drug A",
-                "max_phase": 4,
+                "max_phase": "4.0",
                 "molecule_properties": {"mw_freebase": 300.0},
                 "oral": True,
                 "black_box_warning": 1,
@@ -223,7 +223,7 @@ async def test_approved_drugs_clinical_filter(respx_mock: respx.MockRouter) -> N
             200,
             json={
                 "molecule_chembl_id": "CHEMBL_B",
-                "max_phase": 2,
+                "max_phase": "2.0",
             },
         ),
     )
@@ -276,7 +276,7 @@ async def test_approved_drugs_include_clinical(respx_mock: respx.MockRouter) -> 
             200,
             json={
                 "molecule_chembl_id": "CHEMBL_A",
-                "max_phase": 1,
+                "max_phase": "1.0",
             },
         ),
     )
@@ -292,7 +292,9 @@ async def test_approved_drugs_include_clinical(respx_mock: respx.MockRouter) -> 
 
 
 async def test_drug_indications_by_efo(respx_mock: respx.MockRouter) -> None:
-    respx_mock.get("https://www.ebi.ac.uk/chembl/api/data/drug_indication.json").mock(
+    route = respx_mock.get(
+        "https://www.ebi.ac.uk/chembl/api/data/drug_indication.json"
+    ).mock(
         return_value=httpx.Response(
             200,
             json={
@@ -300,8 +302,8 @@ async def test_drug_indications_by_efo(respx_mock: respx.MockRouter) -> None:
                     {
                         "molecule_chembl_id": "CHEMBL25",
                         "molecule_pref_name": None,  # exercise `or ""`
-                        "max_phase_for_indication": 4,
-                        "efo_id": "EFO_0000228",
+                        "max_phase_for_ind": 4,
+                        "efo_id": "EFO:0000228",
                         "efo_term": "breast carcinoma",
                         "mesh_id": "D001943",
                         "mesh_heading": "Breast Neoplasms",
@@ -311,10 +313,16 @@ async def test_drug_indications_by_efo(respx_mock: respx.MockRouter) -> None:
         ),
     )
     async with ChEMBLClient() as client:
-        # Pass `MONDO:` prefix to exercise the prefix translation path.
-        results = await client.drug_indications(efo_id="MONDO:0007254", limit=999)
+        results = await client.drug_indications(efo_id="EFO:0000228", limit=999)
+    # Regression test for D1-B: ChEMBL stores efo_id in colon form and orders
+    # by max_phase_for_ind. The client must pass both through unchanged
+    # (the old EFO_ rewrite returned 0 rows; -max_phase_for_indication = 400).
+    sent = route.calls.last.request.url.params
+    assert sent["efo_id"] == "EFO:0000228"
+    assert sent["order_by"] == "-max_phase_for_ind"
     assert results[0]["pref_name"] == ""
     assert results[0]["molecule_chembl_id"] == "CHEMBL25"
+    assert results[0]["max_phase_for_indication"] == 4
 
 
 async def test_drug_indications_by_mesh(respx_mock: respx.MockRouter) -> None:
@@ -483,3 +491,21 @@ async def test_get_molecule_unknown_phase_label(respx_mock: respx.MockRouter) ->
         mol = await client._get_molecule("CHEMBL_U")
     assert mol is not None
     assert mol["max_phase_label"] == "Unknown"
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("4.0", 4.0),  # ChEMBL's real string form
+        ("0.5", 0.5),  # Early Phase 1
+        (4, 4.0),  # legacy integer form
+        (3.0, 3.0),  # native float
+        (-1, -1.0),  # Withdrawn sentinel
+        (None, 0.0),  # null
+        ("", 0.0),  # blank string
+        ("n/a", 0.0),  # unparseable
+    ],
+)
+def test_coerce_phase(value: object, expected: float) -> None:
+    """``_coerce_phase`` tolerates every max_phase form ChEMBL emits."""
+    assert _coerce_phase(value) == expected
