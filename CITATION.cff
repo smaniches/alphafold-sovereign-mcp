@@ -46,8 +46,8 @@ keywords:
   - biosecurity
   - drug-discovery
   - clinical-research
-version: "1.1.0"
-date-released: "2026-05-11"
+version: "1.1.1"
+date-released: "2026-05-17"
 references:
   - type: software
     title: "AlphaFold Protein Structure Database"
