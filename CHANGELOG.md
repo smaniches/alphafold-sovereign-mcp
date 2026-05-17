@@ -7,6 +7,53 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.1.1] - 2026-05-17
+
+A maintenance release that hardens the 1.1.0 surface. It resolves every
+outstanding automated code-review comment, verifies the codebase against
+the live AlphaFold DB v6 response schema, and makes the structure tools
+behave consistently when AlphaFold DB has no model for an accession.
+
+### Fixed
+- `EnsemblClient._first_uniprot` returned the string `"None"` for a list
+  whose first element was not a string; it now type-checks before
+  coercion.
+- `AlphaFoldClient.get_pae` could return a non-dict (a JSON `null` body
+  or a `null` first element of a single-element array); it now always
+  returns a dict.
+- `_validate_af_file_url` rejected an uppercase `HTTPS` scheme; the
+  scheme comparison is now case-insensitive per RFC 3986.
+- `ClinVarClient` exact-match ranking and RefSeq-accession detection
+  were case-sensitive; both are now case-insensitive.
+- `_fetch_af_plddt` raised `TypeError` when AlphaFold DB returned a
+  `null` `uniprotSequence`; the value is now coerced to an empty string.
+- Structure-intelligence AlphaFold fetchers are routed through
+  `AlphaFoldClient` and adapt to the AlphaFold DB v6 schema: the removed
+  `meanPlddt` field is replaced by `globalMetricValue`.
+- The AlphaMissense UniProt accession is resolved from the Ensembl VEP
+  `swissprot` consequence field, removing a redundant gene lookup.
+
+### Changed
+- The structure tools now return one consistent, human-readable
+  response when AlphaFold DB has no model for an accession, including a
+  `structure_available` flag. A stale coverage claim was removed.
+- `score_binding_pocket_geometry` docstring and methodology string now
+  describe the additive druggability index and the pLDDT threshold the
+  code actually applies.
+- Self-description accuracy pass: stale version strings and overstated
+  docstrings were corrected across the repository.
+- Test surface: 677 tests at 100% line and branch coverage, up from 623
+  tests at 99%. The `noxfile.py` coverage gate is raised to 100% to
+  match CI.
+
+### Security
+- The offline-mode air-gap pre-check resolved its target URL with a
+  manual branch that could inspect a different host than the request
+  reached for a protocol-relative or uppercase-scheme path. It now uses
+  `httpx.URL.join`, the same RFC 3986 resolution httpx applies
+  internally, so the pre-check inspects the host the request will
+  actually contact.
+
 ## [1.1.0-rc1] — 2026-05-11
 
 First release candidate that ships the refactored modular tree alongside
@@ -132,6 +179,7 @@ threat model, examples, mkdocs site).
 - Multi-mode local cache (`sovereign` / `readonly` / `disabled`).
 - HTML5 API documentation.
 
-[Unreleased]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.0-rc1...HEAD
+[Unreleased]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.0-rc1...v1.1.1
 [1.1.0-rc1]: https://github.com/smaniches/alphafold-sovereign-mcp/releases/tag/v1.1.0-rc1
 [1.0.0]: https://github.com/smaniches/alphafold-sovereign-mcp/releases/tag/v1.0.0

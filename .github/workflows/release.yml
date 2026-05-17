@@ -187,9 +187,11 @@ jobs:
             gh release upload "$TAG" "${ASSETS[@]}" --clobber
           else
             echo "Creating release $TAG."
+            PRERELEASE=""
+            if [[ "$TAG" == *-* ]]; then PRERELEASE="--prerelease"; fi
             gh release create "$TAG" \
               --title "AlphaFold Sovereign MCP $TAG" \
               --notes-file CHANGELOG.md \
-              --prerelease \
+              $PRERELEASE \
               "${ASSETS[@]}"
           fi
