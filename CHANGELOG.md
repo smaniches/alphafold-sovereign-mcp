@@ -7,6 +7,43 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.1.2] - 2026-05-17
+
+A metadata-coherence patch on top of v1.1.1. The v1.1.1 published
+artifacts (PyPI wheel, GitHub Release, Smithery / MCP-registry scrape)
+still carried release-candidate-era manifest fields because the audit
+landed in PR #17 that merged after the v1.1.1 tag was cut. v1.1.2
+rebuilds the wheel and re-publishes so the public-facing metadata
+matches the actual stable status. No runtime behaviour changes.
+
+### Changed
+- `pyproject.toml` trove classifier raised from
+  `Development Status :: 4 - Beta` to
+  `Development Status :: 5 - Production/Stable` so the PyPI surface
+  matches the `"stable"` maturity declared in `server.json`,
+  `.well-known/mcp.json`, and `smithery.yaml`.
+- `server.json` `"maturity"` is `"stable"` and the registry install
+  command drops the `--pre` flag (the wheel published for v1.1.1 still
+  carried `pip install --pre alphafold-sovereign-mcp`).
+- `.well-known/mcp.json` `"maturity"` is `"stable"`.
+- `smithery.yaml` gains an explicit `maturity: stable` field (the
+  registry manifest only carried it implicitly via the description
+  before) and the description coverage figures are aligned with the
+  rest of the manifests (677 tests, 100% line and branch).
+- `docs/installation.md` no longer pitches the project as a release
+  candidate, drops the `--pre` / `--prerelease=allow` install
+  instructions, simplifies the `uvx` example to
+  `uvx alphafold-sovereign-mcp`, and removes the obsolete
+  `## Stable-only pip install` section.
+- `AUDIT.md` and `INCIDENT_RESPONSE.md` re-anchor the still-true
+  "as of <version>" claims (no external audit, no postmortems) to
+  v1.1.2.
+- Version strings raised to 1.1.2 across `pyproject.toml`,
+  `src/alphafold_sovereign/__init__.py`, `server.json`,
+  `.well-known/mcp.json`, `smithery.yaml`, `CITATION.cff`,
+  `STATUS.md`, `README.md`, `docs/index.md`, `mkdocs.yml`,
+  `docs/installation.md`, and `examples/README.md`.
+
 ## [1.1.1] - 2026-05-17
 
 A maintenance release that hardens the 1.1.0 surface. It resolves every
@@ -179,7 +216,8 @@ threat model, examples, mkdocs site).
 - Multi-mode local cache (`sovereign` / `readonly` / `disabled`).
 - HTML5 API documentation.
 
-[Unreleased]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.2...HEAD
+[1.1.2]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.0-rc1...v1.1.1
 [1.1.0-rc1]: https://github.com/smaniches/alphafold-sovereign-mcp/releases/tag/v1.1.0-rc1
 [1.0.0]: https://github.com/smaniches/alphafold-sovereign-mcp/releases/tag/v1.0.0
