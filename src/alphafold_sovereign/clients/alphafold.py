@@ -2,7 +2,7 @@
 # Copyright 2024-2026 Santiago Maniches
 """AlphaFold Database async client.
 
-Wraps the EBI AlphaFold DB v4 REST API, the AlphaMissense endpoint,
+Wraps the EBI AlphaFold DB REST API, the AlphaMissense endpoint,
 and the PAE (predicted aligned error) JSON endpoint.
 
 Reference:
@@ -40,7 +40,7 @@ _AF_CONFIG = UpstreamConfig(
 
 
 class AlphaFoldClient(BaseAsyncClient):
-    """Async client for the EBI AlphaFold DB v4 REST API."""
+    """Async client for the EBI AlphaFold DB REST API."""
 
     upstream_name = "AlphaFold DB"
     config = _AF_CONFIG
@@ -90,9 +90,9 @@ class AlphaFoldClient(BaseAsyncClient):
         if not pae_url:
             return {}
         raw: Any = await self._get(_validate_af_file_url(pae_url))
-        if isinstance(raw, list):
-            return cast("dict[str, Any]", raw[0]) if raw else {}
-        return cast("dict[str, Any]", raw)
+        if isinstance(raw, list) and raw:
+            raw = raw[0]
+        return cast("dict[str, Any]", raw) or {}
 
     async def get_alphamissense(self, uniprot_id: str) -> dict[str, Any]:
         """Fetch AlphaMissense per-substitution pathogenicity annotations.
@@ -200,7 +200,7 @@ def _validate_af_file_url(url: str) -> str:
     """
     parts = urlsplit(url)
     host = parts.hostname or ""
-    if parts.scheme != "https" or host != _AF_HOST:
+    if parts.scheme.lower() != "https" or host != _AF_HOST:
         raise ValueError(
             f"AlphaFold DB advertised a file URL on an unexpected host: "
             f"expected an https URL on {_AF_HOST!r}, got {url!r}."

@@ -365,7 +365,7 @@ class KnowledgeGraph:
                 params_hash     TEXT NOT NULL,       -- SHA-256 of input params
                 params_json     TEXT NOT NULL,
                 result_hash     TEXT,                -- SHA-256 of output
-                result_json     TEXT,                -- truncated if > 1MB
+                result_json     TEXT,                -- JSON-serialised tool output
                 duration_ms     INTEGER,
                 error           TEXT,
                 session_id      TEXT,

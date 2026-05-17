@@ -1,7 +1,7 @@
 # Known Limitations
 
 This document enumerates the specific, named limitations of the project
-as of v1.1.0-rc1. It complements ``STATUS.md`` (which gives the
+as of v1.1.0. It complements ``STATUS.md`` (which gives the
 high-level posture) by listing concrete, addressable items.
 
 If you find a limitation that is not listed here, please open an issue

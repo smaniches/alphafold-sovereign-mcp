@@ -54,11 +54,9 @@ def _first_uniprot(value: Any) -> str:
     version suffix intact for the caller to strip if required. Returns an
     empty string when no accession is present.
     """
-    if isinstance(value, list):
-        return str(value[0]) if value else ""
-    if isinstance(value, str):
-        return value
-    return ""
+    if isinstance(value, list) and value:
+        value = value[0]
+    return value if isinstance(value, str) else ""
 
 
 class EnsemblClient(BaseAsyncClient):
