@@ -100,8 +100,8 @@ class ClinVarClient(BaseAsyncClient):
         summaries = await self._fetch_summaries(ids)
         # The gene-scoped search also returns nearby variants; surface the
         # exact change match (when present) first so callers can take row[0].
-        change = hgvs.partition(":")[2].strip()
-        summaries.sort(key=lambda s: change not in s.get("name", ""))
+        change = hgvs.partition(":")[2].strip().lower()
+        summaries.sort(key=lambda s: change not in s.get("name", "").lower())
         return summaries
 
     async def get_variant(self, variation_id: str) -> dict[str, Any]:
@@ -171,7 +171,7 @@ class ClinVarClient(BaseAsyncClient):
         prefix, change = prefix.strip(), change.strip()
         # RefSeq accessions (NM_, NP_, NC_, NG_, XM_, ...) carry an
         # underscore; gene symbols do not.
-        if re.match(r"[A-Z]{2}_\d", prefix):
+        if re.match(r"[A-Z]{2}_\d", prefix, re.IGNORECASE):
             return hgvs
         return f"{prefix}[gene] AND {change}"
 

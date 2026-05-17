@@ -174,7 +174,7 @@ async def _fetch_af_plddt(uniprot_id: str) -> dict[str, Any] | None:
         "uniprot_id": uniprot_id,
         "mean_plddt": meta.get("globalMetricValue"),
         "model_url": meta.get("pdbUrl", ""),
-        "sequence_length": len(meta.get("uniprotSequence", "")),
+        "sequence_length": len(meta.get("uniprotSequence") or ""),
     }
 
     try:
@@ -193,6 +193,39 @@ async def _fetch_af_plddt(uniprot_id: str) -> dict[str, Any] | None:
         result["domain_boundaries"] = _detect_domain_boundaries(pae_matrix)
 
     return result
+
+
+def _no_structure_response(uniprot_id: str) -> dict[str, Any]:
+    """Return a uniform, human-readable response when AF DB has no model.
+
+    AlphaFold DB does not contain a model for every UniProt accession.
+    When a structure or prediction fetch returns nothing, every
+    structure tool returns this same shape, so an LLM or a human
+    receives one clear, consistent explanation rather than a terse or
+    silent failure.
+
+    Args:
+        uniprot_id: The accession that was requested.
+
+    Returns:
+        A dict carrying ``structure_available`` set to False, a plain
+        ``error`` line, and an explanatory ``note``.
+    """
+    return {
+        "uniprot_id": uniprot_id,
+        "structure_available": False,
+        "error": (
+            "No AlphaFold model: AlphaFold DB returned no structure "
+            "prediction for this UniProt accession."
+        ),
+        "note": (
+            "AlphaFold DB covers most of UniProtKB but not every "
+            "accession. Some fragments, non-reference isoforms, and "
+            "very recently added entries have no deposited model. This "
+            "is an expected data-coverage gap, not a server fault. "
+            "Confirm the accession at https://alphafold.ebi.ac.uk/."
+        ),
+    }
 
 
 def _find_high_pae_pairs(pae: np.ndarray, threshold: float = 15.0) -> list[dict[str, Any]]:
@@ -449,11 +482,7 @@ async def analyze_structural_confidence(
     result = await _fetch_af_plddt(uid)
 
     if not result:
-        return {
-            "uniprot_id": uid,
-            "error": "AlphaFold structure not found in database.",
-            "note": "Only human proteome + model organisms are covered by AF DB v6.",
-        }
+        return _no_structure_response(uid)
 
     plddt = result.get("mean_plddt")
     confidence_tier = _plddt_tier(plddt)
@@ -537,10 +566,7 @@ async def compute_topology_fingerprint(
 
     structure = await _fetch_af_structure(uid)
     if not structure:
-        return {
-            "uniprot_id": uid,
-            "error": "Cannot fetch AlphaFold structure.",
-        }
+        return _no_structure_response(uid)
 
     ca_coords = _parse_ca_coords_from_pdb(structure["pdb_text"])
     if ca_coords.shape[0] == 0:
@@ -618,7 +644,7 @@ async def compare_proteins_topologically(
 
     for uid, struct in zip(ids, structures):
         if isinstance(struct, Exception) or struct is None:
-            errors[uid] = "Structure fetch failed."
+            errors[uid] = "No AlphaFold model for this accession."
             continue
         ca = _parse_ca_coords_from_pdb(struct["pdb_text"])
         if ca.shape[0] == 0:
@@ -796,16 +822,24 @@ async def score_binding_pocket_geometry(
 ) -> dict[str, Any]:
     """Identify and score putative binding pockets from AlphaFold geometry.
 
-    Uses the alpha-sphere / geometric clustering approach: residues whose Cα
-    atoms form concave surface regions (negative curvature) are candidate
-    pocket-lining residues.  Each pocket is scored by:
-    - **Burial score**: average distance of pocket residues from the surface centroid
-    - **Compactness**: radius of gyration of pocket residues
-    - **pLDDT qualifier**: only high-confidence residues (pLDDT > 70) are included
-    - **Pocket druggability index** (PDI): composite of volume estimate + compactness
+    Detects pockets with a geometry-only heuristic. Residues in the
+    inner 60 percent of the structure by distance from the centroid are
+    treated as buried, then grown greedily into clusters within an 8
+    Angstrom radius. A cluster is kept as a putative pocket when it has
+    at least ``min_pocket_residues`` members and a mean pLDDT of at
+    least 50.
 
-    This is a first-principles geometric approach — no ML model required,
-    fully reproducible from AF coordinates, usable in air-gap deployments.
+    Each pocket reports a radius of gyration (compactness of the pocket
+    residues), a burial value (distance of the pocket centroid from the
+    structure centroid), a mean pLDDT, and a druggability index. The
+    druggability index runs 0 to 100 and is the sum of four equally
+    weighted 0 to 25 sub-scores: residue count, radius of gyration, mean
+    pLDDT, and burial.
+
+    This is a fast, dependency-free pre-screen, not a substitute for a
+    validated pocket detector such as fpocket or P2Rank. It needs no ML
+    model, is fully reproducible from AlphaFold coordinates, and runs in
+    air-gapped deployments.
 
     Args:
         params.uniprot_id: UniProt accession.
@@ -817,7 +851,7 @@ async def score_binding_pocket_geometry(
 
     structure = await _fetch_af_structure(uid)
     if not structure:
-        return {"uniprot_id": uid, "error": "Structure not found in AF DB."}
+        return _no_structure_response(uid)
 
     pdb_text = structure["pdb_text"]
     ca_coords, residue_info = _parse_pdb_full(pdb_text)
@@ -846,9 +880,13 @@ async def score_binding_pocket_geometry(
         "putative_pockets": pockets[:10],
         "n_pockets_found": len(pockets),
         "methodology": (
-            "Alpha-sphere geometric clustering on Cα coordinates from AlphaFold DB v6. "
-            "High-confidence residues (B-factor proxy > 70) only. "
-            "Druggability index = compactness × burial × pocket_size / 100."
+            "Geometric clustering of buried Cα atoms (the inner 60 percent "
+            "of residues by distance from the structure centroid), grown "
+            "greedily within an 8 Angstrom radius. Clusters with fewer "
+            "than min_pocket_residues members or a mean pLDDT below 50 "
+            "are discarded. Druggability index is the sum of four equally "
+            "weighted 0 to 25 sub-scores: residue count, radius of "
+            "gyration, mean pLDDT, and burial."
         ),
         "note": (
             "For production use, validate with fpocket, P2Rank, or DoGSiteScorer. "
@@ -898,12 +936,12 @@ async def detect_intrinsically_disordered(
     result = await _fetch_af_plddt(uid)
 
     if not result:
-        return {"uniprot_id": uid, "error": "Structure not found."}
+        return _no_structure_response(uid)
 
     # We can reconstruct per-residue pLDDT from PDB B-factor column
     structure = await _fetch_af_structure(uid)
     if not structure:
-        return {"uniprot_id": uid, "error": "Cannot fetch structure file."}
+        return _no_structure_response(uid)
 
     per_residue_plddt = _extract_plddt_from_pdb(structure["pdb_text"])
     idr_segments = _detect_idr_segments(per_residue_plddt)
