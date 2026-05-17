@@ -7,6 +7,52 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.1.3] - 2026-05-17
+
+A dependency-trimming patch that reduces the runtime surface and closes
+the open Dependabot alert.
+
+### Removed
+- Seven pre-positioned runtime dependencies that no code path imported.
+  Each was annotated in `pyproject.toml` with a comment describing
+  future work (`# JWT — OAuth 2.1 bearer tokens`,
+  `# Cryptography (signing, FIPS)`,
+  `# Optional: OpenTelemetry (graceful no-op if not installed)`,
+  `# Optional: Prometheus metrics`) that was never written. Removed:
+  `mcp` (still pulled in transitively via `fastmcp`),
+  `pydantic-settings`,
+  `cryptography`,
+  `python-jose[cryptography]`,
+  `opentelemetry-sdk`,
+  `opentelemetry-exporter-otlp-proto-grpc`,
+  `prometheus-client`.
+  The HTTP transport, observability layer, and bearer-token handling
+  will declare their own dependencies at the time they actually ship,
+  when the choice can be made against real requirements.
+- The dead `jose.*` entry from the `[[tool.mypy.overrides]]` block that
+  matched the removed `python-jose` package.
+
+### Security
+- Resolves the GHSA-w8m6-9963-pmpv "Minerva timing attack on P-256 in
+  python-ecdsa" Dependabot alert. `ecdsa` was a transitive of
+  `python-jose`; removing the latter drops the former from the install
+  tree.
+
+### Changed
+- `uv.lock` regenerated. Thirteen packages drop out of the install tree:
+  `ecdsa`, `python-jose`, `rsa`, `pyasn1`, `prometheus-client`, `grpcio`,
+  `protobuf`, `googleapis-common-protos`,
+  `opentelemetry-exporter-otlp-proto-common`,
+  `opentelemetry-exporter-otlp-proto-grpc`, `opentelemetry-proto`,
+  `opentelemetry-sdk`, `opentelemetry-semantic-conventions`.
+  `pydantic-settings` and `opentelemetry-api` remain in the lockfile as
+  legitimate transitives of `mcp` and `openapi-pydantic` respectively.
+- New `.github/dependabot.yml` adds weekly automated dependency-update
+  PRs for both the Python ecosystem and GitHub Actions, closing the
+  OpenSSF Scorecard `Dependency-Update-Tool` finding.
+- `AUDIT.md` and `INCIDENT_RESPONSE.md` re-anchor the still-true
+  "as of <version>" claims to v1.1.3.
+
 ## [1.1.2] - 2026-05-17
 
 A metadata-coherence patch on top of v1.1.1. The v1.1.1 published
@@ -216,7 +262,8 @@ threat model, examples, mkdocs site).
 - Multi-mode local cache (`sovereign` / `readonly` / `disabled`).
 - HTML5 API documentation.
 
-[Unreleased]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.2...HEAD
+[Unreleased]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.3...HEAD
+[1.1.3]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.2...v1.1.3
 [1.1.2]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.0-rc1...v1.1.1
 [1.1.0-rc1]: https://github.com/smaniches/alphafold-sovereign-mcp/releases/tag/v1.1.0-rc1
