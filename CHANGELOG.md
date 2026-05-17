@@ -12,7 +12,7 @@ Versioning: [Semantic Versioning](https://semver.org/).
 A metadata-coherence patch on top of v1.1.1. The v1.1.1 published
 artifacts (PyPI wheel, GitHub Release, Smithery / MCP-registry scrape)
 still carried release-candidate-era manifest fields because the audit
-landed in PRs #17 that merged after the v1.1.1 tag was cut. v1.1.2
+landed in PR #17 that merged after the v1.1.1 tag was cut. v1.1.2
 rebuilds the wheel and re-publishes so the public-facing metadata
 matches the actual stable status. No runtime behaviour changes.
 
@@ -26,8 +26,10 @@ matches the actual stable status. No runtime behaviour changes.
   command drops the `--pre` flag (the wheel published for v1.1.1 still
   carried `pip install --pre alphafold-sovereign-mcp`).
 - `.well-known/mcp.json` `"maturity"` is `"stable"`.
-- `smithery.yaml` description coverage figures aligned with the rest
-  of the manifests (677 tests, 100% line and branch).
+- `smithery.yaml` gains an explicit `maturity: stable` field (the
+  registry manifest only carried it implicitly via the description
+  before) and the description coverage figures are aligned with the
+  rest of the manifests (677 tests, 100% line and branch).
 - `docs/installation.md` no longer pitches the project as a release
   candidate, drops the `--pre` / `--prerelease=allow` install
   instructions, simplifies the `uvx` example to

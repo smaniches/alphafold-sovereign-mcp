@@ -14,6 +14,7 @@ description: >-
   100% line and branch coverage) but scientific outputs are research aids that
   must be reviewed by qualified humans before clinical use — see
   STATUS.md and LIMITATIONS.md.
+maturity: stable
 version: "1.1.2"
 homepage: https://github.com/smaniches/alphafold-sovereign-mcp
 license: Apache-2.0
