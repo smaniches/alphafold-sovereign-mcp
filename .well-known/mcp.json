@@ -13,7 +13,7 @@
     "smithery": "/smithery.yaml",
     "mcp_server": "/server.json"
   },
-  "maturity": "release-candidate",
+  "maturity": "stable",
   "scientific_validation": "unvalidated",
   "scientific_validation_note": "Engineering-grade (677 tests, 100% coverage). Scientific outputs (ACMG draft, druggability tier) have NOT been reviewed by independent domain experts. See STATUS.md and LIMITATIONS.md."
 }

@@ -2,17 +2,16 @@
 
 ## Quick install (PyPI)
 
-`alphafold-sovereign-mcp` is published on PyPI as a release candidate.
-`pip` requires the `--pre` flag for release-candidate versions:
+`alphafold-sovereign-mcp` is published on PyPI:
 
 ```bash
-pip install --pre alphafold-sovereign-mcp
+pip install alphafold-sovereign-mcp
 ```
 
 Or run without installing using `uvx`:
 
 ```bash
-uvx --prerelease=allow --from alphafold-sovereign-mcp==1.1.0rc1 alphafold-sovereign-mcp
+uvx --from alphafold-sovereign-mcp alphafold-sovereign-mcp
 ```
 
 A signed wheel and sdist are attached to every GitHub Release with
@@ -36,7 +35,7 @@ uv pip install -e ".[tda]"
 ## Verify the install
 
 ```bash
-alphafold-sovereign --version       # → 1.1.0-rc1
+alphafold-sovereign --version       # → 1.1.1
 alphafold-sovereign --self-test     # → SELF-TEST PASS
 ```
 
@@ -72,12 +71,3 @@ from the local SQLite cache:
 ```bash
 ALPHAFOLD_OFFLINE=1 alphafold-sovereign-mcp
 ```
-
-## Stable-only `pip install`
-
-Once the project graduates from release-candidate to a final
-`1.1.0` (or higher) — i.e., after the v1.2.0 scientific-validation
-milestones in [Status](status.md#roadmap-to-v120-validation) are
-met — `pip install alphafold-sovereign-mcp` will pick up the
-stable release without the `--pre` flag.  Until then, `--pre`
-(or `uvx --prerelease=allow`) is required.

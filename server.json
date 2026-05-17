@@ -52,13 +52,13 @@
     "drug-discovery",
     "knowledge-graph"
   ],
-  "maturity": "release-candidate",
+  "maturity": "stable",
   "status_note": "v1.1.1 ships with engineering-grade tests (677 tests, 100% line and branch coverage) but its scientific outputs (ACMG draft, druggability tier) have NOT been validated by independent domain experts. See STATUS.md and LIMITATIONS.md.",
   "install": {
     "pypi": {
       "name": "alphafold-sovereign-mcp",
       "url": "https://pypi.org/project/alphafold-sovereign-mcp/",
-      "command": "pip install --pre alphafold-sovereign-mcp"
+      "command": "pip install alphafold-sovereign-mcp"
     },
     "from_source": {
       "command": "git clone https://github.com/smaniches/alphafold-sovereign-mcp && cd alphafold-sovereign-mcp && uv pip install -e ."

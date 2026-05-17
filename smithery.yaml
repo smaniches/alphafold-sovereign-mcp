@@ -10,8 +10,8 @@ description: >-
   (UniProt, Open Targets, ChEMBL, Ensembl VEP, ClinVar, gnomAD, MONDO,
   HPO, DisGeNET, RCSB PDB, InterPro, Gene Ontology, Human Protein
   Atlas) behind MCP tool calls. Persists each result to a local SQLite
-  knowledge graph for later querying. Engineering-grade (623 tests,
-  99% branch coverage) but scientific outputs are research aids that
+  knowledge graph for later querying. Engineering-grade (677 tests,
+  100% line and branch coverage) but scientific outputs are research aids that
   must be reviewed by qualified humans before clinical use — see
   STATUS.md and LIMITATIONS.md.
 version: "1.1.1"
