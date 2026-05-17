@@ -126,7 +126,7 @@ What we change going forward.
 ## Postmortem archive
 
 Historical postmortems will be linked from this section as they are
-written. As of v1.1.0-rc1 there are none.
+written. As of v1.1.2 there are none.
 
 | Date | Title | Severity | Link |
 |---|---|---|---|
