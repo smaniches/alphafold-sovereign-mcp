@@ -13,7 +13,7 @@ A dependency-trimming patch that reduces the runtime surface and closes
 the open Dependabot alert.
 
 ### Removed
-- Six pre-positioned runtime dependencies that no code path imported.
+- Seven pre-positioned runtime dependencies that no code path imported.
   Each was annotated in `pyproject.toml` with a comment describing
   future work (`# JWT — OAuth 2.1 bearer tokens`,
   `# Cryptography (signing, FIPS)`,
