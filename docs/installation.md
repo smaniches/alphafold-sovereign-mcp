@@ -11,7 +11,7 @@ pip install alphafold-sovereign-mcp
 Or run without installing using `uvx`:
 
 ```bash
-uvx --from alphafold-sovereign-mcp alphafold-sovereign-mcp
+uvx alphafold-sovereign-mcp
 ```
 
 A signed wheel and sdist are attached to every GitHub Release with
