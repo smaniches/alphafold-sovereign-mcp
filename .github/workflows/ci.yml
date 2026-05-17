@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v4
+      - uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
       - name: Install ruff
@@ -39,7 +39,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v4
+      - uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
       - name: Install deps
@@ -67,7 +67,7 @@ jobs:
             python-version: "3.10"
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v4
+      - uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
       - name: Set up Python ${{ matrix.python-version }}
@@ -98,7 +98,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v4
+      - uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
       - name: Install security tools
@@ -175,7 +175,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v4
+      - uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
       - name: Install deps
@@ -200,7 +200,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v4
+      - uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
       - name: Build wheel + sdist

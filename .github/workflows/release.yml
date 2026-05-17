@@ -26,7 +26,7 @@ jobs:
       hashes: ${{ steps.hash.outputs.hashes }}
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v4
+      - uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
       - name: Set up Python
@@ -75,7 +75,7 @@ jobs:
         with:
           name: dist
           path: dist/
-      - uses: astral-sh/setup-uv@v4
+      - uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
       - name: Set up Python

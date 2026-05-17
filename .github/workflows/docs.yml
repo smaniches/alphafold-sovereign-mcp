@@ -39,7 +39,7 @@ jobs:
         with:
           fetch-depth: 0   # mkdocs needs the full history for revision dates
 
-      - uses: astral-sh/setup-uv@v4
+      - uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
 
