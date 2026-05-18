@@ -28,10 +28,13 @@ authors:
 license: Apache-2.0
 repository-code: "https://github.com/smaniches/alphafold-sovereign-mcp"
 url: "https://smaniches.github.io/alphafold-sovereign-mcp/"
-# Concept DOI minted by Zenodo on the v1.1.0 release.  The
-# concept DOI always resolves to the latest version; specific-version
-# DOIs are also available on the Zenodo record page.
-doi: "10.5281/zenodo.20134774"
+# Zenodo concept DOI for the project.  The concept DOI is
+# version-independent; visiting https://doi.org/10.5281/zenodo.20134773
+# always redirects to the latest archived version (currently v1.1.3 at
+# 10.5281/zenodo.20262463).  Each tagged GitHub Release mints its own
+# version-specific DOI under this concept via the GitHub-Zenodo
+# integration.
+doi: "10.5281/zenodo.20134773"
 keywords:
   - alphafold
   - protein-structure
@@ -46,7 +49,7 @@ keywords:
   - biosecurity
   - drug-discovery
   - clinical-research
-version: "1.1.3"
+version: "1.1.4"
 date-released: "2026-05-17"
 references:
   - type: software
