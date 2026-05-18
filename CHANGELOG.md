@@ -9,7 +9,7 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ## [1.1.5] - 2026-05-17
 
-A dependency-hygiene patch. Closes nine of the ten Dependabot PRs
+A dependency-hygiene patch. Closes all ten Dependabot PRs
 that landed within hours of `.github/dependabot.yml` going live in
 v1.1.3, by consolidating their lockfile / workflow updates into a
 single coordinated release. No code, runtime-behaviour, or scientific
@@ -51,7 +51,7 @@ were not flagged by Dependabot: `cachetools` 7.1.1→7.1.2,
 ### Added — documentation
 
 - CHANGELOG `[1.1.5]` section (this entry) enumerating which
-  Dependabot PRs were absorbed and which was deferred and why.
+  Dependabot PRs were absorbed.
 
 ### Verified
 
@@ -59,7 +59,7 @@ were not flagged by Dependabot: `cachetools` 7.1.1→7.1.2,
   triggered by the named bumps)
 - `pytest` 677/677 passing
 - `ruff check` + `ruff format --check` clean on CI-scoped paths
-- `mypy --strict` clean on the constrained mypy 2.0.x
+- `mypy --strict` clean on mypy 2.1.x (CI-scoped paths)
 - All six authoritative version sources read `1.1.5`; concept DOI
   unchanged (`10.5281/zenodo.20134773`).
 
