@@ -7,6 +7,71 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.1.5] - 2026-05-17
+
+A dependency-hygiene patch. Closes nine of the ten Dependabot PRs
+that landed within hours of `.github/dependabot.yml` going live in
+v1.1.3, by consolidating their lockfile / workflow updates into a
+single coordinated release. No code, runtime-behaviour, or scientific
+output changes — same `src/` tree as v1.1.4, 677/677 tests still pass.
+
+### Changed (Python lockfile bumps — within existing `>=` constraints)
+
+`uv lock --upgrade` ran cleanly and produced the following moves, all
+verified by the full test suite passing:
+
+- `black` 26.3.1 → 26.5.0 (dev formatter; Dependabot PR #29)
+- `fastmcp` 3.2.4 → 3.3.1 (**runtime**; Dependabot PR #26)
+- `hypothesis` 6.152.5 → 6.152.7 (dev test framework; Dependabot PR #25)
+- `mypy` 2.0.0 → 2.1.0 (dev type-checker; Dependabot PR #27)
+- `pymdown-extensions` 10.21.2 → 10.21.3 (docs build; Dependabot PR #28)
+
+Plus the following transitives also advanced inside the lockfile but
+were not flagged by Dependabot: `cachetools` 7.1.1→7.1.2,
+`click` 8.3.3→8.4.0, `cyclopts` 4.11.2→4.13.0,
+`fonttools` 4.62.1→4.63.0, `idna` 3.14→3.15,
+`jaraco-functools` 4.4.0→4.5.0, `numpy` 2.4.4→2.4.5,
+`python-discovery` 1.3.0→1.3.1, `python-multipart` 0.0.28→0.0.29,
+`requests` 2.33.1→2.34.2, `ruff` 0.15.12→0.15.13,
+`sse-starlette` 3.4.2→3.4.4, `uvicorn` 0.46.0→0.47.0,
+`virtualenv` 21.3.1→21.3.3.
+
+### Changed (GitHub Actions bumps)
+
+- `astral-sh/setup-uv` v4 → v7 across `ci.yml`, `docs.yml`,
+  `release.yml` (Dependabot PR #24).
+- `actions/upload-artifact` v4 → v7 across `ci.yml`, `scorecard.yml`,
+  `release.yml` (Dependabot PR #20).
+- `github/codeql-action/*` v3 → v4 in `ci.yml` (init + analyze) and
+  `scorecard.yml` (upload-sarif) (Dependabot PR #22).
+- `codecov/codecov-action` v4 → v6 in `ci.yml` (Dependabot PR #23).
+- `ossf/scorecard-action` v2.4.0 → v2.4.3 in `scorecard.yml`
+  (Dependabot PR #21).
+
+### Added — documentation
+
+- CHANGELOG `[1.1.5]` section (this entry) enumerating which
+  Dependabot PRs were absorbed and which was deferred and why.
+
+### Verified
+
+- `uv lock` clean (no unexpected transitive drift beyond what was
+  triggered by the named bumps)
+- `pytest` 677/677 passing
+- `ruff check` + `ruff format --check` clean on CI-scoped paths
+- `mypy --strict` clean on the constrained mypy 2.0.x
+- All six authoritative version sources read `1.1.5`; concept DOI
+  unchanged (`10.5281/zenodo.20134773`).
+
+### Closes Dependabot PRs
+
+All ten open Dependabot PRs (#20–#29) superseded by this
+consolidated release. Their lockfile / workflow updates are folded
+into this commit and verified together by a single CI run, rather
+than landing as ten separate merges.
+
+---
+
 ## [1.1.4] - 2026-05-17
 
 An accuracy patch. Closes one bibliographic error, two stale-claim
@@ -335,7 +400,8 @@ threat model, examples, mkdocs site).
 - Multi-mode local cache (`sovereign` / `readonly` / `disabled`).
 - HTML5 API documentation.
 
-[Unreleased]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.4...HEAD
+[Unreleased]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.5...HEAD
+[1.1.5]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.4...v1.1.5
 [1.1.4]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.3...v1.1.4
 [1.1.3]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.2...v1.1.3
 [1.1.2]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.1...v1.1.2

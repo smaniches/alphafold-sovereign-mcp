@@ -11,7 +11,7 @@ Licensed under Apache 2.0.  See `LICENSE`.
 
 from __future__ import annotations
 
-__version__ = "1.1.4"
+__version__ = "1.1.5"
 __author__ = "Santiago Maniches"
 __author_email__ = "santiago@topologica.ai"
 __license__ = "Apache-2.0"

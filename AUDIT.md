@@ -1,6 +1,6 @@
 # External Audit Status
 
-> **As of v1.1.4: no external audit has been performed.**
+> **As of v1.1.5: no external audit has been performed.**
 
 This document tracks the audit posture of `alphafold-sovereign-mcp`.
 Audit findings, when they exist, will be summarised here with the
