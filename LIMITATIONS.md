@@ -1,7 +1,7 @@
 # Known Limitations
 
 This document enumerates the specific, named limitations of the project
-as of v1.1.5. It complements ``STATUS.md`` (which gives the
+as of v1.1.6. It complements ``STATUS.md`` (which gives the
 high-level posture) by listing concrete, addressable items.
 
 If you find a limitation that is not listed here, please open an issue
@@ -122,7 +122,7 @@ no co-maintainer, no governance body, and no funded continuity plan.
 **Impact:** If the maintainer becomes unavailable, the project stalls.
 
 **Mitigation:** The Apache 2.0 licence ensures any user can fork; the
-code is small enough (2,868 statements as of v1.1.5, verified via
+code is small enough (2,868 statements as of v1.1.6, verified via
 `pytest --cov`) to be picked up by a reasonably motivated successor.
 
 **Planned resolution:** Recruit co-maintainers (see
