@@ -9,11 +9,11 @@ issue and PR numbers that resolved them.
 ## What has been audited
 
 The repository receives automated code review from `gemini-code-assist[bot]`
-on every pull request. Cumulative review activity through v1.1.3:
+on every pull request. Cumulative review activity through v1.1.4:
 
 | Surface | Auditor | Date(s) | PRs reviewed | Outcome |
 |---|---|---|---|---|
-| Engineering (code, docs, tests, CI, manifests, release process) | `gemini-code-assist[bot]` (automated) | 2026-05-11 → 2026-05-17 | [#2](https://github.com/smaniches/alphafold-sovereign-mcp/pull/2), [#6](https://github.com/smaniches/alphafold-sovereign-mcp/pull/6), [#15](https://github.com/smaniches/alphafold-sovereign-mcp/pull/15), [#16](https://github.com/smaniches/alphafold-sovereign-mcp/pull/16), [#17](https://github.com/smaniches/alphafold-sovereign-mcp/pull/17), [#18](https://github.com/smaniches/alphafold-sovereign-mcp/pull/18), [#19](https://github.com/smaniches/alphafold-sovereign-mcp/pull/19) | Cumulative ~12 inline suggestions across docs, manifests, dependency hygiene, and ACMG warning surfaces. Every suggestion resolved via a follow-up commit; see each PR's *Conversation* tab for the resolution trail. |
+| Engineering (code, docs, tests, CI, manifests, release process) | `gemini-code-assist[bot]` (automated) | 2026-05-11 → 2026-05-17 | [#2](https://github.com/smaniches/alphafold-sovereign-mcp/pull/2), [#6](https://github.com/smaniches/alphafold-sovereign-mcp/pull/6), [#15](https://github.com/smaniches/alphafold-sovereign-mcp/pull/15), [#16](https://github.com/smaniches/alphafold-sovereign-mcp/pull/16), [#17](https://github.com/smaniches/alphafold-sovereign-mcp/pull/17), [#18](https://github.com/smaniches/alphafold-sovereign-mcp/pull/18), [#19](https://github.com/smaniches/alphafold-sovereign-mcp/pull/19), [#30](https://github.com/smaniches/alphafold-sovereign-mcp/pull/30) | Cumulative ~13 inline suggestions across docs, manifests, dependency hygiene, and ACMG warning surfaces. Every suggestion resolved via a follow-up commit; see each PR's *Conversation* tab for the resolution trail. |
 
 ## What has NOT been audited
 
@@ -54,6 +54,7 @@ This section is appended to when audits complete. Each entry has:
 | 2026-05-17 | `gemini-code-assist[bot]` | PR #17 — finish v1.1.1 stable-release framing pass | 2 inline suggestions (`uvx` idiom; `Development Status :: 5 - Production/Stable` classifier) | Resolved in commit `ed08229` |
 | 2026-05-17 | `gemini-code-assist[bot]` | PR #18 — v1.1.2 metadata-coherence | 2 inline suggestions (CHANGELOG `PRs #17` → `PR #17`; `smithery.yaml` missing `maturity: stable`) | Resolved in commit `a5a4202` |
 | 2026-05-17 | `gemini-code-assist[bot]` | PR #19 — v1.1.3 dep-trim + Minerva CVE close | 2 inline suggestions (CHANGELOG `Six` → `Seven`; Dependabot ecosystem `pip` → `uv`) | Resolved in commit `61ed61c` |
+| 2026-05-17 | `gemini-code-assist[bot]` | PR #30 — v1.1.4 accuracy patch | 1 inline suggestion (internal consistency: this audit summary itself said "through v1.1.3" while the document header said "As of v1.1.4") | Resolved in this commit |
 
 ---
 
