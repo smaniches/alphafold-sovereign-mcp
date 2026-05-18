@@ -36,7 +36,7 @@ cd alphafold-sovereign-mcp
 uv pip install -e .
 
 # 2. Verify the install
-alphafold-sovereign --version       # → 1.1.4
+alphafold-sovereign --version       # → 1.1.5
 alphafold-sovereign --self-test     # → PASS on the deterministic BRCA1 fixture
 
 # 3. Configure Claude Desktop
