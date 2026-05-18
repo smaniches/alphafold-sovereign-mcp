@@ -13,8 +13,11 @@ A supply-chain hardening patch. Closes the actionable
 OpenSSF Scorecard findings (Token-Permissions × 3 and
 Pinned-Dependencies × ~40) by SHA-pinning every GitHub Action
 reference and tightening per-workflow `permissions:` blocks.
-No code, runtime-behaviour, or dependency-tree changes — same
-`src/` and `uv.lock` as v1.1.5, 677/677 tests still pass.
+No functional code or dependency-tree changes — the only edits
+to `src/` and `uv.lock` are the version-string bump from 1.1.5
+to 1.1.6 (in `src/alphafold_sovereign/__init__.py` and the
+project's own row in `uv.lock`); the dependency graph itself
+is unchanged. 677/677 repo-wide tests still pass.
 
 ### Security — Pinned-Dependencies
 
