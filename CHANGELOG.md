@@ -7,6 +7,84 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.1.7] - 2026-05-18
+
+Ships the supply-chain hardening originally intended for v1.1.6.
+
+### Context — why this is v1.1.7 and not a re-tagging of v1.1.6
+
+The v1.1.6 release pipeline encountered two distinct interacting
+issues that prevented the wheel from reaching PyPI and the signed
+assets from reaching the GitHub release page:
+
+1. The SLSA L3 reusable workflow ref was SHA-pinned alongside
+   every other action. SLSA's trust model intentionally rejects
+   SHA-pinned references because L3 attestations claim "this
+   provenance was produced by a specific *named* version of the
+   generator"; a commit SHA is not a named version. The
+   `provenance / generator` job failed at validation. Fixed in
+   PR #39 by reverting that single line to `@v2.0.0`.
+
+2. The recovery attempt via `workflow_dispatch` from `main`
+   (rather than re-tagging) was incompatible with SLSA L3's
+   build-identity requirement: the generator's `final` job needs
+   the calling workflow to be triggered by a tag-push so the
+   build identity can be tied to an immutable named ref. A
+   `workflow_dispatch` from a branch fails this check. The
+   `provenance / final` job failed as a result.
+
+v1.1.7 ships the *same workflow content* (every action SHA-pinned
+except SLSA's reusable workflow, top-level minimum permissions on
+ci.yml) via the supported `push: tags` trigger that v1.1.3,
+v1.1.4, and v1.1.5 each used successfully. The v1.1.6 git tag and
+its incomplete GitHub release (only the auto-generated source-code
+zip + tar.gz assets, no wheel) are kept on the repo as an audit
+artifact of the diagnostic process. The canonical released
+version going forward is v1.1.7.
+
+### Changed (same content as the v1.1.6 supply-chain hardening)
+
+- Every `uses: <action>@<tag>` reference across `ci.yml`,
+  `docs.yml`, `release.yml`, `scorecard.yml` is SHA-pinned to a
+  40-character commit hash with a `# <tag>` trailing comment
+  (closes the OpenSSF Scorecard `Pinned-Dependencies` findings).
+- The SLSA L3 reusable workflow (`slsa-framework/slsa-github-
+  generator/.github/workflows/generator_generic_slsa3.yml`) is
+  kept on `@v2.0.0` per the trust-model requirement above, with
+  the underlying commit SHA in a trailing comment for audit
+  traceability.
+- `ci.yml` declares a top-level `permissions: contents: read`
+  block; the `codeql` job re-declares its own elevated
+  permissions which take precedence (closes Scorecard
+  `Token-Permissions` findings).
+
+### Verified
+
+- `uv lock` clean (only project version line changed)
+- All four workflow YAML files parse with `yaml.safe_load`
+- Every non-SLSA action ref is SHA-pinned (verified by
+  `grep -rn 'uses: ' .github/workflows/ | grep -v '@[0-9a-f]{40}'
+   | grep -v slsa-framework` returning zero hits)
+- `ruff check` + `ruff format --check` clean on CI-scoped paths
+- `mypy --strict` clean on CI-scoped paths (15 source files)
+- Full pytest suite **677 / 677 passing**
+- All six authoritative version sources read `1.1.7`; concept DOI
+  unchanged (`10.5281/zenodo.20134773`).
+
+### After release
+
+This release MUST be triggered by pushing the `v1.1.7` git tag —
+not by `workflow_dispatch`. The `release.yml` workflow will:
+build the wheel; generate SLSA L3 provenance via the `@v2.0.0`
+reusable workflow (now reachable through the supported trigger
+path); publish to PyPI via OIDC trusted publishing; generate
+CycloneDX + SPDX SBOMs; cosign keyless-sign each artifact; and
+attach all 13 assets to the GitHub release. Zenodo's GitHub
+integration will mint a fresh version-specific DOI under the
+concept DOI as on every prior release.
+
+---
+
 ## [1.1.6] - 2026-05-18
 
 A supply-chain hardening patch. Closes the actionable
@@ -493,7 +571,8 @@ threat model, examples, mkdocs site).
 - Multi-mode local cache (`sovereign` / `readonly` / `disabled`).
 - HTML5 API documentation.
 
-[Unreleased]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.6...HEAD
+[Unreleased]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.7...HEAD
+[1.1.7]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.6...v1.1.7
 [1.1.6]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.5...v1.1.6
 [1.1.5]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.4...v1.1.5
 [1.1.4]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.3...v1.1.4
