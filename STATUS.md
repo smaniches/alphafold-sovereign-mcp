@@ -1,6 +1,6 @@
 # Project Status
 
-**Version:** v1.1.3
+**Version:** v1.1.4
 **Stage:** Early open source. Engineering-grade infrastructure;
 scientifically unvalidated by independent domain experts.
 
@@ -13,8 +13,11 @@ expectation of what this project is and is not.
 ## What is solid
 
 ### Code architecture
-- 20 modules with clear single responsibilities: ``clients/``,
-  ``domain/``, ``tools/``, ``storage/``, ``server/``.
+- Five subpackages with clear single responsibilities — ``clients/``
+  (10 upstream-API modules), ``domain/`` (1 module), ``tools/`` (4
+  MCP-tool modules), ``storage/`` (1 SQLite KG module), ``server/``
+  (2 transport modules). 18 substantive ``.py`` files on the shipped
+  surface.
 - The previous monolith (~6,000 lines) is archived under
   ``_archive/legacy/`` and excluded from coverage and lint.
 - No circular imports; client retry/circuit-breaker logic is a
@@ -44,8 +47,11 @@ expectation of what this project is and is not.
 ### Distribution
 - Published to PyPI at https://pypi.org/project/alphafold-sovereign-mcp/
   (install with ``pip install alphafold-sovereign-mcp``).
-- Zenodo concept DOI: 10.5281/zenodo.20134774 — minted automatically
-  on every GitHub Release.
+- Zenodo concept DOI: 10.5281/zenodo.20134773 — version-independent
+  identifier that redirects to the latest archived version. Each
+  tagged GitHub Release mints its own version-specific DOI under
+  this concept via the GitHub-Zenodo integration (verified on v1.1.3
+  at 10.5281/zenodo.20262463).
 - mkdocs documentation site auto-deploys to GitHub Pages on every
   push to main.
 
@@ -99,7 +105,7 @@ expectation of what this project is and is not.
 - **Single maintainer.** No bus factor > 1.
 - **No external contributors yet.** Review process is documented in
   ``CONTRIBUTING.md`` but has not been exercised.
-- **No formal release cadence.** v1.1.3 is the current release;
+- **No formal release cadence.** v1.1.4 is the current release;
   later versions will be tagged as the validation milestones below
   are met.
 
@@ -118,7 +124,7 @@ expectation of what this project is and is not.
 
 ## Roadmap to v1.2.0 (validation)
 
-The validation gap is the highest-priority work after v1.1.3. The
+The validation gap is the highest-priority work after v1.1.4. The
 planned, sequenced steps are:
 
 1. **End-to-end golden examples.** Three documented notebooks under
@@ -142,5 +148,5 @@ planned, sequenced steps are:
 
 ## Last updated
 
-2026-05-16. This document is part of the repo; PRs to correct or
+2026-05-17. This document is part of the repo; PRs to correct or
 expand it are welcome.

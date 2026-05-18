@@ -7,6 +7,79 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.1.4] - 2026-05-17
+
+An accuracy patch. Closes one bibliographic error, two stale-claim
+errors, and seven smaller drifts found during a self-audit of every
+"claim" file in the repo. No code, runtime, or dependency changes.
+
+### Fixed
+- **Zenodo concept DOI**. Six metadata fields cited
+  `10.5281/zenodo.20134774`, which is the v1.1.0-rc1 *version-specific*
+  DOI rather than the project's concept DOI. The actual concept DOI
+  (the one that always redirects to the latest archived version) is
+  `10.5281/zenodo.20134773`. Citations of the previous value were
+  silently pinned to v1.1.0-rc1; the correct concept DOI now resolves
+  to v1.1.3 today and will resolve to v1.1.4 once this release
+  archives. The `CITATION.cff` header comment that mislabelled the
+  rc1 DOI as "the concept DOI minted on the v1.1.0 release" is also
+  rewritten to describe Zenodo's concept-vs-version model accurately.
+  Files corrected: `CITATION.cff`, `README.md` (DOI badge + bibtex),
+  `STATUS.md`, `server.json`, `.well-known/mcp.json`.
+- **`README.md` `uvx` install example** still showed
+  `uvx --from alphafold-sovereign-mcp alphafold-sovereign-mcp`, the
+  pre-#17 form. PR #17 simplified this to `uvx alphafold-sovereign-mcp`
+  in `docs/installation.md` per a Gemini suggestion but missed the
+  README copy. Now consistent.
+- **`STATUS.md` Zenodo claim**. The earlier wording
+  *"minted automatically on every GitHub Release"* was historically
+  inaccurate: the GitHub-Zenodo webhook was installed only for
+  v1.1.0-rc1, broke between then and v1.1.3, and was reinstalled today
+  before v1.1.3 published. Rewritten to describe what is now true and
+  verifiable: the concept DOI redirects to the latest archived
+  version, and the integration mints a new version-specific DOI on
+  each GitHub Release.
+- **`STATUS.md` module count**. The "20 modules" line was
+  approximate; the actual surface is 5 subpackages with 18 substantive
+  `.py` modules (10 client modules, 1 domain module, 4 tool modules,
+  1 storage module, 2 server modules). Reworded to match.
+- **`AUDIT.md` audit log**. The previous table listed only the PR #2
+  Gemini review, undersurfacing the cumulative engineering review
+  history. Expanded to enumerate the seven PRs reviewed by
+  `gemini-code-assist[bot]` between 2026-05-11 and 2026-05-17 (PRs
+  #2, #6, #16, #17, #18, #19 + the consolidation PR #15) and the
+  commits that resolved each batch of findings. Also clarified the
+  threat-model row (the maturity expectation for an external STRIDE
+  audit was unclear; now stated as "defer until external security
+  audit"). This brings AUDIT.md into honest agreement with the
+  actual review trail visible in the PR archive.
+- **`LIMITATIONS.md` self-references**. The "as of v1.1.0" anchor
+  in the preamble was three releases stale (now "as of v1.1.4"). The
+  "~3,000 statements" approximation in L6 is replaced by the verified
+  exact count from `pytest --cov` output (2,868 statements).
+- **Stale "Last updated" dates** in `AUDIT.md` (2026-05-11),
+  `STATUS.md` (2026-05-16), and `LIMITATIONS.md` (2026-05-11) are all
+  refreshed to today, 2026-05-17.
+- **`AUDIT.md` as-of line** and `INCIDENT_RESPONSE.md` as-of line
+  re-anchored from v1.1.3 to v1.1.4.
+
+### Verified correct (no change)
+For traceability, the following claims were verified against the
+codebase during this audit and do not need correction:
+
+- 677 tests (`pytest --collect-only` returns 677)
+- 100% line and branch coverage (2868/2868 statements, 776/776
+  branches per `pytest --cov` on this commit)
+- 29 MCP tools (12 disease + 6 precision medicine + 6 structure
+  intelligence + 5 knowledge graph; confirmed via `grep -c "^@mcp.tool"`
+  per module)
+- 14 data sources (AlphaFold DB + 13 others, per the README table)
+- Version 1.1.4 consistent across `pyproject.toml`,
+  `src/alphafold_sovereign/__init__.py`, `server.json`,
+  `.well-known/mcp.json`, `smithery.yaml`, `CITATION.cff`
+
+---
+
 ## [1.1.3] - 2026-05-17
 
 A dependency-trimming patch that reduces the runtime surface and closes
@@ -262,7 +335,8 @@ threat model, examples, mkdocs site).
 - Multi-mode local cache (`sovereign` / `readonly` / `disabled`).
 - HTML5 API documentation.
 
-[Unreleased]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.3...HEAD
+[Unreleased]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.4...HEAD
+[1.1.4]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.3...v1.1.4
 [1.1.3]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.2...v1.1.3
 [1.1.2]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.0-rc1...v1.1.1

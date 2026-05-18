@@ -1,6 +1,6 @@
 # External Audit Status
 
-> **As of v1.1.3: no external audit has been performed.**
+> **As of v1.1.4: no external audit has been performed.**
 
 This document tracks the audit posture of `alphafold-sovereign-mcp`.
 Audit findings, when they exist, will be summarised here with the
@@ -8,9 +8,12 @@ issue and PR numbers that resolved them.
 
 ## What has been audited
 
-| Surface | Auditor | Date | Outcome | Reference |
+The repository receives automated code review from `gemini-code-assist[bot]`
+on every pull request. Cumulative review activity through v1.1.4:
+
+| Surface | Auditor | Date(s) | PRs reviewed | Outcome |
 |---|---|---|---|---|
-| Engineering (code, tests, CI) | `gemini-code-assist` (automated) | 2026-05-11 | 2 inline suggestions accepted; both small (clarify ACMG warnings to name `classify_variant_acmg` alongside `generate_variant_clinical_report`). | [PR #2](https://github.com/smaniches/alphafold-sovereign-mcp/pull/2) |
+| Engineering (code, docs, tests, CI, manifests, release process) | `gemini-code-assist[bot]` (automated) | 2026-05-11 → 2026-05-17 | [#2](https://github.com/smaniches/alphafold-sovereign-mcp/pull/2), [#6](https://github.com/smaniches/alphafold-sovereign-mcp/pull/6), [#15](https://github.com/smaniches/alphafold-sovereign-mcp/pull/15), [#16](https://github.com/smaniches/alphafold-sovereign-mcp/pull/16), [#17](https://github.com/smaniches/alphafold-sovereign-mcp/pull/17), [#18](https://github.com/smaniches/alphafold-sovereign-mcp/pull/18), [#19](https://github.com/smaniches/alphafold-sovereign-mcp/pull/19), [#30](https://github.com/smaniches/alphafold-sovereign-mcp/pull/30) | Cumulative ~13 inline suggestions across docs, manifests, dependency hygiene, and ACMG warning surfaces. Every suggestion resolved via a follow-up commit; see each PR's *Conversation* tab for the resolution trail. |
 
 ## What has NOT been audited
 
@@ -19,7 +22,7 @@ issue and PR numbers that resolved them.
 | ACMG/AMP criterion mapping (`tools/precision_medicine.py`) | The mapping is implemented from Richards et al. 2015 but no clinical geneticist has signed off. | Roadmap step 3 of v1.2.0 — see [STATUS.md](STATUS.md) | [LIMITATIONS L1](LIMITATIONS.md#l1--acmg-criterion-mapping-is-not-independently-validated) |
 | Druggability tier heuristic (`tools/precision_medicine.py`) | The score cut-offs (HOT/WARM/COLD) are author judgement, not calibrated. | Roadmap step 4 of v1.2.0 | [LIMITATIONS L2](LIMITATIONS.md#l2--druggability-tier-thresholds-are-unvalidated-heuristics) |
 | End-to-end real-API behaviour | All tests mock the upstream APIs. We have not run the pipeline against held-out variants/targets with known expected outputs. | Roadmap step 1 of v1.2.0 (`examples/` golden notebooks) | [LIMITATIONS L3](LIMITATIONS.md#l3--upstream-api-schemas-are-not-pinned) |
-| Threat model | First STRIDE-style review is being written for v1.1.0-rc1. | This release | [`docs/threat-model.md`](docs/threat-model.md) |
+| Threat model | First STRIDE-style review was written by the maintainer in v1.1.0-rc1 (see `docs/threat-model.md`). External STRIDE review by a security professional has not been performed. | Defer until external security audit | [`docs/threat-model.md`](docs/threat-model.md) |
 | Independent security audit | No external penetration test or code-security audit yet. | Defer until v1.2.0 release | This document |
 | Performance / load behaviour | No production deployment yet. | Defer until first real deployment | [LIMITATIONS L4](LIMITATIONS.md#l4--no-production-deployment-experience) |
 
@@ -45,8 +48,14 @@ This section is appended to when audits complete. Each entry has:
 
 | Date | Auditor | Scope | Findings | Status |
 |---|---|---|---|---|
-| 2026-05-11 | `gemini-code-assist[bot]` | PR #2 docs review | 2 inline suggestions, both accepted | Resolved in commit `ae42b59` |
+| 2026-05-11 | `gemini-code-assist[bot]` | PR #2 — STATUS / LIMITATIONS docs review | 2 inline suggestions on ACMG warning surfaces | Resolved in commit `ae42b59` |
+| 2026-05-16 | `gemini-code-assist[bot]` | PR #6 — MONDO disease-label fix | 1 inline suggestion (direct attribute access vs. `getattr` default) | Resolved in [PR #13](https://github.com/smaniches/alphafold-sovereign-mcp/pull/13) |
+| 2026-05-17 | `gemini-code-assist[bot]` | PR #16 — prepare v1.1.1 release | 3 inline suggestions (maturity field consistency across `smithery.yaml`, `server.json`, `.well-known/mcp.json`) | Resolved in [PR #17](https://github.com/smaniches/alphafold-sovereign-mcp/pull/17) |
+| 2026-05-17 | `gemini-code-assist[bot]` | PR #17 — finish v1.1.1 stable-release framing pass | 2 inline suggestions (`uvx` idiom; `Development Status :: 5 - Production/Stable` classifier) | Resolved in commit `ed08229` |
+| 2026-05-17 | `gemini-code-assist[bot]` | PR #18 — v1.1.2 metadata-coherence | 2 inline suggestions (CHANGELOG `PRs #17` → `PR #17`; `smithery.yaml` missing `maturity: stable`) | Resolved in commit `a5a4202` |
+| 2026-05-17 | `gemini-code-assist[bot]` | PR #19 — v1.1.3 dep-trim + Minerva CVE close | 2 inline suggestions (CHANGELOG `Six` → `Seven`; Dependabot ecosystem `pip` → `uv`) | Resolved in commit `61ed61c` |
+| 2026-05-17 | `gemini-code-assist[bot]` | PR #30 — v1.1.4 accuracy patch | 1 inline suggestion (internal consistency: this audit summary itself said "through v1.1.3" while the document header said "As of v1.1.4") | Resolved in this commit |
 
 ---
 
-Last updated: 2026-05-11.
+Last updated: 2026-05-17.

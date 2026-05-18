@@ -7,7 +7,7 @@
 [![Tests](https://img.shields.io/badge/tests-677%20passing-success)](https://github.com/smaniches/alphafold-sovereign-mcp/actions/workflows/ci.yml)
 [![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)](https://github.com/smaniches/alphafold-sovereign-mcp/actions/workflows/ci.yml)
 
-> **v1.1.3.** Engineering-grade
+> **v1.1.4.** Engineering-grade
 > (677 tests, 100% line and branch coverage, full legal kit).
 > Scientifically unvalidated by independent domain experts. See
 > [Status](status.md) and [Limitations](limitations.md).
