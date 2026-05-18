@@ -7,6 +7,96 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.1.6] - 2026-05-18
+
+A supply-chain hardening patch. Closes the actionable
+OpenSSF Scorecard findings (Token-Permissions × 3 and
+Pinned-Dependencies × ~40) by SHA-pinning every GitHub Action
+reference and tightening per-workflow `permissions:` blocks.
+No code, runtime-behaviour, or dependency-tree changes — same
+`src/` and `uv.lock` as v1.1.5, 677/677 tests still pass.
+
+### Security — Pinned-Dependencies
+
+Every `uses: <action>@<tag>` reference across the four workflow
+files is now `uses: <action>@<40-char-SHA>  # <tag>`. This closes
+the OpenSSF Scorecard `Pinned-Dependencies` findings (roughly 40
+of them, one per `uses:` line) and prevents a hijacked-tag
+supply-chain attack: an attacker who compromises an action's tag
+to point at a malicious revision can no longer cause our workflow
+to run that revision. The `# <tag>` trailing comment preserves
+human readability; Dependabot's `uv` + `github-actions` ecosystem
+config (added in v1.1.3) keeps pinned SHAs up-to-date when new
+upstream versions release.
+
+Actions SHA-pinned (commit SHA → tag for traceability):
+
+| Action | SHA | Tag |
+|---|---|---|
+| `actions/checkout` | `34e114876b0b11c390a56381ad16ebd13914f8d5` | v4 |
+| `actions/download-artifact` | `d3f86a106a0bac45b974a628896c90dbdf5c8093` | v4 |
+| `actions/upload-artifact` | `043fb46d1a93c77aae656e7c1c64a875d1fc6a0a` | v7 |
+| `astral-sh/setup-uv` | `37802adc94f370d6bfd71619e3f0bf239e1f3b78` | v7 |
+| `anchore/sbom-action` | `e22c389904149dbc22b58101806040fa8d37a610` | v0 |
+| `codecov/codecov-action` | `57e3a136b779b570ffcdbf80b3bdc90e7fab3de2` | v6 |
+| `github/codeql-action` | `9e0d7b8d25671d64c341c19c0152d693099fb5ba` | v4 |
+| `ossf/scorecard-action` | `4eaacf0543bb3f2c246792bd56e8cdeffafb205a` | v2.4.3 |
+| `pypa/gh-action-pypi-publish` | `cef221092ed1bacb1cc03d23a2d87d1d172e277b` | release/v1 |
+| `sigstore/cosign-installer` | `398d4b0eeef1380460a10c8013a76f728fb906ac` | v3 |
+| `slsa-framework/slsa-github-generator` | `5a775b367a56d5bd118a224a811bba288150a563` | v2.0.0 |
+
+### Security — Token-Permissions
+
+`ci.yml` now declares a top-level `permissions: contents: read`
+block, which Scorecard's `Token-Permissions` check requires. The
+`codeql` job inside `ci.yml` re-declares its own elevated
+permissions (`security-events: write`, `actions: read`, `contents:
+read`) — that job-level block takes precedence for codeql alone.
+`release.yml` already had tight per-job permissions blocks
+(introduced earlier in the release-readiness work); `docs.yml`
+already had a minimum `contents: write` (the only privilege
+`mkdocs gh-deploy` needs); `scorecard.yml` already had
+appropriately scoped per-job permissions.
+
+After this change, all four workflows declare their permissions
+explicitly. Scorecard's `Token-Permissions` findings should
+close on the next weekly Scorecard scan.
+
+### Verified
+
+- `uv lock` clean (no dependency changes; project version line
+  only)
+- All four workflow YAML files parse cleanly
+- `grep -rn "uses: " .github/workflows/ | grep -v "@[0-9a-f]\{40\}"`
+  returns zero hits (every action is SHA-pinned)
+- `ruff check` + `ruff format --check` clean on CI-scoped paths
+- Full pytest suite **677 / 677 passing**
+- All six authoritative version sources read `1.1.6`; concept DOI
+  unchanged (`10.5281/zenodo.20134773`).
+
+### Scorecard findings that remain after this release
+
+The following Scorecard findings are deliberately not addressed
+here, with documented reasons:
+
+- **Code-Review** (high) — requires a co-maintainer with a
+  separate-approver workflow. Structurally unfixable while the
+  project is solo-maintained; see `STATUS.md` "Project maturity".
+- **Fuzzing** (medium) — OSS-Fuzz integration is out of scope for
+  a project of this size composed mostly of thin API wrappers;
+  most code paths are exercised exhaustively by the existing
+  677-test hermetic suite with respx-mocked upstreams.
+- **Branch-Protection** (high) — already addressed by the
+  "Protect main" ruleset (https://github.com/smaniches/alphafold-sovereign-mcp/settings/rules)
+  active since 2026-05-17; this finding will close on the next
+  Scorecard scan when Scorecard re-reads the repo's protection
+  rules.
+
+The real vulnerability scanner — CodeQL `security-extended` —
+continues to report zero findings on the shipped surface.
+
+---
+
 ## [1.1.5] - 2026-05-17
 
 A dependency-hygiene patch. Closes all ten Dependabot PRs
@@ -400,7 +490,8 @@ threat model, examples, mkdocs site).
 - Multi-mode local cache (`sovereign` / `readonly` / `disabled`).
 - HTML5 API documentation.
 
-[Unreleased]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.5...HEAD
+[Unreleased]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.6...HEAD
+[1.1.6]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.5...v1.1.6
 [1.1.5]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.4...v1.1.5
 [1.1.4]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.3...v1.1.4
 [1.1.3]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.2...v1.1.3
