@@ -1,0 +1,3115 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="MCP server wrapping AlphaFold DB and 13 other biomedical data sources. Engineering-grade infrastructure; scientifically unvalidated by independent domain experts. v1.1.7.">
+      
+      
+        <meta name="author" content="Santiago Maniches">
+      
+      
+        <link rel="canonical" href="https://smaniches.github.io/alphafold-sovereign-mcp/changelog/">
+      
+      
+        <link rel="prev" href="../quality/mutation-scores/">
+      
+      
+        <link rel="next" href="../contributing/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Changelog - AlphaFold Sovereign MCP</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#changelog" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="AlphaFold Sovereign MCP" class="md-header__button md-logo" aria-label="AlphaFold Sovereign MCP" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 2h2v2c0 1.44.68 2.61 1.88 3.78.86.83 2.01 1.63 3.21 2.42l-1.83 1.19C8.27 10.72 7.31 10 6.5 9.21 5.07 7.82 4 6.1 4 4zm14 0h2v2c0 2.1-1.07 3.82-2.5 5.21-1.41 1.38-3.21 2.52-4.96 3.63-1.75 1.12-3.45 2.21-4.66 3.38C6.68 17.39 6 18.56 6 20v2H4v-2c0-2.1 1.07-3.82 2.5-5.21 1.41-1.38 3.21-2.52 4.96-3.63 1.75-1.12 3.45-2.21 4.66-3.38C17.32 6.61 18 5.44 18 4zm-3.26 10.61c.99.67 1.95 1.39 2.76 2.18C18.93 16.18 20 17.9 20 20v2h-2v-2c0-1.44-.68-2.61-1.88-3.78-.86-.83-2.01-1.63-3.21-2.42zM7 3h10v1l-.06.5H7.06L7 4zm.68 3h8.64c-.24.34-.52.69-.9 1.06l-.51.44H9.07l-.49-.44c-.38-.37-.66-.72-.9-1.06m1.41 10.5h5.84l.49.44c.38.37.66.72.9 1.06H7.68c.24-.34.52-.69.9-1.06zm-2.03 3h9.88l.06.5v1H7v-1z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            AlphaFold Sovereign MCP
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Changelog
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+          <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
+            
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91s2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08"/></svg>
+          </a>
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/smaniches/alphafold-sovereign-mcp" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    smaniches/alphafold-sovereign-mcp
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+    
+      
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../installation/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Installation
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../tools/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Tool reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../examples/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Examples
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../architecture/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Architecture
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../status/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Quality
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="./" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Project
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+    
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="AlphaFold Sovereign MCP" class="md-nav__button md-logo" aria-label="AlphaFold Sovereign MCP" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 2h2v2c0 1.44.68 2.61 1.88 3.78.86.83 2.01 1.63 3.21 2.42l-1.83 1.19C8.27 10.72 7.31 10 6.5 9.21 5.07 7.82 4 6.1 4 4zm14 0h2v2c0 2.1-1.07 3.82-2.5 5.21-1.41 1.38-3.21 2.52-4.96 3.63-1.75 1.12-3.45 2.21-4.66 3.38C6.68 17.39 6 18.56 6 20v2H4v-2c0-2.1 1.07-3.82 2.5-5.21 1.41-1.38 3.21-2.52 4.96-3.63 1.75-1.12 3.45-2.21 4.66-3.38C17.32 6.61 18 5.44 18 4zm-3.26 10.61c.99.67 1.95 1.39 2.76 2.18C18.93 16.18 20 17.9 20 20v2h-2v-2c0-1.44-.68-2.61-1.88-3.78-.86-.83-2.01-1.63-3.21-2.42zM7 3h10v1l-.06.5H7.06L7 4zm.68 3h8.64c-.24.34-.52.69-.9 1.06l-.51.44H9.07l-.49-.44c-.38-.37-.66-.72-.9-1.06m1.41 10.5h5.84l.49.44c.38.37.66.72.9 1.06H7.68c.24-.34.52-.69.9-1.06zm-2.03 3h9.88l.06.5v1H7v-1z"/></svg>
+
+    </a>
+    AlphaFold Sovereign MCP
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/smaniches/alphafold-sovereign-mcp" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    smaniches/alphafold-sovereign-mcp
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../tools/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tool reference
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tool reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tools/disease/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Disease tools
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tools/precision-medicine/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Precision-medicine tools
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tools/structure-intelligence/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Structure-intelligence tools
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tools/knowledge-graph/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Knowledge-graph tools
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../examples/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Examples
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../examples/01-variant-triage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Variant triage (BRCA1)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../examples/02-target-characterization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Target characterisation (EGFR)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../examples/03-drug-discovery/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Drug discovery (Imatinib)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quality
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Quality
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../status/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Status
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../limitations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Limitations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../threat-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Threat model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../audit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quality/mutation-scores/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mutation testing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Project
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#117-2026-05-18" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.1.7 - 2026-05-18
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1.1.7 - 2026-05-18">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#context-why-this-is-v117-and-not-a-re-tagging-of-v116" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Context — why this is v1.1.7 and not a re-tagging of v1.1.6
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changed-same-content-as-the-v116-supply-chain-hardening" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed (same content as the v1.1.6 supply-chain hardening)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#verified" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verified
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#after-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        After release
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#116-2026-05-18" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.1.6 - 2026-05-18
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1.1.6 - 2026-05-18">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#security-pinned-dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security — Pinned-Dependencies
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#security-token-permissions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security — Token-Permissions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#verified_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verified
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scorecard-findings-that-remain-after-this-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scorecard findings that remain after this release
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#115-2026-05-17" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.1.5 - 2026-05-17
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1.1.5 - 2026-05-17">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#changed-python-lockfile-bumps-within-existing-constraints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed (Python lockfile bumps — within existing &gt;= constraints)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changed-github-actions-bumps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed (GitHub Actions bumps)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#added-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added — documentation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#verified_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verified
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#closes-dependabot-prs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Closes Dependabot PRs
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#114-2026-05-17" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.1.4 - 2026-05-17
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1.1.4 - 2026-05-17">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#fixed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fixed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#verified-correct-no-change" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verified correct (no change)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#113-2026-05-17" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.1.3 - 2026-05-17
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1.1.3 - 2026-05-17">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#removed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Removed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#security" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#112-2026-05-17" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.1.2 - 2026-05-17
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1.1.2 - 2026-05-17">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#changed_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#111-2026-05-17" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.1.1 - 2026-05-17
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1.1.1 - 2026-05-17">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#fixed_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fixed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changed_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#security_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#110-rc1-2026-05-11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.1.0-rc1 — 2026-05-11
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1.1.0-rc1 — 2026-05-11">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#added-release-ready-surface" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added — release-ready surface
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changed-language-scrub-for-open-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed — language scrub for open release
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changed-test-surface" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed — test surface
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fixed_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fixed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#removed_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Removed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#known-limitations-see-limitationsmd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Known limitations (see LIMITATIONS.md)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#unreleased" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unreleased
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#100-2026-03-01-phase-1-baseline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.0.0 — 2026-03-01 (Phase 1 baseline)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1.0.0 — 2026-03-01 (Phase 1 baseline)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#added" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code-of-conduct/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code of conduct
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../governance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Governance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../privacy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Privacy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../support/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#117-2026-05-18" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.1.7 - 2026-05-18
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1.1.7 - 2026-05-18">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#context-why-this-is-v117-and-not-a-re-tagging-of-v116" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Context — why this is v1.1.7 and not a re-tagging of v1.1.6
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changed-same-content-as-the-v116-supply-chain-hardening" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed (same content as the v1.1.6 supply-chain hardening)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#verified" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verified
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#after-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        After release
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#116-2026-05-18" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.1.6 - 2026-05-18
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1.1.6 - 2026-05-18">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#security-pinned-dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security — Pinned-Dependencies
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#security-token-permissions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security — Token-Permissions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#verified_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verified
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scorecard-findings-that-remain-after-this-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scorecard findings that remain after this release
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#115-2026-05-17" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.1.5 - 2026-05-17
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1.1.5 - 2026-05-17">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#changed-python-lockfile-bumps-within-existing-constraints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed (Python lockfile bumps — within existing &gt;= constraints)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changed-github-actions-bumps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed (GitHub Actions bumps)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#added-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added — documentation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#verified_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verified
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#closes-dependabot-prs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Closes Dependabot PRs
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#114-2026-05-17" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.1.4 - 2026-05-17
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1.1.4 - 2026-05-17">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#fixed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fixed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#verified-correct-no-change" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verified correct (no change)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#113-2026-05-17" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.1.3 - 2026-05-17
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1.1.3 - 2026-05-17">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#removed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Removed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#security" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#112-2026-05-17" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.1.2 - 2026-05-17
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1.1.2 - 2026-05-17">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#changed_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#111-2026-05-17" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.1.1 - 2026-05-17
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1.1.1 - 2026-05-17">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#fixed_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fixed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changed_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#security_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#110-rc1-2026-05-11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.1.0-rc1 — 2026-05-11
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1.1.0-rc1 — 2026-05-11">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#added-release-ready-surface" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added — release-ready surface
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changed-language-scrub-for-open-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed — language scrub for open release
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changed-test-surface" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed — test surface
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fixed_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fixed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#removed_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Removed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#known-limitations-see-limitationsmd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Known limitations (see LIMITATIONS.md)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#unreleased" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unreleased
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#100-2026-03-01-phase-1-baseline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.0.0 — 2026-03-01 (Phase 1 baseline)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1.0.0 — 2026-03-01 (Phase 1 baseline)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#added" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/smaniches/alphafold-sovereign-mcp/edit/main/docs/changelog.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+    
+      
+    
+    <a href="https://github.com/smaniches/alphafold-sovereign-mcp/raw/main/docs/changelog.md" title="View source of this page" class="md-content__button md-icon">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 18c.56 0 1 .44 1 1s-.44 1-1 1-1-.44-1-1 .44-1 1-1m0-3c-2.73 0-5.06 1.66-6 4 .94 2.34 3.27 4 6 4s5.06-1.66 6-4c-.94-2.34-3.27-4-6-4m0 6.5a2.5 2.5 0 0 1-2.5-2.5 2.5 2.5 0 0 1 2.5-2.5 2.5 2.5 0 0 1 2.5 2.5 2.5 2.5 0 0 1-2.5 2.5M9.27 20H6V4h7v5h5v4.07c.7.08 1.36.25 2 .49V8l-6-6H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h4.5a8.2 8.2 0 0 1-1.23-2"/></svg>
+    </a>
+  
+
+
+<h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
+<p>All notable changes to this project are documented here.</p>
+<p>Format: <a href="https://keepachangelog.com/en/1.1.0/">Keep a Changelog</a>.
+Versioning: <a href="https://semver.org/">Semantic Versioning</a>.</p>
+<hr />
+<h2 id="117-2026-05-18"><a href="https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.6...v1.1.7">1.1.7</a> - 2026-05-18<a class="headerlink" href="#117-2026-05-18" title="Permanent link">&para;</a></h2>
+<p>Ships the supply-chain hardening originally intended for v1.1.6.</p>
+<h3 id="context-why-this-is-v117-and-not-a-re-tagging-of-v116">Context — why this is v1.1.7 and not a re-tagging of v1.1.6<a class="headerlink" href="#context-why-this-is-v117-and-not-a-re-tagging-of-v116" title="Permanent link">&para;</a></h3>
+<p>The v1.1.6 release pipeline encountered two distinct interacting
+issues that prevented the wheel from reaching PyPI and the signed
+assets from reaching the GitHub release page:</p>
+<ol>
+<li>
+<p>The SLSA L3 reusable workflow ref was SHA-pinned alongside
+   every other action. SLSA's trust model intentionally rejects
+   SHA-pinned references because L3 attestations claim "this
+   provenance was produced by a specific <em>named</em> version of the
+   generator"; a commit SHA is not a named version. The
+   <code>provenance / generator</code> job failed at validation. Fixed in
+   PR #39 by reverting that single line to <code>@v2.0.0</code>.</p>
+</li>
+<li>
+<p>The recovery attempt via <code>workflow_dispatch</code> from <code>main</code>
+   (rather than re-tagging) was incompatible with SLSA L3's
+   build-identity requirement: the generator's <code>final</code> job needs
+   the calling workflow to be triggered by a tag-push so the
+   build identity can be tied to an immutable named ref. A
+   <code>workflow_dispatch</code> from a branch fails this check. The
+   <code>provenance / final</code> job failed as a result.</p>
+</li>
+</ol>
+<p>v1.1.7 ships the <em>same workflow content</em> (every action SHA-pinned
+except SLSA's reusable workflow, top-level minimum permissions on
+ci.yml) via the supported <code>push: tags</code> trigger that v1.1.3,
+v1.1.4, and v1.1.5 each used successfully. The v1.1.6 git tag and
+its incomplete GitHub release (only the auto-generated source-code
+zip + tar.gz assets, no wheel) are kept on the repo as an audit
+artifact of the diagnostic process. The canonical released
+version going forward is v1.1.7.</p>
+<h3 id="changed-same-content-as-the-v116-supply-chain-hardening">Changed (same content as the v1.1.6 supply-chain hardening)<a class="headerlink" href="#changed-same-content-as-the-v116-supply-chain-hardening" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Every <code>uses: &lt;action&gt;@&lt;tag&gt;</code> reference across <code>ci.yml</code>,
+  <code>docs.yml</code>, <code>release.yml</code>, <code>scorecard.yml</code> is SHA-pinned to a
+  40-character commit hash with a <code># &lt;tag&gt;</code> trailing comment
+  (closes the OpenSSF Scorecard <code>Pinned-Dependencies</code> findings).</li>
+<li>The SLSA L3 reusable workflow (<code>slsa-framework/slsa-github-
+  generator/.github/workflows/generator_generic_slsa3.yml</code>) is
+  kept on <code>@v2.0.0</code> per the trust-model requirement above, with
+  the underlying commit SHA in a trailing comment for audit
+  traceability.</li>
+<li><code>ci.yml</code> declares a top-level <code>permissions: contents: read</code>
+  block; the <code>codeql</code> job re-declares its own elevated
+  permissions which take precedence (closes Scorecard
+  <code>Token-Permissions</code> findings).</li>
+</ul>
+<h3 id="verified">Verified<a class="headerlink" href="#verified" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>uv lock</code> clean (only project version line changed)</li>
+<li>All four workflow YAML files parse with <code>yaml.safe_load</code></li>
+<li>Every non-SLSA action ref is SHA-pinned (verified by
+  <code>grep -rn 'uses: ' .github/workflows/ | grep -v '@[0-9a-f]{40}'
+   | grep -v slsa-framework</code> returning zero hits)</li>
+<li><code>ruff check</code> + <code>ruff format --check</code> clean on CI-scoped paths</li>
+<li><code>mypy --strict</code> clean on CI-scoped paths (15 source files)</li>
+<li>Full pytest suite <strong>677 / 677 passing</strong></li>
+<li>All six authoritative version sources read <code>1.1.7</code>; concept DOI
+  unchanged (<code>10.5281/zenodo.20134773</code>).</li>
+</ul>
+<h3 id="after-release">After release<a class="headerlink" href="#after-release" title="Permanent link">&para;</a></h3>
+<p>This release MUST be triggered by pushing the <code>v1.1.7</code> git tag —
+not by <code>workflow_dispatch</code>. The <code>release.yml</code> workflow will:
+build the wheel; generate SLSA L3 provenance via the <code>@v2.0.0</code>
+reusable workflow (now reachable through the supported trigger
+path); publish to PyPI via OIDC trusted publishing; generate
+CycloneDX + SPDX SBOMs; cosign keyless-sign each artifact; and
+attach all 13 assets to the GitHub release. Zenodo's GitHub
+integration will mint a fresh version-specific DOI under the
+concept DOI as on every prior release.</p>
+<hr />
+<h2 id="116-2026-05-18"><a href="https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.5...v1.1.6">1.1.6</a> - 2026-05-18<a class="headerlink" href="#116-2026-05-18" title="Permanent link">&para;</a></h2>
+<p>A supply-chain hardening patch. Closes the actionable
+OpenSSF Scorecard findings (Token-Permissions × 3 and
+Pinned-Dependencies × ~40) by SHA-pinning every GitHub Action
+reference and tightening per-workflow <code>permissions:</code> blocks.
+No functional code or dependency-tree changes — the only edits
+to <code>src/</code> and <code>uv.lock</code> are the version-string bump from 1.1.5
+to 1.1.6 (in <code>src/alphafold_sovereign/__init__.py</code> and the
+project's own row in <code>uv.lock</code>); the dependency graph itself
+is unchanged. 677/677 repo-wide tests still pass.</p>
+<h3 id="security-pinned-dependencies">Security — Pinned-Dependencies<a class="headerlink" href="#security-pinned-dependencies" title="Permanent link">&para;</a></h3>
+<p>Every <code>uses: &lt;action&gt;@&lt;tag&gt;</code> reference across the four workflow
+files is now <code>uses: &lt;action&gt;@&lt;40-char-SHA&gt;  # &lt;tag&gt;</code>. This closes
+the OpenSSF Scorecard <code>Pinned-Dependencies</code> findings (roughly 40
+of them, one per <code>uses:</code> line) and prevents a hijacked-tag
+supply-chain attack: an attacker who compromises an action's tag
+to point at a malicious revision can no longer cause our workflow
+to run that revision. The <code># &lt;tag&gt;</code> trailing comment preserves
+human readability; Dependabot's <code>uv</code> + <code>github-actions</code> ecosystem
+config (added in v1.1.3) keeps pinned SHAs up-to-date when new
+upstream versions release.</p>
+<p>Actions SHA-pinned (commit SHA → tag for traceability):</p>
+<table>
+<thead>
+<tr>
+<th>Action</th>
+<th>SHA</th>
+<th>Tag</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>actions/checkout</code></td>
+<td><code>34e114876b0b11c390a56381ad16ebd13914f8d5</code></td>
+<td>v4</td>
+</tr>
+<tr>
+<td><code>actions/download-artifact</code></td>
+<td><code>d3f86a106a0bac45b974a628896c90dbdf5c8093</code></td>
+<td>v4</td>
+</tr>
+<tr>
+<td><code>actions/upload-artifact</code></td>
+<td><code>043fb46d1a93c77aae656e7c1c64a875d1fc6a0a</code></td>
+<td>v7</td>
+</tr>
+<tr>
+<td><code>astral-sh/setup-uv</code></td>
+<td><code>37802adc94f370d6bfd71619e3f0bf239e1f3b78</code></td>
+<td>v7</td>
+</tr>
+<tr>
+<td><code>anchore/sbom-action</code></td>
+<td><code>e22c389904149dbc22b58101806040fa8d37a610</code></td>
+<td>v0</td>
+</tr>
+<tr>
+<td><code>codecov/codecov-action</code></td>
+<td><code>57e3a136b779b570ffcdbf80b3bdc90e7fab3de2</code></td>
+<td>v6</td>
+</tr>
+<tr>
+<td><code>github/codeql-action</code></td>
+<td><code>9e0d7b8d25671d64c341c19c0152d693099fb5ba</code></td>
+<td>v4</td>
+</tr>
+<tr>
+<td><code>ossf/scorecard-action</code></td>
+<td><code>4eaacf0543bb3f2c246792bd56e8cdeffafb205a</code></td>
+<td>v2.4.3</td>
+</tr>
+<tr>
+<td><code>pypa/gh-action-pypi-publish</code></td>
+<td><code>cef221092ed1bacb1cc03d23a2d87d1d172e277b</code></td>
+<td>release/v1</td>
+</tr>
+<tr>
+<td><code>sigstore/cosign-installer</code></td>
+<td><code>398d4b0eeef1380460a10c8013a76f728fb906ac</code></td>
+<td>v3</td>
+</tr>
+<tr>
+<td><code>slsa-framework/slsa-github-generator</code></td>
+<td><code>5a775b367a56d5bd118a224a811bba288150a563</code></td>
+<td>v2.0.0</td>
+</tr>
+</tbody>
+</table>
+<h3 id="security-token-permissions">Security — Token-Permissions<a class="headerlink" href="#security-token-permissions" title="Permanent link">&para;</a></h3>
+<p><code>ci.yml</code> now declares a top-level <code>permissions: contents: read</code>
+block, which Scorecard's <code>Token-Permissions</code> check requires. The
+<code>codeql</code> job inside <code>ci.yml</code> re-declares its own elevated
+permissions (<code>security-events: write</code>, <code>actions: read</code>, <code>contents:
+read</code>) — that job-level block takes precedence for codeql alone.
+<code>release.yml</code> already had tight per-job permissions blocks
+(introduced earlier in the release-readiness work); <code>docs.yml</code>
+already had a minimum <code>contents: write</code> (the only privilege
+<code>mkdocs gh-deploy</code> needs); <code>scorecard.yml</code> already had
+appropriately scoped per-job permissions.</p>
+<p>After this change, all four workflows declare their permissions
+explicitly. Scorecard's <code>Token-Permissions</code> findings should
+close on the next weekly Scorecard scan.</p>
+<h3 id="verified_1">Verified<a class="headerlink" href="#verified_1" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>uv lock</code> clean (no dependency changes; project version line
+  only)</li>
+<li>All four workflow YAML files parse cleanly</li>
+<li><code>grep -rn "uses: " .github/workflows/ | grep -v "@[0-9a-f]\{40\}"</code>
+  returns zero hits (every action is SHA-pinned)</li>
+<li><code>ruff check</code> + <code>ruff format --check</code> clean on CI-scoped paths</li>
+<li>Full pytest suite <strong>677 / 677 passing</strong></li>
+<li>All six authoritative version sources read <code>1.1.6</code>; concept DOI
+  unchanged (<code>10.5281/zenodo.20134773</code>).</li>
+</ul>
+<h3 id="scorecard-findings-that-remain-after-this-release">Scorecard findings that remain after this release<a class="headerlink" href="#scorecard-findings-that-remain-after-this-release" title="Permanent link">&para;</a></h3>
+<p>The following Scorecard findings are deliberately not addressed
+here, with documented reasons:</p>
+<ul>
+<li><strong>Code-Review</strong> (high) — requires a co-maintainer with a
+  separate-approver workflow. Structurally unfixable while the
+  project is solo-maintained; see <code>STATUS.md</code> "Project maturity".</li>
+<li><strong>Fuzzing</strong> (medium) — OSS-Fuzz integration is out of scope for
+  a project of this size composed mostly of thin API wrappers;
+  most code paths are exercised exhaustively by the existing
+  677-test hermetic suite with respx-mocked upstreams.</li>
+<li><strong>Branch-Protection</strong> (high) — already addressed by the
+  "Protect main" ruleset (https://github.com/smaniches/alphafold-sovereign-mcp/settings/rules)
+  active since 2026-05-17; this finding will close on the next
+  Scorecard scan when Scorecard re-reads the repo's protection
+  rules.</li>
+</ul>
+<p>The real vulnerability scanner — CodeQL <code>security-extended</code> —
+continues to report zero findings on the shipped surface.</p>
+<hr />
+<h2 id="115-2026-05-17"><a href="https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.4...v1.1.5">1.1.5</a> - 2026-05-17<a class="headerlink" href="#115-2026-05-17" title="Permanent link">&para;</a></h2>
+<p>A dependency-hygiene patch. Closes all ten Dependabot PRs
+that landed within hours of <code>.github/dependabot.yml</code> going live in
+v1.1.3, by consolidating their lockfile / workflow updates into a
+single coordinated release. No code, runtime-behaviour, or scientific
+output changes — same <code>src/</code> tree as v1.1.4, 677/677 tests still pass.</p>
+<h3 id="changed-python-lockfile-bumps-within-existing-constraints">Changed (Python lockfile bumps — within existing <code>&gt;=</code> constraints)<a class="headerlink" href="#changed-python-lockfile-bumps-within-existing-constraints" title="Permanent link">&para;</a></h3>
+<p><code>uv lock --upgrade</code> ran cleanly and produced the following moves, all
+verified by the full test suite passing:</p>
+<ul>
+<li><code>black</code> 26.3.1 → 26.5.0 (dev formatter; Dependabot PR #29)</li>
+<li><code>fastmcp</code> 3.2.4 → 3.3.1 (<strong>runtime</strong>; Dependabot PR #26)</li>
+<li><code>hypothesis</code> 6.152.5 → 6.152.7 (dev test framework; Dependabot PR #25)</li>
+<li><code>mypy</code> 2.0.0 → 2.1.0 (dev type-checker; Dependabot PR #27)</li>
+<li><code>pymdown-extensions</code> 10.21.2 → 10.21.3 (docs build; Dependabot PR #28)</li>
+</ul>
+<p>Plus the following transitives also advanced inside the lockfile but
+were not flagged by Dependabot: <code>cachetools</code> 7.1.1→7.1.2,
+<code>click</code> 8.3.3→8.4.0, <code>cyclopts</code> 4.11.2→4.13.0,
+<code>fonttools</code> 4.62.1→4.63.0, <code>idna</code> 3.14→3.15,
+<code>jaraco-functools</code> 4.4.0→4.5.0, <code>numpy</code> 2.4.4→2.4.5,
+<code>python-discovery</code> 1.3.0→1.3.1, <code>python-multipart</code> 0.0.28→0.0.29,
+<code>requests</code> 2.33.1→2.34.2, <code>ruff</code> 0.15.12→0.15.13,
+<code>sse-starlette</code> 3.4.2→3.4.4, <code>uvicorn</code> 0.46.0→0.47.0,
+<code>virtualenv</code> 21.3.1→21.3.3.</p>
+<h3 id="changed-github-actions-bumps">Changed (GitHub Actions bumps)<a class="headerlink" href="#changed-github-actions-bumps" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>astral-sh/setup-uv</code> v4 → v7 across <code>ci.yml</code>, <code>docs.yml</code>,
+  <code>release.yml</code> (Dependabot PR #24).</li>
+<li><code>actions/upload-artifact</code> v4 → v7 across <code>ci.yml</code>, <code>scorecard.yml</code>,
+  <code>release.yml</code> (Dependabot PR #20).</li>
+<li><code>github/codeql-action/*</code> v3 → v4 in <code>ci.yml</code> (init + analyze) and
+  <code>scorecard.yml</code> (upload-sarif) (Dependabot PR #22).</li>
+<li><code>codecov/codecov-action</code> v4 → v6 in <code>ci.yml</code> (Dependabot PR #23).</li>
+<li><code>ossf/scorecard-action</code> v2.4.0 → v2.4.3 in <code>scorecard.yml</code>
+  (Dependabot PR #21).</li>
+</ul>
+<h3 id="added-documentation">Added — documentation<a class="headerlink" href="#added-documentation" title="Permanent link">&para;</a></h3>
+<ul>
+<li>CHANGELOG <code>[1.1.5]</code> section (this entry) enumerating which
+  Dependabot PRs were absorbed.</li>
+</ul>
+<h3 id="verified_2">Verified<a class="headerlink" href="#verified_2" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>uv lock</code> clean (no unexpected transitive drift beyond what was
+  triggered by the named bumps)</li>
+<li><code>pytest</code> 677/677 passing</li>
+<li><code>ruff check</code> + <code>ruff format --check</code> clean on CI-scoped paths</li>
+<li><code>mypy --strict</code> clean on mypy 2.1.x (CI-scoped paths)</li>
+<li>All six authoritative version sources read <code>1.1.5</code>; concept DOI
+  unchanged (<code>10.5281/zenodo.20134773</code>).</li>
+</ul>
+<h3 id="closes-dependabot-prs">Closes Dependabot PRs<a class="headerlink" href="#closes-dependabot-prs" title="Permanent link">&para;</a></h3>
+<p>All ten open Dependabot PRs (#20–#29) superseded by this
+consolidated release. Their lockfile / workflow updates are folded
+into this commit and verified together by a single CI run, rather
+than landing as ten separate merges.</p>
+<hr />
+<h2 id="114-2026-05-17"><a href="https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.3...v1.1.4">1.1.4</a> - 2026-05-17<a class="headerlink" href="#114-2026-05-17" title="Permanent link">&para;</a></h2>
+<p>An accuracy patch. Closes one bibliographic error, two stale-claim
+errors, and seven smaller drifts found during a self-audit of every
+"claim" file in the repo. No code, runtime, or dependency changes.</p>
+<h3 id="fixed">Fixed<a class="headerlink" href="#fixed" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Zenodo concept DOI</strong>. Six metadata fields cited
+  <code>10.5281/zenodo.20134774</code>, which is the v1.1.0-rc1 <em>version-specific</em>
+  DOI rather than the project's concept DOI. The actual concept DOI
+  (the one that always redirects to the latest archived version) is
+  <code>10.5281/zenodo.20134773</code>. Citations of the previous value were
+  silently pinned to v1.1.0-rc1; the correct concept DOI now resolves
+  to v1.1.3 today and will resolve to v1.1.4 once this release
+  archives. The <code>CITATION.cff</code> header comment that mislabelled the
+  rc1 DOI as "the concept DOI minted on the v1.1.0 release" is also
+  rewritten to describe Zenodo's concept-vs-version model accurately.
+  Files corrected: <code>CITATION.cff</code>, <code>README.md</code> (DOI badge + bibtex),
+  <code>STATUS.md</code>, <code>server.json</code>, <code>.well-known/mcp.json</code>.</li>
+<li><strong><code>README.md</code> <code>uvx</code> install example</strong> still showed
+  <code>uvx --from alphafold-sovereign-mcp alphafold-sovereign-mcp</code>, the
+  pre-#17 form. PR #17 simplified this to <code>uvx alphafold-sovereign-mcp</code>
+  in <code>docs/installation.md</code> per a Gemini suggestion but missed the
+  README copy. Now consistent.</li>
+<li><strong><code>STATUS.md</code> Zenodo claim</strong>. The earlier wording
+  <em>"minted automatically on every GitHub Release"</em> was historically
+  inaccurate: the GitHub-Zenodo webhook was installed only for
+  v1.1.0-rc1, broke between then and v1.1.3, and was reinstalled today
+  before v1.1.3 published. Rewritten to describe what is now true and
+  verifiable: the concept DOI redirects to the latest archived
+  version, and the integration mints a new version-specific DOI on
+  each GitHub Release.</li>
+<li><strong><code>STATUS.md</code> module count</strong>. The "20 modules" line was
+  approximate; the actual surface is 5 subpackages with 18 substantive
+  <code>.py</code> modules (10 client modules, 1 domain module, 4 tool modules,
+  1 storage module, 2 server modules). Reworded to match.</li>
+<li><strong><code>AUDIT.md</code> audit log</strong>. The previous table listed only the PR #2
+  Gemini review, undersurfacing the cumulative engineering review
+  history. Expanded to enumerate the seven PRs reviewed by
+  <code>gemini-code-assist[bot]</code> between 2026-05-11 and 2026-05-17 (PRs
+  #2, #6, #16, #17, #18, #19 + the consolidation PR #15) and the
+  commits that resolved each batch of findings. Also clarified the
+  threat-model row (the maturity expectation for an external STRIDE
+  audit was unclear; now stated as "defer until external security
+  audit"). This brings AUDIT.md into honest agreement with the
+  actual review trail visible in the PR archive.</li>
+<li><strong><code>LIMITATIONS.md</code> self-references</strong>. The "as of v1.1.0" anchor
+  in the preamble was three releases stale (now "as of v1.1.4"). The
+  "~3,000 statements" approximation in L6 is replaced by the verified
+  exact count from <code>pytest --cov</code> output (2,868 statements).</li>
+<li><strong>Stale "Last updated" dates</strong> in <code>AUDIT.md</code> (2026-05-11),
+  <code>STATUS.md</code> (2026-05-16), and <code>LIMITATIONS.md</code> (2026-05-11) are all
+  refreshed to today, 2026-05-17.</li>
+<li><strong><code>AUDIT.md</code> as-of line</strong> and <code>INCIDENT_RESPONSE.md</code> as-of line
+  re-anchored from v1.1.3 to v1.1.4.</li>
+</ul>
+<h3 id="verified-correct-no-change">Verified correct (no change)<a class="headerlink" href="#verified-correct-no-change" title="Permanent link">&para;</a></h3>
+<p>For traceability, the following claims were verified against the
+codebase during this audit and do not need correction:</p>
+<ul>
+<li>677 tests (<code>pytest --collect-only</code> returns 677)</li>
+<li>100% line and branch coverage (2868/2868 statements, 776/776
+  branches per <code>pytest --cov</code> on this commit)</li>
+<li>29 MCP tools (12 disease + 6 precision medicine + 6 structure
+  intelligence + 5 knowledge graph; confirmed via <code>grep -c "^@mcp.tool"</code>
+  per module)</li>
+<li>14 data sources (AlphaFold DB + 13 others, per the README table)</li>
+<li>Version 1.1.4 consistent across <code>pyproject.toml</code>,
+  <code>src/alphafold_sovereign/__init__.py</code>, <code>server.json</code>,
+  <code>.well-known/mcp.json</code>, <code>smithery.yaml</code>, <code>CITATION.cff</code></li>
+</ul>
+<hr />
+<h2 id="113-2026-05-17"><a href="https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.2...v1.1.3">1.1.3</a> - 2026-05-17<a class="headerlink" href="#113-2026-05-17" title="Permanent link">&para;</a></h2>
+<p>A dependency-trimming patch that reduces the runtime surface and closes
+the open Dependabot alert.</p>
+<h3 id="removed">Removed<a class="headerlink" href="#removed" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Seven pre-positioned runtime dependencies that no code path imported.
+  Each was annotated in <code>pyproject.toml</code> with a comment describing
+  future work (<code># JWT — OAuth 2.1 bearer tokens</code>,
+  <code># Cryptography (signing, FIPS)</code>,
+  <code># Optional: OpenTelemetry (graceful no-op if not installed)</code>,
+  <code># Optional: Prometheus metrics</code>) that was never written. Removed:
+  <code>mcp</code> (still pulled in transitively via <code>fastmcp</code>),
+  <code>pydantic-settings</code>,
+  <code>cryptography</code>,
+  <code>python-jose[cryptography]</code>,
+  <code>opentelemetry-sdk</code>,
+  <code>opentelemetry-exporter-otlp-proto-grpc</code>,
+  <code>prometheus-client</code>.
+  The HTTP transport, observability layer, and bearer-token handling
+  will declare their own dependencies at the time they actually ship,
+  when the choice can be made against real requirements.</li>
+<li>The dead <code>jose.*</code> entry from the <code>[[tool.mypy.overrides]]</code> block that
+  matched the removed <code>python-jose</code> package.</li>
+</ul>
+<h3 id="security">Security<a class="headerlink" href="#security" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Resolves the GHSA-w8m6-9963-pmpv "Minerva timing attack on P-256 in
+  python-ecdsa" Dependabot alert. <code>ecdsa</code> was a transitive of
+  <code>python-jose</code>; removing the latter drops the former from the install
+  tree.</li>
+</ul>
+<h3 id="changed">Changed<a class="headerlink" href="#changed" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>uv.lock</code> regenerated. Thirteen packages drop out of the install tree:
+  <code>ecdsa</code>, <code>python-jose</code>, <code>rsa</code>, <code>pyasn1</code>, <code>prometheus-client</code>, <code>grpcio</code>,
+  <code>protobuf</code>, <code>googleapis-common-protos</code>,
+  <code>opentelemetry-exporter-otlp-proto-common</code>,
+  <code>opentelemetry-exporter-otlp-proto-grpc</code>, <code>opentelemetry-proto</code>,
+  <code>opentelemetry-sdk</code>, <code>opentelemetry-semantic-conventions</code>.
+  <code>pydantic-settings</code> and <code>opentelemetry-api</code> remain in the lockfile as
+  legitimate transitives of <code>mcp</code> and <code>openapi-pydantic</code> respectively.</li>
+<li>New <code>.github/dependabot.yml</code> adds weekly automated dependency-update
+  PRs for both the Python ecosystem and GitHub Actions, closing the
+  OpenSSF Scorecard <code>Dependency-Update-Tool</code> finding.</li>
+<li><code>AUDIT.md</code> and <code>INCIDENT_RESPONSE.md</code> re-anchor the still-true
+  "as of <version>" claims to v1.1.3.</li>
+</ul>
+<h2 id="112-2026-05-17"><a href="https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.1...v1.1.2">1.1.2</a> - 2026-05-17<a class="headerlink" href="#112-2026-05-17" title="Permanent link">&para;</a></h2>
+<p>A metadata-coherence patch on top of v1.1.1. The v1.1.1 published
+artifacts (PyPI wheel, GitHub Release, Smithery / MCP-registry scrape)
+still carried release-candidate-era manifest fields because the audit
+landed in PR #17 that merged after the v1.1.1 tag was cut. v1.1.2
+rebuilds the wheel and re-publishes so the public-facing metadata
+matches the actual stable status. No runtime behaviour changes.</p>
+<h3 id="changed_1">Changed<a class="headerlink" href="#changed_1" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>pyproject.toml</code> trove classifier raised from
+  <code>Development Status :: 4 - Beta</code> to
+  <code>Development Status :: 5 - Production/Stable</code> so the PyPI surface
+  matches the <code>"stable"</code> maturity declared in <code>server.json</code>,
+  <code>.well-known/mcp.json</code>, and <code>smithery.yaml</code>.</li>
+<li><code>server.json</code> <code>"maturity"</code> is <code>"stable"</code> and the registry install
+  command drops the <code>--pre</code> flag (the wheel published for v1.1.1 still
+  carried <code>pip install --pre alphafold-sovereign-mcp</code>).</li>
+<li><code>.well-known/mcp.json</code> <code>"maturity"</code> is <code>"stable"</code>.</li>
+<li><code>smithery.yaml</code> gains an explicit <code>maturity: stable</code> field (the
+  registry manifest only carried it implicitly via the description
+  before) and the description coverage figures are aligned with the
+  rest of the manifests (677 tests, 100% line and branch).</li>
+<li><code>docs/installation.md</code> no longer pitches the project as a release
+  candidate, drops the <code>--pre</code> / <code>--prerelease=allow</code> install
+  instructions, simplifies the <code>uvx</code> example to
+  <code>uvx alphafold-sovereign-mcp</code>, and removes the obsolete
+  <code>## Stable-only pip install</code> section.</li>
+<li><code>AUDIT.md</code> and <code>INCIDENT_RESPONSE.md</code> re-anchor the still-true
+  "as of <version>" claims (no external audit, no postmortems) to
+  v1.1.2.</li>
+<li>Version strings raised to 1.1.2 across <code>pyproject.toml</code>,
+  <code>src/alphafold_sovereign/__init__.py</code>, <code>server.json</code>,
+  <code>.well-known/mcp.json</code>, <code>smithery.yaml</code>, <code>CITATION.cff</code>,
+  <code>STATUS.md</code>, <code>README.md</code>, <code>docs/index.md</code>, <code>mkdocs.yml</code>,
+  <code>docs/installation.md</code>, and <code>examples/README.md</code>.</li>
+</ul>
+<h2 id="111-2026-05-17"><a href="https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.0-rc1...v1.1.1">1.1.1</a> - 2026-05-17<a class="headerlink" href="#111-2026-05-17" title="Permanent link">&para;</a></h2>
+<p>A maintenance release that hardens the 1.1.0 surface. It resolves every
+outstanding automated code-review comment, verifies the codebase against
+the live AlphaFold DB v6 response schema, and makes the structure tools
+behave consistently when AlphaFold DB has no model for an accession.</p>
+<h3 id="fixed_1">Fixed<a class="headerlink" href="#fixed_1" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>EnsemblClient._first_uniprot</code> returned the string <code>"None"</code> for a list
+  whose first element was not a string; it now type-checks before
+  coercion.</li>
+<li><code>AlphaFoldClient.get_pae</code> could return a non-dict (a JSON <code>null</code> body
+  or a <code>null</code> first element of a single-element array); it now always
+  returns a dict.</li>
+<li><code>_validate_af_file_url</code> rejected an uppercase <code>HTTPS</code> scheme; the
+  scheme comparison is now case-insensitive per RFC 3986.</li>
+<li><code>ClinVarClient</code> exact-match ranking and RefSeq-accession detection
+  were case-sensitive; both are now case-insensitive.</li>
+<li><code>_fetch_af_plddt</code> raised <code>TypeError</code> when AlphaFold DB returned a
+  <code>null</code> <code>uniprotSequence</code>; the value is now coerced to an empty string.</li>
+<li>Structure-intelligence AlphaFold fetchers are routed through
+  <code>AlphaFoldClient</code> and adapt to the AlphaFold DB v6 schema: the removed
+  <code>meanPlddt</code> field is replaced by <code>globalMetricValue</code>.</li>
+<li>The AlphaMissense UniProt accession is resolved from the Ensembl VEP
+  <code>swissprot</code> consequence field, removing a redundant gene lookup.</li>
+</ul>
+<h3 id="changed_2">Changed<a class="headerlink" href="#changed_2" title="Permanent link">&para;</a></h3>
+<ul>
+<li>The structure tools now return one consistent, human-readable
+  response when AlphaFold DB has no model for an accession, including a
+  <code>structure_available</code> flag. A stale coverage claim was removed.</li>
+<li><code>score_binding_pocket_geometry</code> docstring and methodology string now
+  describe the additive druggability index and the pLDDT threshold the
+  code actually applies.</li>
+<li>Self-description accuracy pass: stale version strings and overstated
+  docstrings were corrected across the repository.</li>
+<li>Test surface: 677 tests at 100% line and branch coverage, up from 623
+  tests at 99%. The <code>noxfile.py</code> coverage gate is raised to 100% to
+  match CI.</li>
+</ul>
+<h3 id="security_1">Security<a class="headerlink" href="#security_1" title="Permanent link">&para;</a></h3>
+<ul>
+<li>The offline-mode air-gap pre-check resolved its target URL with a
+  manual branch that could inspect a different host than the request
+  reached for a protocol-relative or uppercase-scheme path. It now uses
+  <code>httpx.URL.join</code>, the same RFC 3986 resolution httpx applies
+  internally, so the pre-check inspects the host the request will
+  actually contact.</li>
+</ul>
+<h2 id="110-rc1-2026-05-11"><a href="https://github.com/smaniches/alphafold-sovereign-mcp/releases/tag/v1.1.0-rc1">1.1.0-rc1</a> — 2026-05-11<a class="headerlink" href="#110-rc1-2026-05-11" title="Permanent link">&para;</a></h2>
+<p>First release candidate that ships the refactored modular tree alongside
+the full audit-readiness kit (<code>STATUS.md</code>, <code>LIMITATIONS.md</code>, <code>AUDIT.md</code>,
+threat model, examples, mkdocs site).</p>
+<h3 id="added-release-ready-surface">Added — release-ready surface<a class="headerlink" href="#added-release-ready-surface" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>examples/</code> with three documented end-to-end transcripts:
+  variant triage (BRCA1 c.5266dupC), target characterisation (EGFR),
+  and drug-discovery (Imatinib → BCR-ABL).</li>
+<li>mkdocs-material documentation site deployed to GitHub Pages at
+  <code>https://smaniches.github.io/alphafold-sovereign-mcp/</code>.</li>
+<li><code>AUDIT.md</code>, <code>docs/threat-model.md</code> (STRIDE × MCP server surface),
+  <code>INCIDENT_RESPONSE.md</code>.</li>
+<li><code>smithery.yaml</code> and <code>server.json</code> so the server is discoverable in
+  the Smithery registry and the official MCP server registry.</li>
+<li><code>.well-known/security.txt</code> (RFC 9116) and <code>.well-known/mcp.json</code>.</li>
+<li><code>noxfile.py</code> with <code>lint</code>, <code>type</code>, <code>test</code>, <code>cov</code>, <code>mutate</code>, <code>docs</code>,
+  <code>build</code> sessions.</li>
+<li><code>--self-test</code> and <code>--version</code> CLI flags. <code>alphafold-sovereign
+  --self-test</code> boots the server in offline mode and verifies the
+  deterministic logic of <code>generate_variant_clinical_report</code> on a known
+  variant.</li>
+<li>Pre-registered 10-prompt benchmark under <code>benchmarks/</code> with
+  SHA-256-committed prompt manifest and a deterministic re-run verifier.</li>
+<li>Mutation testing via <code>mutmut</code>; per-module mutation scores published
+  to <code>docs/quality/mutation-scores.md</code>.</li>
+<li>Release workflow with SLSA L3 provenance attestations and
+  <code>cosign</code>-signed artefacts.</li>
+<li>OpenSSF Scorecard workflow; badge in README.</li>
+<li>Zenodo DOI integration via GitHub releases; DOI added to
+  <code>CITATION.cff</code>.</li>
+</ul>
+<h3 id="changed-language-scrub-for-open-release">Changed — language scrub for open release<a class="headerlink" href="#changed-language-scrub-for-open-release" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Removed marketing and overclaim language from the README, docstrings,
+  and module headers. Specifically:</li>
+<li>Dropped claims of "drift tensor R²=0.9992" — there is no benchmark
+    in the repository that substantiates this number.</li>
+<li>Dropped "patent-pending TOPOLOGICA methodology" framing from the
+    structure-intelligence module. The patent status is described
+    soberly in <a href="PATENTS.md"><code>PATENTS.md</code></a>.</li>
+<li>Dropped "Defense-grade sovereignty stack (FedRAMP-aligned, FIPS,
+    SBOM, SLSA L3)" comparison line. None of those certifications has
+    been audited; only an SBOM is actually emitted today.</li>
+<li>Renamed <code>_wasserstein_distance</code> → <code>_fingerprint_distance</code> because
+    the function computes L2 distance between length-normalised
+    fingerprint vectors, not a Wasserstein distance on persistence
+    diagrams. Updated callers, tests, and the tool's annotation title
+    accordingly.</li>
+<li>The ACMG/AMP output of the variant tools is now consistently
+    described as a "draft surface of the upstream evidence", not a
+    clinical interpretation.</li>
+<li>The druggability tier is consistently described as a "heuristic".</li>
+<li>Removed the <code>LICENSE-COMMERCIAL.md</code> file and the "Enterprise
+  Edition" wording everywhere. The project is licensed under
+  Apache 2.0, full stop.</li>
+<li>Dropped enterprise / commercial contact email addresses from the
+  docs. Contact channels are: GitHub Discussions for questions,
+  GitHub Issues for bugs, GitHub Security Advisories for
+  vulnerabilities.</li>
+</ul>
+<h3 id="changed-test-surface">Changed — test surface<a class="headerlink" href="#changed-test-surface" title="Permanent link">&para;</a></h3>
+<ul>
+<li>623 unit tests, hermetic (respx-mocked upstreams), runs in under 15
+  seconds on a laptop.</li>
+<li>Coverage on the shipped surface: <strong>99% line + branch</strong> (99.52%
+  measured), with 19 of 20 modules at 100%. The remaining gap is 1
+  statement and 2 partial branches in
+  <code>tools/knowledge_graph_tools.py</code> in a defensive sync-fallback path.</li>
+<li>CI matrix: Python 3.10, 3.11, 3.12, 3.13 × Ubuntu, macOS.</li>
+<li>CodeQL <code>security-extended</code> runs on every push to a public repo
+  (free tier of GitHub-hosted runners).</li>
+</ul>
+<h3 id="fixed_2">Fixed<a class="headerlink" href="#fixed_2" title="Permanent link">&para;</a></h3>
+<ul>
+<li>SQL injection (CWE-89) in <code>storage/knowledge_graph.py</code>: parameterised
+  <code>LIMIT</code> clauses and added the <code>_ALLOWED_TABLES</code> allow-list guarding
+  <code>export_to_dict(tables=...)</code>.</li>
+<li><code>__init__.py</code> no longer eagerly imports legacy <code>parsers</code>/<code>core</code>/
+  <code>features</code>/<code>topology</code> modules. <code>import alphafold_sovereign</code> now
+  succeeds without <code>numpy</code>, so the <code>--no-deps</code> wheel-import check in
+  CI passes.</li>
+<li>24 mypy strict errors across the client modules (proper return-type
+  casts for <code>Any</code>-typed upstream responses; removal of stale <code>#
+  type: ignore</code> comments).</li>
+<li>5 bandit / CodeQL <code>B608</code> hardcoded-SQL flags eliminated.</li>
+<li><code>_traverse_network</code> in <code>tools/knowledge_graph_tools.py</code> was awaiting
+  a sync method (<code>kg._fetchall</code>); calling it synchronously now.</li>
+</ul>
+<h3 id="removed_1">Removed<a class="headerlink" href="#removed_1" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>_archive/legacy/</code> — the original monolithic <code>alphafold_mcp.py</code>
+  (5,840 LOC) and its supporting modules moved here. Not packaged in
+  the wheel; excluded from lint, type, coverage, and security tooling.
+  Tracked for deletion in v2.0.</li>
+<li><code>tests/verify_config.py</code> — a one-off helper with a hardcoded Windows
+  path; not a test.</li>
+</ul>
+<h3 id="known-limitations-see-limitationsmd">Known limitations (see <code>LIMITATIONS.md</code>)<a class="headerlink" href="#known-limitations-see-limitationsmd" title="Permanent link">&para;</a></h3>
+<ul>
+<li>ACMG criterion mapping has not been reviewed by an independent
+  clinical geneticist (L1).</li>
+<li>Druggability tier thresholds are unvalidated heuristics (L2).</li>
+<li>Upstream API schemas are not pinned (L3).</li>
+<li>No production deployment experience yet (L4).</li>
+<li>macOS Python 3.11 test flake (L5).</li>
+<li>Single-maintainer bus factor (L6).</li>
+<li>No real-world correctness telemetry (L7).</li>
+</ul>
+<hr />
+<h2 id="unreleased"><a href="https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.7...HEAD">Unreleased</a><a class="headerlink" href="#unreleased" title="Permanent link">&para;</a></h2>
+<hr />
+<h2 id="100-2026-03-01-phase-1-baseline"><a href="https://github.com/smaniches/alphafold-sovereign-mcp/releases/tag/v1.0.0">1.0.0</a> — 2026-03-01 (Phase 1 baseline)<a class="headerlink" href="#100-2026-03-01-phase-1-baseline" title="Permanent link">&para;</a></h2>
+<h3 id="added">Added<a class="headerlink" href="#added" title="Permanent link">&para;</a></h3>
+<ul>
+<li>25 MCP tools across structure, enrichment, and analysis modules.</li>
+<li>FastMCP server over stdio transport.</li>
+<li>Local-first AlphaFold structure cache with AlphaFold DB fallback.</li>
+<li>Persistent homology via Vietoris-Rips (Betti numbers β₀, β₁, β₂).</li>
+<li>PAE matrix extraction and domain detection.</li>
+<li>Intrinsic-disorder prediction.</li>
+<li>GO semantic similarity (Resnik, Lin, Jiang).</li>
+<li>UniProt metadata enrichment.</li>
+<li>Multi-mode local cache (<code>sovereign</code> / <code>readonly</code> / <code>disabled</code>).</li>
+<li>HTML5 API documentation.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Copyright &copy; 2024–2026 Santiago Maniches. Released under the Apache License 2.0.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+    <a href="https://github.com/smaniches/alphafold-sovereign-mcp" target="_blank" rel="noopener" title="GitHub" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="https://orcid.org/0009-0005-6480-1987" target="_blank" rel="noopener" title="ORCID" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M294.7 188.2h-45.9V342h47.5c67.6 0 83.1-51.3 83.1-76.9 0-41.6-26.5-76.9-84.7-76.9M256 8a248 248 0 1 0 0 496 248 248 0 1 0 0-496m-80.8 360.8h-29.8V161.3h29.8zM160.3 98.5a19.6 19.6 0 1 1 0 39.2 19.6 19.6 0 1 1 0-39.2M300 369h-81V161.3h80.6c76.7 0 110.4 54.8 110.4 103.9 0 53.3-41.7 103.9-110 103.9z"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["announce.dismiss", "content.action.edit", "content.action.view", "content.code.annotate", "content.code.copy", "navigation.expand", "navigation.indexes", "navigation.instant", "navigation.sections", "navigation.tabs", "navigation.tabs.sticky", "navigation.top", "navigation.tracking", "search.highlight", "search.share", "search.suggest", "toc.follow"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
