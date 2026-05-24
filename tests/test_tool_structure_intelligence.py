@@ -1019,6 +1019,84 @@ async def test_resolve_ortholog_uniprot_exception(
     assert result == ""
 
 
+async def test_resolve_ortholog_uniprot_non_list(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from alphafold_sovereign.tools.structure_intelligence import (
+        _resolve_ortholog_uniprot,
+    )
+
+    mock_ensembl = MagicMock()
+    mock_ensembl._get = AsyncMock(return_value={"not": "a list"})
+    result = await _resolve_ortholog_uniprot(mock_ensembl, "ENSMUSG00000001")
+    assert result == ""
+
+
+async def test_resolve_ortholog_uniprot_empty_primary_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from alphafold_sovereign.tools.structure_intelligence import (
+        _resolve_ortholog_uniprot,
+    )
+
+    mock_ensembl = MagicMock()
+    mock_ensembl._get = AsyncMock(return_value=[{"primary_id": ""}, {"primary_id": "Q99999"}])
+    result = await _resolve_ortholog_uniprot(mock_ensembl, "ENSMUSG00000001")
+    assert result == "Q99999"
+
+
+async def test_evolutionary_shifts_ortholog_no_af_structure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ortholog resolves to UniProt but AF has no model → fallback."""
+    mock_ensembl = MagicMock()
+    mock_ensembl.orthologs = AsyncMock(
+        return_value=[{"species": "mus_musculus", "gene_id": "ENSMUSG1", "identity": 80.0}]
+    )
+    mock_ensembl.gene_lookup = AsyncMock(return_value={"uniprot_ids": ["P12345"]})
+    mock_ensembl._get = AsyncMock(return_value=[{"primary_id": "Q62469"}])
+    monkeypatch.setattr(si, "EnsemblClient", lambda: mock_ensembl)
+
+    call_count = {"n": 0}
+
+    async def fake_fetch(uid: str) -> dict[str, Any] | None:
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            return {"pdb_text": _make_pdb(15), "uniprot_id": uid}
+        return None
+
+    monkeypatch.setattr(si, "_fetch_af_structure", fake_fetch)
+    out = await find_evolutionary_structural_shifts(EvolutionaryInput(gene_symbol="BRCA1"))
+    profile = out["evolutionary_profile"][0]
+    assert profile["divergence_method"] == "sequence_identity"
+
+
+async def test_evolutionary_shifts_ortholog_empty_ca(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ortholog AF structure has no CA atoms → fallback."""
+    mock_ensembl = MagicMock()
+    mock_ensembl.orthologs = AsyncMock(
+        return_value=[{"species": "mus_musculus", "gene_id": "ENSMUSG1", "identity": 80.0}]
+    )
+    mock_ensembl.gene_lookup = AsyncMock(return_value={"uniprot_ids": ["P12345"]})
+    mock_ensembl._get = AsyncMock(return_value=[{"primary_id": "Q62469"}])
+    monkeypatch.setattr(si, "EnsemblClient", lambda: mock_ensembl)
+
+    call_count = {"n": 0}
+
+    async def fake_fetch(uid: str) -> dict[str, Any] | None:
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            return {"pdb_text": _make_pdb(15), "uniprot_id": uid}
+        return {"pdb_text": "HEADER EMPTY\nEND", "uniprot_id": uid}
+
+    monkeypatch.setattr(si, "_fetch_af_structure", fake_fetch)
+    out = await find_evolutionary_structural_shifts(EvolutionaryInput(gene_symbol="BRCA1"))
+    profile = out["evolutionary_profile"][0]
+    assert profile["divergence_method"] == "sequence_identity"
+
+
 # ---------------------------------------------------------------------------
 # score_binding_pocket_geometry
 # ---------------------------------------------------------------------------

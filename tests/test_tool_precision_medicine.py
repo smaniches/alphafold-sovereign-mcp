@@ -1000,6 +1000,18 @@ async def test_assess_target_druggability_resolve_exception(
     assert out["evidence"]["gene_constraint"]["loeuf"] is None
 
 
+async def test_assess_target_druggability_plddt_non_dict(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """get_prediction returns non-dict (e.g. list) → plddt stays None."""
+    mocks = _patch_clients(monkeypatch)
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value=None)
+    mocks["alphafold"].get_prediction = AsyncMock(return_value=[])
+
+    out = await assess_target_druggability(DruggabilityInput(uniprot_id="P38398"))
+    assert out["evidence"]["plddt_mean"] is None
+
+
 # ---------------------------------------------------------------------------
 # synthesize_protein_dossier
 # ---------------------------------------------------------------------------
@@ -1093,6 +1105,26 @@ async def test_synthesize_protein_dossier_with_exceptions(
         ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="standard")
     )
     assert out["disease_associations"] == []
+
+
+async def test_synthesize_protein_dossier_plddt_non_dict(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """get_prediction returns non-dict → dossier_plddt stays None."""
+    mocks = _patch_clients(monkeypatch)
+    mocks["opentargets"].associated_diseases = AsyncMock(return_value=[])
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(return_value={})
+    mocks["disgenet"].gene_disease_associations = AsyncMock(return_value=[])
+    mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
+    mocks["clinvar"].search_gene = AsyncMock(return_value=[])
+    mocks["ensembl"].gene_lookup = AsyncMock(return_value={})
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value=None)
+    mocks["alphafold"].get_prediction = AsyncMock(return_value=[])
+
+    out = await synthesize_protein_dossier(
+        ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="standard")
+    )
+    assert out["druggability"]["tier"] in {"NOT_DRUGGABLE", "COLD", "WARM", "HOT"}
 
 
 async def test_synthesize_protein_dossier_chembl_target_no_id(
