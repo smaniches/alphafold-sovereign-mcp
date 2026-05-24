@@ -931,7 +931,8 @@ async def test_evolutionary_shifts_ortholog_no_gene_id(
 
     monkeypatch.setattr(si, "_fetch_af_structure", fake_fetch)
     out = await find_evolutionary_structural_shifts(EvolutionaryInput(gene_symbol="BRCA1"))
-    assert out["evolutionary_profile"][0]["structural_drift_estimate"] is None
+    assert out["evolutionary_profile"][0]["divergence_estimate"] is None
+    assert out["evolutionary_profile"][0]["divergence_method"] == "sequence_identity"
 
 
 # ---------------------------------------------------------------------------

@@ -2,9 +2,8 @@
 # Copyright 2024-2026 Santiago Maniches
 """AlphaFold Sovereign Knowledge Graph — local relational provenance store.
 
-This module implements the persistent local knowledge graph that transforms
-AlphaFold Sovereign from a stateless API connector into a learning research
-intelligence platform.  Every tool result is automatically stored, enabling:
+This module implements the persistent local SQLite store that records
+tool results across sessions.  Every tool result can be stored, enabling:
 
   - **Offline analysis**: query previously fetched data without internet
   - **Cross-session synthesis**: "find all HIGH-tier variants I've ever triaged"

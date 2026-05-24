@@ -1096,80 +1096,53 @@ async def test_omim_to_mondo_exception(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 async def test_uniprot_to_ensembl_success(monkeypatch: pytest.MonkeyPatch) -> None:
-    fake_resp = MagicMock()
-    fake_resp.json.return_value = {
-        "dbReferences": [
-            {
-                "type": "Ensembl",
-                "properties": [{"key": "gene ID", "value": "ENSG00000012048"}],
-            }
-        ]
-    }
-    fake_resp.raise_for_status = MagicMock()
+    """OpenTargetsClient resolves UniProt → Ensembl via resolve_target."""
 
-    async def fake_get(url: str) -> Any:
-        return fake_resp
+    class _FakeOT:
+        async def __aenter__(self) -> "_FakeOT":
+            return self
 
-    monkeypatch.setattr(dz._uniprot_http, "get", fake_get)
+        async def __aexit__(self, *_: object) -> None:
+            return None
+
+        async def resolve_target(self, query: str) -> dict[str, str]:
+            return {"ensembl_id": "ENSG00000012048", "symbol": "BRCA1"}
+
+    monkeypatch.setattr("alphafold_sovereign.tools.disease.OpenTargetsClient", lambda *a, **kw: _FakeOT())
     out = await _uniprot_to_ensembl("P38398")
     assert out == "ENSG00000012048"
 
 
 async def test_uniprot_to_ensembl_no_match(monkeypatch: pytest.MonkeyPatch) -> None:
-    fake_resp = MagicMock()
-    fake_resp.json.return_value = {"dbReferences": []}
-    fake_resp.raise_for_status = MagicMock()
+    class _FakeOT:
+        async def __aenter__(self) -> "_FakeOT":
+            return self
 
-    async def fake_get(url: str) -> Any:
-        return fake_resp
+        async def __aexit__(self, *_: object) -> None:
+            return None
 
-    monkeypatch.setattr(dz._uniprot_http, "get", fake_get)
+        async def resolve_target(self, query: str) -> dict[str, str]:
+            return {}
+
+    monkeypatch.setattr("alphafold_sovereign.tools.disease.OpenTargetsClient", lambda *a, **kw: _FakeOT())
     out = await _uniprot_to_ensembl("P00001")
     assert out == ""
 
 
 async def test_uniprot_to_ensembl_exception(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def fake_get(url: str) -> Any:
-        raise httpx.ConnectError("oops")
+    class _FakeOT:
+        async def __aenter__(self) -> "_FakeOT":
+            return self
 
-    monkeypatch.setattr(dz._uniprot_http, "get", fake_get)
+        async def __aexit__(self, *_: object) -> None:
+            return None
+
+        async def resolve_target(self, query: str) -> dict[str, str]:
+            raise RuntimeError("oops")
+
+    monkeypatch.setattr("alphafold_sovereign.tools.disease.OpenTargetsClient", lambda *a, **kw: _FakeOT())
     out = await _uniprot_to_ensembl("P00001")
     assert out == ""
-
-
-async def test_uniprot_to_ensembl_property_no_gene_id_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Hit the branch where dbReferences has Ensembl entry but no 'gene ID' property."""
-    fake_resp = MagicMock()
-    fake_resp.json.return_value = {
-        "dbReferences": [{"type": "Ensembl", "properties": [{"key": "other", "value": "X"}]}]
-    }
-    fake_resp.raise_for_status = MagicMock()
-
-    async def fake_get(url: str) -> Any:
-        return fake_resp
-
-    monkeypatch.setattr(dz._uniprot_http, "get", fake_get)
-    out = await _uniprot_to_ensembl("P00001")
-    assert out == ""
-
-
-async def test_uniprot_to_ensembl_non_ensembl_ref(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Hit the branch where dbReferences has a non-Ensembl type entry."""
-    fake_resp = MagicMock()
-    fake_resp.json.return_value = {
-        "dbReferences": [
-            {"type": "OtherDB", "properties": []},
-            {"type": "Ensembl", "properties": [{"key": "gene ID", "value": "ENSG_OK"}]},
-        ]
-    }
-    fake_resp.raise_for_status = MagicMock()
-
-    async def fake_get(url: str) -> Any:
-        return fake_resp
-
-    monkeypatch.setattr(dz._uniprot_http, "get", fake_get)
-    out = await _uniprot_to_ensembl("P00001")
-    assert out == "ENSG_OK"
 
 
 # ---------------------------------------------------------------------------

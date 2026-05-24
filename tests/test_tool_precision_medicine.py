@@ -261,13 +261,15 @@ def test_druggability_tier_branches(
     plddt: float | None,
     expected: str,
 ) -> None:
-    tier, _ = _druggability_tier(
+    tier, _, scoring = _druggability_tier(
         drug_count=drug_count,
         tractability_labels=tract,
         loeuf=loeuf,
         plddt_mean=plddt,
     )
     assert tier == expected
+    assert "total_score" in scoring
+    assert "components" in scoring
 
 
 @pytest.mark.parametrize(
