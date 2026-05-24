@@ -604,7 +604,9 @@ async def generate_variant_clinical_report(
                 drug_candidates = await _chembl().find_repurposable_drugs(
                     uniprot_ids[0], max_phase=2
                 )
-            source_status["chembl"] = "ok"
+                source_status["chembl"] = "ok"
+            else:
+                source_status["chembl"] = "no_data"
         except Exception as exc:
             log.warning("drugs.failed", exc=str(exc))
             source_status["chembl"] = "failed"

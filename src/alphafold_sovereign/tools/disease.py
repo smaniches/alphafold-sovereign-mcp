@@ -1235,16 +1235,26 @@ async def _omim_to_mondo(disease_id: str) -> str | None:
         return None
 
 
+_OT_SINGLETON: OpenTargetsClient | None = None
+
+
+def _get_ot_client() -> OpenTargetsClient:
+    global _OT_SINGLETON  # noqa: PLW0603
+    if _OT_SINGLETON is None:
+        _OT_SINGLETON = OpenTargetsClient()
+    return _OT_SINGLETON
+
+
 async def _uniprot_to_ensembl(uniprot_id: str) -> str:
     """Resolve UniProt accession to Ensembl gene ID via Open Targets search.
 
     Routes through OpenTargetsClient so the request shares the client's
     rate limiter, retry policy, circuit breaker, and air-gap enforcement.
+    Uses a module-level singleton to avoid per-call connection overhead.
     """
     try:
-        async with OpenTargetsClient() as ot:
-            resolved = await ot.resolve_target(uniprot_id)
-            return resolved.get("ensembl_id", "")
+        resolved = await _get_ot_client().resolve_target(uniprot_id)
+        return resolved.get("ensembl_id", "")
     except Exception:
         return ""
 

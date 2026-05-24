@@ -1092,55 +1092,39 @@ async def test_omim_to_mondo_exception(monkeypatch: pytest.MonkeyPatch) -> None:
     assert out is None
 
 
+def test_get_ot_client_singleton(monkeypatch: pytest.MonkeyPatch) -> None:
+    """_get_ot_client creates a singleton OpenTargetsClient."""
+    from alphafold_sovereign.tools.disease import _get_ot_client
+
+    monkeypatch.setattr("alphafold_sovereign.tools.disease._OT_SINGLETON", None)
+    client = _get_ot_client()
+    assert client is not None
+    assert _get_ot_client() is client
+
+
 async def test_uniprot_to_ensembl_success(monkeypatch: pytest.MonkeyPatch) -> None:
-    """OpenTargetsClient resolves UniProt to Ensembl via resolve_target."""
-
-    class _FakeOT:
-        async def __aenter__(self) -> _FakeOT:
-            return self
-
-        async def __aexit__(self, *_: object) -> None:
-            return None
-
-        async def resolve_target(self, query: str) -> dict[str, str]:
-            return {"ensembl_id": "ENSG00000012048", "symbol": "BRCA1"}
-
-    _ot_path = "alphafold_sovereign.tools.disease.OpenTargetsClient"
-    monkeypatch.setattr(_ot_path, lambda *a, **kw: _FakeOT())
+    """Singleton OT client resolves UniProt to Ensembl via resolve_target."""
+    mock_ot = MagicMock()
+    mock_ot.resolve_target = AsyncMock(
+        return_value={"ensembl_id": "ENSG00000012048", "symbol": "BRCA1"}
+    )
+    monkeypatch.setattr("alphafold_sovereign.tools.disease._get_ot_client", lambda: mock_ot)
     out = await _uniprot_to_ensembl("P38398")
     assert out == "ENSG00000012048"
 
 
 async def test_uniprot_to_ensembl_no_match(monkeypatch: pytest.MonkeyPatch) -> None:
-    class _FakeOT:
-        async def __aenter__(self) -> _FakeOT:
-            return self
-
-        async def __aexit__(self, *_: object) -> None:
-            return None
-
-        async def resolve_target(self, query: str) -> dict[str, str]:
-            return {}
-
-    _ot_path = "alphafold_sovereign.tools.disease.OpenTargetsClient"
-    monkeypatch.setattr(_ot_path, lambda *a, **kw: _FakeOT())
+    mock_ot = MagicMock()
+    mock_ot.resolve_target = AsyncMock(return_value={})
+    monkeypatch.setattr("alphafold_sovereign.tools.disease._get_ot_client", lambda: mock_ot)
     out = await _uniprot_to_ensembl("P00001")
     assert out == ""
 
 
 async def test_uniprot_to_ensembl_exception(monkeypatch: pytest.MonkeyPatch) -> None:
-    class _FakeOT:
-        async def __aenter__(self) -> _FakeOT:
-            return self
-
-        async def __aexit__(self, *_: object) -> None:
-            return None
-
-        async def resolve_target(self, query: str) -> dict[str, str]:
-            raise RuntimeError("oops")
-
-    _ot_path = "alphafold_sovereign.tools.disease.OpenTargetsClient"
-    monkeypatch.setattr(_ot_path, lambda *a, **kw: _FakeOT())
+    mock_ot = MagicMock()
+    mock_ot.resolve_target = AsyncMock(side_effect=RuntimeError("oops"))
+    monkeypatch.setattr("alphafold_sovereign.tools.disease._get_ot_client", lambda: mock_ot)
     out = await _uniprot_to_ensembl("P00001")
     assert out == ""
 
