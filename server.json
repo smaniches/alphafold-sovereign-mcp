@@ -1,7 +1,7 @@
 {
   "$schema": "https://modelcontextprotocol.io/schemas/server.schema.json",
   "name": "alphafold-sovereign-mcp",
-  "version": "1.1.7",
+  "version": "1.1.8",
   "description": "MCP server wrapping AlphaFold DB and 13 other biomedical data sources behind a set of MCP tool calls; persists each result to a local SQLite knowledge graph for later querying.",
   "vendor": "Santiago Maniches",
   "license": "Apache-2.0",
