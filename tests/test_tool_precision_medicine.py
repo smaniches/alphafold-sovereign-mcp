@@ -252,6 +252,7 @@ def test_vep_to_acmg_cadd_and_polyphen() -> None:
         (0, [], None, None, "NOT_DRUGGABLE"),  # 0
         (5, ["Small molecule"], 0.2, 80.0, "HOT"),  # 3+2+1-1=5
         (1, ["small_mol_X"], 0.2, None, "WARM"),  # 2+2-1=3
+        (0, [], None, 50.0, "NOT_DRUGGABLE"),  # pLDDT<70 → 0
     ],
 )
 def test_druggability_tier_branches(
@@ -512,6 +513,10 @@ def _patch_clients(monkeypatch: pytest.MonkeyPatch) -> dict[str, MagicMock]:
     # AlphaMissense lookups default to "no annotation"; tests that exercise
     # the AlphaMissense path override this with a concrete record.
     mocks["alphafold"].alphamissense_score = AsyncMock(return_value=None)
+    # Default pLDDT prediction metadata for druggability scoring.
+    mocks["alphafold"].get_prediction = AsyncMock(
+        return_value={"entryId": "AF-TEST-F1", "globalMetricValue": 85.0}
+    )
     return mocks
 
 
@@ -670,6 +675,24 @@ async def test_generate_variant_report_no_gene_symbol(
     )
     # No gene → no constraint, no disease
     assert out["gene_constraint"]["pLI"] is None
+    assert out["data_sources_status"]["chembl"] == "skipped"
+
+
+async def test_generate_variant_report_no_gene_drug_context_on(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """include_drug_context=True but no gene → chembl skipped."""
+    mocks = _patch_clients(monkeypatch)
+    mocks["ensembl"].vep_hgvs = AsyncMock(return_value=_make_vep_result())
+    mocks["clinvar"].search_by_hgvs = AsyncMock(return_value=[])
+    mocks["gnomad"].variant_frequencies = AsyncMock(return_value={})
+
+    out = await generate_variant_clinical_report(
+        VariantClinicalReportInput(hgvs="NM_007294.3:c.181T>G", include_drug_context=True)
+    )
+    assert out["data_sources_status"]["chembl"] == "skipped"
+    assert out["data_sources_status"]["disgenet"] == "skipped"
+    assert out["data_sources_status"]["open_targets"] == "skipped"
 
 
 async def test_generate_variant_report_non_canonical_skipped(
@@ -915,6 +938,7 @@ async def test_assess_target_druggability_no_chembl_no_ot(
         side_effect=RuntimeError("ot fail")
     )
     mocks["gnomad"].gene_constraint = AsyncMock(side_effect=RuntimeError("g fail"))
+    mocks["alphafold"].get_prediction = AsyncMock(side_effect=RuntimeError("af fail"))
 
     out = await assess_target_druggability(DruggabilityInput(uniprot_id="P38398"))
     assert out["druggability_tier"] == "NOT_DRUGGABLE"
@@ -954,7 +978,8 @@ async def test_assess_target_druggability_gnomad_constraint_exception(
     mocks["gnomad"].gene_constraint = AsyncMock(side_effect=RuntimeError("g fail"))
 
     out = await assess_target_druggability(DruggabilityInput(uniprot_id="P38398"))
-    assert out["druggability_tier"] == "NOT_DRUGGABLE"
+    assert out["druggability_tier"] == "COLD"
+    assert out["evidence"]["plddt_mean"] == 85.0
 
 
 async def test_assess_target_druggability_resolve_exception(
@@ -1062,6 +1087,7 @@ async def test_synthesize_protein_dossier_with_exceptions(
     mocks["clinvar"].search_gene = AsyncMock(side_effect=RuntimeError("e"))
     mocks["ensembl"].gene_lookup = AsyncMock(side_effect=RuntimeError("e"))
     mocks["chembl"].target_by_uniprot = AsyncMock(return_value=None)
+    mocks["alphafold"].get_prediction = AsyncMock(side_effect=RuntimeError("e"))
 
     out = await synthesize_protein_dossier(
         ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="standard")
