@@ -8,7 +8,6 @@ import json
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-import httpx
 import pytest
 
 from alphafold_sovereign.clients.hpo import DiseaseByPhenotype
@@ -18,7 +17,6 @@ from alphafold_sovereign.domain.disease import (
     PhenotypeAssociation,
     TargetEvidenceScore,
 )
-from alphafold_sovereign.tools import disease as dz
 from alphafold_sovereign.tools.disease import (
     COMMON_DISEASE_ROOTS,
     CommonDiseaseInput,
@@ -56,7 +54,6 @@ from alphafold_sovereign.tools.disease import (
     search_diseases,
     triage_variant_3d,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures: helper builders
@@ -1096,10 +1093,10 @@ async def test_omim_to_mondo_exception(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 async def test_uniprot_to_ensembl_success(monkeypatch: pytest.MonkeyPatch) -> None:
-    """OpenTargetsClient resolves UniProt → Ensembl via resolve_target."""
+    """OpenTargetsClient resolves UniProt to Ensembl via resolve_target."""
 
     class _FakeOT:
-        async def __aenter__(self) -> "_FakeOT":
+        async def __aenter__(self) -> _FakeOT:
             return self
 
         async def __aexit__(self, *_: object) -> None:
@@ -1108,14 +1105,15 @@ async def test_uniprot_to_ensembl_success(monkeypatch: pytest.MonkeyPatch) -> No
         async def resolve_target(self, query: str) -> dict[str, str]:
             return {"ensembl_id": "ENSG00000012048", "symbol": "BRCA1"}
 
-    monkeypatch.setattr("alphafold_sovereign.tools.disease.OpenTargetsClient", lambda *a, **kw: _FakeOT())
+    _ot_path = "alphafold_sovereign.tools.disease.OpenTargetsClient"
+    monkeypatch.setattr(_ot_path, lambda *a, **kw: _FakeOT())
     out = await _uniprot_to_ensembl("P38398")
     assert out == "ENSG00000012048"
 
 
 async def test_uniprot_to_ensembl_no_match(monkeypatch: pytest.MonkeyPatch) -> None:
     class _FakeOT:
-        async def __aenter__(self) -> "_FakeOT":
+        async def __aenter__(self) -> _FakeOT:
             return self
 
         async def __aexit__(self, *_: object) -> None:
@@ -1124,14 +1122,15 @@ async def test_uniprot_to_ensembl_no_match(monkeypatch: pytest.MonkeyPatch) -> N
         async def resolve_target(self, query: str) -> dict[str, str]:
             return {}
 
-    monkeypatch.setattr("alphafold_sovereign.tools.disease.OpenTargetsClient", lambda *a, **kw: _FakeOT())
+    _ot_path = "alphafold_sovereign.tools.disease.OpenTargetsClient"
+    monkeypatch.setattr(_ot_path, lambda *a, **kw: _FakeOT())
     out = await _uniprot_to_ensembl("P00001")
     assert out == ""
 
 
 async def test_uniprot_to_ensembl_exception(monkeypatch: pytest.MonkeyPatch) -> None:
     class _FakeOT:
-        async def __aenter__(self) -> "_FakeOT":
+        async def __aenter__(self) -> _FakeOT:
             return self
 
         async def __aexit__(self, *_: object) -> None:
@@ -1140,7 +1139,8 @@ async def test_uniprot_to_ensembl_exception(monkeypatch: pytest.MonkeyPatch) -> 
         async def resolve_target(self, query: str) -> dict[str, str]:
             raise RuntimeError("oops")
 
-    monkeypatch.setattr("alphafold_sovereign.tools.disease.OpenTargetsClient", lambda *a, **kw: _FakeOT())
+    _ot_path = "alphafold_sovereign.tools.disease.OpenTargetsClient"
+    monkeypatch.setattr(_ot_path, lambda *a, **kw: _FakeOT())
     out = await _uniprot_to_ensembl("P00001")
     assert out == ""
 

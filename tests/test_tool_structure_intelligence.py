@@ -30,6 +30,7 @@ from alphafold_sovereign.tools.structure_intelligence import (
     _fetch_af_structure,
     _find_high_pae_pairs,
     _find_most_similar_pair,
+    _fingerprint_distance,
     _geometric_pocket_detection,
     _idr_clinical_implications,
     _interpret_tda,
@@ -40,7 +41,6 @@ from alphafold_sovereign.tools.structure_intelligence import (
     _pocket_druggability_index,
     _pocket_druggability_label,
     _provenance,
-    _fingerprint_distance,
     analyze_structural_confidence,
     compare_proteins_topologically,
     compute_topology_fingerprint,
@@ -48,7 +48,6 @@ from alphafold_sovereign.tools.structure_intelligence import (
     find_evolutionary_structural_shifts,
     score_binding_pocket_geometry,
 )
-
 
 # ---------------------------------------------------------------------------
 # Synthetic PDB

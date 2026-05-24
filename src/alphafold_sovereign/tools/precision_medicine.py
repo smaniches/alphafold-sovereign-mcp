@@ -897,7 +897,9 @@ async def assess_target_druggability(
             "gnomad": "https://gnomad.broadinstitute.org",
             "alphafold_db": "https://alphafold.ebi.ac.uk",
         },
-        "provenance": _provenance(chembl="v34", open_targets="24.06", gnomad="v4", alphafold_db="v6"),
+        "provenance": _provenance(
+            chembl="v34", open_targets="24.06", gnomad="v4", alphafold_db="v6"
+        ),
     }
 
     log.info("complete", tier=tier, drug_count=drug_count)

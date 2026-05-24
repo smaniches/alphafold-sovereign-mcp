@@ -14,8 +14,8 @@ from alphafold_sovereign.tools import precision_medicine as pm
 from alphafold_sovereign.tools.precision_medicine import (
     ACMGVariantInput,
     DiseaseDrugLandscapeInput,
-    DrugRepurposingInput,
     DruggabilityInput,
+    DrugRepurposingInput,
     ProteinDossierInput,
     TargetSelectivityInput,
     VariantClinicalReportInput,

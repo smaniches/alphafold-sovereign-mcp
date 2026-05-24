@@ -778,7 +778,9 @@ async def find_evolutionary_structural_shifts(
                     if orth_ca.shape[0] > 0:
                         orth_tda = _compute_tda_fingerprint(orth_ca)
                         tda_distance = round(
-                            _fingerprint_distance(human_fingerprint, orth_tda["fingerprint_vector"]),
+                            _fingerprint_distance(
+                                human_fingerprint, orth_tda["fingerprint_vector"]
+                            ),
                             6,
                         )
                         divergence_estimate = tda_distance
