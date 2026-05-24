@@ -8,7 +8,6 @@ import json
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-import httpx
 import pytest
 
 from alphafold_sovereign.clients.hpo import DiseaseByPhenotype
@@ -18,7 +17,6 @@ from alphafold_sovereign.domain.disease import (
     PhenotypeAssociation,
     TargetEvidenceScore,
 )
-from alphafold_sovereign.tools import disease as dz
 from alphafold_sovereign.tools.disease import (
     COMMON_DISEASE_ROOTS,
     CommonDiseaseInput,
@@ -56,7 +54,6 @@ from alphafold_sovereign.tools.disease import (
     search_diseases,
     triage_variant_3d,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures: helper builders
@@ -1095,81 +1092,41 @@ async def test_omim_to_mondo_exception(monkeypatch: pytest.MonkeyPatch) -> None:
     assert out is None
 
 
+def test_get_ot_client_singleton(monkeypatch: pytest.MonkeyPatch) -> None:
+    """_get_ot_client creates a singleton OpenTargetsClient."""
+    from alphafold_sovereign.tools.disease import _get_ot_client
+
+    monkeypatch.setattr("alphafold_sovereign.tools.disease._OT_SINGLETON", None)
+    client = _get_ot_client()
+    assert client is not None
+    assert _get_ot_client() is client
+
+
 async def test_uniprot_to_ensembl_success(monkeypatch: pytest.MonkeyPatch) -> None:
-    fake_resp = MagicMock()
-    fake_resp.json.return_value = {
-        "dbReferences": [
-            {
-                "type": "Ensembl",
-                "properties": [{"key": "gene ID", "value": "ENSG00000012048"}],
-            }
-        ]
-    }
-    fake_resp.raise_for_status = MagicMock()
-
-    async def fake_get(url: str) -> Any:
-        return fake_resp
-
-    monkeypatch.setattr(dz._uniprot_http, "get", fake_get)
+    """Singleton OT client resolves UniProt to Ensembl via resolve_target."""
+    mock_ot = MagicMock()
+    mock_ot.resolve_target = AsyncMock(
+        return_value={"ensembl_id": "ENSG00000012048", "symbol": "BRCA1"}
+    )
+    monkeypatch.setattr("alphafold_sovereign.tools.disease._get_ot_client", lambda: mock_ot)
     out = await _uniprot_to_ensembl("P38398")
     assert out == "ENSG00000012048"
 
 
 async def test_uniprot_to_ensembl_no_match(monkeypatch: pytest.MonkeyPatch) -> None:
-    fake_resp = MagicMock()
-    fake_resp.json.return_value = {"dbReferences": []}
-    fake_resp.raise_for_status = MagicMock()
-
-    async def fake_get(url: str) -> Any:
-        return fake_resp
-
-    monkeypatch.setattr(dz._uniprot_http, "get", fake_get)
+    mock_ot = MagicMock()
+    mock_ot.resolve_target = AsyncMock(return_value={})
+    monkeypatch.setattr("alphafold_sovereign.tools.disease._get_ot_client", lambda: mock_ot)
     out = await _uniprot_to_ensembl("P00001")
     assert out == ""
 
 
 async def test_uniprot_to_ensembl_exception(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def fake_get(url: str) -> Any:
-        raise httpx.ConnectError("oops")
-
-    monkeypatch.setattr(dz._uniprot_http, "get", fake_get)
+    mock_ot = MagicMock()
+    mock_ot.resolve_target = AsyncMock(side_effect=RuntimeError("oops"))
+    monkeypatch.setattr("alphafold_sovereign.tools.disease._get_ot_client", lambda: mock_ot)
     out = await _uniprot_to_ensembl("P00001")
     assert out == ""
-
-
-async def test_uniprot_to_ensembl_property_no_gene_id_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Hit the branch where dbReferences has Ensembl entry but no 'gene ID' property."""
-    fake_resp = MagicMock()
-    fake_resp.json.return_value = {
-        "dbReferences": [{"type": "Ensembl", "properties": [{"key": "other", "value": "X"}]}]
-    }
-    fake_resp.raise_for_status = MagicMock()
-
-    async def fake_get(url: str) -> Any:
-        return fake_resp
-
-    monkeypatch.setattr(dz._uniprot_http, "get", fake_get)
-    out = await _uniprot_to_ensembl("P00001")
-    assert out == ""
-
-
-async def test_uniprot_to_ensembl_non_ensembl_ref(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Hit the branch where dbReferences has a non-Ensembl type entry."""
-    fake_resp = MagicMock()
-    fake_resp.json.return_value = {
-        "dbReferences": [
-            {"type": "OtherDB", "properties": []},
-            {"type": "Ensembl", "properties": [{"key": "gene ID", "value": "ENSG_OK"}]},
-        ]
-    }
-    fake_resp.raise_for_status = MagicMock()
-
-    async def fake_get(url: str) -> Any:
-        return fake_resp
-
-    monkeypatch.setattr(dz._uniprot_http, "get", fake_get)
-    out = await _uniprot_to_ensembl("P00001")
-    assert out == "ENSG_OK"
 
 
 # ---------------------------------------------------------------------------

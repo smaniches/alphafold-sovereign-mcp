@@ -23,10 +23,10 @@ import json
 from datetime import datetime, timezone
 from typing import Any
 
-import httpx
 import structlog
 from pydantic import BaseModel, ConfigDict, Field
 
+from alphafold_sovereign import __version__
 from alphafold_sovereign.clients.clinvar import ClinVarClient
 from alphafold_sovereign.clients.gnomad import GnomADClient
 from alphafold_sovereign.clients.hpo import HPOClient
@@ -40,7 +40,7 @@ from alphafold_sovereign.server.app import mcp
 
 logger = structlog.get_logger(__name__)
 
-_SERVER_VERSION = "1.1.0"
+_SERVER_VERSION = __version__
 
 # ---------------------------------------------------------------------------
 # Common disease MONDO IDs — curated, validated against MONDO 2025-01 release
@@ -1235,24 +1235,28 @@ async def _omim_to_mondo(disease_id: str) -> str | None:
         return None
 
 
-_uniprot_http: httpx.AsyncClient = httpx.AsyncClient(timeout=10.0)
+_OT_SINGLETON: OpenTargetsClient | None = None
+
+
+def _get_ot_client() -> OpenTargetsClient:
+    global _OT_SINGLETON  # noqa: PLW0603
+    if _OT_SINGLETON is None:
+        _OT_SINGLETON = OpenTargetsClient()
+    return _OT_SINGLETON
 
 
 async def _uniprot_to_ensembl(uniprot_id: str) -> str:
-    """Resolve UniProt accession to Ensembl gene ID via UniProt REST API."""
-    url = f"https://rest.uniprot.org/uniprotkb/{uniprot_id}.json"
+    """Resolve UniProt accession to Ensembl gene ID via Open Targets search.
+
+    Routes through OpenTargetsClient so the request shares the client's
+    rate limiter, retry policy, circuit breaker, and air-gap enforcement.
+    Uses a module-level singleton to avoid per-call connection overhead.
+    """
     try:
-        resp = await _uniprot_http.get(url)
-        resp.raise_for_status()
-        data = resp.json()
-        for ref in data.get("dbReferences", []):
-            if ref.get("type") == "Ensembl":
-                for prop in ref.get("properties", []):
-                    if prop.get("key") == "gene ID":
-                        return prop["value"]
+        resolved = await _get_ot_client().resolve_target(uniprot_id)
+        return resolved.get("ensembl_id", "")
     except Exception:
-        pass
-    return ""
+        return ""
 
 
 def _parse_clinvar_class(raw: str) -> PathogenicityClass:

@@ -398,36 +398,76 @@ def _druggability_tier(
     tractability_labels: list[str],
     loeuf: float | None,
     plddt_mean: float | None,
-) -> tuple[str, str]:
-    """Return (tier, rationale) for target druggability."""
-    score = 0
+) -> tuple[str, str, dict[str, Any]]:
+    """Return (tier, rationale, scoring_breakdown) for target druggability."""
+    components: dict[str, dict[str, Any]] = {}
 
     # Drug precedent is the strongest signal
     if drug_count >= 3:
-        score += 3
+        drug_contrib = 3
+        components["drug_precedent"] = {"contribution": 3, "input": f"drug_count={drug_count}, >=3"}
     elif drug_count >= 1:
-        score += 2
+        drug_contrib = 2
+        components["drug_precedent"] = {"contribution": 2, "input": f"drug_count={drug_count}, >=1"}
+    else:
+        drug_contrib = 0
+        components["drug_precedent"] = {"contribution": 0, "input": f"drug_count={drug_count}"}
 
     # Tractability labels from Open Targets
     small_mol_labels = {"Small molecule", "Discovery_small_molecule", "SM_clinical"}
-    if any(lab in small_mol_labels or "small_mol" in lab.lower() for lab in tractability_labels):
-        score += 2
+    has_tractability = any(
+        lab in small_mol_labels or "small_mol" in lab.lower() for lab in tractability_labels
+    )
+    tract_contrib = 2 if has_tractability else 0
+    components["tractability"] = {
+        "contribution": tract_contrib,
+        "input": "small_molecule label present" if has_tractability else "no small_molecule label",
+    }
 
     # pLDDT ≥ 70 → confident structure → analysable binding pockets
     if plddt_mean is not None and plddt_mean >= 70:
-        score += 1
+        plddt_contrib = 1
+        components["plddt"] = {"contribution": 1, "input": f"plddt_mean={plddt_mean:.1f}, >=70"}
+    elif plddt_mean is not None:
+        plddt_contrib = 0
+        components["plddt"] = {"contribution": 0, "input": f"plddt_mean={plddt_mean:.1f}, <70"}
+    else:
+        plddt_contrib = 0
+        components["plddt"] = {"contribution": 0, "input": "not_available"}
 
     # LOEUF: highly constrained genes may cause toxicity on inhibition
     if loeuf is not None and loeuf < 0.35:
-        score -= 1  # safety concern, not insurmountable
+        loeuf_contrib = -1
+        components["loeuf_safety"] = {
+            "contribution": -1,
+            "input": f"loeuf={loeuf:.3f}, <0.35 — safety concern",
+        }
+    else:
+        loeuf_contrib = 0
+        loeuf_input = f"loeuf={loeuf:.3f}, >=0.35" if loeuf is not None else "not_available"
+        components["loeuf_safety"] = {"contribution": 0, "input": loeuf_input}
+
+    score = drug_contrib + tract_contrib + plddt_contrib + loeuf_contrib
+    scoring = {
+        "total_score": score,
+        "thresholds": {"HOT": ">=4", "WARM": ">=2", "COLD": ">=1", "NOT_DRUGGABLE": "<1"},
+        "components": components,
+    }
 
     if score >= 4:
-        return "HOT", "Strong drug precedent, tractable structure, clinically validated."
-    if score >= 2:
-        return "WARM", "Some drug precedent or tractability; further profiling recommended."
-    if score >= 1:
-        return "COLD", "Limited precedent; structural optimisation required."
-    return "NOT_DRUGGABLE", "No current evidence of druggability."
+        tier = "HOT"
+        rationale = "Strong drug precedent and tractability evidence."
+    elif score >= 2:
+        tier = "WARM"
+        rationale = "Some drug precedent or tractability; further profiling recommended."
+    elif score >= 1:
+        tier = "COLD"
+        rationale = "Limited precedent; additional evidence needed."
+    else:
+        tier = "NOT_DRUGGABLE"
+        rationale = "No current evidence of druggability."
+
+    return tier, rationale, scoring
 
 
 # ── Tool 1: Full clinical variant report ─────────────────────────────────────
@@ -474,6 +514,8 @@ async def generate_variant_clinical_report(
     log = logger.bind(hgvs=hgvs, tool="generate_variant_clinical_report")
     log.info("start")
 
+    source_status: dict[str, str] = {}
+
     # ── Step 1: Parse gene symbol ────────────────────────────────────────────
     gene_symbol = EnsemblClient.parse_gene_from_hgvs(hgvs)
 
@@ -486,10 +528,16 @@ async def generate_variant_clinical_report(
     )
     if isinstance(vep_results, Exception):
         log.warning("vep.failed", exc=str(vep_results))
+        source_status["ensembl_vep"] = "failed"
         vep_results = []
+    else:
+        source_status["ensembl_vep"] = "ok"
     if isinstance(clinvar_results, Exception):
         log.warning("clinvar.failed", exc=str(clinvar_results))
+        source_status["clinvar"] = "failed"
         clinvar_results = []
+    else:
+        source_status["clinvar"] = "ok"
 
     # ── Step 3: gnomAD variant ID construction ───────────────────────────────
     gnomad_data: dict[str, Any] = {}
@@ -497,8 +545,12 @@ async def generate_variant_clinical_report(
     if gnomad_id:
         try:
             gnomad_data = await _gnomad().variant_frequencies(gnomad_id)
+            source_status["gnomad"] = "ok"
         except Exception as exc:
             log.warning("gnomad.failed", exc=str(exc))
+            source_status["gnomad"] = "failed"
+    else:
+        source_status["gnomad"] = "skipped"
 
     # ── Step 4: Gene-level constraint ────────────────────────────────────────
     gene_constraint: dict[str, Any] = {}
@@ -530,8 +582,17 @@ async def generate_variant_clinical_report(
         results = await asyncio.gather(*tasks, return_exceptions=True)
         if not isinstance(results[0], Exception):
             disgenet_assocs = results[0]  # type: ignore
+            source_status["disgenet"] = "ok"
+        else:
+            source_status["disgenet"] = "failed"
         if len(results) > 1 and not isinstance(results[1], Exception):
             ot_diseases = [s.to_dict() if hasattr(s, "to_dict") else s for s in results[1]]  # type: ignore
+            source_status["open_targets"] = "ok"
+        else:
+            source_status["open_targets"] = "failed"
+    else:
+        source_status["disgenet"] = "skipped"
+        source_status["open_targets"] = "skipped"
 
     # ── Step 6: Drug context ──────────────────────────────────────────────────
     drug_candidates: list[dict[str, Any]] = []
@@ -543,8 +604,16 @@ async def generate_variant_clinical_report(
                 drug_candidates = await _chembl().find_repurposable_drugs(
                     uniprot_ids[0], max_phase=2
                 )
+                source_status["chembl"] = "ok"
+            else:
+                source_status["chembl"] = "no_data"
         except Exception as exc:
             log.warning("drugs.failed", exc=str(exc))
+            source_status["chembl"] = "failed"
+    elif not params.include_drug_context:
+        source_status["chembl"] = "skipped"
+    else:
+        source_status["chembl"] = "skipped"
 
     # ── Step 7: Consolidate ClinVar ───────────────────────────────────────────
     clinvar_record: dict[str, Any] | None = None
@@ -560,6 +629,7 @@ async def generate_variant_clinical_report(
         gene_symbol,
         vep_results,  # type: ignore[arg-type]
     )
+    source_status["alphamissense"] = "ok" if am_score is not None else "no_data"
 
     # ── Step 9: Draft ACMG criteria ───────────────────────────────────────────
     acmg_criteria: dict[str, str] = {}
@@ -663,6 +733,7 @@ async def generate_variant_clinical_report(
             "note": "Drugs acting on the gene product — not necessarily on this variant.",
         }
 
+    report["data_sources_status"] = source_status
     report["data_sources"] = {
         "ensembl_vep": "https://rest.ensembl.org",
         "clinvar": "https://www.ncbi.nlm.nih.gov/clinvar/",
@@ -769,21 +840,32 @@ async def assess_target_druggability(
         except Exception as exc:
             log.warning("constraint.failed", exc=str(exc))
 
+    # AlphaFold pLDDT (structural confidence)
+    plddt_mean: float | None = None
+    try:
+        af_meta = await _alphafold().get_prediction(uid)
+        if isinstance(af_meta, dict):
+            plddt_mean = af_meta.get("globalMetricValue")
+    except Exception as exc:
+        log.warning("plddt.failed", exc=str(exc))
+
     # Druggability tier
-    tier, rationale = _druggability_tier(
+    tier, rationale, scoring = _druggability_tier(
         drug_count=drug_count,
         tractability_labels=tractability_labels,
         loeuf=loeuf,
-        plddt_mean=None,  # populated when structure tools are integrated
+        plddt_mean=plddt_mean,
     )
 
     report: dict[str, Any] = {
         "uniprot_id": uid,
         "druggability_tier": tier,
         "tier_rationale": rationale,
+        "scoring_breakdown": scoring,
         "evidence": {
             "drug_count": drug_count,
             "tractability_labels": tractability_labels,
+            "plddt_mean": plddt_mean,
             "gene_constraint": {
                 "loeuf": loeuf,
                 "pLI": gene_constraint.get("pLI"),
@@ -815,8 +897,11 @@ async def assess_target_druggability(
             "chembl": "https://www.ebi.ac.uk/chembl/",
             "open_targets": "https://platform.opentargets.org",
             "gnomad": "https://gnomad.broadinstitute.org",
+            "alphafold_db": "https://alphafold.ebi.ac.uk",
         },
-        "provenance": _provenance(chembl="v34", open_targets="24.06", gnomad="v4"),
+        "provenance": _provenance(
+            chembl="v34", open_targets="24.06", gnomad="v4", alphafold_db="v6"
+        ),
     }
 
     log.info("complete", tier=tier, drug_count=drug_count)
@@ -915,12 +1000,21 @@ async def synthesize_protein_dossier(
     clinvar_vars = results.get("clinvar_variants") or []
     ensembl_gene = results.get("ensembl_gene") or {}
 
+    # AlphaFold pLDDT
+    dossier_plddt: float | None = None
+    try:
+        af_meta = await _alphafold().get_prediction(uid)
+        if isinstance(af_meta, dict):
+            dossier_plddt = af_meta.get("globalMetricValue")
+    except Exception:
+        pass
+
     # Compute druggability
-    tier, rationale = _druggability_tier(
+    tier, rationale, _scoring = _druggability_tier(
         drug_count=ot_tract.get("drug_count", len(drugs)),
         tractability_labels=ot_tract.get("tractability_labels", []),
         loeuf=constraint.get("loeuf"),
-        plddt_mean=None,
+        plddt_mean=dossier_plddt,
     )
 
     # Synthesise top disease list (merge OT + DisGeNET)
