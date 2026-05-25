@@ -1,0 +1,4 @@
+# CODEOWNERS — enforce review on all changes
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+* @smaniches

@@ -48,22 +48,13 @@ jobs:
           retention-days: 7
 
   # ── SLSA L3 build provenance (in-toto attestation) ───────────────────────
-  # NOTE on the un-SHA-pinned reference below:
-  # SLSA's trust model intentionally requires that this reusable workflow
-  # be referenced by a semver-formatted tag, NOT a commit SHA. The
-  # generator's internal validation fails if the caller pins by SHA. We
-  # therefore keep this single line on the @v2.0.0 tag form, with the
-  # tag's underlying commit SHA noted in the trailing comment for audit
-  # traceability. The 12 other action references across this repo are
-  # SHA-pinned per OpenSSF Scorecard `Pinned-Dependencies` (added in
-  # v1.1.6).
   provenance:
     needs: [build]
     permissions:
       actions: read
       id-token: write
       contents: write
-    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@f7dd8c54c2067bafc12ca7a55595d5ee9b75204a # v2.1.0
     with:
       base64-subjects: "${{ needs.build.outputs.hashes }}"
       provenance-name: "alphafold-sovereign-mcp.intoto.jsonl"
