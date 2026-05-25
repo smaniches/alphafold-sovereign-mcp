@@ -207,6 +207,9 @@ ignore = [
     "RUF001", "RUF002", "ANN401", "PLC0415", "TC003",
     "PLR2004", "PERF401", "B905", "SIM105", "E501",
 ]
+# Fuzz harnesses: TestOneInput is mandated by Atheris; try-except-pass is
+# standard fuzzing idiom; annotations and perf lints are not relevant.
+"fuzz/**" = ["N802", "SIM105", "PERF401", "ANN", "S"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["alphafold_sovereign"]
