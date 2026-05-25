@@ -28,9 +28,7 @@ def _fuzz_ontology_term(fdp: atheris.FuzzedDataProvider) -> OntologyTerm:
         synonyms=tuple(
             fdp.ConsumeUnicodeNoSurrogates(64) for _ in range(fdp.ConsumeIntInRange(0, 5))
         ),
-        xrefs=tuple(
-            fdp.ConsumeUnicodeNoSurrogates(32) for _ in range(fdp.ConsumeIntInRange(0, 5))
-        ),
+        xrefs=tuple(fdp.ConsumeUnicodeNoSurrogates(32) for _ in range(fdp.ConsumeIntInRange(0, 5))),
         namespace=fdp.ConsumeUnicodeNoSurrogates(16),
         obsolete=fdp.ConsumeBool(),
     )
