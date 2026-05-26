@@ -10,11 +10,11 @@ description: >-
   (UniProt, Open Targets, ChEMBL, Ensembl VEP, ClinVar, gnomAD, MONDO,
   HPO, DisGeNET, RCSB PDB, InterPro, Gene Ontology, Human Protein
   Atlas) behind MCP tool calls. Persists each result to a local SQLite
-  knowledge graph for later querying. Engineering-grade (677 tests,
+  knowledge graph for later querying. Engineering-validated (689 tests,
   100% line and branch coverage) but scientific outputs are research aids that
   must be reviewed by qualified humans before clinical use — see
   STATUS.md and LIMITATIONS.md.
-maturity: stable
+maturity: beta
 version: "1.1.8"
 homepage: https://github.com/smaniches/alphafold-sovereign-mcp
 license: Apache-2.0

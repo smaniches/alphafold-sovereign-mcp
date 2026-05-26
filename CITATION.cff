@@ -14,8 +14,8 @@ abstract: >-
   DisGeNET, RCSB PDB, InterPro, Gene Ontology, Human Protein Atlas)
   as tool calls a Claude (or other MCP-capable) client can invoke
   directly. Persists each result to a local SQLite knowledge graph for
-  later querying. The server is engineering-grade (677 tests, 100% line
-  + branch coverage) but its scientific outputs — draft ACMG/AMP
+  later querying. The server is engineering-validated (689 tests, 100%
+  line + branch coverage) but its scientific outputs — draft ACMG/AMP
   evidence and a heuristic druggability tier — have NOT been reviewed
   by independent domain experts and must be treated as research aids,
   not as clinical decision support. See LIMITATIONS.md.
@@ -49,8 +49,8 @@ keywords:
   - biosecurity
   - drug-discovery
   - clinical-research
-version: "1.1.7"
-date-released: "2026-05-18"
+version: "1.1.8"
+date-released: "2026-05-26"
 references:
   - type: software
     title: "AlphaFold Protein Structure Database"
