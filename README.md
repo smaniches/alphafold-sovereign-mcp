@@ -18,15 +18,15 @@ clinical or regulatory use.
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](pyproject.toml)
 [![MCP Spec 2025-06-18](https://img.shields.io/badge/MCP-2025--06--18-purple)](https://modelcontextprotocol.io)
-[![Tests](https://img.shields.io/badge/tests-677%20passing-success)](https://github.com/smaniches/alphafold-sovereign-mcp/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/tests-689%20passing-success)](https://github.com/smaniches/alphafold-sovereign-mcp/actions/workflows/ci.yml)
 [![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)](https://github.com/smaniches/alphafold-sovereign-mcp/actions/workflows/ci.yml)
 [![ORCID](https://img.shields.io/badge/ORCID-0009--0005--6480--1987-A6CE39?logo=orcid&logoColor=white)](https://orcid.org/0009-0005-6480-1987)
 [![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.20134773-3C5A99?logo=zenodo&logoColor=white)](https://doi.org/10.5281/zenodo.20134773)
 
-**Status:** `v1.1.7`. Engineering-grade (677 tests, 100% line and
-branch coverage, full legal kit). Not yet scientifically validated by
-independent domain experts; see [`STATUS.md`](STATUS.md) and
-[`LIMITATIONS.md`](LIMITATIONS.md).
+**Status:** `v1.1.8` (Beta). Engineering-validated (689 tests, 100%
+line and branch coverage). Not yet scientifically validated by
+independent domain experts; not yet deployed in production. See
+[`STATUS.md`](STATUS.md) and [`LIMITATIONS.md`](LIMITATIONS.md).
 
 ---
 
@@ -123,7 +123,7 @@ uv pip install -e .
 ### Verify the install
 
 ```bash
-alphafold-sovereign --version       # → 1.1.7
+alphafold-sovereign --version       # → 1.1.8
 alphafold-sovereign --self-test     # → PASS on the offline BRCA1 fixture
 ```
 
@@ -318,14 +318,14 @@ See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the full module map.
 
 ## Testing & quality
 
-- 677 unit tests with respx-mocked upstreams; the full suite runs
-  hermetically in under a minute on a laptop.
+- 689 unit tests with respx-mocked upstreams; the full suite runs
+  hermetically in under a minute on a laptop. Test count includes
+  parametrised expansions as reported by `pytest --collect-only`.
 - Coverage on the shipped surface (`src/alphafold_sovereign/clients`,
   `domain`, `storage`, `server`, `tools`): **100% line + branch**,
   every shipped module at 100%.
-- Lint: `ruff` (full ruleset, no per-file ignores on the production
-  tree). Type checking: `mypy --strict` on the domain, clients, and
-  storage subtrees.
+- Lint: `ruff` (full ruleset). Type checking: `mypy --strict` on the
+  domain, clients, and storage subtrees.
 - Security: `bandit` plus CodeQL `security-extended`.
 - Supply chain: SBOM generation in CI; reproducible-build script at
   `scripts/replicate.sh`.
@@ -340,7 +340,7 @@ HEAD; if you find a divergence, please open an issue.
 ## Contributing
 
 DCO sign-off required (`git commit -s`). No copyright assignment.
-Coverage gate: CI enforces 100% line and branch coverage on the shipped surface.
+Coverage gate: CI enforces 100% line and branch coverage on the shipped surface (`nox -s cov`).
 Full guide: [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ---
@@ -363,7 +363,7 @@ this file).
   author    = {Maniches, Santiago},
   title     = {AlphaFold Sovereign MCP},
   year      = {2026},
-  version   = {1.1.7},
+  version   = {1.1.8},
   url       = {https://github.com/smaniches/alphafold-sovereign-mcp},
   license   = {Apache-2.0},
   orcid     = {0009-0005-6480-1987},

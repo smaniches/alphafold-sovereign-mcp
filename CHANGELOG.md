@@ -7,6 +7,74 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.1.8] - 2026-05-26
+
+A metadata-consistency and validation-posture patch. Closes version
+drift between `pyproject.toml` / `__init__.py` (which were bumped to
+1.1.8 in PR #43) and the 12+ documentation and manifest files that
+still read `1.1.7`. Downgrades the maturity claim from
+`Production/Stable` to `Beta` to match the project's actual
+deployment and validation status.
+
+### Fixed
+- **Version drift.** 12 files (`README.md`, `STATUS.md`,
+  `LIMITATIONS.md`, `CITATION.cff`, `docs/index.md`,
+  `docs/installation.md`, `mkdocs.yml`, `server.json` status_note)
+  still read `1.1.7` after the `pyproject.toml` / `__init__.py` /
+  `server.json` / `.well-known/mcp.json` / `smithery.yaml` version
+  fields were bumped to `1.1.8` in PR #43.
+- **Stale test count.** All references to "677 tests" updated to
+  689, the current `pytest --collect-only` count (includes
+  parametrised expansions).
+- **`CONTRIBUTING.md` overclaims.** Removed unsubstantiated claims
+  that the software is "used by pharmaceutical, clinical-research,
+  and defense organizations" and that "real clinicians, researchers,
+  and analysts use [it] to make consequential decisions." No evidence
+  supports either claim; `STATUS.md` explicitly states no production
+  deployment has occurred.
+- **`CONTRIBUTING.md` nox sessions.** The "How to Run the Test
+  Pyramid" section listed 9 nox sessions (`unit`, `property`,
+  `contract`, `client`, `integration`, `benchmark`, `security`,
+  `mutation`, `perf`) that do not exist in `noxfile.py`. Replaced
+  with the actual sessions.
+- **`CONTRIBUTING.md` coverage gate.** Stated "≥ 95% line, ≥ 90%
+  branch" but `noxfile.py` enforces `--cov-fail-under=100` and
+  `pyproject.toml` sets `fail_under = 99`. Corrected to "100% line
+  and branch".
+
+### Changed
+- **PyPI classifier** downgraded from
+  `Development Status :: 5 - Production/Stable` to
+  `Development Status :: 4 - Beta`. The project has no production
+  deployment experience (LIMITATIONS L4), no scientific validation
+  (STATUS.md), and no external contributors. `Production/Stable`
+  was not supported by evidence.
+- **Maturity field** in `server.json`, `.well-known/mcp.json`, and
+  `smithery.yaml` changed from `"stable"` to `"beta"`.
+- **Language throughout** changed from "engineering-grade" to
+  "engineering-validated" to avoid implying a maturity level the
+  project has not reached.
+
+### Added
+- **`STATUS.md` validation matrix.** A table distinguishing
+  engineering validation (unit tests, coverage, static analysis,
+  security scanning, release provenance) from scientific validation,
+  clinical validation, and regulatory certification — all three
+  marked as "Not performed" / "None".
+- **`REVIEWER.md`.** Step-by-step guide for a cold reviewer to
+  install, self-test, run the offline test suite, inspect examples,
+  and verify release provenance.
+
+### Verified
+- `grep -rn '1\.1\.7'` across all version-bearing files returns
+  zero hits (only historical CHANGELOG entries remain).
+- `grep -rn 'Production/Stable\|maturity.*stable'` across
+  `pyproject.toml`, `server.json`, `.well-known/mcp.json`,
+  `smithery.yaml` returns zero hits.
+- 689 / 689 tests collected by `pytest --collect-only`.
+
+---
+
 ## [1.1.7] - 2026-05-18
 
 Ships the supply-chain hardening originally intended for v1.1.6.
@@ -571,7 +639,8 @@ threat model, examples, mkdocs site).
 - Multi-mode local cache (`sovereign` / `readonly` / `disabled`).
 - HTML5 API documentation.
 
-[Unreleased]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.7...HEAD
+[Unreleased]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.8...HEAD
+[1.1.8]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.7...v1.1.8
 [1.1.7]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.6...v1.1.7
 [1.1.6]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.5...v1.1.6
 [1.1.5]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.4...v1.1.5

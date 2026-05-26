@@ -1,9 +1,9 @@
 # Contributing to AlphaFold Sovereign MCP
 
-Thank you for considering a contribution. This project ships
-production-grade software used by pharmaceutical, clinical-research,
-and defense organizations. We hold contributions to a correspondingly
-high bar — and we will help you meet it.
+Thank you for considering a contribution. This project aims to be
+a well-tested, well-documented MCP server for biomedical data access.
+We hold contributions to a high engineering bar — and we will help
+you meet it.
 
 This document is the single source of truth for "how do I contribute,
 and what will happen to my contribution?"
@@ -104,21 +104,20 @@ The first `uv sync` pins all transitive dependencies to hashes in
 ## How to Run the Test Pyramid
 
 ```bash
-uv run nox -s unit          # fast, no network
-uv run nox -s property      # Hypothesis property tests
-uv run nox -s contract      # MCP protocol compliance
-uv run nox -s client        # HTTP-mocked upstream clients
-uv run nox -s integration   # live upstream calls (network required)
-uv run nox -s benchmark     # pre-registered prompts; SHA-256 committed
-uv run nox -s security      # bandit, semgrep, pip-audit
-uv run nox -s mutation      # mutmut on critical modules
-uv run nox -s perf          # pytest-benchmark + locust
+uv run nox -s lint          # ruff check + format check
+uv run nox -s type          # mypy --strict
+uv run nox -s test          # full pytest suite (all supported Pythons)
+uv run nox -s cov           # pytest + coverage report (100% gate)
+uv run nox -s security      # bandit + safety + pip-audit
+uv run nox -s docs          # mkdocs build
+uv run nox -s build         # sdist + wheel
+uv run nox -s mutate        # mutmut on the shipped surface
+uv run nox -s self_test     # alphafold-sovereign --self-test
 ```
 
-CI runs all but `mutation` and `perf` on every PR. Those two run
-nightly and on release tags.
+CI runs `lint`, `type`, `test`, `cov`, and `docs` on every PR.
 
-Coverage gate: **≥ 95% line, ≥ 90% branch** on every PR.
+Coverage gate: **100% line and branch** on the shipped surface.
 
 ## Commit Message Convention
 
@@ -198,7 +197,6 @@ See [`GOVERNANCE.md`](./GOVERNANCE.md) for the formal process.
 
 ---
 
-Thank you. Every contributor here is a co-author of a tool that
-real clinicians, researchers, and analysts use to make consequential
-decisions. We don't take that lightly, and we won't let your work be
-treated as anything less.
+Thank you for contributing. Every improvement to this project helps
+researchers and engineers who depend on reliable biomedical data
+access.

@@ -52,8 +52,8 @@
     "drug-discovery",
     "knowledge-graph"
   ],
-  "maturity": "stable",
-  "status_note": "v1.1.7 ships with engineering-grade tests (677 tests, 100% line and branch coverage) but its scientific outputs (ACMG draft, druggability tier) have NOT been validated by independent domain experts. See STATUS.md and LIMITATIONS.md.",
+  "maturity": "beta",
+  "status_note": "v1.1.8 — engineering-validated (689 tests, 100% line and branch coverage). Scientific outputs (ACMG draft, druggability tier) have NOT been validated by independent domain experts. Not yet deployed in production. See STATUS.md and LIMITATIONS.md.",
   "install": {
     "pypi": {
       "name": "alphafold-sovereign-mcp",
