@@ -36,7 +36,7 @@ jobs:
       - name: Install ruff
         run: uv tool install ruff
       - name: Run ruff check
-        run: uv run ruff check src/alphafold_sovereign/clients/ src/alphafold_sovereign/domain/ src/alphafold_sovereign/tools/ src/alphafold_sovereign/storage/ --output-format=github
+        run: uv run ruff check src/ --output-format=github
       - name: Run ruff format check
         run: uv run ruff format --check .
 
@@ -57,6 +57,8 @@ jobs:
             src/alphafold_sovereign/domain/ \
             src/alphafold_sovereign/clients/ \
             src/alphafold_sovereign/storage/ \
+            src/alphafold_sovereign/server/ \
+            src/alphafold_sovereign/__main__.py \
             --config-file pyproject.toml
 
   # ── Test matrix ───────────────────────────────────────────────────────────────────────

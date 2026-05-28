@@ -33,6 +33,7 @@ SRC_DIRS_LINT = [
     "src/alphafold_sovereign/tools/",
     "src/alphafold_sovereign/storage/",
     "src/alphafold_sovereign/server/",
+    "src/alphafold_sovereign/__main__.py",
 ]
 SRC_DIRS_TYPE = [
     "src/alphafold_sovereign/domain/",

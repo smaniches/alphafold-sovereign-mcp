@@ -7,6 +7,45 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [Unreleased]
+
+A small audit-and-polish pass. Closes residual version drift, a stale
+statement count, a lint-scope gap that let one style violation ship, and
+a coverage-gate inconsistency. No functional code changes — behaviour,
+tool surface, and public API are unchanged.
+
+### Fixed
+- **Residual version drift.** `examples/README.md` still printed
+  `--version → 1.1.7`; updated to `1.1.8` to match every other manifest
+  and document (the v1.1.8 drift sweep missed this one file).
+- **Stale statement count.** `LIMITATIONS.md` L6 carried the v1.1.4
+  figure (`2,868` statements) under an "as of v1.1.8" label. The
+  verified `pytest --cov` count on the v1.1.8 surface is `2,948`
+  statements / 790 branches (identical on Python 3.10–3.13, since no
+  source uses version-conditional branches).
+- **Unlinted entry point.** `src/alphafold_sovereign/__main__.py`
+  contained an `E501` (over-length `--self-test` help string) that
+  shipped because neither the CI `ruff` step nor `noxfile`'s
+  `SRC_DIRS_LINT` covered the file. The string is wrapped; the file is
+  now linted.
+
+### Changed
+- **CI lint scope now matches the package.** The `lint` job runs
+  `ruff check src/` (was four hand-listed subpackages), so `server/`
+  and `__main__.py` can no longer drift out of coverage.
+- **CI type-check scope aligned with `noxfile`.** The `typecheck` job
+  now also covers `server/` and `__main__.py`; the `noxfile` `type`
+  session already did, so CI and local `nox` results agree as
+  `noxfile.py` documents.
+- **`noxfile` lint scope** now includes `__main__.py`, matching its
+  `type` session.
+- **Coverage gate.** `[tool.coverage.report] fail_under` raised from
+  `99` to `100`, matching the threshold CI and the `nox` `cov` session
+  already enforce on the command line (`--cov-fail-under=100`) and the
+  100% figure advertised throughout the docs.
+
+---
+
 ## [1.1.8] - 2026-05-26
 
 A metadata-consistency and validation-posture patch. Closes version
