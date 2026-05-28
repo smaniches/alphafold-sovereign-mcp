@@ -9,10 +9,13 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-A small audit-and-polish pass. Closes residual version drift, a stale
-statement count, a lint-scope gap that let one style violation ship, and
-a coverage-gate inconsistency. No functional code changes — behaviour,
-tool surface, and public API are unchanged.
+Audit-and-polish work accumulated since v1.1.8. Closes residual version
+drift, a stale statement count, a lint-scope gap that let one style
+violation ship, a coverage-gate inconsistency, a **data-source overclaim**
+(docs advertised 14 sources; only 9 are actually queried), and an MCP
+handshake that reported the framework version instead of the product
+version. No change to runtime behaviour, the tool surface, or the public
+API — the tool count stays 29.
 
 ### Fixed
 - **Residual version drift.** `examples/README.md` still printed
@@ -20,14 +23,34 @@ tool surface, and public API are unchanged.
   and document (the v1.1.8 drift sweep missed this one file).
 - **Stale statement count.** `LIMITATIONS.md` L6 carried the v1.1.4
   figure (`2,868` statements) under an "as of v1.1.8" label. The
-  verified `pytest --cov` count on the v1.1.8 surface is `2,948`
-  statements / 790 branches (identical on Python 3.10–3.13, since no
-  source uses version-conditional branches).
+  verified `pytest --cov` count is `2,949` statements / 790 branches
+  (this includes the one-line `__version__` import added below;
+  identical across Python 3.10–3.13, since no source uses
+  version-conditional branches).
 - **Unlinted entry point.** `src/alphafold_sovereign/__main__.py`
   contained an `E501` (over-length `--self-test` help string) that
   shipped because neither the CI `ruff` step nor `noxfile`'s
   `SRC_DIRS_LINT` covered the file. The string is wrapped; the file is
   now linted.
+- **Data-source overclaim corrected (14 → 9).** The README, registry
+  manifests (`server.json`, `.well-known/mcp.json`, `smithery.yaml`),
+  the PyPI / `pyproject` description, `CITATION.cff`, `STATUS.md`,
+  `LIMITATIONS.md`, `docs/index.md`, and the package docstrings
+  advertised "AlphaFold DB + 13 other data sources." Only **9**
+  upstreams are actually queried (AlphaFold DB, Open Targets, ChEMBL,
+  Ensembl, ClinVar, gnomAD, MONDO, HPO, DisGeNET). RCSB PDB, Gene
+  Ontology, and InterPro are never contacted; UniProt is used only as an
+  identifier namespace; Human Protein Atlas is at most a transitive Open
+  Targets score. The five were removed from the source lists, the count
+  corrected to 9, and an explicit "not integrated in this release" note
+  added to the README data-sources table. (`ARCHITECTURE.md` is
+  separately stale — it lists modules that do not ship — and is left for
+  a dedicated pass.)
+- **MCP server version.** The `initialize` handshake reported FastMCP's
+  own version (`3.3.1`) instead of the product version, because
+  `server/app.py` constructed `FastMCP("alphafold-sovereign")` with no
+  `version=`. It now passes `version=__version__`, so a connecting
+  client sees `1.1.8`.
 
 ### Changed
 - **CI lint scope now matches the package.** The `lint` job runs
@@ -43,6 +66,9 @@ tool surface, and public API are unchanged.
   `99` to `100`, matching the threshold CI and the `nox` `cov` session
   already enforce on the command line (`--cov-fail-under=100`) and the
   100% figure advertised throughout the docs.
+- **`server.json` capability.** `tools.listChanged` corrected from
+  `false` to `true` to match what the running FastMCP server advertises
+  in the `initialize` handshake.
 
 ---
 

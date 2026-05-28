@@ -2,7 +2,7 @@
 # Copyright 2024-2026 Santiago Maniches
 """AlphaFold Sovereign MCP.
 
-A Model Context Protocol server that wraps AlphaFold DB and 13 other
+A Model Context Protocol server that wraps AlphaFold DB and 8 other
 public biomedical data sources behind MCP tool calls, and persists
 each result to a local SQLite knowledge graph for later querying.
 

@@ -9,9 +9,9 @@ type: software
 title: "AlphaFold Sovereign MCP"
 abstract: >-
   An open-source Model Context Protocol (MCP) server that exposes
-  AlphaFold DB and 13 other public biomedical data sources (UniProt,
-  Open Targets, ChEMBL, Ensembl VEP, ClinVar, gnomAD, MONDO, HPO,
-  DisGeNET, RCSB PDB, InterPro, Gene Ontology, Human Protein Atlas)
+  AlphaFold DB and 8 other public biomedical data sources (Open
+  Targets, ChEMBL, Ensembl VEP, ClinVar, gnomAD, MONDO, HPO,
+  DisGeNET)
   as tool calls a Claude (or other MCP-capable) client can invoke
   directly. Persists each result to a local SQLite knowledge graph for
   later querying. The server is engineering-validated (689 tests, 100%

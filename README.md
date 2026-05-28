@@ -1,6 +1,6 @@
 # AlphaFold Sovereign MCP
 
-A Model Context Protocol server that wraps AlphaFold DB and 13 other
+A Model Context Protocol server that wraps AlphaFold DB and 8 other
 public biomedical data sources behind a set of MCP tool calls, and
 persists each result to a local SQLite knowledge graph for later
 querying.
@@ -34,9 +34,8 @@ independent domain experts; not yet deployed in production. See
 
 A Python MCP server that:
 
-- Wraps AlphaFold DB, UniProt, MONDO, HPO, Open Targets, ClinVar,
-  gnomAD, DisGeNET, ChEMBL, Ensembl, InterPro, RCSB PDB, Gene
-  Ontology, and Human Protein Atlas behind MCP tool calls. Each call
+- Wraps AlphaFold DB, MONDO, HPO, Open Targets, ClinVar, gnomAD,
+  DisGeNET, ChEMBL, and Ensembl behind MCP tool calls. Each call
   is a thin orchestration over those upstreams; the server does not
   add scientific judgement.
 - Composes upstreams into multi-source workflows: variant
@@ -273,7 +272,6 @@ distance from the human structure along with sequence identity.
 | Source | What we use | License |
 |---|---|---|
 | AlphaFold DB v6 (EBI/DeepMind) | Structures, pLDDT, PAE, AlphaMissense | CC BY 4.0 |
-| UniProt | Protein function, domains, GO | CC BY 4.0 |
 | MONDO (OLS4) | Disease ontology, ICD cross-refs | CC BY 4.0 |
 | HPO (JAX) | Phenotype terms, gene-disease links | hpo.jax.org |
 | Open Targets | Disease–target evidence | Apache 2.0 |
@@ -282,10 +280,12 @@ distance from the human structure along with sequence identity.
 | DisGeNET | Gene–disease association scores | CC BY-NC-SA 4.0 |
 | ChEMBL v34 (EMBL-EBI) | Drug bioactivity, MoA, ADMET | CC BY-SA 3.0 |
 | Ensembl (EMBL-EBI) | VEP, orthologs, gene lookup | Apache 2.0 |
-| InterPro | Domain + family annotations | CC0 |
-| RCSB PDB | Experimental structures | CC0 |
-| Gene Ontology | Biological process, molecular function | CC BY 4.0 |
-| Human Protein Atlas | Tissue expression | CC BY-SA 3.0 |
+
+UniProt accessions are used throughout as protein **identifiers** — they
+key AlphaFold structures and Open Targets cross-references — but the
+UniProt API itself is not queried as a data source. Domain (InterPro),
+Gene Ontology, experimental-structure (RCSB PDB), and tissue-expression
+(Human Protein Atlas) lookups are **not** integrated in this release.
 
 See [`NOTICE`](NOTICE) for full attributions.
 
@@ -372,9 +372,8 @@ this file).
 ```
 
 When citing results derived from this software, please also cite the
-upstream data sources (AlphaFold DB, UniProt, Open Targets, ChEMBL,
-Ensembl, ClinVar, gnomAD, MONDO, HPO, DisGeNET, RCSB PDB, InterPro,
-Gene Ontology, Human Protein Atlas) according to their own citation
+upstream data sources (AlphaFold DB, Open Targets, ChEMBL, Ensembl,
+ClinVar, gnomAD, MONDO, HPO, DisGeNET) according to their own citation
 requirements.
 
 ## License

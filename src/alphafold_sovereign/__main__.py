@@ -83,7 +83,7 @@ def _run_self_test() -> int:
 def _parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="alphafold-sovereign-mcp",
-        description="MCP server wrapping AlphaFold DB and 13 other biomedical data sources.",
+        description="MCP server wrapping AlphaFold DB and 8 other biomedical data sources.",
     )
     parser.add_argument(
         "--version",
