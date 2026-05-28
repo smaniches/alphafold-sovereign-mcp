@@ -93,7 +93,10 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "--self-test",
         action="store_true",
-        help="Run a deterministic offline self-test of the ACMG helper functions and exit. No network calls.",
+        help=(
+            "Run a deterministic offline self-test of the ACMG helper "
+            "functions and exit. No network calls."
+        ),
     )
     return parser.parse_args(argv)
 
