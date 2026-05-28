@@ -7,7 +7,7 @@
 > tool emits when its upstream clients (Ensembl VEP, AlphaMissense,
 > ClinVar, gnomAD, Open Targets, UniProt) return data we have unit
 > tests for. End-to-end validation against the live upstreams is on
-> the v1.2.0 roadmap (see [`STATUS.md`](../../STATUS.md)) — until then,
+> the v1.2.0 roadmap (see [`STATUS.md`](../status.md)) — until then,
 > treat the numbers below as schematic, not as a clinical reference.
 
 ## Setup
@@ -150,7 +150,7 @@ deterministic ACMG draft match the golden file.
 
 ## Reproducing this example for real
 
-1. Install: see top-level [`README.md`](../../README.md#install).
+1. Install: see top-level [`README.md`](../installation.md).
 2. Configure Claude Desktop as shown above.
 3. Restart Claude Desktop.
 4. Paste the user prompt at the top of this document.

@@ -43,7 +43,7 @@ offline mode).
                                │ HTTPS (off by default in offline mode)
                                ▼
                 ┌──────────────────────────────┐
-                │  14 upstream biomedical APIs │
+                │  9 upstream biomedical APIs  │
                 │  (Ensembl, ClinVar, gnomAD,  │
                 │   AlphaFold DB, …)           │
                 └──────────────────────────────┘

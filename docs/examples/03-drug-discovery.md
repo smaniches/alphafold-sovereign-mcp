@@ -4,7 +4,7 @@
 > server returns this shape consistent with its unit-tested
 > orchestration over Open Targets, ChEMBL, UniProt, ClinVar, and
 > AlphaFold DB. Live-API validation is on the v1.2.0 roadmap; see
-> [`STATUS.md`](../../STATUS.md).
+> [`STATUS.md`](../status.md).
 
 ## User prompt
 

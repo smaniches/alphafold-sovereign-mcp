@@ -1,13 +1,13 @@
 # Example: Target Characterisation — EGFR
 
 > **Status: Illustrative.** Same caveat as
-> [`examples/01-variant-triage/`](../01-variant-triage/README.md): the
+> [`examples/01-variant-triage/`](01-variant-triage.md): the
 > numbers below are consistent with what the server emits when its
 > upstream clients (Open Targets, ChEMBL, UniProt, AlphaFold DB,
 > gnomAD) return data we have unit tests for. They have NOT been
 > verified against live API responses for this exact target.
 > End-to-end validation lands in v1.2.0; see
-> [`STATUS.md`](../../STATUS.md).
+> [`STATUS.md`](../status.md).
 
 ## User prompt
 
