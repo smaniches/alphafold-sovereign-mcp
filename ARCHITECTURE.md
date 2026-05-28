@@ -1,251 +1,195 @@
 # Architecture
 
-This document describes the system design of AlphaFold Sovereign MCP.
-For the rationale behind key decisions, see `docs/adr/`. For the
-threat model, see `docs/THREAT_MODEL.md`.
+This document describes the system design of AlphaFold Sovereign MCP as
+**shipped in the current release**. Where a capability is planned but not yet
+implemented, it is listed under [Roadmap](#roadmap-not-yet-shipped) rather
+than described as if it exists. For the threat model, see
+[`docs/threat-model.md`](https://github.com/smaniches/alphafold-sovereign-mcp/blob/main/docs/threat-model.md).
 
-## Design Principles
+## Design principles
 
-1. **Sovereign first.** Every feature must be installable and operable
-   without network access. Online APIs enhance; they never gate.
-2. **Auditable by default.** Every tool invocation produces a signed,
-   content-addressed audit record. Nothing is optional except the
-   exporter.
-3. **Single licence.** The codebase is Apache 2.0 — one licence,
-   no dual-licence funnel, no feature gated behind a paid edition.
-4. **Protocol-native.** We implement the full MCP 2025-06-18 surface:
-   tools, resources, prompts, sampling, roots, progress, cancellation,
-   and resource subscriptions. We do not paper over the spec.
-5. **Disease-integrated.** Structural biology without disease context
-   is incomplete. Every protein query optionally traverses MONDO, HPO,
-   Open Targets, ClinVar, gnomAD, and DisGeNET to answer "why does
-   this structure matter clinically?"
+1. **Sovereign and offline-capable.** The package installs and runs without
+   network access. With `ALPHAFOLD_OFFLINE=1`, the base HTTP client refuses
+   all egress before a socket is opened and the server answers from the local
+   SQLite knowledge graph. The deterministic `--self-test` makes no network
+   calls.
+2. **Provenance by default.** Every tool result can be persisted to a local,
+   content-addressed SQLite store. The `tool_invocations` and `provenance`
+   tables record the tool name, parameters, input and output SHA-256 hashes,
+   the upstream data-source versions, and a UTC timestamp. Cryptographic
+   signing of these records is a roadmap item; it is not yet implemented.
+3. **Single licence.** The codebase is Apache 2.0 — one licence, with no
+   dual-licence funnel and no feature gated behind a paid edition.
+4. **Protocol-native, tools first.** The server implements the MCP *tools*
+   surface over the stdio transport: 29 tools registered on a single FastMCP
+   application. MCP resources, MCP prompts, and the Streamable HTTP transport
+   are on the roadmap and are not part of the shipped surface.
+5. **Disease-integrated.** Structural data is joined with disease context.
+   The variant- and target-level tools traverse MONDO, HPO, Open Targets,
+   ClinVar, gnomAD, and DisGeNET to answer why a given structure matters
+   clinically.
 
 ---
 
-## Module Map
+## Module map (shipped)
 
 ```
 src/alphafold_sovereign/
 │
-├── server/               MCP transport layer
-│   ├── __init__.py
-│   ├── stdio.py          stdio (Claude Desktop / CLI)
-│   ├── http.py           Streamable HTTP (MCP spec 2025-06-18)
-│   ├── auth.py           OAuth 2.1 + PKCE + capability tokens
-│   ├── session.py        Mcp-Session-Id, resumability, Last-Event-ID
-│   └── registry.py       Tool / resource / prompt registration
+├── __init__.py          Package metadata (__version__, author, licence)
+├── __main__.py          CLI entry point: --version, --self-test, stdio server
 │
-├── tools/                MCP tool implementations (thin orchestration)
-│   ├── structure.py      Structure retrieval, search, batch, cache
-│   ├── features.py       pLDDT profiles, PAE, contact maps
-│   ├── topology.py       Persistent homology, Wasserstein / bottleneck
-│   ├── enrichment.py     UniProt, GO annotations, domain families
-│   ├── analysis.py       Disorder, domain detection, IC, semantics
-│   ├── disease.py    ★   MONDO, HPO, Open Targets, common-disease targets
-│   ├── variants.py       AlphaMissense, ClinVar, gnomAD, HGVS triage
-│   ├── biothreat.py      Sequence-of-concern, cross-species homology
-│   └── federation.py     Peer discovery, delegation, mesh routing
+├── server/              MCP transport layer
+│   ├── app.py           The single FastMCP application instance
+│   └── stdio.py         stdio transport; imports the tool modules and runs it
 │
-├── resources/            MCP Resources (URI-addressable canonical data)
-│   ├── protein.py        protein://{uniprot_id}
-│   ├── structure.py      structure://{uniprot_id}/{layer}
-│   ├── disease.py        disease://{mondo_id}
-│   └── ontology.py       go://{go_id}, hpo://{hpo_id}, mondo://{mondo_id}
+├── tools/               MCP tool implementations (29 tools; thin orchestration)
+│   ├── precision_medicine.py     variant clinical report, ACMG draft,
+│   │                             druggability tier, protein dossier,
+│   │                             disease–drug map, drug repurposing  (6)
+│   ├── structure_intelligence.py pLDDT confidence, topology fingerprint,
+│   │                             topological comparison, evolutionary
+│   │                             shifts, pocket geometry, disorder      (6)
+│   ├── disease.py                MONDO/HPO lookups, target–disease evidence,
+│   │                             3-D variant triage, ICD-10 resolution  (12)
+│   └── knowledge_graph_tools.py  query and export the local graph        (5)
 │
-├── prompts/              MCP Prompts (curated multi-turn workflows)
-│   ├── clinical.py       triage_missense_variant, summarize_for_clinician
-│   ├── discovery.py      characterize_drug_target, find_binding_pocket
-│   ├── comparative.py    compare_orthologs, assess_disorder_landscape
-│   └── biosec.py         screen_sequence_of_concern, assess_dual_use_risk
+├── clients/             Async HTTP clients — one per upstream (9 + base)
+│   ├── _base.py         BaseAsyncClient: httpx HTTP/2, tenacity retry with
+│   │                    jitter, aiolimiter per-host rate limiting, a circuit
+│   │                    breaker, the offline allowlist, SHA-256 verification
+│   ├── alphafold.py     AlphaFold DB (prediction metadata, PDB, PAE, AlphaMissense)
+│   ├── opentargets.py   Open Targets Platform GraphQL
+│   ├── chembl.py        ChEMBL REST
+│   ├── ensembl.py       Ensembl REST (VEP, gene and variant lookup, orthologs)
+│   ├── clinvar.py       ClinVar via NCBI E-utilities
+│   ├── gnomad.py        gnomAD GraphQL
+│   ├── mondo.py         MONDO via OLS4 and the Monarch API
+│   ├── hpo.py           HPO via the HPO API and OLS4
+│   └── disgenet.py      DisGeNET REST
 │
-├── clients/              Async HTTP clients (one per upstream)
-│   ├── _base.py          httpx + tenacity + aiolimiter + circuit breaker
-│   ├── alphafold.py      AlphaFold DB v4 (PDB, CIF, PAE, confidence)
-│   ├── uniprot.py        UniProt REST + SPARQL
-│   ├── pdb.py            RCSB PDB REST + GraphQL; PDBe
-│   ├── interpro.py       InterPro / Pfam domain annotations
-│   ├── mondo.py      ★   MONDO via OLS4 + Monarch API
-│   ├── hpo.py        ★   HPO via HPO API + OLS4
-│   ├── opentargets.py ★  Open Targets Platform GraphQL
-│   ├── clinvar.py    ★   ClinVar via NCBI E-utilities
-│   ├── gnomad.py     ★   gnomAD GraphQL
-│   ├── disgenet.py   ★   DisGeNET REST
-│   ├── ensembl.py        Ensembl REST (gene / variant)
-│   ├── chembl.py         ChEMBL REST
-│   ├── openfda.py        openFDA REST
-│   ├── clinicaltrials.py ClinicalTrials.gov v2
-│   └── pubmed.py         NCBI PubMed E-utilities
+├── domain/              Pure-Python types; no I/O, no network, no MCP SDK
+│   └── disease.py       PathogenicityClass, EvidenceType, OntologyTerm,
+│                        DiseaseRecord, PhenotypeAssociation,
+│                        TargetEvidenceScore, PopulationFrequency, VariantReport
 │
-├── domain/               Pure-Python types; no I/O
-│   ├── structure.py      AlphaFoldStructure, Atom, Residue, Metadata
-│   ├── sequence.py       AminoAcidSequence, HGVS, VariantPosition
-│   ├── disease.py    ★   DiseaseRecord, PhenotypeAssociation,
-│   │                      TargetEvidenceScore, VariantReport
-│   ├── ontology.py       GOTerm, MONDOTerm, HPOTerm, OntologyEdge
-│   └── provenance.py     ToolCallRecord, ContentHash, AuditEntry
-│
-├── storage/              Persistence and indexing
-│   ├── cache.py          LRU + on-disk + optional Redis
-│   ├── index.py          Dynamic UniProt-ID index (O(1))
-│   ├── object_store.py   S3 / MinIO / local FS adapter
-│   └── content_addressed.py  SHA-256 keyed immutable store
-│
-├── compute/              CPU / GPU computation
-│   ├── ripser_adapter.py Persistent homology via ripser.py
-│   ├── pae.py            PAE extraction, domain detection
-│   ├── disorder.py       Intrinsic disorder predictor
-│   ├── semantics.py      GO IC, Resnik/Lin/Jiang similarity
-│   ├── foldseek_adapter.py Structure-similarity search
-│   └── batched.py        Bounded-concurrency asyncio.gather
-│
-├── observability/        Cross-cutting concerns
-│   ├── logging.py        structlog JSON, request_id correlation
-│   ├── tracing.py        OpenTelemetry OTLP spans
-│   ├── metrics.py        Prometheus + OTel metrics
-│   └── audit.py          Signed audit log (ed25519 + optional Rekor)
-│
-└── security/             Security controls
-    ├── signing.py        ed25519 reasoning-trace signatures
-    ├── policy.py         OPA / Rego policy hooks
-    ├── secrets.py        env + Vault + AWS KMS providers
-    ├── allowlist.py      Outbound domain allowlist (air-gap mode)
-    └── screening.py      Sequence-of-concern + dual-use guardrails
+└── storage/             Persistence and provenance
+    └── knowledge_graph.py   SQLite knowledge graph (WAL mode); six entity,
+                             four relationship, and two provenance tables;
+                             SHA-256-keyed JSON blobs; optional DuckDB layer
 ```
 
-★ = new in this wave
+The package also contains six reserved namespace packages — `compliance/`,
+`compute/`, `observability/`, `prompts/`, `resources/`, and `security/`. Each
+is currently an empty `__init__.py`: they reserve import paths for the roadmap
+items below and contain no shipped code.
 
 ---
 
-## Data Flow
+## Data flow
 
-### Online Structure Request (typical)
-
-```
-Claude (MCP client)
-  │  tool_call: get_structure(uniprot_id="P12345")
-  ▼
-server/stdio.py  ─── request_id, session_id generated
-  │
-  ▼
-tools/structure.py  ─── validate Pydantic input
-  │
-  ├──(1) storage/index.py  ─── O(1) hash-set lookup
-  │        │ hit → storage/cache.py → return CIF bytes
-  │        │ miss ↓
-  │        └──(2) clients/alphafold.py
-  │                   httpx GET alphafold.ebi.ac.uk/files/AF-P12345-F1-model_v4.pdb
-  │                   retry(tenacity) → rate-limit(aiolimiter) → circuit-breaker
-  │                   response bytes → SHA-256 verify → storage/cache.py store
-  │
-  ├──(3) compute/ripser_adapter.py  ─── Cα coords → VR filtration → barcodes
-  │
-  ├──(4) observability/audit.py  ─── sign & append AuditEntry
-  │
-  └──(5) format response → provenance footer appended
-              (server version · timestamp · request_id · content_hash)
-  ▼
-Claude: structured Markdown + JSON with provenance
-```
-
-### Variant Triage (new disease layer)
+### 3-D variant triage (representative multi-source tool)
 
 ```
-Claude: triage_variant_3d(hgvs="BRCA1:c.181T>G")
+Claude (MCP client): triage_variant_3d(hgvs="BRCA1:c.181T>G")
   │
   ▼
 tools/disease.py::triage_variant_3d
   │
-  ├─ clients/ensembl.py    HGVS → UniProt accession, residue position
-  ├─ clients/alphafold.py  3-D structure → residue neighborhood
-  ├─ clients/alphafold.py  AlphaMissense score for that variant
-  ├─ clients/clinvar.py    ClinVar interpretation + review status
-  ├─ clients/gnomad.py     Population allele frequency + constraint
-  ├─ clients/opentargets.py  Disease-target evidence scores
-  ├─ clients/mondo.py      Disease names, synonyms, ICD-10/11 cross-refs
+  ├─ clients/ensembl.py      HGVS -> UniProt accession, residue position
+  ├─ clients/alphafold.py    structure context + AlphaMissense score
+  ├─ clients/clinvar.py      ClinVar interpretation + review status
+  ├─ clients/gnomad.py       population allele frequency + constraint
+  ├─ clients/opentargets.py  disease–target evidence scores
+  ├─ clients/mondo.py        disease names, synonyms, ICD-10 cross-refs
   │
-  └─ domain/disease.py::VariantReport  ─── assembled structured report
-       provenance footer: all upstream call IDs + timestamps + hashes
+  ├─ domain/disease.py::VariantReport   assembled, validated result
+  └─ storage/knowledge_graph.py         optional persist: result + provenance
 ```
+
+Every upstream call passes through `clients/_base.py`, which applies a
+per-host rate limit (aiolimiter), retry with exponential back-off and jitter
+(tenacity), and a per-host circuit breaker. With `ALPHAFOLD_OFFLINE=1`, egress
+is refused at this layer and the request is served from the knowledge graph if
+the data is already present.
 
 ---
 
-## Disease Ontology Integration
+## Persistence: the knowledge graph
 
-### Sources
+The only persistence layer is a local SQLite database
+(`storage/knowledge_graph.py`), opened in WAL mode. Its location defaults to
+the platform user-data directory and can be overridden with `ALPHAFOLD_KG_PATH`.
+The schema comprises:
 
-| Source | What we use | API |
+- **Entity tables (6):** `proteins`, `variants`, `diseases`, `drugs`,
+  `phenotypes`, `genes`.
+- **Relationship tables (4):** `protein_disease`, `protein_drug`,
+  `variant_disease`, `gene_phenotype`.
+- **Provenance tables (2):** `tool_invocations` (each tool call with its
+  parameters, input and output hashes, and timing) and `provenance` (the
+  data-source version snapshot per invocation).
+
+Result blobs are stored as SHA-256-keyed JSON, so identical inputs deduplicate
+and an analysis can be replayed offline. If DuckDB is installed it is used as
+an optional columnar layer for aggregation and export; it is not required and
+is not a runtime dependency.
+
+---
+
+## Disease-ontology integration
+
+The disease-layer tools query six upstreams directly:
+
+| Source | What is used | API |
 |---|---|---|
-| MONDO | Unified disease IDs, cross-refs (ICD-10, OMIM, Orphanet, DOID) | OLS4 REST + Monarch |
-| HPO | Phenotype terms, HPO-disease links, phenotype profiles | HPO REST + OLS4 |
-| Open Targets | Disease-target evidence, association scores, evidence types | GraphQL |
-| ClinVar | Variant pathogenicity, clinical significance, review status | NCBI E-utils |
-| gnomAD | Population allele frequencies, constraint scores, pext | GraphQL |
-| DisGeNET | Gene-disease association scores, literature evidence | REST |
-| ICD-10/11 | Clinical coding (billing, EHR integration) | NLM API |
-| Orphanet | Rare-disease-specific data, prevalence | OLS4 |
-| MeSH | Literature indexing, disease hierarchy | NCBI E-utils |
-| OMIM | Mendelian disease genetics (API key required) | REST |
+| MONDO | Unified disease IDs and cross-references (ICD-10, OMIM, Orphanet, DOID) | OLS4 REST + Monarch |
+| HPO | Phenotype terms and gene–phenotype links | HPO API + OLS4 |
+| Open Targets | Disease–target evidence and association scores | GraphQL |
+| ClinVar | Variant clinical significance and review status | NCBI E-utilities |
+| gnomAD | Population allele frequencies and constraint | GraphQL |
+| DisGeNET | Gene–disease association scores | REST |
 
-### Common-Disease Coverage
-
-The `get_common_disease_targets` tool profiles protein targets across
-all major ICD-10 disease chapters, with curated prevalence tiers:
-
-| ICD chapter | Representative conditions | MONDO root |
-|---|---|---|
-| I — Circulatory | MI, stroke, HF, AFib, hypertension | MONDO:0004995 |
-| II — Neoplasms | Top-10 cancers by incidence | MONDO:0045024 |
-| III — Blood | Leukaemia, lymphoma, anaemia | MONDO:0005570 |
-| IV — Endocrine | T1DM, T2DM, thyroid disease | MONDO:0005002 |
-| V — Mental | Depression, schizophrenia, bipolar | MONDO:0005084 |
-| VI — Neurological | AD, PD, ALS, MS, epilepsy | MONDO:0005071 |
-| X — Respiratory | COPD, asthma, IPF, TB | MONDO:0005087 |
-| XI — Digestive | IBD, NASH, CRC | MONDO:0004335 |
-| XIII — Musculoskeletal | RA, OA, SLE | MONDO:0007147 |
-| I (infectious) | HIV, COVID-19, malaria, TB | MONDO:0005550 |
+ICD-10 codes (`resolve_icd10_to_mondo`) and Orphanet rare-disease identifiers
+(`get_orphan_disease_atlas`) are resolved through MONDO's cross-references,
+not by querying separate ICD or Orphanet services. The
+`get_common_disease_targets` tool profiles protein targets across the major
+ICD-10 disease chapters, anchored to MONDO disease roots.
 
 ---
 
-## Caching Architecture
+## Security and sovereignty
 
-```
-Request
-  │
-  ├─ L1: Python LRU dict (in-process, TTL 10 min)
-  ├─ L2: On-disk SHA-256 content store (persistent, no TTL)
-  ├─ L3: Redis (optional, for multi-instance deployments)
-  └─ L4: Air-gap bundle (signed snapshot for offline mode)
-```
+Shipped controls:
 
-Cache keys are always the SHA-256 of `(upstream_url, canonical_params)`.
-This means any two calls with identical parameters return the same
-bytes, always — enabling deterministic audit replay.
+- **Egress control.** With `ALPHAFOLD_OFFLINE=1`, all outbound requests are
+  refused in `clients/_base.py` before a socket is opened.
+  `ALPHAFOLD_ALLOW_HOSTS` provides a comma-separated allowlist for
+  partial-air-gap deployments.
+- **Provenance trail.** Tool invocations are recorded in the SQLite
+  `tool_invocations` table with input and output SHA-256 hashes and UTC
+  timestamps. These records are insert-only in normal operation.
+- **Parameterised SQL.** All knowledge-graph queries use bound parameters;
+  table names are drawn from a fixed internal allowlist, never from user input.
+
+For the full STRIDE analysis, see [`docs/threat-model.md`](https://github.com/smaniches/alphafold-sovereign-mcp/blob/main/docs/threat-model.md).
 
 ---
 
-## Security Architecture
+## Roadmap (not yet shipped)
 
-See `docs/THREAT_MODEL.md` for the full STRIDE analysis.
+These capabilities are intentionally absent from the current release and are
+listed so the shipped boundary is unambiguous:
 
-Key controls:
-
-- **Outbound allowlist** — in air-gap mode (`ALPHAFOLD_OFFLINE=1`),
-  all egress is blocked at the `clients/_base.py` layer before a
-  socket is opened.
-- **Sequence-of-concern screening** — `security/screening.py` runs
-  before any deep enrichment of a submitted protein sequence.
-- **Audit log** — every tool invocation is recorded in the
-  `tool_invocations` table with SHA-256 hashes of inputs and outputs
-  and a UTC timestamp. The log is append-only at the SQLite layer;
-  cryptographic signing of audit records is a tracked work item
-  (not yet implemented in the shipped codebase).
-
-Items on the roadmap but **not** yet implemented in the shipped
-codebase, listed here so the boundary is clear:
-
-- OAuth 2.1 + PKCE on the HTTP transport (the stdio transport, which
-  is what `claude-desktop` uses, has no separate auth — the client
-  process owns its capabilities).
-- A FIPS 140-3 build that switches `cryptography` to the OpenSSL FIPS
+- **Streamable HTTP transport with OAuth 2.1 / PKCE.** Only the stdio
+  transport ships today; stdio clients (such as Claude Desktop) own their own
+  process capabilities and use no separate auth.
+- **MCP resources and prompts.** Only the tools surface is implemented.
+- **Cryptographic signing of provenance records** (for example, ed25519
+  signatures and an external transparency log). Records are currently stored
+  unsigned in SQLite.
+- **A FIPS 140-3 build** that switches `cryptography` to the OpenSSL FIPS
   provider.
+
+The reserved namespace packages (`compliance/`, `compute/`, `observability/`,
+`prompts/`, `resources/`, `security/`) hold the import paths for this work.

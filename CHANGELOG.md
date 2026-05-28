@@ -15,7 +15,8 @@ violation ship, a coverage-gate inconsistency, a **data-source overclaim**
 (docs advertised 14 sources; only 9 are actually queried), and an MCP
 handshake that reported the framework version instead of the product
 version. No change to runtime behaviour, the tool surface, or the public
-API — the tool count stays 29.
+API — the tool count stays 29. It also brings `ARCHITECTURE.md` and the
+documentation site into line with the shipped code.
 
 ### Fixed
 - **Residual version drift.** `examples/README.md` still printed
@@ -43,9 +44,7 @@ API — the tool count stays 29.
   identifier namespace; Human Protein Atlas is at most a transitive Open
   Targets score. The five were removed from the source lists, the count
   corrected to 9, and an explicit "not integrated in this release" note
-  added to the README data-sources table. (`ARCHITECTURE.md` is
-  separately stale — it lists modules that do not ship — and is left for
-  a dedicated pass.)
+  added to the README data-sources table.
 - **MCP server version.** The `initialize` handshake reported FastMCP's
   own version (`3.3.1`) instead of the product version, because
   `server/app.py` constructed `FastMCP("alphafold-sovereign")` with no
@@ -69,6 +68,31 @@ API — the tool count stays 29.
 - **`server.json` capability.** `tools.listChanged` corrected from
   `false` to `true` to match what the running FastMCP server advertises
   in the `initialize` handshake.
+
+### Documentation
+- **`ARCHITECTURE.md` rewritten to match the shipped code.** The previous
+  module map described an aspirational system of roughly fifty modules,
+  most of which do not ship — an HTTP transport with OAuth, MCP resources
+  and prompts, a multi-layer Redis cache, federation, biothreat
+  screening, ed25519 signing, and client modules for UniProt, RCSB PDB,
+  InterPro, openFDA, ClinicalTrials, and PubMed. It now documents only
+  what ships: the stdio transport, the single FastMCP application with 29
+  tools, the nine upstream clients plus the shared base, the `domain`
+  types, and the SQLite knowledge graph. A clearly delimited "Roadmap
+  (not yet shipped)" section records the unimplemented items, and the six
+  empty namespace packages are named as reserved. Broken cross-references
+  (`docs/THREAT_MODEL.md`, `docs/adr/`) were corrected.
+- **Documentation site is link-clean.** Corrected the residual "13 other
+  data sources" claim in the `mkdocs.yml` site description and the "14
+  upstream APIs" figure in the threat-model diagram (both now 9), fixed
+  the broken `docs/adding-a-client.md` reference in `CONTRIBUTING.md`, and
+  repaired the cross-document links that resolved on GitHub but not in the
+  rendered site (absolute URLs for the snippet-included root documents;
+  in-site relative links for the example pages). `mkdocs build` now emits
+  no broken-link warnings.
+- **mkdocstrings.** Disabled griffe's `warn_unknown_params` so the
+  deliberate single-`params`-model docstring convention no longer
+  produces spurious build warnings.
 
 ---
 
@@ -619,7 +643,7 @@ threat model, examples, mkdocs site).
     in the repository that substantiates this number.
   - Dropped "patent-pending TOPOLOGICA methodology" framing from the
     structure-intelligence module. The patent status is described
-    soberly in [`PATENTS.md`](PATENTS.md).
+    soberly in [`PATENTS.md`](https://github.com/smaniches/alphafold-sovereign-mcp/blob/main/PATENTS.md).
   - Dropped "Defense-grade sovereignty stack (FedRAMP-aligned, FIPS,
     SBOM, SLSA L3)" comparison line. None of those certifications has
     been audited; only an SBOM is actually emitted today.

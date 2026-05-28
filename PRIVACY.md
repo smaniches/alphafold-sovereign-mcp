@@ -79,6 +79,6 @@ This software does not process Protected Health Information.
 Privacy questions: open a
 [GitHub Discussion](https://github.com/smaniches/alphafold-sovereign-mcp/discussions)
 or, for sensitive issues, follow the coordinated-disclosure process
-in [`SECURITY.md`](./SECURITY.md).
+in [`SECURITY.md`](https://github.com/smaniches/alphafold-sovereign-mcp/blob/main/SECURITY.md).
 
 *Last updated: 2026-05-11*

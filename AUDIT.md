@@ -19,12 +19,12 @@ on every pull request. Cumulative review activity through v1.1.4:
 
 | Surface | Why this matters | When | Tracked at |
 |---|---|---|---|
-| ACMG/AMP criterion mapping (`tools/precision_medicine.py`) | The mapping is implemented from Richards et al. 2015 but no clinical geneticist has signed off. | Roadmap step 3 of v1.2.0 — see [STATUS.md](STATUS.md) | [LIMITATIONS L1](LIMITATIONS.md#l1--acmg-criterion-mapping-is-not-independently-validated) |
-| Druggability tier heuristic (`tools/precision_medicine.py`) | The score cut-offs (HOT/WARM/COLD) are author judgement, not calibrated. | Roadmap step 4 of v1.2.0 | [LIMITATIONS L2](LIMITATIONS.md#l2--druggability-tier-thresholds-are-unvalidated-heuristics) |
-| End-to-end real-API behaviour | All tests mock the upstream APIs. We have not run the pipeline against held-out variants/targets with known expected outputs. | Roadmap step 1 of v1.2.0 (`examples/` golden notebooks) | [LIMITATIONS L3](LIMITATIONS.md#l3--upstream-api-schemas-are-not-pinned) |
-| Threat model | First STRIDE-style review was written by the maintainer in v1.1.0-rc1 (see `docs/threat-model.md`). External STRIDE review by a security professional has not been performed. | Defer until external security audit | [`docs/threat-model.md`](docs/threat-model.md) |
+| ACMG/AMP criterion mapping (`tools/precision_medicine.py`) | The mapping is implemented from Richards et al. 2015 but no clinical geneticist has signed off. | Roadmap step 3 of v1.2.0 — see [STATUS.md](https://github.com/smaniches/alphafold-sovereign-mcp/blob/main/STATUS.md) | [LIMITATIONS L1](https://github.com/smaniches/alphafold-sovereign-mcp/blob/main/LIMITATIONS.md#l1--acmg-criterion-mapping-is-not-independently-validated) |
+| Druggability tier heuristic (`tools/precision_medicine.py`) | The score cut-offs (HOT/WARM/COLD) are author judgement, not calibrated. | Roadmap step 4 of v1.2.0 | [LIMITATIONS L2](https://github.com/smaniches/alphafold-sovereign-mcp/blob/main/LIMITATIONS.md#l2--druggability-tier-thresholds-are-unvalidated-heuristics) |
+| End-to-end real-API behaviour | All tests mock the upstream APIs. We have not run the pipeline against held-out variants/targets with known expected outputs. | Roadmap step 1 of v1.2.0 (`examples/` golden notebooks) | [LIMITATIONS L3](https://github.com/smaniches/alphafold-sovereign-mcp/blob/main/LIMITATIONS.md#l3--upstream-api-schemas-are-not-pinned) |
+| Threat model | First STRIDE-style review was written by the maintainer in v1.1.0-rc1 (see `docs/threat-model.md`). External STRIDE review by a security professional has not been performed. | Defer until external security audit | [`docs/threat-model.md`](https://github.com/smaniches/alphafold-sovereign-mcp/blob/main/docs/threat-model.md) |
 | Independent security audit | No external penetration test or code-security audit yet. | Defer until v1.2.0 release | This document |
-| Performance / load behaviour | No production deployment yet. | Defer until first real deployment | [LIMITATIONS L4](LIMITATIONS.md#l4--no-production-deployment-experience) |
+| Performance / load behaviour | No production deployment yet. | Defer until first real deployment | [LIMITATIONS L4](https://github.com/smaniches/alphafold-sovereign-mcp/blob/main/LIMITATIONS.md#l4--no-production-deployment-experience) |
 
 ## How to request an audit
 
@@ -35,7 +35,7 @@ reviewing this project, please:
    scope you have in mind.
 2. Mention the maintainer (`@smaniches`).
 3. For sensitive findings, follow the disclosure process in
-   [SECURITY.md](SECURITY.md).
+   [SECURITY.md](https://github.com/smaniches/alphafold-sovereign-mcp/blob/main/SECURITY.md).
 
 ## Audit log
 

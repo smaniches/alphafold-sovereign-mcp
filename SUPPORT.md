@@ -10,7 +10,7 @@
 Response time is best-effort.
 
 **Do not use GitHub Issues for security vulnerabilities.** See
-[`SECURITY.md`](./SECURITY.md) for the coordinated-disclosure process.
+[`SECURITY.md`](https://github.com/smaniches/alphafold-sovereign-mcp/blob/main/SECURITY.md) for the coordinated-disclosure process.
 
 ## How to file a good bug report
 

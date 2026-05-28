@@ -20,7 +20,7 @@ and what will happen to my contribution?"
 ## Code of Conduct
 
 This project adopts the **Contributor Covenant 2.1**, available in
-[`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md). By participating you
+[`CODE_OF_CONDUCT.md`](https://github.com/smaniches/alphafold-sovereign-mcp/blob/main/CODE_OF_CONDUCT.md). By participating you
 agree to be bound by it. Report violations to
 `conduct@topologica.ai`.
 
@@ -57,7 +57,7 @@ CI blocks unsigned commits.
 |---|---|
 | Bug fixes | ✅ always welcome |
 | Documentation improvements | ✅ always welcome |
-| New upstream-API clients (under `clients/`) | ✅ welcome — see [`docs/adding-a-client.md`](docs/adding-a-client.md) |
+| New upstream-API clients (under `clients/`) | ✅ welcome — model them on `clients/_base.py` and the nine shipped clients |
 | New tools that compose existing capabilities | ✅ welcome |
 | Performance improvements with benchmarks | ✅ welcome |
 | Refactors of >500 LOC | 🟡 discuss in an issue first |
@@ -185,7 +185,7 @@ backlog and we appreciate the nudge.
 Sustained, high-quality contribution (typically 6 months and ≥ 20
 merged PRs, or a single foundational contribution like adding a new
 data-source family) earns an invitation to the maintainers' team.
-See [`GOVERNANCE.md`](./GOVERNANCE.md) for the formal process.
+See [`GOVERNANCE.md`](https://github.com/smaniches/alphafold-sovereign-mcp/blob/main/GOVERNANCE.md) for the formal process.
 
 ## Asking for help
 
@@ -193,7 +193,7 @@ See [`GOVERNANCE.md`](./GOVERNANCE.md) for the formal process.
 |---|---|
 | "How do I do X?" | GitHub Discussions |
 | "Is this a bug?" | GitHub Issues |
-| "Is this a security issue?" | See [`SECURITY.md`](./SECURITY.md) (use GitHub Security Advisories) |
+| "Is this a security issue?" | See [`SECURITY.md`](https://github.com/smaniches/alphafold-sovereign-mcp/blob/main/SECURITY.md) (use GitHub Security Advisories) |
 
 ---
 
