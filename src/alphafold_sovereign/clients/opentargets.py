@@ -163,18 +163,23 @@ class OpenTargetsClient(BaseAsyncClient):
         """Return the top protein targets associated with a disease.
 
         Args:
-            disease_id: Open Targets / EFO / MONDO disease ID,
-                e.g. ``'MONDO:0007254'`` (breast carcinoma).
+            disease_id: Open Targets / EFO / MONDO disease ID, in either
+                colon or underscore form, e.g. ``'MONDO:0007254'`` or
+                ``'MONDO_0007254'`` (breast carcinoma).
             limit: Maximum target associations to return.
 
         Returns:
             List of ``TargetEvidenceScore`` sorted by overall score descending.
         """
         limit = max(1, min(limit, 200))
+        # Open Targets keys disease records on underscore-form CURIEs
+        # (e.g. MONDO_0007254, EFO_0000305). Normalise the conventional
+        # colon form so callers may pass either; underscore input is a no-op.
+        efo_id = disease_id.replace(":", "_")
         data = await self._graphql(
             self._GQL_PATH,
             _DISEASE_TARGETS_QUERY,
-            {"efoId": disease_id, "page": {"index": 0, "size": limit}},
+            {"efoId": efo_id, "page": {"index": 0, "size": limit}},
         )
         disease = data.get("disease") or {}
         disease_name: str = disease.get("name", "")

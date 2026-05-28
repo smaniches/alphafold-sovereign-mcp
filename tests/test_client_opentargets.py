@@ -234,6 +234,11 @@ async def test_associated_targets_clamps_limit(respx_mock: respx.MockRouter) -> 
         await client.associated_targets("MONDO:1", limit=-5)
     body = route.calls.last.request.content.decode()
     assert '"size":1' in body
+    # Regression: colon-form CURIEs must be normalised to Open Targets'
+    # underscore form (MONDO:1 -> MONDO_1), or the disease is not found and
+    # every query silently returns zero targets.
+    assert "MONDO_1" in body
+    assert "MONDO:1" not in body
 
 
 # ---------------------------------------------------------------------------
