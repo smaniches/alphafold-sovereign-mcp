@@ -9,16 +9,24 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-Audit-and-polish work accumulated since v1.1.8. Closes residual version
-drift, a stale statement count, a lint-scope gap that let one style
-violation ship, a coverage-gate inconsistency, a **data-source overclaim**
-(docs advertised 14 sources; only 9 are actually queried), and an MCP
-handshake that reported the framework version instead of the product
-version. No change to runtime behaviour, the tool surface, or the public
-API — the tool count stays 29. It also brings `ARCHITECTURE.md` and the
-documentation site into line with the shipped code.
+Audit-and-polish work accumulated since v1.1.8, plus one functional fix:
+`get_disease_targets` now returns results (it previously returned an empty
+list for every disease). The remaining changes — residual version drift, a
+stale statement count, a lint-scope gap that let one style violation ship,
+a coverage-gate inconsistency, a **data-source overclaim** (docs advertised
+14 sources; only 9 are actually queried), an MCP handshake that reported
+the framework version instead of the product version, and an
+`ARCHITECTURE.md` / documentation-site accuracy pass — do not change
+runtime behaviour. The tool surface and tool count (29) are unchanged.
 
 ### Fixed
+- **`get_disease_targets` returned no targets for any disease.** The tool
+  passed colon-form CURIEs (e.g. `MONDO:0009061`) to Open Targets, which
+  keys disease records on the underscore form, so every query matched no
+  disease and returned an empty list under a `success` status. The
+  normalisation now lives in `OpenTargetsClient.associated_targets`, so all
+  callers are robust. Verified against the live API: cystic fibrosis now
+  returns CFTR (UniProt P13569) as its top target. (#52)
 - **Residual version drift.** `examples/README.md` still printed
   `--version → 1.1.7`; updated to `1.1.8` to match every other manifest
   and document (the v1.1.8 drift sweep missed this one file).
@@ -96,7 +104,7 @@ documentation site into line with the shipped code.
 
 ---
 
-## [1.1.8] - 2026-05-26
+## [1.1.8] - 2026-05-24
 
 A metadata-consistency and validation-posture patch. Closes version
 drift between `pyproject.toml` / `__init__.py` (which were bumped to
