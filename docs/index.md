@@ -13,16 +13,15 @@
 > not yet deployed in production. See
 > [Status](status.md) and [Limitations](limitations.md).
 
-A Model Context Protocol server that wraps **AlphaFold DB** and 13
+A Model Context Protocol server that wraps **AlphaFold DB** and 8
 other public biomedical data sources behind a set of MCP tool calls,
 and persists each result to a local SQLite knowledge graph for later
 querying.
 
 ## What it does
 
-- Wraps AlphaFold DB, UniProt, MONDO, HPO, Open Targets, ClinVar,
-  gnomAD, DisGeNET, ChEMBL, Ensembl, InterPro, RCSB PDB, Gene
-  Ontology, and Human Protein Atlas behind MCP tool calls.
+- Wraps AlphaFold DB, MONDO, HPO, Open Targets, ClinVar, gnomAD,
+  DisGeNET, ChEMBL, and Ensembl behind MCP tool calls.
 - Composes upstreams into multi-source workflows — variant triage
   reports, disease–target landscape summaries, drug-repurposing
   candidates, cross-species structural divergence.

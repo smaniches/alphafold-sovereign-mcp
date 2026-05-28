@@ -61,9 +61,8 @@ review.
 **Modules:** all of ``src/alphafold_sovereign/clients/``.
 
 **Description:** We call live APIs (Ensembl REST, Open Targets GraphQL,
-ClinVar VCV JSON, gnomAD GraphQL, AlphaFold DB, RCSB PDB, UniProt,
-MONDO, HPO, DisGeNET, ChEMBL, InterPro, Gene Ontology, Human Protein
-Atlas) at their current schema. If an upstream changes shape,
+ClinVar VCV JSON, gnomAD GraphQL, AlphaFold DB, MONDO, HPO, DisGeNET,
+ChEMBL) at their current schema. If an upstream changes shape,
 serialisation may break.
 
 **Impact:** Reproducibility is limited. A run today may produce
@@ -122,7 +121,7 @@ no co-maintainer, no governance body, and no funded continuity plan.
 **Impact:** If the maintainer becomes unavailable, the project stalls.
 
 **Mitigation:** The Apache 2.0 licence ensures any user can fork; the
-code is small enough (2,948 statements as of v1.1.8, verified via
+code is small enough (2,949 statements as of v1.1.8, verified via
 `pytest --cov`) to be picked up by a reasonably motivated successor.
 
 **Planned resolution:** Recruit co-maintainers (see

@@ -31,7 +31,7 @@ expectation of what this project is and is not.
 
 ### Code architecture
 - Five subpackages with clear single responsibilities — ``clients/``
-  (10 upstream-API modules), ``domain/`` (1 module), ``tools/`` (4
+  (9 upstream clients + 1 shared base), ``domain/`` (1 module), ``tools/`` (4
   MCP-tool modules), ``storage/`` (1 SQLite KG module), ``server/``
   (2 transport modules). 18 substantive ``.py`` files on the shipped
   surface.
@@ -132,10 +132,10 @@ expectation of what this project is and is not.
 
 | If you are …                  | You can use this project for …                             | You should NOT use this project for …                                                                            |
 |-------------------------------|------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------|
-| A researcher exploring a target | Pulling and joining data from 14 upstream sources via MCP | Making a final go/no-go decision on a drug programme                                                            |
+| A researcher exploring a target | Pulling and joining data from 9 upstream sources via MCP | Making a final go/no-go decision on a drug programme                                                            |
 | A clinical geneticist          | Quickly assembling a literature snapshot for a variant     | Issuing a clinical report; ACMG calls produced here are not validated and should be re-derived from raw sources |
 | A platform engineer            | Studying a tested example of an MCP server with retries    | Production deployment without your own validation, monitoring, and SLA work                                     |
-| A bioinformatician             | Prototyping a workflow that calls 14 sources behind one API| Reproducible publication-grade analyses (upstream APIs are not pinned by us)                                    |
+| A bioinformatician             | Prototyping a workflow that calls 9 sources behind one API| Reproducible publication-grade analyses (upstream APIs are not pinned by us)                                    |
 
 ---
 
@@ -165,5 +165,5 @@ planned, sequenced steps are:
 
 ## Last updated
 
-2026-05-26. This document is part of the repo; PRs to correct or
+2026-05-28. This document is part of the repo; PRs to correct or
 expand it are welcome.
