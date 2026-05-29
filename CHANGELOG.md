@@ -101,6 +101,12 @@ runtime behaviour. The tool surface and tool count (29) are unchanged.
 - **mkdocstrings.** Disabled griffe's `warn_unknown_params` so the
   deliberate single-`params`-model docstring convention no longer
   produces spurious build warnings.
+- **Social-preview cards.** Enabled mkdocs-material's `social` plugin so
+  the documentation site generates an Open Graph card per page (title plus
+  the accurate, non-overclaiming site description); shared links now render
+  a preview instead of a bare URL. Adds the `imaging` extra to the docs
+  dependency group and the Cairo/Pango system libraries to the docs CI
+  workflow.
 
 ---
 

@@ -47,6 +47,12 @@ jobs:
       - name: Set up Python
         run: uv python install 3.12
 
+      - name: Install Cairo/Pango system libraries (for social-card rendering)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libcairo2-dev libfreetype6-dev libffi-dev libjpeg-dev libpng-dev libz-dev
+
       - name: Install package + docs deps
         run: uv sync --extra docs
 

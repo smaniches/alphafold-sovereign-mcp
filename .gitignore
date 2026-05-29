@@ -80,6 +80,8 @@ coverage.xml
 
 # mkdocs build output (deployed to gh-pages via CI)
 site/
+# mkdocs-material social-cards plugin cache (fonts + generated cards)
+.cache/
 
 # benchmark results (one subdir per pinned prompts.jsonl SHA)
 benchmarks/results/*/
