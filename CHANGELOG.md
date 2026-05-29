@@ -76,6 +76,11 @@ runtime behaviour. The tool surface and tool count (29) are unchanged.
 - **`server.json` capability.** `tools.listChanged` corrected from
   `false` to `true` to match what the running FastMCP server advertises
   in the `initialize` handshake.
+- **Dependency hygiene (Dependabot).** Consolidated four routine updates,
+  none touching the runtime dependency tree: dev tools `ruff` 0.15.13 →
+  0.15.15 and `hypothesis` 6.152.7 → 6.155.0 (lockfile), and the pinned
+  CI-action SHAs for `github/codeql-action` (4.35.5 → 4.36.0) and
+  `codecov/codecov-action` (6.0.0 → 6.0.1). Closes #44, #45, #46, #47.
 
 ### Documentation
 - **`ARCHITECTURE.md` rewritten to match the shipped code.** The previous
