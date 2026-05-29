@@ -95,7 +95,7 @@ jobs:
           PYTHONPATH: src
       - name: Upload coverage
         if: matrix.python-version == '3.12' && matrix.os == 'ubuntu-latest'
-        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6
+        uses: codecov/codecov-action@e79a6962e0d4c0c17b229090214935d2e33f8354 # v6
         with:
           files: coverage.xml
           flags: unit
@@ -167,14 +167,14 @@ jobs:
       security-events: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - uses: github/codeql-action/init@9e0d7b8d25671d64c341c19c0152d693099fb5ba # v4
+      - uses: github/codeql-action/init@7211b7c8077ea37d8641b6271f6a365a22a5fbfa # v4
         with:
           languages: python
           queries: security-extended
           # Scan only the production source tree; the archived monolith
           # is excluded from coverage, lint, and security review.
           source-root: src
-      - uses: github/codeql-action/analyze@9e0d7b8d25671d64c341c19c0152d693099fb5ba # v4
+      - uses: github/codeql-action/analyze@7211b7c8077ea37d8641b6271f6a365a22a5fbfa # v4
         with:
           category: "/language:python"
 
