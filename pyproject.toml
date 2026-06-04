@@ -102,7 +102,7 @@ docs = [
     # ``imaging`` extra pulls in cairosvg + pillow for the social-card
     # (Open Graph preview) plugin; the Cairo/Pango system libraries are
     # installed in the docs CI workflow.
-    "mkdocs-material[imaging]>=9.5.0",
+    "mkdocs-material[imaging]>=9.7.6",
     "mkdocstrings[python]>=0.25.0",
     "pymdown-extensions>=10.0",
 ]
