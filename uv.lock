@@ -109,7 +109,7 @@ requires-dist = [
     { name = "httpx", extras = ["http2"], specifier = ">=0.27.0" },
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.103.0" },
     { name = "mkdocs", marker = "extra == 'docs'", specifier = ">=1.5.0" },
-    { name = "mkdocs-material", extras = ["imaging"], marker = "extra == 'docs'", specifier = ">=9.5.0" },
+    { name = "mkdocs-material", extras = ["imaging"], marker = "extra == 'docs'", specifier = ">=9.7.6" },
     { name = "mkdocstrings", extras = ["python"], marker = "extra == 'docs'", specifier = ">=0.25.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.10.0" },
     { name = "nox", marker = "extra == 'dev'", specifier = ">=2024.3.2" },
