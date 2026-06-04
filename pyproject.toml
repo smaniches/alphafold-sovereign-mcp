@@ -69,7 +69,7 @@ dependencies = [
     # Numeric
     "numpy>=1.26.0",
     # Platform paths (replaces hard-coded Windows paths)
-    "platformdirs>=4.2.0",
+    "platformdirs>=4.10.0",
 ]
 
 [project.optional-dependencies]
