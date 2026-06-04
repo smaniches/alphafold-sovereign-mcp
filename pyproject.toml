@@ -76,7 +76,7 @@ dependencies = [
 # Topology / TDA (heavy; not required for pure API use)
 tda = [
     "gudhi>=3.9.0",
-    "ripser>=0.6.0",
+    "ripser>=0.6.15",
     "scikit-learn>=1.4.0",
     "scipy>=1.13.0",
 ]
