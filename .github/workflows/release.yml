@@ -168,10 +168,13 @@ jobs:
         run: |
           set -euo pipefail
           for f in dist/*.tar.gz dist/*.whl; do
-            cosign sign-blob --yes "$f" \
-              --bundle "${f}.sigstore" \
-              --output-signature "${f}.sig" \
-              --output-certificate "${f}.crt"
+            # cosign v3 (installed by cosign-installer v4) writes a single
+            # self-contained Sigstore bundle that already includes the
+            # signature, certificate, and Rekor entry. The legacy
+            # --output-signature / --output-certificate flags are IGNORED under
+            # the new bundle format (they produce no files), which previously
+            # broke the release upload — so we attach the .sigstore bundle only.
+            cosign sign-blob --yes "$f" --bundle "${f}.sigstore"
           done
       - name: Determine tag
         id: tag
@@ -187,7 +190,7 @@ jobs:
         run: |
           set -euo pipefail
           TAG=${{ steps.tag.outputs.tag }}
-          ASSETS=( dist/*.tar.gz dist/*.whl dist/*.sigstore dist/*.sig dist/*.crt sboms/sbom.cyclonedx.json sboms/sbom.spdx.json )
+          ASSETS=( dist/*.tar.gz dist/*.whl dist/*.sigstore sboms/sbom.cyclonedx.json sboms/sbom.spdx.json )
 
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Release $TAG already exists — uploading assets with --clobber."

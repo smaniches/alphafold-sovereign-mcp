@@ -73,7 +73,7 @@ For any tagged release, the GitHub Release page should contain:
 
 - Wheel (`.whl`) and sdist (`.tar.gz`)
 - SLSA L3 build provenance attestation (`.intoto.jsonl`)
-- Sigstore signatures (`.sigstore` / `.sig` / `.crt`)
+- Sigstore signatures (`.sigstore` bundles)
 - CycloneDX and SPDX SBOMs
 
 To verify the supply chain locally:
