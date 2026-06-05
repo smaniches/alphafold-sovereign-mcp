@@ -81,6 +81,12 @@ runtime behaviour. The tool surface and tool count (29) are unchanged.
   0.15.15 and `hypothesis` 6.152.7 → 6.155.0 (lockfile), and the pinned
   CI-action SHAs for `github/codeql-action` (4.35.5 → 4.36.0) and
   `codecov/codecov-action` (6.0.0 → 6.0.1). Closes #44, #45, #46, #47.
+- **Release workflow fix.** `release.yml` references the SLSA provenance
+  generator reusable workflow by its `v2.1.0` tag rather than a commit SHA.
+  The generator self-verifies its own ref (`refs/tags/vX.Y.Z`) and rejects
+  SHA pins, so the earlier Scorecard "pin actions by hash" pass had silently
+  broken the release pipeline; this restores a working PyPI publish + SLSA
+  provenance + Sigstore-signed GitHub Release.
 
 ### Documentation
 - **`ARCHITECTURE.md` rewritten to match the shipped code.** The previous

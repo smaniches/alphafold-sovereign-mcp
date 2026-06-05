@@ -54,7 +54,13 @@ jobs:
       actions: read
       id-token: write
       contents: write
-    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@f7dd8c54c2067bafc12ca7a55595d5ee9b75204a # v2.1.0
+    # IMPORTANT: the SLSA generator reusable workflow MUST be referenced by a
+    # semantic-version TAG. It self-verifies its own ref as refs/tags/vX.Y.Z
+    # and fails ("Invalid ref ... Expected ref of the form refs/tags/vX.Y.Z")
+    # if pinned by commit SHA. Do NOT let an OpenSSF Scorecard "pin actions by
+    # hash" pass rewrite this to a SHA — that silently breaks every release.
+    # Tag v2.1.0 == commit f7dd8c54c2067bafc12ca7a55595d5ee9b75204a.
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0
     with:
       base64-subjects: "${{ needs.build.outputs.hashes }}"
       provenance-name: "alphafold-sovereign-mcp.intoto.jsonl"
