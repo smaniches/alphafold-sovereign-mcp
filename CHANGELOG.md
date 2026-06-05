@@ -41,7 +41,7 @@ unchanged; the only behaviour change is the canonical form of the
   `.sigstore` bundle; the ignored legacy `--output-signature` /
   `--output-certificate` flags are gone) that was merged to `main` after the
   v1.1.9 tag.
-- **Counts.** 689 → **696** tests; 2,949 → **2,955** statements (790 → 792
+- **Counts.** 689 → **696** tests; 2,949 → **2,957** statements (790 → 794
   branches); 100% line + branch coverage unchanged.
 
 ## [1.1.9] - 2026-06-04

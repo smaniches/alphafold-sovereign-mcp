@@ -106,15 +106,20 @@ query UniProtToEnsembl($uniprotId: String!) {
 """
 
 
-def _to_curie(raw: str) -> str:
+def _to_curie(raw: object) -> str:
     """Return an ontology disease id in canonical colon-form CURIE.
 
     Open Targets keys and returns disease ids in underscore form (e.g.
     ``MONDO_0007254``, ``EFO_0000305``); the conventional CURIE form uses a
     colon. Replace only the first ``_`` separating an alphabetic prefix from the
-    local id. Values already in colon form, empty strings, and ids without an
-    alphabetic prefix pass through unchanged, so the function is idempotent.
+    local id. Ids already in colon form, or without an alphabetic prefix, pass
+    through unchanged; a ``None`` / empty / non-string id (e.g. a null upstream
+    value, since ``disease.get("id")`` is ``None`` when the key is present but
+    null) collapses to ``""``. The function is therefore idempotent and never
+    raises on a malformed upstream payload.
     """
+    if not isinstance(raw, str) or not raw:
+        return ""
     prefix, sep, local = raw.partition("_")
     if sep and prefix.isalpha() and local:
         return f"{prefix}:{local}"

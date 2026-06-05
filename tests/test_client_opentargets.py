@@ -83,8 +83,12 @@ def test_to_curie_already_colon_is_noop() -> None:
     assert _to_curie("MONDO:0007254") == "MONDO:0007254"
 
 
-def test_to_curie_empty_is_noop() -> None:
+def test_to_curie_falsy_or_non_string_is_empty() -> None:
+    # Empty, None (a null upstream id), and non-string ids collapse to "" and
+    # never raise -- disease.get("id") can be None when the key is present.
     assert _to_curie("") == ""
+    assert _to_curie(None) == ""
+    assert _to_curie(12345) == ""
 
 
 def test_to_curie_non_alpha_prefix_is_noop() -> None:
