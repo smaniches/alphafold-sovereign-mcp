@@ -23,7 +23,7 @@ clinical or regulatory use.
 [![ORCID](https://img.shields.io/badge/ORCID-0009--0005--6480--1987-A6CE39?logo=orcid&logoColor=white)](https://orcid.org/0009-0005-6480-1987)
 [![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.20134773-3C5A99?logo=zenodo&logoColor=white)](https://doi.org/10.5281/zenodo.20134773)
 
-**Status:** `v1.1.8` (Beta). Engineering-validated (689 tests, 100%
+**Status:** `v1.1.9` (Beta). Engineering-validated (689 tests, 100%
 line and branch coverage). Not yet scientifically validated by
 independent domain experts; not yet deployed in production. See
 [`STATUS.md`](STATUS.md) and [`LIMITATIONS.md`](LIMITATIONS.md).
@@ -122,7 +122,7 @@ uv pip install -e .
 ### Verify the install
 
 ```bash
-alphafold-sovereign --version       # → 1.1.8
+alphafold-sovereign --version       # → 1.1.9
 alphafold-sovereign --self-test     # → PASS on the offline BRCA1 fixture
 ```
 
@@ -363,7 +363,7 @@ this file).
   author    = {Maniches, Santiago},
   title     = {AlphaFold Sovereign MCP},
   year      = {2026},
-  version   = {1.1.8},
+  version   = {1.1.9},
   url       = {https://github.com/smaniches/alphafold-sovereign-mcp},
   license   = {Apache-2.0},
   orcid     = {0009-0005-6480-1987},

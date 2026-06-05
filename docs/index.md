@@ -7,7 +7,7 @@
 [![Tests](https://img.shields.io/badge/tests-689%20passing-success)](https://github.com/smaniches/alphafold-sovereign-mcp/actions/workflows/ci.yml)
 [![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)](https://github.com/smaniches/alphafold-sovereign-mcp/actions/workflows/ci.yml)
 
-> **v1.1.8** (Beta). Engineering-validated
+> **v1.1.9** (Beta). Engineering-validated
 > (689 tests, 100% line and branch coverage).
 > Scientifically unvalidated by independent domain experts;
 > not yet deployed in production. See

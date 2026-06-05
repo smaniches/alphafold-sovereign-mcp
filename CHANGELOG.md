@@ -7,7 +7,7 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [Unreleased]
+## [1.1.9] - 2026-06-04
 
 Audit-and-polish work accumulated since v1.1.8, plus one functional fix:
 `get_disease_targets` now returns results (it previously returned an empty
@@ -747,7 +747,8 @@ threat model, examples, mkdocs site).
 - Multi-mode local cache (`sovereign` / `readonly` / `disabled`).
 - HTML5 API documentation.
 
-[Unreleased]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.8...HEAD
+[Unreleased]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.9...HEAD
+[1.1.9]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.8...v1.1.9
 [1.1.8]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.7...v1.1.8
 [1.1.7]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.6...v1.1.7
 [1.1.6]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.5...v1.1.6
