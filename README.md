@@ -18,12 +18,12 @@ clinical or regulatory use.
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](pyproject.toml)
 [![MCP Spec 2025-06-18](https://img.shields.io/badge/MCP-2025--06--18-purple)](https://modelcontextprotocol.io)
-[![Tests](https://img.shields.io/badge/tests-689%20passing-success)](https://github.com/smaniches/alphafold-sovereign-mcp/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/tests-696%20passing-success)](https://github.com/smaniches/alphafold-sovereign-mcp/actions/workflows/ci.yml)
 [![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)](https://github.com/smaniches/alphafold-sovereign-mcp/actions/workflows/ci.yml)
 [![ORCID](https://img.shields.io/badge/ORCID-0009--0005--6480--1987-A6CE39?logo=orcid&logoColor=white)](https://orcid.org/0009-0005-6480-1987)
 [![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.20134773-3C5A99?logo=zenodo&logoColor=white)](https://doi.org/10.5281/zenodo.20134773)
 
-**Status:** `v1.1.9` (Beta). Engineering-validated (689 tests, 100%
+**Status:** `v1.1.10` (Beta). Engineering-validated (696 tests, 100%
 line and branch coverage). Not yet scientifically validated by
 independent domain experts; not yet deployed in production. See
 [`STATUS.md`](STATUS.md) and [`LIMITATIONS.md`](LIMITATIONS.md).
@@ -122,7 +122,7 @@ uv pip install -e .
 ### Verify the install
 
 ```bash
-alphafold-sovereign --version       # → 1.1.9
+alphafold-sovereign --version       # → 1.1.10
 alphafold-sovereign --self-test     # → PASS on the offline BRCA1 fixture
 ```
 
@@ -318,7 +318,7 @@ See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the full module map.
 
 ## Testing & quality
 
-- 689 unit tests with respx-mocked upstreams; the full suite runs
+- 696 unit tests with respx-mocked upstreams; the full suite runs
   hermetically in under a minute on a laptop. Test count includes
   parametrised expansions as reported by `pytest --collect-only`.
 - Coverage on the shipped surface (`src/alphafold_sovereign/clients`,
@@ -363,7 +363,7 @@ this file).
   author    = {Maniches, Santiago},
   title     = {AlphaFold Sovereign MCP},
   year      = {2026},
-  version   = {1.1.9},
+  version   = {1.1.10},
   url       = {https://github.com/smaniches/alphafold-sovereign-mcp},
   license   = {Apache-2.0},
   orcid     = {0009-0005-6480-1987},

@@ -14,7 +14,7 @@ abstract: >-
   DisGeNET)
   as tool calls a Claude (or other MCP-capable) client can invoke
   directly. Persists each result to a local SQLite knowledge graph for
-  later querying. The server is engineering-validated (689 tests, 100%
+  later querying. The server is engineering-validated (696 tests, 100%
   line + branch coverage) but its scientific outputs — draft ACMG/AMP
   evidence and a heuristic druggability tier — have NOT been reviewed
   by independent domain experts and must be treated as research aids,
@@ -49,8 +49,8 @@ keywords:
   - biosecurity
   - drug-discovery
   - clinical-research
-version: "1.1.9"
-date-released: "2026-06-04"
+version: "1.1.10"
+date-released: "2026-06-05"
 references:
   - type: software
     title: "AlphaFold Protein Structure Database"

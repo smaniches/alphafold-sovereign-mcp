@@ -7,8 +7,7 @@ from __future__ import annotations
 import httpx
 import respx
 
-from alphafold_sovereign.clients.opentargets import OpenTargetsClient
-
+from alphafold_sovereign.clients.opentargets import OpenTargetsClient, _to_curie
 
 _GQL_URL = "https://api.platform.opentargets.org/api/v4/graphql"
 
@@ -69,6 +68,78 @@ def test_row_to_score_missing_disease_uses_defaults() -> None:
     score = OpenTargetsClient._row_to_score({}, "ENSG1", "X", "")
     assert score.disease_mondo_id == ""
     assert score.disease_name == ""
+
+
+def test_to_curie_underscore_to_colon() -> None:
+    assert _to_curie("MONDO_0007254") == "MONDO:0007254"
+
+
+def test_to_curie_efo_underscore() -> None:
+    # Open Targets also returns EFO disease ids; the prefix is preserved.
+    assert _to_curie("EFO_0000305") == "EFO:0000305"
+
+
+def test_to_curie_already_colon_is_noop() -> None:
+    assert _to_curie("MONDO:0007254") == "MONDO:0007254"
+
+
+def test_to_curie_falsy_or_non_string_is_empty() -> None:
+    # Empty, None (a null upstream id), and non-string ids collapse to "" and
+    # never raise -- disease.get("id") can be None when the key is present.
+    assert _to_curie("") == ""
+    assert _to_curie(None) == ""
+    assert _to_curie(12345) == ""
+
+
+def test_to_curie_non_alpha_prefix_is_noop() -> None:
+    # No alphabetic prefix -> don't invent a CURIE; leave untouched.
+    assert _to_curie("0007254_x") == "0007254_x"
+
+
+def test_row_to_score_normalises_underscore_disease_id() -> None:
+    # The live Open Targets API returns underscore-form disease ids; the mapped
+    # output must be canonical colon-form CURIE (the #52 output-side fix).
+    row = {"disease": {"id": "MONDO_0007254", "name": "breast carcinoma"}, "score": 0.4}
+    score = OpenTargetsClient._row_to_score(row, "ENSG1", "BRCA1", "P38398")
+    assert score.disease_mondo_id == "MONDO:0007254"
+
+
+async def test_associated_targets_normalises_output_curie(
+    respx_mock: respx.MockRouter,
+) -> None:
+    # Caller passes underscore form; the returned disease_mondo_id must be the
+    # canonical colon-form CURIE rather than echoing the input verbatim.
+    respx_mock.post(_GQL_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "data": {
+                    "disease": {
+                        "id": "MONDO_0007254",
+                        "name": "breast carcinoma",
+                        "associatedTargets": {
+                            "rows": [
+                                {
+                                    "target": {
+                                        "id": "ENSG1",
+                                        "approvedSymbol": "BRCA1",
+                                        "proteinIds": [],
+                                        "tractability": None,
+                                    },
+                                    "score": 0.7,
+                                    "datatypeScores": [],
+                                }
+                            ]
+                        },
+                    }
+                }
+            },
+        ),
+    )
+    async with OpenTargetsClient() as client:
+        scores = await client.associated_targets("MONDO_0007254")
+    assert len(scores) == 1
+    assert scores[0].disease_mondo_id == "MONDO:0007254"
 
 
 # ---------------------------------------------------------------------------
