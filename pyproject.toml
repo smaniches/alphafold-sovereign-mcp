@@ -9,7 +9,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "alphafold-sovereign-mcp"
-version = "1.1.9"
+version = "1.1.10"
 description = "MCP server wrapping AlphaFold DB and 8 other biomedical data sources, with a local SQLite knowledge graph."
 readme = "README.md"
 license = {text = "Apache-2.0"}

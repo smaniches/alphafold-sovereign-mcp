@@ -1,6 +1,6 @@
 # Project Status
 
-**Version:** v1.1.9
+**Version:** v1.1.10
 **Stage:** Beta. Engineering-validated infrastructure; scientifically
 unvalidated by independent domain experts.
 
@@ -14,7 +14,7 @@ expectation of what this project is and is not.
 
 | Dimension | Status | Evidence |
 |---|---|---|
-| Offline unit tests | Passing (689 tests) | `uv run pytest tests/` on every PR; CI matrix across Python 3.10–3.13 |
+| Offline unit tests | Passing (696 tests) | `uv run pytest tests/` on every PR; CI matrix across Python 3.10–3.13 |
 | Line + branch coverage | 100% on shipped surface | `nox -s cov`; enforced by `--cov-fail-under=100` |
 | Static analysis | Clean | `ruff check`, `mypy --strict`, `bandit` on every PR |
 | Security scanning | Clean | CodeQL `security-extended` on every push; no open findings |
@@ -41,7 +41,7 @@ expectation of what this project is and is not.
   single module reused by every upstream client.
 
 ### Test suite
-- **689 tests** (including parametrised expansions) across 20 modules.
+- **696 tests** (including parametrised expansions) across 20 modules.
 - **100% line + branch coverage** on the shipped surface
   (``src/alphafold_sovereign/``, excluding the archived monolith).
 - Tests use ``respx`` to mock HTTP semantics (not just return values),
@@ -122,7 +122,7 @@ expectation of what this project is and is not.
 - **Single maintainer.** No bus factor > 1.
 - **No external contributors yet.** Review process is documented in
   ``CONTRIBUTING.md`` but has not been exercised.
-- **No formal release cadence.** v1.1.9 is the current release;
+- **No formal release cadence.** v1.1.10 is the current release;
   later versions will be tagged as the validation milestones below
   are met.
 
@@ -141,7 +141,7 @@ expectation of what this project is and is not.
 
 ## Roadmap to v1.2.0 (validation)
 
-The validation gap is the highest-priority work after v1.1.9. The
+The validation gap is the highest-priority work after v1.1.10. The
 planned, sequenced steps are:
 
 1. **End-to-end golden examples.** Three documented notebooks under
@@ -165,5 +165,5 @@ planned, sequenced steps are:
 
 ## Last updated
 
-2026-06-04. This document is part of the repo; PRs to correct or
+2026-06-05. This document is part of the repo; PRs to correct or
 expand it are welcome.

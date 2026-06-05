@@ -106,6 +106,21 @@ query UniProtToEnsembl($uniprotId: String!) {
 """
 
 
+def _to_curie(raw: str) -> str:
+    """Return an ontology disease id in canonical colon-form CURIE.
+
+    Open Targets keys and returns disease ids in underscore form (e.g.
+    ``MONDO_0007254``, ``EFO_0000305``); the conventional CURIE form uses a
+    colon. Replace only the first ``_`` separating an alphabetic prefix from the
+    local id. Values already in colon form, empty strings, and ids without an
+    alphabetic prefix pass through unchanged, so the function is idempotent.
+    """
+    prefix, sep, local = raw.partition("_")
+    if sep and prefix.isalpha() and local:
+        return f"{prefix}:{local}"
+    return raw
+
+
 class OpenTargetsClient(BaseAsyncClient):
     """
     Async GraphQL client for Open Targets Platform.
@@ -197,7 +212,7 @@ class OpenTargetsClient(BaseAsyncClient):
                     target_ensembl_id=ensembl,
                     target_gene_symbol=symbol,
                     uniprot_id=uniprot,
-                    disease_mondo_id=disease_id,
+                    disease_mondo_id=_to_curie(disease_id),
                     disease_name=disease_name,
                     overall_score=float(row.get("score", 0.0)),
                     genetic_association=dt.get("genetic_association", 0.0),
@@ -296,7 +311,7 @@ class OpenTargetsClient(BaseAsyncClient):
             target_ensembl_id=ensembl_id,
             target_gene_symbol=symbol,
             uniprot_id=uniprot_id,
-            disease_mondo_id=disease.get("id", ""),
+            disease_mondo_id=_to_curie(disease.get("id", "")),
             disease_name=disease.get("name", ""),
             overall_score=float(row.get("score", 0.0)),
             genetic_association=dt.get("genetic_association", 0.0),

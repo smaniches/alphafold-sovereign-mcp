@@ -7,6 +7,43 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.1.10] - 2026-06-05
+
+Two reviewer-flagged residuals from the v1.1.9 audit, plus the
+release-workflow fix that was merged to `main` after the v1.1.9 tag but never
+shipped in a tagged release. The tool surface and tool count (29) are
+unchanged; the only behaviour change is the canonical form of the
+`disease_mondo_id` field returned by the Open Targets disease/target tools.
+
+### Fixed
+- **`server.json` `tags` still advertised the five non-integrated sources.**
+  v1.1.9 corrected the data-source *count* (14 → 9) in the description and the
+  README/manifest prose, but the `server.json` `tags` array still listed
+  `uniprot`, `rcsb-pdb`, `interpro`, `gene-ontology`, and
+  `human-protein-atlas` — none of which has a client. The nine integrated
+  upstreams are AlphaFold DB, Open Targets, ChEMBL, Ensembl, ClinVar, gnomAD,
+  MONDO, HPO, and DisGeNET. The five stale tags were removed so the manifest
+  matches the corrected count.
+- **Open Targets disease ids are now returned as canonical colon-form CURIEs.**
+  v1.1.9 normalised disease ids on the *input* path (so `get_disease_targets`
+  returns results); the *output* `disease_mondo_id` still echoed the
+  underscore form the live API returns (e.g. `MONDO_0007254`) or the raw
+  caller input. A new idempotent `_to_curie` helper canonicalises the returned
+  id to colon form (`MONDO:0007254`, `EFO:0000305`, …) at both construction
+  sites (`associated_targets` and `_row_to_score`). It is prefix-agnostic, so
+  EFO / Orphanet ids keep their own prefix rather than being forced to MONDO.
+  Seven regression tests were added — the live underscore form was previously
+  exercised only by colon-form mocks, so the gap shipped unnoticed.
+
+### Changed
+- **Release workflow.** v1.1.10 is the first tagged release built from the
+  fully fixed `release.yml`: it ships the `cosign` v3 fix (one self-contained
+  `.sigstore` bundle; the ignored legacy `--output-signature` /
+  `--output-certificate` flags are gone) that was merged to `main` after the
+  v1.1.9 tag.
+- **Counts.** 689 → **696** tests; 2,949 → **2,955** statements (790 → 792
+  branches); 100% line + branch coverage unchanged.
+
 ## [1.1.9] - 2026-06-04
 
 Audit-and-polish work accumulated since v1.1.8, plus one functional fix:
