@@ -7,7 +7,7 @@
 - HPO phenotype-to-disease and gene-to-phenotype
 - Common disease protein target profiling (all major ICD chapters)
 - Open Targets disease-target evidence scoring
-- Variant 3-D triage (HGVS → structure → AlphaMissense → ClinVar → gnomAD)
+- Variant 3-D triage (HGVS → ClinVar + gnomAD constraint + disease context)
 - Phenotype-to-structure pipeline
 - Cross-disease structural comparison
 - Orphan disease structural atlas
@@ -738,19 +738,26 @@ async def get_common_disease_targets(params: CommonDiseaseInput) -> str:
 async def triage_variant_3d(params: VariantTriageInput) -> str:
     """Comprehensive clinical triage for a missense variant.
 
-    Fuses structural, pathogenicity, population-genetics, and disease
-    context into a single prioritised report:
+    Fuses the upstream signals this tool currently wires into a single
+    prioritised report:
 
-    1. **Structural context** — AlphaFold pLDDT at the mutated residue,
-       PAE in the local neighbourhood (confidence of structural context)
-    2. **Pathogenicity** — AlphaMissense score (0–1, calibrated to P/LP
-       threshold ≥ 0.564), ClinVar interpretation + review status
-    3. **Population genetics** — gnomAD global AF, per-ancestry breakdown,
-       LOEUF gene constraint score
-    4. **Disease associations** — MONDO disease record, Open Targets
-       evidence scores for the host gene
+    1. **Pathogenicity** — ClinVar interpretation + review status. The
+       ``alphamissense_score`` / ``alphamissense_interpretation`` fields
+       are always ``null`` / "Not available" here: AlphaMissense is not
+       wired into this tool. For an AlphaMissense pathogenicity score use
+       ``generate_variant_clinical_report``.
+    2. **Population genetics** — gnomAD LOEUF / pLI gene-constraint
+       scores. Per-variant allele frequencies and the per-ancestry
+       breakdown are not wired into this tool.
+    3. **Disease associations** — a placeholder note pointing at
+       ``get_target_diseases()``; the Open Targets / MONDO traversal is
+       a roadmap (Wave-3) item.
+    4. **Structural context** — a text note pointing at
+       ``get_structure()``; the AlphaFold pLDDT / PAE join is a roadmap
+       (Wave-3) item.
 
-    Returns a ``pathogenicity_tier``: HIGH / MEDIUM / LOW / UNKNOWN.
+    Returns a ``pathogenicity_tier``: HIGH / MEDIUM / LOW / UNKNOWN
+    (derived from ClinVar; the AlphaMissense input is always absent here).
 
     Example: ``triage_variant_3d(hgvs='BRCA1:c.181T>G')``
     """
