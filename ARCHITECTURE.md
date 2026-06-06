@@ -12,9 +12,9 @@ than described as if it exists. For the threat model, see
    network access. With `ALPHAFOLD_OFFLINE=1`, the base HTTP client refuses
    all egress before a socket is opened (raising `AirGapError`). The
    knowledge-graph query and export tools answer from the local SQLite store;
-   the upstream-querying tools fail closed when their data is not already
-   local, since they do not yet fall back to the knowledge graph
-   automatically. The deterministic `--self-test` makes no network calls.
+   the upstream-querying tools do not read the knowledge graph, so they fail
+   closed in offline mode -- any upstream call raises `AirGapError`. The
+   deterministic `--self-test` makes no network calls.
 2. **Provenance by capability.** Every tool result *can* be persisted to a
    local, content-addressed SQLite store through the knowledge-graph API. The
    `tool_invocations` and `provenance` tables are designed to hold the tool
