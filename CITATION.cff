@@ -13,8 +13,9 @@ abstract: >-
   Targets, ChEMBL, Ensembl VEP, ClinVar, gnomAD, MONDO, HPO,
   DisGeNET)
   as tool calls a Claude (or other MCP-capable) client can invoke
-  directly. Persists each result to a local SQLite knowledge graph for
-  later querying. The server is engineering-validated (696 tests, 100%
+  directly. Tool results can be persisted to a local SQLite knowledge graph
+  through its query/export API (automatic per-invocation persistence is not
+  yet wired). The server is engineering-validated (696 tests, 100%
   line + branch coverage) but its scientific outputs — draft ACMG/AMP
   evidence and a heuristic druggability tier — have NOT been reviewed
   by independent domain experts and must be treated as research aids,
