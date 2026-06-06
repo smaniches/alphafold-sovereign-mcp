@@ -10,14 +10,20 @@ than described as if it exists. For the threat model, see
 
 1. **Sovereign and offline-capable.** The package installs and runs without
    network access. With `ALPHAFOLD_OFFLINE=1`, the base HTTP client refuses
-   all egress before a socket is opened and the server answers from the local
-   SQLite knowledge graph. The deterministic `--self-test` makes no network
-   calls.
-2. **Provenance by default.** Every tool result can be persisted to a local,
-   content-addressed SQLite store. The `tool_invocations` and `provenance`
-   tables record the tool name, parameters, input and output SHA-256 hashes,
-   the upstream data-source versions, and a UTC timestamp. Cryptographic
-   signing of these records is a roadmap item; it is not yet implemented.
+   all egress before a socket is opened (raising `AirGapError`). The
+   knowledge-graph query and export tools answer from the local SQLite store;
+   the upstream-querying tools do not read the knowledge graph, so they fail
+   closed in offline mode -- any upstream call raises `AirGapError`. The
+   deterministic `--self-test` makes no network calls.
+2. **Provenance by capability.** Every tool result *can* be persisted to a
+   local, content-addressed SQLite store through the knowledge-graph API. The
+   `tool_invocations` and `provenance` tables are designed to hold the tool
+   name, parameters, input and output SHA-256 hashes, the upstream
+   data-source versions, and a UTC timestamp; the writer
+   (`KnowledgeGraph.log_tool_invocation`) exists but is not yet hooked into
+   the tool-dispatch path, so in normal operation these tables stay empty
+   unless a caller persists explicitly. Cryptographic signing of these
+   records is a roadmap item; it is not yet implemented.
 3. **Single licence.** The codebase is Apache 2.0 — one licence, with no
    dual-licence funnel and no feature gated behind a paid edition.
 4. **Protocol-native, tools first.** The server implements the MCP *tools*
@@ -76,7 +82,7 @@ src/alphafold_sovereign/
 └── storage/             Persistence and provenance
     └── knowledge_graph.py   SQLite knowledge graph (WAL mode); six entity,
                              four relationship, and two provenance tables;
-                             SHA-256-keyed JSON blobs; optional DuckDB layer
+                             SHA-256-keyed JSON blobs
 ```
 
 The package also contains six reserved namespace packages — `compliance/`,
@@ -88,7 +94,11 @@ items below and contain no shipped code.
 
 ## Data flow
 
-### 3-D variant triage (representative multi-source tool)
+### 3-D variant triage (a multi-source tool)
+
+This is the data flow as currently implemented. Some upstreams named in the
+tool's design are not yet wired (see the Wave-3 notes inline and in the
+[Roadmap](#roadmap-not-yet-shipped)).
 
 ```
 Claude (MCP client): triage_variant_3d(hgvs="BRCA1:c.181T>G")
@@ -96,22 +106,27 @@ Claude (MCP client): triage_variant_3d(hgvs="BRCA1:c.181T>G")
   ▼
 tools/disease.py::triage_variant_3d
   │
-  ├─ clients/ensembl.py      HGVS -> UniProt accession, residue position
-  ├─ clients/alphafold.py    structure context + AlphaMissense score
+  ├─ _parse_hgvs_gene        extract gene symbol from the HGVS string
+  │                          (local parse; no Ensembl/UniProt resolution yet)
   ├─ clients/clinvar.py      ClinVar interpretation + review status
-  ├─ clients/gnomad.py       population allele frequency + constraint
-  ├─ clients/opentargets.py  disease–target evidence scores
-  ├─ clients/mondo.py        disease names, synonyms, ICD-10 cross-refs
+  ├─ clients/gnomad.py       gnomAD gene-constraint scores; AlphaMissense
+  │                          score is read from this payload when present
+  ├─ disease context         placeholder note today; full Open Targets /
+  │                          MONDO traversal is a Wave-3 item
+  ├─ structure context       a text note pointing at get_structure(); the
+  │                          AlphaFold pLDDT/PAE join is a Wave-3 item
   │
-  ├─ domain/disease.py::VariantReport   assembled, validated result
-  └─ storage/knowledge_graph.py         optional persist: result + provenance
+  └─ result                  assembled as a plain dict with a provenance
+                             footer and returned as JSON (no automatic
+                             knowledge-graph persist)
 ```
 
 Every upstream call passes through `clients/_base.py`, which applies a
 per-host rate limit (aiolimiter), retry with exponential back-off and jitter
 (tenacity), and a per-host circuit breaker. With `ALPHAFOLD_OFFLINE=1`, egress
-is refused at this layer and the request is served from the knowledge graph if
-the data is already present.
+is refused at this layer before a socket is opened (`AirGapError`); the client
+layer does not transparently fall back to the knowledge graph, so a tool that
+needs fresh upstream data fails closed in offline mode.
 
 ---
 
@@ -126,14 +141,18 @@ The schema comprises:
   `phenotypes`, `genes`.
 - **Relationship tables (4):** `protein_disease`, `protein_drug`,
   `variant_disease`, `gene_phenotype`.
-- **Provenance tables (2):** `tool_invocations` (each tool call with its
+- **Provenance tables (2):** `tool_invocations` (a tool call with its
   parameters, input and output hashes, and timing) and `provenance` (the
-  data-source version snapshot per invocation).
+  data-source version snapshot per invocation). The writer for
+  `tool_invocations`, `KnowledgeGraph.log_tool_invocation`, is implemented but
+  is not yet called from the tool-dispatch path, so the table is populated
+  only when a caller invokes it explicitly.
 
 Result blobs are stored as SHA-256-keyed JSON, so identical inputs deduplicate
-and an analysis can be replayed offline. If DuckDB is installed it is used as
-an optional columnar layer for aggregation and export; it is not required and
-is not a runtime dependency.
+and stored analyses can be re-read offline. A columnar analytical layer
+(DuckDB) for aggregation and export is planned but not yet wired: there is no
+DuckDB runtime dependency and the code does not import it. See the
+[Roadmap](#roadmap-not-yet-shipped).
 
 ---
 
@@ -166,9 +185,11 @@ Shipped controls:
   refused in `clients/_base.py` before a socket is opened.
   `ALPHAFOLD_ALLOW_HOSTS` provides a comma-separated allowlist for
   partial-air-gap deployments.
-- **Provenance trail.** Tool invocations are recorded in the SQLite
-  `tool_invocations` table with input and output SHA-256 hashes and UTC
-  timestamps. These records are insert-only in normal operation.
+- **Provenance trail (capability).** The SQLite `tool_invocations` table can
+  hold each tool call with input and output SHA-256 hashes and UTC timestamps,
+  written insert-only via `KnowledgeGraph.log_tool_invocation`. This writer is
+  not yet hooked into tool dispatch, so the trail is populated only when a
+  caller logs explicitly; automatic per-invocation logging is a roadmap item.
 - **Parameterised SQL.** All knowledge-graph queries use bound parameters;
   table names are drawn from a fixed internal allowlist, never from user input.
 
@@ -185,6 +206,13 @@ listed so the shipped boundary is unambiguous:
   transport ships today; stdio clients (such as Claude Desktop) own their own
   process capabilities and use no separate auth.
 - **MCP resources and prompts.** Only the tools surface is implemented.
+- **Automatic provenance logging.** `KnowledgeGraph.log_tool_invocation`
+  exists but is not yet invoked by the tool-dispatch path; wiring it in so
+  every MCP tool call lands in `tool_invocations` is a roadmap item. Until
+  then the audit trail is a capability, not an always-on behaviour.
+- **A DuckDB analytical layer.** A columnar path over the SQLite store for
+  fast aggregation and export is planned. It is not wired today: there is no
+  DuckDB dependency and the code does not import it.
 - **Cryptographic signing of provenance records** (for example, ed25519
   signatures and an external transparency log). Records are currently stored
   unsigned in SQLite.

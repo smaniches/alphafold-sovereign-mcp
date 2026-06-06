@@ -24,10 +24,13 @@ Every tool decorates `@mcp.tool()` with MCP-spec annotations:
 
 ## Provenance
 
-Every tool result includes a `sources_cited` array listing the
-upstream APIs that contributed to the response. The local cache
-records every tool invocation in the SQLite knowledge graph for
-later query via the knowledge-graph tools.
+Every tool result carries a provenance footer listing the server
+version, a UTC timestamp, and the upstream data sources that
+contributed to the response (the disease-layer tools additionally
+return a `sources_queried` field). The SQLite knowledge graph can
+record tool invocations via `KnowledgeGraph.log_tool_invocation`, but
+this writer is not yet hooked into tool dispatch, so the audit trail is
+populated only when a caller logs explicitly.
 
 ## ⚠ Limitations
 

@@ -15,8 +15,9 @@
 
 A Model Context Protocol server that wraps **AlphaFold DB** and 8
 other public biomedical data sources behind a set of MCP tool calls,
-and persists each result to a local SQLite knowledge graph for later
-querying.
+backed by a local SQLite knowledge graph with query and export tools.
+Results can be persisted to the graph through its API; automatic
+per-invocation persistence is not yet wired.
 
 ## What it does
 
@@ -25,8 +26,10 @@ querying.
 - Composes upstreams into multi-source workflows — variant triage
   reports, disease–target landscape summaries, drug-repurposing
   candidates, cross-species structural divergence.
-- Persists every result to a local SQLite knowledge graph; the
-  knowledge-graph tools then traverse the accumulated state.
+- Ships a local SQLite knowledge graph with query and export tools.
+  Results can be persisted through its API; automatic per-invocation
+  persistence is not yet wired, so the graph is populated only when a
+  caller writes to it explicitly.
 
 See [Tool reference](tools/index.md) for the full inventory.
 

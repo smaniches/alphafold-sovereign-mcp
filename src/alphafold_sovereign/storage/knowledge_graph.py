@@ -13,7 +13,8 @@ tool results across sessions.  Every tool result can be stored, enabling:
 
 Architecture:
   - Primary store: SQLite (zero-dependency, embedded, ACID, WAL mode)
-  - Analytical layer: DuckDB if installed (columnar, fast aggregation)
+  - Analytical layer: a columnar DuckDB path is planned but not yet wired
+    (no DuckDB dependency; this module does not import it)
   - Content-addressed JSON blobs: SHA-256 keyed, dedup-safe
   - Full provenance: source, version, timestamp, tool, parameters, hash
 
