@@ -2,8 +2,9 @@
 
 A Model Context Protocol server — an AlphaFold MCP server — that
 wraps AlphaFold DB and 8 other public biomedical data sources behind
-a set of MCP tool calls, and persists each result to a local SQLite
-knowledge graph for later querying.
+a set of MCP tool calls, backed by a local SQLite knowledge graph with
+query and export tools (results can be persisted through its API;
+automatic per-invocation persistence is not yet wired).
 
 This is an unfunded, independent open-source project. It is not a
 service, not certified for any regulated use, and its outputs are
@@ -42,9 +43,11 @@ A Python MCP server that:
   cross-reference reports, disease–target landscape summaries,
   heuristic target-druggability scoring, drug-repurposing candidate
   ranking, and cross-species structural-distance computation.
-- Persists every tool result to a local SQLite knowledge graph
-  (`storage/knowledge_graph.py`) so a research session accumulates a
-  queryable, exportable database.
+- Ships a local SQLite knowledge graph (`storage/knowledge_graph.py`)
+  with query and export tools. Tool results can be persisted to it
+  through the knowledge-graph API; automatic per-invocation persistence
+  is not yet wired, so the store is populated only when a caller writes
+  to it explicitly.
 - Includes a topological-data-analysis (TDA) module that computes
   persistent-homology fingerprints (Betti numbers β₀, β₁, β₂) over
   Vietoris-Rips filtrations of Cα coordinates, and an

@@ -25,9 +25,11 @@ Every tool decorates `@mcp.tool()` with MCP-spec annotations:
 ## Provenance
 
 Every tool result includes a `sources_cited` array listing the
-upstream APIs that contributed to the response. The local cache
-records every tool invocation in the SQLite knowledge graph for
-later query via the knowledge-graph tools.
+upstream APIs that contributed to the response. The SQLite knowledge
+graph can record tool invocations via
+`KnowledgeGraph.log_tool_invocation`, but this writer is not yet hooked
+into tool dispatch, so the audit trail is populated only when a caller
+logs explicitly.
 
 ## ⚠ Limitations
 
