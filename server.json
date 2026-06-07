@@ -48,7 +48,7 @@
     "knowledge-graph"
   ],
   "maturity": "beta",
-  "status_note": "v1.1.10 — engineering-validated (696 tests, 100% line and branch coverage). Scientific outputs (ACMG draft, druggability tier) have NOT been validated by independent domain experts. Not yet deployed in production. See STATUS.md and LIMITATIONS.md.",
+  "status_note": "v1.1.10 — engineering-validated (697 tests, 100% line and branch coverage). Scientific outputs (ACMG draft, druggability tier) have NOT been validated by independent domain experts. Not yet deployed in production. See STATUS.md and LIMITATIONS.md.",
   "install": {
     "pypi": {
       "name": "alphafold-sovereign-mcp",
