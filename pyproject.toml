@@ -73,6 +73,12 @@ dependencies = [
     "numpy>=1.26.0",
     # Platform paths (replaces hard-coded Windows paths)
     "platformdirs>=4.10.0",
+    # Security floor on a transitive of `mcp` (mcp pins `pyjwt[crypto]>=2.10.1`,
+    # which resolves to 2.12.1 carrying PYSEC-2026-175/177/178/179). This is a
+    # version floor on a package already in the tree, not a direct functional
+    # import — no code path uses jwt. Forces the patched 2.13.0 for every
+    # installer (the floor lands in the wheel's Requires-Dist).
+    "pyjwt[crypto]>=2.13.0",
 ]
 
 [project.optional-dependencies]

@@ -7,6 +7,22 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [Unreleased]
+
+### Security
+- **Forces patched `pyjwt` 2.13.0 into the runtime tree.** `pyjwt` enters the
+  install tree transitively through `fastmcp` → `mcp` 1.27.1, which pins
+  `pyjwt[crypto]>=2.10.1`. That loose floor resolved to 2.12.1, which carries
+  four advisories — PYSEC-2026-175, -177, -178, -179 — all fixed in 2.13.0
+  (confirmed by `pip-audit`). A direct `pyjwt[crypto]>=2.13.0` floor was added
+  to `[project.dependencies]`. Unlike a uv-only `[tool.uv]` constraint, a
+  `[project.dependencies]` floor lands in the published wheel's `Requires-Dist`,
+  so every installer (not just `uv`) is forced onto the patched release. No code
+  path imports `jwt`; this is a security version floor on a package already in
+  the tree, not a re-introduction of the direct functional dependency removed in
+  v1.1.3. `uv.lock` regenerated: `pyjwt` 2.12.1 → 2.13.0, the only package that
+  changed.
+
 ## [1.1.10] - 2026-06-05
 
 Two reviewer-flagged residuals from the v1.1.9 audit, plus the
