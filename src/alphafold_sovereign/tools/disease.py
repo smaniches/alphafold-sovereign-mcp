@@ -885,8 +885,8 @@ async def phenotype_to_structures(params: PhenotypeToStructureInput) -> str:
     2. For each disease → top protein targets (Open Targets)
     3. For each target → UniProt ID (for AlphaFold retrieval)
 
-    Use the returned UniProt IDs with ``get_structure`` or ``get_enriched_protein``
-    to retrieve structural data.
+    Use the returned UniProt IDs with ``analyze_structural_confidence``
+    to retrieve AlphaFold structural confidence (pLDDT/PAE).
 
     Example: ``phenotype_to_structures(hpo_id='HP:0002621')``
     maps Atherosclerosis → disease targets → UniProt IDs.
@@ -945,8 +945,8 @@ async def phenotype_to_structures(params: PhenotypeToStructureInput) -> str:
                 "diseases_found": len(output),
                 "result": output,
                 "next_step": (
-                    "Use get_structure(uniprot_id=...) or "
-                    "get_enriched_protein(uniprot_id=...) for structural context."
+                    "Use analyze_structural_confidence(uniprot_id=...) for "
+                    "AlphaFold structural confidence (pLDDT/PAE)."
                 ),
             },
             indent=2,
