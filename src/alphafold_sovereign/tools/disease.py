@@ -7,7 +7,7 @@
 - HPO phenotype-to-disease and gene-to-phenotype
 - Common disease protein target profiling (all major ICD chapters)
 - Open Targets disease-target evidence scoring
-- Variant 3-D triage (HGVS → structure → AlphaMissense → ClinVar → gnomAD)
+- Variant 3-D triage (HGVS → ClinVar + gnomAD constraint + disease context)
 - Phenotype-to-structure pipeline
 - Cross-disease structural comparison
 - Orphan disease structural atlas
@@ -259,15 +259,25 @@ class VariantTriageInput(BaseModel):
     )
     include_structure: bool = Field(
         default=True,
-        description="Retrieve AlphaFold structure for context.",
+        description=(
+            "Add a pointer note toward structural-confidence analysis. "
+            "The full AlphaFold pLDDT/PAE join is a Wave-3 roadmap item "
+            "(not wired into this tool yet)."
+        ),
     )
     include_gnomad: bool = Field(
         default=True,
-        description="Fetch population allele frequencies from gnomAD.",
+        description=(
+            "Fetch gnomAD gene-CONSTRAINT scores (LOEUF / pLI) only. "
+            "Per-variant allele frequencies are not wired into this tool."
+        ),
     )
     include_disease_context: bool = Field(
         default=True,
-        description="Fetch MONDO disease + Open Targets evidence.",
+        description=(
+            "Add a placeholder disease-context note. The MONDO / Open "
+            "Targets traversal is a Wave-3 roadmap item (stub)."
+        ),
     )
 
 
@@ -738,19 +748,27 @@ async def get_common_disease_targets(params: CommonDiseaseInput) -> str:
 async def triage_variant_3d(params: VariantTriageInput) -> str:
     """Comprehensive clinical triage for a missense variant.
 
-    Fuses structural, pathogenicity, population-genetics, and disease
-    context into a single prioritised report:
+    Fuses the upstream signals this tool currently wires into a single
+    prioritised report:
 
-    1. **Structural context** — AlphaFold pLDDT at the mutated residue,
-       PAE in the local neighbourhood (confidence of structural context)
-    2. **Pathogenicity** — AlphaMissense score (0–1, calibrated to P/LP
-       threshold ≥ 0.564), ClinVar interpretation + review status
-    3. **Population genetics** — gnomAD global AF, per-ancestry breakdown,
-       LOEUF gene constraint score
-    4. **Disease associations** — MONDO disease record, Open Targets
-       evidence scores for the host gene
+    1. **Pathogenicity** — ClinVar interpretation + review status. The
+       ``alphamissense_score`` / ``alphamissense_interpretation`` fields
+       are always ``null`` / "Not available" here: AlphaMissense is not
+       wired into this tool. For an AlphaMissense pathogenicity score use
+       ``generate_variant_clinical_report``.
+    2. **Population genetics** — gnomAD LOEUF / pLI gene-constraint
+       scores. Per-variant allele frequencies and the per-ancestry
+       breakdown are not wired into this tool.
+    3. **Disease associations** — a placeholder note pointing at
+       ``get_target_diseases()``; the Open Targets / MONDO traversal is
+       a roadmap (Wave-3) item.
+    4. **Structural context** — a text note pointing at
+       ``analyze_structural_confidence`` (resolve the gene to a UniProt
+       accession first); the AlphaFold pLDDT / PAE join into this report
+       is a roadmap (Wave-3) item.
 
-    Returns a ``pathogenicity_tier``: HIGH / MEDIUM / LOW / UNKNOWN.
+    Returns a ``pathogenicity_tier``: HIGH / MEDIUM / LOW / UNKNOWN
+    (derived from ClinVar; the AlphaMissense input is always absent here).
 
     Example: ``triage_variant_3d(hgvs='BRCA1:c.181T>G')``
     """
@@ -776,24 +794,29 @@ async def triage_variant_3d(params: VariantTriageInput) -> str:
             _fetch_disease_context(gene_symbol) if params.include_disease_context else None
         )
 
-        coros = [clinvar_coro]
+        # Map each coroutine to its source key so results stay
+        # unambiguously matched regardless of which include_* flags are
+        # set (positional indexing breaks when gnomAD is off but disease
+        # context is on). Insertion order keeps gather order
+        # clinvar -> gnomad -> disease.
+        coro_map: dict[str, Any] = {"clinvar": clinvar_coro}
         if gnomad_coro:
-            coros.append(gnomad_coro)
+            coro_map["gnomad"] = gnomad_coro
             sources.append("gnomAD")
         if disease_coro:
-            coros.append(disease_coro)
+            coro_map["disease"] = disease_coro
             sources.append("OpenTargets")
             sources.append("MONDO")
 
-        fetched = await asyncio.gather(*coros, return_exceptions=True)
+        gathered = await asyncio.gather(*coro_map.values(), return_exceptions=True)
+        results = dict(zip(coro_map.keys(), gathered))
 
-        clinvar_data: dict[str, Any] = fetched[0] if not isinstance(fetched[0], Exception) else {}
-        gnomad_data: dict[str, Any] = (
-            fetched[1] if len(fetched) > 1 and not isinstance(fetched[1], Exception) else {}
-        )
-        disease_data: dict[str, Any] = (
-            fetched[-1] if disease_coro and not isinstance(fetched[-1], Exception) else {}
-        )
+        def _ok(value: Any) -> dict[str, Any]:
+            return value if isinstance(value, dict) else {}
+
+        clinvar_data: dict[str, Any] = _ok(results.get("clinvar"))
+        gnomad_data: dict[str, Any] = _ok(results.get("gnomad"))
+        disease_data: dict[str, Any] = _ok(results.get("disease"))
 
         # -- Step 3: Pathogenicity tier ---------------------------------
         clinvar_cls_raw = clinvar_data.get("classification", "Not provided")
@@ -823,9 +846,11 @@ async def triage_variant_3d(params: VariantTriageInput) -> str:
         # existing alphafold_mcp tools are migrated to the new module layout)
         if params.include_structure:
             report["structure_note"] = (
-                f"AlphaFold structure available via: "
-                f"get_structure(uniprot_id='<{gene_symbol}_UNIPROT>'). "
-                "Structural integration to be linked in Wave 3."
+                f"AlphaFold structural confidence for {gene_symbol}: resolve "
+                f"{gene_symbol} to a UniProt accession, then call "
+                "analyze_structural_confidence(uniprot_id='<UNIPROT>'). "
+                "Automatic structural integration into this report is a "
+                "Wave-3 roadmap item."
             )
 
         return json.dumps(report, indent=2) + _provenance(
@@ -860,8 +885,8 @@ async def phenotype_to_structures(params: PhenotypeToStructureInput) -> str:
     2. For each disease → top protein targets (Open Targets)
     3. For each target → UniProt ID (for AlphaFold retrieval)
 
-    Use the returned UniProt IDs with ``get_structure`` or ``get_enriched_protein``
-    to retrieve structural data.
+    Use the returned UniProt IDs with ``analyze_structural_confidence``
+    to retrieve AlphaFold structural confidence (pLDDT/PAE).
 
     Example: ``phenotype_to_structures(hpo_id='HP:0002621')``
     maps Atherosclerosis → disease targets → UniProt IDs.
@@ -920,8 +945,8 @@ async def phenotype_to_structures(params: PhenotypeToStructureInput) -> str:
                 "diseases_found": len(output),
                 "result": output,
                 "next_step": (
-                    "Use get_structure(uniprot_id=...) or "
-                    "get_enriched_protein(uniprot_id=...) for structural context."
+                    "Use analyze_structural_confidence(uniprot_id=...) for "
+                    "AlphaFold structural confidence (pLDDT/PAE)."
                 ),
             },
             indent=2,

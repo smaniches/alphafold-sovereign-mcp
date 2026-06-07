@@ -662,6 +662,45 @@ async def test_triage_variant_3d_without_optional(monkeypatch: pytest.MonkeyPatc
     assert "structure_note" not in parsed
 
 
+async def test_triage_variant_3d_disease_only_no_gnomad(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression: with gnomAD off but disease context on, the disease
+    result must land in disease_context (not population_genetics).
+
+    The old positional unpacking assigned fetched[1] (the disease result,
+    since coros == [clinvar, disease]) to gnomad_data, leaking it into
+    population_genetics AND disease_context.
+    """
+    sentinel = {"note": "DISEASE_SENTINEL", "stub": True}
+
+    async def fake_clinvar(hgvs: str, gene: str) -> dict[str, Any]:
+        return {"classification": "Pathogenic"}
+
+    async def fake_disease(gene: str) -> dict[str, Any]:
+        return sentinel
+
+    monkeypatch.setattr("alphafold_sovereign.tools.disease._fetch_clinvar", fake_clinvar)
+    # Deliberately do NOT patch _fetch_gnomad: it must not be called.
+    monkeypatch.setattr("alphafold_sovereign.tools.disease._fetch_disease_context", fake_disease)
+
+    out = await triage_variant_3d(
+        VariantTriageInput(
+            hgvs="BRCA1:c.181T>G",
+            include_gnomad=False,
+            include_disease_context=True,
+            include_structure=False,
+        )
+    )
+    parsed = json.loads(out.split("---")[0].strip())
+    assert parsed["status"] == "success"
+    # gnomAD was off → population_genetics empty (the bug leaked the disease here)
+    assert parsed["population_genetics"] == {}
+    # disease context correctly carries the sentinel
+    assert parsed["disease_context"] == sentinel
+    assert "gnomAD" not in parsed["sources_queried"]
+
+
 async def test_triage_variant_3d_partial_exceptions(monkeypatch: pytest.MonkeyPatch) -> None:
     async def fake_clinvar(hgvs: str, gene: str) -> dict[str, Any]:
         raise RuntimeError("cv fail")
