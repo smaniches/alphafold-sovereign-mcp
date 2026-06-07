@@ -8,8 +8,10 @@ name: alphafold-sovereign-mcp
 description: >-
   MCP server wrapping AlphaFold DB and 8 other biomedical data sources
   (Open Targets, ChEMBL, Ensembl VEP, ClinVar, gnomAD, MONDO, HPO,
-  DisGeNET) behind MCP tool calls. Persists each result to a local SQLite
-  knowledge graph for later querying. Engineering-validated (696 tests,
+  DisGeNET) behind MCP tool calls. Tool results can be persisted to a local
+  SQLite knowledge graph via its storage API; the exposed MCP tools query and
+  export that store read-only (automatic per-invocation persistence is not yet
+  wired). Engineering-validated (696 tests,
   100% line and branch coverage) but scientific outputs are research aids that
   must be reviewed by qualified humans before clinical use — see
   STATUS.md and LIMITATIONS.md.

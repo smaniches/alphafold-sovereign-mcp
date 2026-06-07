@@ -2,7 +2,7 @@
   "$schema": "https://modelcontextprotocol.io/schemas/server.schema.json",
   "name": "alphafold-sovereign-mcp",
   "version": "1.1.10",
-  "description": "MCP server wrapping AlphaFold DB and 8 other biomedical data sources behind a set of MCP tool calls; persists each result to a local SQLite knowledge graph for later querying.",
+  "description": "MCP server wrapping AlphaFold DB and 8 other biomedical data sources behind a set of MCP tool calls; tool results can be persisted to a local SQLite knowledge graph via its storage API; the exposed MCP tools query and export that store read-only (automatic per-invocation persistence is not yet wired).",
   "vendor": "Santiago Maniches",
   "license": "Apache-2.0",
   "homepage": "https://github.com/smaniches/alphafold-sovereign-mcp",
