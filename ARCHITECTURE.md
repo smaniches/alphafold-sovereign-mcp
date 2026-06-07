@@ -113,7 +113,7 @@ tools/disease.py::triage_variant_3d
   │                          score is read from this payload when present
   ├─ disease context         placeholder note today; full Open Targets /
   │                          MONDO traversal is a Wave-3 item
-  ├─ structure context       a text note pointing at get_structure(); the
+  ├─ structure context       a text note pointing at analyze_structural_confidence(); the
   │                          AlphaFold pLDDT/PAE join is a Wave-3 item
   │
   └─ result                  assembled as a plain dict with a provenance
