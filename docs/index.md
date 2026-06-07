@@ -4,11 +4,11 @@
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://github.com/smaniches/alphafold-sovereign-mcp/blob/main/LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://github.com/smaniches/alphafold-sovereign-mcp/blob/main/pyproject.toml)
 [![MCP Spec 2025-06-18](https://img.shields.io/badge/MCP-2025--06--18-purple)](https://modelcontextprotocol.io)
-[![Tests](https://img.shields.io/badge/tests-696%20passing-success)](https://github.com/smaniches/alphafold-sovereign-mcp/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/tests-697%20passing-success)](https://github.com/smaniches/alphafold-sovereign-mcp/actions/workflows/ci.yml)
 [![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)](https://github.com/smaniches/alphafold-sovereign-mcp/actions/workflows/ci.yml)
 
 > **v1.1.10** (Beta). Engineering-validated
-> (696 tests, 100% line and branch coverage).
+> (697 tests, 100% line and branch coverage).
 > Scientifically unvalidated by independent domain experts;
 > not yet deployed in production. See
 > [Status](status.md) and [Limitations](limitations.md).

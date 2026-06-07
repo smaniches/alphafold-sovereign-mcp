@@ -14,7 +14,7 @@ expectation of what this project is and is not.
 
 | Dimension | Status | Evidence |
 |---|---|---|
-| Offline unit tests | Passing (696 tests) | `uv run pytest tests/` on every PR; CI matrix across Python 3.10–3.13 |
+| Offline unit tests | Passing (697 tests) | `uv run pytest tests/` on every PR; CI matrix across Python 3.10–3.13 |
 | Line + branch coverage | 100% on shipped surface | `nox -s cov`; enforced by `--cov-fail-under=100` |
 | Static analysis | Clean | `ruff check`, `mypy --strict`, `bandit` on every PR |
 | Security scanning | Clean | CodeQL `security-extended` on every push; no open findings |
@@ -41,7 +41,7 @@ expectation of what this project is and is not.
   single module reused by every upstream client.
 
 ### Test suite
-- **696 tests** (including parametrised expansions) across 20 modules.
+- **697 tests** (including parametrised expansions) across 20 modules.
 - **100% line + branch coverage** on the shipped surface
   (``src/alphafold_sovereign/``, excluding the archived monolith).
 - Tests use ``respx`` to mock HTTP semantics (not just return values),

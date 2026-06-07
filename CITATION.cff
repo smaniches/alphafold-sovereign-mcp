@@ -16,7 +16,7 @@ abstract: >-
   directly. Tool results can be persisted to a local SQLite knowledge graph
   via its storage API; the exposed MCP tools query and export that store
   read-only (automatic per-invocation persistence is not yet wired). The
-  server is engineering-validated (696 tests, 100%
+  server is engineering-validated (697 tests, 100%
   line + branch coverage) but its scientific outputs — draft ACMG/AMP
   evidence and a heuristic druggability tier — have NOT been reviewed
   by independent domain experts and must be treated as research aids,
