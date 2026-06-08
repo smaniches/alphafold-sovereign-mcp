@@ -7,11 +7,19 @@
 #     keeping the manifest and the lockfile in sync in a single PR. Covers
 #     the runtime dependencies plus the dev / docs / security / tda extras.
 #   - GitHub Actions used by .github/workflows/*. Action SHAs are pinned via
-#     major-version tags; Dependabot raises a PR when a new tag is published,
-#     the maintainer reviews and merges.
+#     major-version tags; Dependabot raises a PR when a new tag is published.
 #
-# Schedule: weekly on Mondays at 09:00 UTC. Single PR per ecosystem caps
-# review burden for the solo maintainer.
+# Schedule: weekly on Mondays at 09:00 UTC.
+#
+# Grouping: minor + patch updates are batched so the solo maintainer sees
+# at most three routine PRs a week (runtime / dev-tooling / actions) instead
+# of one per dependency. MAJOR bumps are deliberately left OUT of every group
+# so they each arrive as their own PR and stand out for manual review.
+#
+# Auto-merge: see .github/workflows/dependabot-auto-merge.yml. The low-risk
+# subset (dev-tooling + actions minor/patch, and runtime patch) is merged
+# automatically once the "All Checks Pass" CI gate is green. Runtime minors
+# and all majors are held for the maintainer to merge by hand.
 
 version: 2
 
@@ -29,6 +37,20 @@ updates:
       - python
     commit-message:
       prefix: chore(deps)
+    groups:
+      # Runtime dependencies that ship to users. Batched for minor + patch;
+      # majors fall out of the group into their own PR for manual review.
+      production-minor-patch:
+        dependency-type: production
+        update-types:
+          - minor
+          - patch
+      # Dev / docs / security / tda tooling. Never ships to users.
+      development-minor-patch:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
 
   - package-ecosystem: github-actions
     directory: /
@@ -43,3 +65,10 @@ updates:
       - github-actions
     commit-message:
       prefix: chore(ci)
+    groups:
+      # CI actions only run in the build; batched for minor + patch, majors
+      # break out into their own PR for manual review.
+      actions-minor-patch:
+        update-types:
+          - minor
+          - patch
