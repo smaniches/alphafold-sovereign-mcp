@@ -486,7 +486,7 @@ async def generate_variant_clinical_report(
 ) -> dict[str, Any]:
     """Generate a multi-source variant interpretation report.
 
-    Cross-references evidence from up to eight upstream databases for a
+    Cross-references evidence from up to seven upstream databases for a
     single HGVS variant into one structured report. The report is a
     *research aid*: it surfaces the upstream evidence and the
     ACMG/AMP criteria that the available evidence supports, but it is
@@ -495,12 +495,11 @@ async def generate_variant_clinical_report(
 
     1. **Ensembl VEP** — functional consequence, SIFT/PolyPhen/CADD predictions
     2. **ClinVar** — clinical pathogenicity classifications and review status
-    3. **gnomAD v4** — population allele frequencies across 807,162 individuals
+    3. **gnomAD v4** — population allele frequencies (gnomAD v4, ~807k individuals)
     4. **AlphaMissense** — deep-learning missense pathogenicity (Cheng et al. 2023)
-    5. **MONDO** — disease ontology context
-    6. **Open Targets** — disease-gene evidence scores
-    7. **DisGeNET** — curated gene-disease association scores
-    8. **ChEMBL** — approved drugs acting on the gene product
+    5. **Open Targets** — disease-gene evidence scores
+    6. **DisGeNET** — curated gene-disease association scores
+    7. **ChEMBL** — approved drugs acting on the gene product
 
     The report includes a draft ACMG/AMP criteria checklist with evidence
     mapping, a structural impact summary, and an actionability statement.
@@ -900,7 +899,7 @@ async def assess_target_druggability(
             "alphafold_db": "https://alphafold.ebi.ac.uk",
         },
         "provenance": _provenance(
-            chembl="v34", open_targets="24.06", gnomad="v4", alphafold_db="v6"
+            chembl="v36", open_targets="24.06", gnomad="v4", alphafold_db="v6"
         ),
     }
 
@@ -936,7 +935,6 @@ async def synthesize_protein_dossier(
       - **gnomAD**: population constraint (pLI, LOEUF, mis_z)
       - **ClinVar**: pathogenic variants in this gene
       - **Ensembl**: orthologs across 12 species
-      - **MONDO**: top disease context
 
     Args:
         params.uniprot_id: UniProt accession.
@@ -1095,11 +1093,16 @@ async def synthesize_protein_dossier(
         "clinvar": "https://www.ncbi.nlm.nih.gov/clinvar/",
         "ensembl": "https://rest.ensembl.org",
     }
+    # Stamp the upstreams actually fused into the dossier (see data_sources
+    # above), not tool parameters. ClinVar / Ensembl / DisGeNET serve current
+    # releases and are not pinned to a version here.
     dossier["provenance"] = _provenance(
-        depth=params.depth,
         open_targets="24.06",
         gnomad="v4",
-        chembl="v34",
+        chembl="v36",
+        clinvar="current",
+        ensembl="current",
+        disgenet="current",
     )
 
     log.info("complete.dossier", tier=tier)
@@ -1209,7 +1212,7 @@ async def map_disease_drug_landscape(
         },
         "provenance": _provenance(
             open_targets="24.06",
-            chembl="v34",
+            chembl="v36",
         ),
     }
 
@@ -1239,12 +1242,14 @@ async def classify_variant_acmg(
 
     Criteria populated:
       PVS1 — Null variant in LoF-intolerant gene
-      PS1   — Same AA change as known pathogenic variant (via ClinVar)
       PM2   — Absent/extremely rare in gnomAD population databases
       PP3   — Multiple in-silico predictors (AlphaMissense ≥0.564, SIFT, PolyPhen, CADD)
       BP4   — Multiple in-silico predictors benign (AlphaMissense ≤0.340)
       BP7   — Silent variant, no splicing impact
       BS1   — Allele frequency > 5% in gnomAD
+      PP5   — ClinVar reports the variant pathogenic / likely pathogenic
+              (Supporting). Note: ClinGen's SVI recommends retiring
+              PP5/BP6; it is surfaced here as supporting evidence only.
 
     Args:
         params.hgvs: HGVS expression.
@@ -1515,7 +1520,7 @@ async def find_drug_repurposing_candidates(
             "open_targets": "https://platform.opentargets.org",
             "chembl": "https://www.ebi.ac.uk/chembl/",
         },
-        "provenance": _provenance(open_targets="24.06", chembl="v34"),
+        "provenance": _provenance(open_targets="24.06", chembl="v36"),
     }
 
 

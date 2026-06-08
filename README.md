@@ -11,6 +11,11 @@ service, not certified for any regulated use, and its outputs are
 research aids that should be reviewed by qualified humans before any
 clinical or regulatory use.
 
+This project is not affiliated with, endorsed by, or sponsored by
+Google DeepMind or EMBL-EBI. "AlphaFold" is a trademark of its
+respective owner and is used here only to describe the public data
+(the AlphaFold DB API) that this software consumes.
+
 [![CI](https://github.com/smaniches/alphafold-sovereign-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/smaniches/alphafold-sovereign-mcp/actions/workflows/ci.yml)
 [![Docs](https://github.com/smaniches/alphafold-sovereign-mcp/actions/workflows/docs.yml/badge.svg)](https://smaniches.github.io/alphafold-sovereign-mcp/)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/smaniches/alphafold-sovereign-mcp/badge)](https://api.securityscorecards.dev/projects/github.com/smaniches/alphafold-sovereign-mcp)
@@ -179,7 +184,7 @@ input schema is a Pydantic model; results are JSON.
 | `get_disease_targets` | Top drug targets for a MONDO disease (Open Targets) |
 | `get_target_diseases` | Top diseases for a UniProt target (Open Targets) |
 | `get_common_disease_targets` | Parallel profiling across curated MONDO diseases |
-| `triage_variant_3d` | HGVS → ClinVar + gnomAD + MONDO disease context |
+| `triage_variant_3d` | HGVS → ClinVar + gnomAD constraint (disease/structure context: pointer notes) |
 | `phenotype_to_structures` | HPO → diseases → OT targets → UniProt IDs |
 | `get_orphan_disease_atlas` | Orphanet → MONDO → HPO + OT targets |
 | `compare_disease_target_overlap` | Jaccard similarity of target sets for two diseases |
@@ -193,7 +198,7 @@ input schema is a Pydantic model; results are JSON.
 | `assess_target_druggability` | UniProt → HOT/WARM/COLD/NOT_DRUGGABLE tier |
 | `synthesize_protein_dossier` | UniProt → multi-source briefing |
 | `map_disease_drug_landscape` | MONDO → approved drugs + pipeline + ChEMBL phase counts |
-| `classify_variant_acmg` | HGVS → ACMG/AMP criteria checklist (PVS1, PM2, PP3, BS1, BP4) |
+| `classify_variant_acmg` | HGVS → ACMG/AMP criteria checklist (PVS1, PM2, PP3, BP4, BP7, BS1, PP5) |
 | `find_drug_repurposing_candidates` | MONDO → candidates ranked by OT evidence × ChEMBL phase |
 
 The ACMG/AMP criteria produced are a **draft**: they reflect the
@@ -276,13 +281,13 @@ distance from the human structure along with sequence identity.
 |---|---|---|
 | AlphaFold DB v6 (EBI/DeepMind) | Structures, pLDDT, PAE, AlphaMissense | CC BY 4.0 |
 | MONDO (OLS4) | Disease ontology, ICD cross-refs | CC BY 4.0 |
-| HPO (JAX) | Phenotype terms, gene-disease links | hpo.jax.org |
-| Open Targets | Disease–target evidence | Apache 2.0 |
+| HPO (JAX) | Phenotype terms, gene-disease links | HPO license (free for all use) |
+| Open Targets | Disease–target evidence | CC0 1.0 (data) |
 | ClinVar (NCBI) | Variant pathogenicity | Public domain |
-| gnomAD v4 | Population allele frequencies | ODbL |
-| DisGeNET | Gene–disease association scores | CC BY-NC-SA 4.0 |
-| ChEMBL v34 (EMBL-EBI) | Drug bioactivity, MoA, ADMET | CC BY-SA 3.0 |
-| Ensembl (EMBL-EBI) | VEP, orthologs, gene lookup | Apache 2.0 |
+| gnomAD v4 | Population allele frequencies | CC0 1.0 |
+| DisGeNET | Gene–disease association scores | Free academic tier / commercial (MedBioinformatics) |
+| ChEMBL v36 (EMBL-EBI) | Drug bioactivity, MoA, ADMET | CC BY-SA 3.0 |
+| Ensembl (EMBL-EBI) | VEP, orthologs, gene lookup | No restrictions (data); Apache 2.0 (code) |
 
 UniProt accessions are used throughout as protein **identifiers** — they
 key AlphaFold structures and Open Targets cross-references — but the

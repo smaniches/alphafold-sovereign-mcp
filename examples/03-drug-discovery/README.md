@@ -33,7 +33,7 @@ typically issues them.
 {"tool": "drug_lookup", "params": {"name": "Imatinib"}}
 
 // Turn 2: characterise the primary target
-{"tool": "assess_target_druggability", "params": {"gene_symbol": "ABL1"}}
+{"tool": "assess_target_druggability", "params": {"uniprot_id": "P00519", "include_clinical_stage": true}}
 
 // Turn 3: pull the disease-target link
 {"tool": "explore_disease_target_landscape", "params": {"disease_id": "MONDO_0011996", "target_gene": "ABL1"}}
@@ -89,7 +89,7 @@ typically issues them.
   },
   "structure_ABL1": {
     "uniprot_id": "P00519",
-    "model_url": "https://alphafold.ebi.ac.uk/files/AF-P00519-F1-model_v4.pdb",
+    "model_url": "https://alphafold.ebi.ac.uk/files/AF-P00519-F1-model_v6.pdb",
     "n_residues": 1130,
     "plddt_mean": 71.8,
     "kinase_domain_residues": [242, 493],

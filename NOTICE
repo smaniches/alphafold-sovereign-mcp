@@ -33,13 +33,28 @@ This product makes use of third-party components, each governed by
 its own license. A full inventory is published with every release in
 the form of CycloneDX and SPDX Software Bills of Materials (SBOMs).
 
-Notable upstream data sources accessed at runtime (no code included):
+Notable upstream data sources accessed at runtime (no upstream code is
+included or redistributed):
   - AlphaFold Protein Structure Database
-      (DeepMind / EMBL-EBI; CC BY 4.0 for predicted structures)
-  - UniProt (CC BY 4.0)
-  - Gene Ontology (CC BY 4.0)
-  - InterPro / Pfam (CC0)
-  - RCSB Protein Data Bank (CC0)
+      (Google DeepMind / EMBL-EBI; CC BY 4.0 for predicted structures;
+       includes AlphaMissense annotations, Cheng et al. Science 2023)
+  - MONDO Disease Ontology (Monarch Initiative; CC BY 4.0)
+  - Human Phenotype Ontology (Jackson Laboratory; HPO license)
+  - Open Targets (EMBL-EBI and partners; data CC0 1.0)
+  - ClinVar (NCBI; public domain)
+  - gnomAD v4 (Broad Institute; CC0 1.0)
+  - DisGeNET (MedBioinformatics; free academic tier / commercial license)
+  - ChEMBL (EMBL-EBI; CC BY-SA 3.0)
+  - Ensembl (EMBL-EBI; data released with no restrictions, code Apache 2.0)
+
+UniProt accessions are used only as protein identifiers; the UniProt
+API is not queried as a data source. Gene Ontology, InterPro / Pfam, and
+the RCSB Protein Data Bank are not integrated in this release.
+
+This project is independent. It is not affiliated with, endorsed by, or
+sponsored by Google DeepMind or EMBL-EBI. "AlphaFold" and the names of
+the data sources above are trademarks of their respective owners and are
+used solely to describe the public data this software consumes.
 
 Users are responsible for complying with the terms of any upstream
 data sources they access through this software.
