@@ -243,6 +243,54 @@ async def test_gene_lookup_error_returns_not_found(
 
 
 # ---------------------------------------------------------------------------
+# ncbi_gene_id
+# ---------------------------------------------------------------------------
+
+
+async def test_ncbi_gene_id_found(respx_mock: respx.MockRouter) -> None:
+    respx_mock.get("https://rest.ensembl.org/lookup/symbol/human/BRCA1").mock(
+        return_value=httpx.Response(200, json={"id": "ENSG0001", "display_name": "BRCA1"}),
+    )
+    respx_mock.get("https://rest.ensembl.org/xrefs/id/ENSG0001").mock(
+        return_value=httpx.Response(
+            200, json=[{"dbname": "EntrezGene", "primary_id": "672", "display_id": "BRCA1"}]
+        ),
+    )
+    async with EnsemblClient() as client:
+        assert await client.ncbi_gene_id("BRCA1") == "672"
+
+
+async def test_ncbi_gene_id_gene_not_found(respx_mock: respx.MockRouter) -> None:
+    respx_mock.get("https://rest.ensembl.org/lookup/symbol/human/BAD").mock(
+        return_value=httpx.Response(500),
+    )
+    async with EnsemblClient() as client:
+        assert await client.ncbi_gene_id("BAD") == ""
+
+
+async def test_ncbi_gene_id_xrefs_error(respx_mock: respx.MockRouter) -> None:
+    respx_mock.get("https://rest.ensembl.org/lookup/symbol/human/BRCA1").mock(
+        return_value=httpx.Response(200, json={"id": "ENSG0001", "display_name": "BRCA1"}),
+    )
+    respx_mock.get("https://rest.ensembl.org/xrefs/id/ENSG0001").mock(
+        return_value=httpx.Response(503),
+    )
+    async with EnsemblClient() as client:
+        assert await client.ncbi_gene_id("BRCA1") == ""
+
+
+async def test_ncbi_gene_id_no_primary_id(respx_mock: respx.MockRouter) -> None:
+    respx_mock.get("https://rest.ensembl.org/lookup/symbol/human/BRCA1").mock(
+        return_value=httpx.Response(200, json={"id": "ENSG0001", "display_name": "BRCA1"}),
+    )
+    respx_mock.get("https://rest.ensembl.org/xrefs/id/ENSG0001").mock(
+        return_value=httpx.Response(200, json=[{"dbname": "EntrezGene", "primary_id": ""}]),
+    )
+    async with EnsemblClient() as client:
+        assert await client.ncbi_gene_id("BRCA1") == ""
+
+
+# ---------------------------------------------------------------------------
 # variant_info
 # ---------------------------------------------------------------------------
 
@@ -313,7 +361,7 @@ async def test_orthologs_filter_and_limit(respx_mock: respx.MockRouter) -> None:
         "https://rest.ensembl.org/lookup/symbol/human/BRCA1",
     ).mock(return_value=httpx.Response(200, json=_GENE_LOOKUP_OK))
     respx_mock.get(
-        "https://rest.ensembl.org/homology/id/ENSG0001",
+        "https://rest.ensembl.org/homology/id/human/ENSG0001",
     ).mock(
         return_value=httpx.Response(
             200,
@@ -370,7 +418,7 @@ async def test_orthologs_limit_breaks_outer_loop(
         "https://rest.ensembl.org/lookup/symbol/human/BRCA1",
     ).mock(return_value=httpx.Response(200, json=_GENE_LOOKUP_OK))
     respx_mock.get(
-        "https://rest.ensembl.org/homology/id/ENSG0001",
+        "https://rest.ensembl.org/homology/id/human/ENSG0001",
     ).mock(
         return_value=httpx.Response(
             200,
@@ -395,7 +443,7 @@ async def test_orthologs_filter_skips_non_matching(
         "https://rest.ensembl.org/lookup/symbol/human/BRCA1",
     ).mock(return_value=httpx.Response(200, json=_GENE_LOOKUP_OK))
     respx_mock.get(
-        "https://rest.ensembl.org/homology/id/ENSG0001",
+        "https://rest.ensembl.org/homology/id/human/ENSG0001",
     ).mock(
         return_value=httpx.Response(
             200,
@@ -435,7 +483,7 @@ async def test_orthologs_no_filter_returns_all(respx_mock: respx.MockRouter) -> 
         "https://rest.ensembl.org/lookup/symbol/human/BRCA1",
     ).mock(return_value=httpx.Response(200, json=_GENE_LOOKUP_OK))
     respx_mock.get(
-        "https://rest.ensembl.org/homology/id/ENSG0001",
+        "https://rest.ensembl.org/homology/id/human/ENSG0001",
     ).mock(
         return_value=httpx.Response(
             200,
@@ -472,7 +520,7 @@ async def test_orthologs_homology_error(respx_mock: respx.MockRouter) -> None:
         "https://rest.ensembl.org/lookup/symbol/human/BRCA1",
     ).mock(return_value=httpx.Response(200, json=_GENE_LOOKUP_OK))
     respx_mock.get(
-        "https://rest.ensembl.org/homology/id/ENSG0001",
+        "https://rest.ensembl.org/homology/id/human/ENSG0001",
     ).mock(return_value=httpx.Response(500))
     async with EnsemblClient() as client:
         rows = await client.orthologs("BRCA1")

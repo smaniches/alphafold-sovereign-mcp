@@ -28,6 +28,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from alphafold_sovereign import __version__
 from alphafold_sovereign.clients.clinvar import ClinVarClient
+from alphafold_sovereign.clients.ensembl import EnsemblClient
 from alphafold_sovereign.clients.gnomad import GnomADClient
 from alphafold_sovereign.clients.hpo import HPOClient
 from alphafold_sovereign.clients.mondo import MONDOClient
@@ -512,17 +513,31 @@ async def get_gene_phenotype_profile(params: GenePhenotypeInput) -> str:
     Example: ``get_gene_phenotype_profile(gene_symbol='SCN1A')``
     """
     try:
-        async with HPOClient() as hpo_client, GnomADClient() as gnomad_client:
-            coros = [hpo_client.phenotypes_for_gene(params.gene_symbol)]
+        async with (
+            EnsemblClient() as ensembl_client,
+            HPOClient() as hpo_client,
+            GnomADClient() as gnomad_client,
+        ):
+            # HPO's network-annotation endpoint is keyed on NCBI Gene IDs, so
+            # resolve the HGNC symbol to its Entrez ID via Ensembl first.
+            ncbi_gene_id = await ensembl_client.ncbi_gene_id(params.gene_symbol)
+
+            coros: list[Any] = []
+            if ncbi_gene_id:
+                coros.append(
+                    hpo_client.phenotypes_for_gene_id(
+                        f"NCBIGene:{ncbi_gene_id}", gene_symbol=params.gene_symbol
+                    )
+                )
             if params.include_constraint:
                 coros.append(gnomad_client.gene_constraint(params.gene_symbol))  # type: ignore[arg-type]
             results = await asyncio.gather(*coros, return_exceptions=True)
 
-        phenotypes_result = results[0]
-        constraint_result = results[1] if params.include_constraint else {}
+        phenotypes_result = results[0] if ncbi_gene_id else None
+        constraint_result = results[-1] if params.include_constraint else {}
 
         phenotypes: list[dict[str, Any]] = []
-        if not isinstance(phenotypes_result, Exception):
+        if phenotypes_result is not None and not isinstance(phenotypes_result, Exception):
             phenotypes = [p.to_dict() for p in phenotypes_result]
 
         constraint: dict[str, Any] = {}
@@ -902,8 +917,13 @@ async def phenotype_to_structures(params: PhenotypeToStructureInput) -> str:
                 limit=params.disease_limit,
             )
 
-            # Resolve OMIM → MONDO for Open Targets
-            mondo_tasks = [_omim_to_mondo(d.disease_id) for d in diseases]
+            # Resolve each disease to a MONDO ID for Open Targets. The HPO
+            # annotation already carries a cross-referenced MONDO ID; fall back
+            # to an OMIM→MONDO lookup only when it does not.
+            mondo_tasks = [
+                _identity(d.mondo_id) if d.mondo_id else _omim_to_mondo(d.disease_id)
+                for d in diseases
+            ]
             mondo_ids = await asyncio.gather(*mondo_tasks, return_exceptions=True)
 
             target_tasks = []
@@ -1216,15 +1236,31 @@ async def resolve_icd10_to_mondo(params: ICD10ToMONDOInput) -> str:
 
 
 def _parse_hgvs_gene(hgvs: str) -> tuple[str, str]:
-    """Extract gene symbol and c. notation from an HGVS expression."""
+    """Extract gene symbol and c. notation from an HGVS expression.
+
+    Handles the three common notations:
+
+    - Gene-relative:           ``BRCA1:c.181T>G``           → ``('BRCA1', 'c.181T>G')``
+    - RefSeq with gene parens: ``NM_007294.4(BRCA1):c.5266dupC``
+      (the canonical ClinVar form) → ``('BRCA1', 'c.5266dupC')``
+    - RefSeq without gene:      ``NM_007294.3:c.181T>G``     → ``('', 'c.181T>G')``
+    """
     import re
 
-    # 'BRCA1:c.181T>G' or 'NM_007294.3:c.181T>G'
+    hgvs = hgvs.strip()
+
+    # RefSeq/Ensembl transcript carrying the gene in parentheses, e.g.
+    # 'NM_007294.4(BRCA1):c.5266dupC' — the standard ClinVar HGVS form.
+    paren = re.match(r"^[A-Za-z][A-Za-z0-9_.\-]*\(([A-Za-z0-9\-]+)\):(.+)$", hgvs)
+    if paren:
+        return (paren.group(1).upper(), paren.group(2))
+
+    # 'BRCA1:c.181T>G' or transcript-only 'NM_007294.3:c.181T>G'
     match = re.match(r"^([A-Za-z][A-Za-z0-9_\-\.]*):(.+)$", hgvs)
     if match:
         raw_gene = match.group(1)
-        # Strip transcript version (NM_007294.3 → NM_007294)
-        if raw_gene.startswith("NM_") or raw_gene.startswith("NR_"):
+        # A bare RefSeq/Ensembl transcript accession is not a gene symbol.
+        if raw_gene.startswith(("NM_", "NR_", "NP_", "XM_", "ENST", "ENSP")):
             return ("", match.group(2))
         return (raw_gene, match.group(2))
     return ("", "")
@@ -1250,6 +1286,11 @@ async def _fetch_disease_context(gene_symbol: str) -> dict[str, Any]:
     # Build a placeholder ensembl ID; full resolution in Wave 3
     # via the Ensembl client (not yet written in this wave).
     return {"note": f"Full disease context for {gene_symbol} via get_target_diseases()."}
+
+
+async def _identity(value: str) -> str:
+    """Async pass-through, so a known value can join an ``asyncio.gather``."""
+    return value
 
 
 async def _omim_to_mondo(disease_id: str) -> str | None:

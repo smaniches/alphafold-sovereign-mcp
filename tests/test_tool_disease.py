@@ -163,6 +163,21 @@ def test_parse_hgvs_gene_invalid() -> None:
     assert _parse_hgvs_gene("invalid string") == ("", "")
 
 
+def test_parse_hgvs_gene_refseq_with_gene_parens() -> None:
+    # Canonical ClinVar form: gene carried in parentheses after the transcript.
+    assert _parse_hgvs_gene("NM_007294.4(BRCA1):c.5266dupC") == ("BRCA1", "c.5266dupC")
+
+
+def test_parse_hgvs_gene_hyphenated_symbol() -> None:
+    assert _parse_hgvs_gene("HLA-A:c.100A>G") == ("HLA-A", "c.100A>G")
+
+
+def test_parse_hgvs_gene_ensembl_transcript_returns_empty() -> None:
+    gene, change = _parse_hgvs_gene("ENST00000357654:c.181T>G")
+    assert gene == ""
+    assert change == "c.181T>G"
+
+
 @pytest.mark.parametrize(
     ("score", "expected_substring"),
     [
@@ -345,16 +360,25 @@ async def test_lookup_phenotype_error(monkeypatch: pytest.MonkeyPatch) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _ensembl_mock(ncbi_gene_id: str) -> MagicMock:
+    client = MagicMock()
+    client.ncbi_gene_id = AsyncMock(return_value=ncbi_gene_id)
+    return client
+
+
 async def test_gene_phenotype_profile_full(monkeypatch: pytest.MonkeyPatch) -> None:
     pheno = MagicMock()
     pheno.to_dict.return_value = {"hpo_id": "HP:0001"}
 
     hpo_client = MagicMock()
-    hpo_client.phenotypes_for_gene = AsyncMock(return_value=[pheno])
+    hpo_client.phenotypes_for_gene_id = AsyncMock(return_value=[pheno])
 
     gnomad_client = MagicMock()
     gnomad_client.gene_constraint = AsyncMock(return_value={"loeuf": 0.3})
 
+    _patch_client_class(
+        monkeypatch, "alphafold_sovereign.tools.disease.EnsemblClient", _ensembl_mock("672")
+    )
     _patch_client_class(monkeypatch, "alphafold_sovereign.tools.disease.HPOClient", hpo_client)
     _patch_client_class(
         monkeypatch, "alphafold_sovereign.tools.disease.GnomADClient", gnomad_client
@@ -365,13 +389,17 @@ async def test_gene_phenotype_profile_full(monkeypatch: pytest.MonkeyPatch) -> N
     assert parsed["status"] == "success"
     assert parsed["phenotype_count"] == 1
     assert parsed["gnomad_constraint"] == {"loeuf": 0.3}
+    hpo_client.phenotypes_for_gene_id.assert_awaited_once_with("NCBIGene:672", gene_symbol="BRCA1")
 
 
 async def test_gene_phenotype_profile_no_constraint(monkeypatch: pytest.MonkeyPatch) -> None:
     hpo_client = MagicMock()
-    hpo_client.phenotypes_for_gene = AsyncMock(return_value=[])
+    hpo_client.phenotypes_for_gene_id = AsyncMock(return_value=[])
     gnomad_client = MagicMock()
     gnomad_client.gene_constraint = AsyncMock(return_value={})
+    _patch_client_class(
+        monkeypatch, "alphafold_sovereign.tools.disease.EnsemblClient", _ensembl_mock("672")
+    )
     _patch_client_class(monkeypatch, "alphafold_sovereign.tools.disease.HPOClient", hpo_client)
     _patch_client_class(
         monkeypatch, "alphafold_sovereign.tools.disease.GnomADClient", gnomad_client
@@ -385,11 +413,36 @@ async def test_gene_phenotype_profile_no_constraint(monkeypatch: pytest.MonkeyPa
     assert parsed["gnomad_constraint"] == {}
 
 
+async def test_gene_phenotype_profile_no_entrez(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No Entrez mapping ⇒ skip the HPO call, still report gnomAD constraint."""
+    hpo_client = MagicMock()
+    hpo_client.phenotypes_for_gene_id = AsyncMock(return_value=[MagicMock()])
+    gnomad_client = MagicMock()
+    gnomad_client.gene_constraint = AsyncMock(return_value={"loeuf": 0.5})
+    _patch_client_class(
+        monkeypatch, "alphafold_sovereign.tools.disease.EnsemblClient", _ensembl_mock("")
+    )
+    _patch_client_class(monkeypatch, "alphafold_sovereign.tools.disease.HPOClient", hpo_client)
+    _patch_client_class(
+        monkeypatch, "alphafold_sovereign.tools.disease.GnomADClient", gnomad_client
+    )
+
+    out = await get_gene_phenotype_profile(GenePhenotypeInput(gene_symbol="OBSCURE"))
+    parsed = json.loads(out.split("---")[0].strip())
+    assert parsed["status"] == "success"
+    assert parsed["phenotype_count"] == 0
+    assert parsed["gnomad_constraint"] == {"loeuf": 0.5}
+    hpo_client.phenotypes_for_gene_id.assert_not_called()
+
+
 async def test_gene_phenotype_profile_exceptions(monkeypatch: pytest.MonkeyPatch) -> None:
     hpo_client = MagicMock()
-    hpo_client.phenotypes_for_gene = AsyncMock(side_effect=RuntimeError("err1"))
+    hpo_client.phenotypes_for_gene_id = AsyncMock(side_effect=RuntimeError("err1"))
     gnomad_client = MagicMock()
     gnomad_client.gene_constraint = AsyncMock(side_effect=RuntimeError("err2"))
+    _patch_client_class(
+        monkeypatch, "alphafold_sovereign.tools.disease.EnsemblClient", _ensembl_mock("672")
+    )
     _patch_client_class(monkeypatch, "alphafold_sovereign.tools.disease.HPOClient", hpo_client)
     _patch_client_class(
         monkeypatch, "alphafold_sovereign.tools.disease.GnomADClient", gnomad_client
@@ -411,6 +464,7 @@ async def test_gene_phenotype_profile_outer_error(monkeypatch: pytest.MonkeyPatc
         async def __aexit__(self, *_: object) -> None:
             return None
 
+    monkeypatch.setattr("alphafold_sovereign.tools.disease.EnsemblClient", lambda *a, **kw: _Boom())
     monkeypatch.setattr("alphafold_sovereign.tools.disease.HPOClient", lambda *a, **kw: _Boom())
     out = await get_gene_phenotype_profile(GenePhenotypeInput(gene_symbol="X"))
     parsed = json.loads(out)
@@ -761,6 +815,33 @@ async def test_phenotype_to_structures_success(monkeypatch: pytest.MonkeyPatch) 
     parsed = json.loads(out.split("---")[0].strip())
     assert parsed["status"] == "success"
     assert parsed["diseases_found"] == 1
+
+
+async def test_phenotype_to_structures_uses_mondo_xref(monkeypatch: pytest.MonkeyPatch) -> None:
+    """When HPO supplies a MONDO xref, use it directly and skip OMIM→MONDO."""
+    disease = DiseaseByPhenotype(
+        disease_id="OMIM:1", disease_name="D1", hpo_id="HP:0001", mondo_id="MONDO:0001"
+    )
+    hpo_client = MagicMock()
+    hpo_client.diseases_for_phenotype = AsyncMock(return_value=[disease])
+    _patch_client_class(monkeypatch, "alphafold_sovereign.tools.disease.HPOClient", hpo_client)
+
+    ot_client = MagicMock()
+    ot_client.associated_targets = AsyncMock(return_value=[_evidence_score(uniprot="P9")])
+    _patch_client_class(
+        monkeypatch, "alphafold_sovereign.tools.disease.OpenTargetsClient", ot_client
+    )
+
+    async def boom_omim(disease_id: str) -> str | None:
+        raise AssertionError("_omim_to_mondo must not be called when mondo_id is present")
+
+    monkeypatch.setattr("alphafold_sovereign.tools.disease._omim_to_mondo", boom_omim)
+
+    out = await phenotype_to_structures(PhenotypeToStructureInput(hpo_id="HP:0001"))
+    parsed = json.loads(out.split("---")[0].strip())
+    assert parsed["status"] == "success"
+    # Open Targets was queried with the HPO-provided MONDO id directly.
+    assert ot_client.associated_targets.await_args.args[0] == "MONDO:0001"
 
 
 async def test_phenotype_to_structures_skips_bad_mondo(monkeypatch: pytest.MonkeyPatch) -> None:
