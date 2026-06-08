@@ -1,63 +1,21 @@
 {
-  "$schema": "https://modelcontextprotocol.io/schemas/server.schema.json",
-  "name": "alphafold-sovereign-mcp",
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.smaniches/alphafold-sovereign-mcp",
+  "description": "MCP server for AlphaFold and 8 other biomedical data sources with a local SQLite knowledge graph",
   "version": "1.2.0",
-  "description": "MCP server wrapping AlphaFold DB and 8 other biomedical data sources behind a set of MCP tool calls; tool results can be persisted to a local SQLite knowledge graph via its storage API; the exposed MCP tools query and export that store read-only (automatic per-invocation persistence is not yet wired).",
-  "vendor": "Santiago Maniches",
-  "license": "Apache-2.0",
-  "homepage": "https://github.com/smaniches/alphafold-sovereign-mcp",
-  "documentation": "https://smaniches.github.io/alphafold-sovereign-mcp/",
   "repository": {
-    "type": "git",
-    "url": "https://github.com/smaniches/alphafold-sovereign-mcp.git"
+    "url": "https://github.com/smaniches/alphafold-sovereign-mcp",
+    "source": "github"
   },
-  "issues": "https://github.com/smaniches/alphafold-sovereign-mcp/issues",
-  "doi": "10.5281/zenodo.20134773",
-  "protocol_version": "2025-06-18",
-  "transports": [
+  "packages": [
     {
-      "type": "stdio",
-      "command": "alphafold-sovereign-mcp"
+      "registryType": "pypi",
+      "identifier": "alphafold-sovereign-mcp",
+      "version": "1.2.0",
+      "runtimeHint": "uvx",
+      "transport": {
+        "type": "stdio"
+      }
     }
-  ],
-  "capabilities": {
-    "tools": {
-      "listChanged": true
-    },
-    "resources": false,
-    "prompts": false,
-    "logging": false
-  },
-  "categories": [
-    "bioinformatics",
-    "scientific-research",
-    "knowledge-base"
-  ],
-  "tags": [
-    "alphafold",
-    "open-targets",
-    "chembl",
-    "clinvar",
-    "gnomad",
-    "ensembl",
-    "mondo",
-    "hpo",
-    "disgenet",
-    "variant-classification",
-    "drug-discovery",
-    "knowledge-graph"
-  ],
-  "maturity": "beta",
-  "status_note": "v1.2.0 — engineering-validated (723 tests, 100% line and branch coverage) and exercised end-to-end against the live upstream APIs. Scientific outputs (ACMG draft, druggability tier) have NOT been validated by independent domain experts. Not yet deployed in production. See STATUS.md and LIMITATIONS.md.",
-  "install": {
-    "pypi": {
-      "name": "alphafold-sovereign-mcp",
-      "url": "https://pypi.org/project/alphafold-sovereign-mcp/",
-      "command": "pip install alphafold-sovereign-mcp"
-    },
-    "from_source": {
-      "command": "git clone https://github.com/smaniches/alphafold-sovereign-mcp && cd alphafold-sovereign-mcp && uv pip install -e ."
-    },
-    "verify": "alphafold-sovereign --self-test"
-  }
+  ]
 }
