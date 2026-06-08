@@ -9,7 +9,7 @@ Three end-to-end illustrations of what an MCP session against
 | [`02-target-characterization/`](02-target-characterization/) | `assess_target_druggability` | Characterising **EGFR** as a drug target: Open Targets, ChEMBL, gnomAD constraint, AlphaFold pLDDT (structure folds in via the tool's `include_alphafold` parameter). |
 | [`03-drug-discovery/`](03-drug-discovery/) | `assess_target_druggability` (+ three `v1.1.0-rc1` tools no longer in the current surface — see the note in that example) | Multi-turn flow: **Imatinib → BCR-ABL → CML**. The molecular story behind a TKI, plus the T315I resistance gatekeeper. |
 
-## ⚠ Status of these examples
+## Status of these examples
 
 These are **illustrative**. The transcripts (`transcript.jsonl`) and
 the prose responses are consistent with what the server emits when

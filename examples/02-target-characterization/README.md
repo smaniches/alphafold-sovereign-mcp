@@ -116,7 +116,7 @@
 > - **Structure**: AlphaFold pLDDT mean 73.6; the kinase domain
 >   (712–979) is well-resolved (pLDDT > 90), which is what you want
 >   for pocket-finding.
-> - **⚠ Caveat**: The "HOT" tier is a 4-line heuristic, not a
+> - **Caveat**: The "HOT" tier is a 4-line heuristic, not a
 >   calibrated prediction. Treat as a triage signal alongside
 >   medicinal-chemistry review.
 
