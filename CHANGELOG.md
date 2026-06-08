@@ -9,6 +9,56 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-06-08
+
+The "live-API validation" milestone. Every tool was exercised end-to-end
+against the real upstream APIs (Open Targets, ChEMBL, UniProt, Ensembl,
+ClinVar, gnomAD, HPO, AlphaFold DB); four that were non-operative were fixed,
+the local knowledge graph now seeds itself, and the documentation/examples
+were brought in line with what the code actually returns.
+
+### Added
+- **The local knowledge graph seeds itself on first use.** A curated seed
+  dataset (the BCR-ABL/CML and BRCA1/breast-cancer entities used in the worked
+  examples) is loaded when the graph is empty, so `query_protein_database`,
+  `query_variant_database`, `export_research_dataset`, and
+  `find_drug_gene_network` return representative results out of the box. Set
+  `AFSMCP_DISABLE_KG_SEED=1` to keep the graph empty. New relationship-write
+  methods (`store_protein_drug`, `store_protein_disease`, `store_variant_disease`)
+  back the seed.
+- **EFO disease resolution + supporting client methods.** `DiseaseRecord.efo_ids`
+  (MONDO→EFO cross-reference), `OpenTargetsClient.resolve_disease_efo` (name→EFO
+  via search), `ChEMBLClient.molecule_names` (bulk ID→name, chunked), and
+  `EnsemblClient.ncbi_gene_id` (HGNC symbol→Entrez).
+
+### Fixed
+- **`map_disease_drug_landscape` returned no drugs or targets for any disease.**
+  It passed a MONDO ID into ChEMBL's EFO-keyed `drug_indication` filter and into
+  Open Targets. Now resolves MONDO→EFO (via the term's xref, falling back to an
+  Open Targets name search for terms without one — e.g. "breast cancer"), backfills
+  drug names, and retries Open Targets via the EFO ID. CML now returns 9 approved
+  drugs (imatinib, dasatinib, nilotinib, ponatinib, bosutinib, asciminib, …) and
+  ABL1/BCR/KIT targets.
+- **Three phenotype tools returned HTTP 404.** The HPO REST API moved from
+  `hpo.jax.org` to `ontology.jax.org`; the client was repointed and its parsing
+  rewritten. `lookup_phenotype`, `get_gene_phenotype_profile`, and
+  `phenotype_to_structures` are operative again.
+- **`find_evolutionary_structural_shifts` found no orthologs.** Ensembl's
+  homology-by-ID endpoint now requires the species in the path
+  (`/homology/id/{species}/{id}`).
+- **`triage_variant_3d` rejected standard HGVS.** The parser now accepts the
+  canonical ClinVar form (`NM_…(GENE):c.…`) and no longer mis-reads genomic
+  accessions or chromosome names as gene symbols.
+- **`synthesize_protein_dossier` provenance** stamped the wrong field and omitted
+  several sources; scientific-accuracy and source-honesty defects (licenses,
+  ACMG PS1→PP5, MONDO/version claims) were corrected across the docs.
+
+### Changed
+- **Example 03 re-captured from a live run** and relabelled "Captured live",
+  with the real `WARM` / pLDDT-63 / `CAUTION` output and a transparent note on
+  why the druggability heuristic under-rates ABL1 on the full-length chain.
+- **CI:** Dependabot grouping + low-risk auto-merge; `fetch-metadata` v3.1.0.
+
 ### Security
 - **Forces patched `pyjwt` 2.13.0 into the runtime tree.** `pyjwt` enters the
   install tree transitively through `fastmcp` → `mcp` 1.27.1, which pins
@@ -806,7 +856,9 @@ threat model, examples, mkdocs site).
 - Multi-mode local cache (`sovereign` / `readonly` / `disabled`).
 - HTML5 API documentation.
 
-[Unreleased]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.9...HEAD
+[Unreleased]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.10...v1.2.0
+[1.1.10]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.9...v1.1.10
 [1.1.9]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.8...v1.1.9
 [1.1.8]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.7...v1.1.8
 [1.1.7]: https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.1.6...v1.1.7

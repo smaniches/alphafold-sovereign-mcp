@@ -27,8 +27,13 @@ from alphafold_sovereign.tools.knowledge_graph_tools import (
 
 
 @pytest.fixture(autouse=True)
-def _reset_kg_singleton() -> Any:
-    """Reset module-level KG singleton between tests."""
+def _reset_kg_singleton(monkeypatch: pytest.MonkeyPatch) -> Any:
+    """Reset module-level KG singleton between tests.
+
+    Seeding is disabled by default so these tests exercise the empty-graph
+    behaviour; the seed path is covered explicitly in ``test_kg_autoseed``.
+    """
+    monkeypatch.setenv("AFSMCP_DISABLE_KG_SEED", "1")
     kg_mod._KG_SINGLETON = None
     yield
     if kg_mod._KG_SINGLETON is not None:
@@ -347,3 +352,61 @@ async def test_query_variant_database_kg_patch(
 
     out = await query_variant_database(VariantQueryInput(gene="BRCA1"))
     assert out["result_count"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Auto-seed (out-of-the-box data)
+# ---------------------------------------------------------------------------
+
+
+async def test_kg_autoseed_populates_tools(
+    monkeypatch: pytest.MonkeyPatch, kg_db_path: Path
+) -> None:
+    """With seeding enabled, an empty graph auto-seeds and the tools return data."""
+    monkeypatch.delenv("AFSMCP_DISABLE_KG_SEED", raising=False)
+    proteins = await query_protein_database(ProteinQueryInput(limit=10))
+    assert len(proteins["proteins"]) >= 5
+    variants = await query_variant_database(VariantQueryInput(limit=10))
+    assert len(variants["variants"]) >= 2
+    net = await find_drug_gene_network(DrugNetworkInput(seed="MONDO:0011996", max_hops=2))
+    assert len(net["network"]["nodes"]) > 0
+    assert len(net["network"]["edges"]) > 0
+
+
+async def test_kg_autoseed_skips_when_populated(
+    monkeypatch: pytest.MonkeyPatch, kg_db_path: Path
+) -> None:
+    """seed_if_empty is a no-op once the graph already holds proteins."""
+    monkeypatch.delenv("AFSMCP_DISABLE_KG_SEED", raising=False)
+    async with kg_mod.get_knowledge_graph() as kg:
+        # First access already seeded the graph, so a second call does nothing.
+        assert await kg.seed_if_empty() is False
+
+
+async def test_seed_if_empty_requires_connection(tmp_path: Path) -> None:
+    """seed_if_empty raises a clear error when the DB connection is not open."""
+    kg = kg_mod.KnowledgeGraph(tmp_path / "unconnected.db")
+    with pytest.raises(RuntimeError, match="connection is not open"):
+        await kg.seed_if_empty()
+
+
+async def test_seed_if_empty_rolls_back_on_failure(
+    monkeypatch: pytest.MonkeyPatch, kg_db_path: Path
+) -> None:
+    """A failed seed is rolled back and swallowed; the graph stays empty/usable."""
+    monkeypatch.delenv("AFSMCP_DISABLE_KG_SEED", raising=False)
+
+    async def _boom(_kg: Any) -> None:
+        raise RuntimeError("seed boom")
+
+    async def _boom_write(_self: Any, _sql: str, _params: Any) -> None:
+        # Force the best-effort cleanup DELETEs to fail too — they must be
+        # swallowed rather than masking the seed failure.
+        raise RuntimeError("write boom")
+
+    monkeypatch.setattr("alphafold_sovereign.storage.seed.seed_knowledge_graph", _boom)
+    monkeypatch.setattr(kg_mod.KnowledgeGraph, "_write", _boom_write)
+    async with kg_mod.get_knowledge_graph() as kg:
+        assert await kg.seed_if_empty() is False
+        proteins = await kg.query_proteins(limit=5)
+    assert proteins == []

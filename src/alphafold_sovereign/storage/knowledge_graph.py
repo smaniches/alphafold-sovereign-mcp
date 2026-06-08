@@ -46,6 +46,7 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import datetime
 import hashlib
 import json
@@ -138,6 +139,54 @@ class KnowledgeGraph:
             self._conn.close()
             self._conn = None
             logger.info("kg.closed")
+
+    async def seed_if_empty(self) -> bool:
+        """Load the curated seed dataset when the graph holds no proteins.
+
+        Gives the local-knowledge-graph tools representative results out of the
+        box. Set ``AFSMCP_DISABLE_KG_SEED=1`` to keep the graph empty. Returns
+        ``True`` when seeding ran. Seeding is best-effort: a partial failure is
+        rolled back and swallowed so the graph stays usable (empty) and a later
+        run retries.
+        """
+        if self._conn is None:
+            raise RuntimeError("Database connection is not open; call connect() first.")
+        if os.environ.get("AFSMCP_DISABLE_KG_SEED"):
+            return False
+
+        def _count_proteins() -> int:
+            assert self._conn is not None
+            return int(self._conn.execute("SELECT COUNT(*) FROM proteins").fetchone()[0])
+
+        async with self._lock:
+            loop = asyncio.get_event_loop()
+            existing = await loop.run_in_executor(None, _count_proteins)
+        if existing > 0:
+            return False
+
+        from alphafold_sovereign.storage.seed import seed_knowledge_graph
+
+        try:
+            await seed_knowledge_graph(self)
+        except Exception as exc:
+            # Seeding is not atomic; roll back any partial seed so the empty
+            # check holds and a later run can retry, rather than leaving the
+            # graph permanently half-populated.
+            logger.error("kg.seed.failed", exc=str(exc))
+            for stmt in (
+                "DELETE FROM variant_disease",
+                "DELETE FROM protein_drug",
+                "DELETE FROM protein_disease",
+                "DELETE FROM variants",
+                "DELETE FROM drugs",
+                "DELETE FROM diseases",
+                "DELETE FROM proteins",
+            ):
+                with contextlib.suppress(Exception):
+                    await self._write(stmt, [])
+            return False
+        logger.info("kg.seeded")
+        return True
 
     def _open_db(self) -> sqlite3.Connection:
         conn = sqlite3.connect(str(self._db_path), check_same_thread=False)
@@ -848,6 +897,84 @@ class KnowledgeGraph:
         )
         self._conn.commit()
 
+    # ── Relationship write operations ─────────────────────────────────────────
+
+    async def store_protein_disease(
+        self,
+        *,
+        uniprot_id: str,
+        mondo_id: str,
+        source: str,
+        score: float | None = None,
+        genetic_assoc: float | None = None,
+        known_drug: float | None = None,
+        n_pmids: int | None = None,
+    ) -> None:
+        """Upsert a protein↔disease evidence link."""
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        params = [uniprot_id, mondo_id, source, score, genetic_assoc, known_drug, n_pmids, now]
+        sql = """
+            INSERT INTO protein_disease
+                (uniprot_id, mondo_id, source, score, genetic_assoc, known_drug, n_pmids, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(uniprot_id, mondo_id, source) DO UPDATE SET
+                score = excluded.score, known_drug = excluded.known_drug
+        """
+        await self._write(sql, params)
+
+    async def store_protein_drug(
+        self,
+        *,
+        uniprot_id: str,
+        chembl_id: str,
+        target_chembl_id: str = "",
+        activity_type: str = "",
+        value_nm: float | None = None,
+        mechanism: str = "",
+    ) -> None:
+        """Upsert a protein↔drug (target) link."""
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        params = [uniprot_id, chembl_id, target_chembl_id, activity_type, value_nm, mechanism, now]
+        sql = """
+            INSERT INTO protein_drug
+                (uniprot_id, chembl_id, target_chembl_id, activity_type, value_nm, mechanism, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(uniprot_id, chembl_id, activity_type) DO UPDATE SET
+                mechanism = excluded.mechanism
+        """
+        await self._write(sql, params)
+
+    async def store_variant_disease(
+        self,
+        *,
+        hgvs: str,
+        mondo_id: str,
+        source: str,
+        score: float | None = None,
+        p_value: float | None = None,
+    ) -> None:
+        """Upsert a variant↔disease association."""
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        params = [hgvs, mondo_id, source, score, p_value, now]
+        sql = """
+            INSERT INTO variant_disease (hgvs, mondo_id, source, score, p_value, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(hgvs, mondo_id, source) DO UPDATE SET score = excluded.score
+        """
+        await self._write(sql, params)
+
+    async def _write(self, sql: str, params: list[Any]) -> None:
+        """Run a parameterised write under the connection lock."""
+
+        def _exec() -> None:
+            assert self._conn is not None
+            self._conn.execute(sql, params)
+            self._conn.commit()
+
+        async with self._lock:
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, _exec)
+
     async def log_tool_invocation(
         self,
         *,
@@ -1130,4 +1257,5 @@ async def get_knowledge_graph(
                 await _KG_SINGLETON.close()
             _KG_SINGLETON = KnowledgeGraph(db_path)
             await _KG_SINGLETON.connect()
+            await _KG_SINGLETON.seed_if_empty()
     yield _KG_SINGLETON

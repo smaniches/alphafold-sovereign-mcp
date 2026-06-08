@@ -423,3 +423,53 @@ async def test_resolve_target_null_search(respx_mock: respx.MockRouter) -> None:
     async with OpenTargetsClient() as client:
         resolved = await client.resolve_target("P01116")
     assert resolved == {}
+
+
+# ---------------------------------------------------------------------------
+# resolve_disease_efo
+# ---------------------------------------------------------------------------
+
+
+async def test_resolve_disease_efo_found(respx_mock: respx.MockRouter) -> None:
+    """Returns the first EFO hit as a colon-form CURIE, skipping non-EFO hits."""
+    respx_mock.post(_GQL_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "data": {
+                    "search": {
+                        "hits": [
+                            {"id": "MONDO_0007254", "entity": "disease", "name": "breast cancer"},
+                            {"id": "EFO_0000305", "entity": "disease", "name": "breast carcinoma"},
+                        ]
+                    }
+                }
+            },
+        ),
+    )
+    async with OpenTargetsClient() as client:
+        assert await client.resolve_disease_efo("breast cancer") == "EFO:0000305"
+
+
+async def test_resolve_disease_efo_no_efo_hit(respx_mock: respx.MockRouter) -> None:
+    respx_mock.post(_GQL_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={"data": {"search": {"hits": [{"id": "MONDO_0007254", "entity": "disease"}]}}},
+        ),
+    )
+    async with OpenTargetsClient() as client:
+        assert await client.resolve_disease_efo("breast cancer") == ""
+
+
+async def test_resolve_disease_efo_error_returns_empty(respx_mock: respx.MockRouter) -> None:
+    respx_mock.post(_GQL_URL).mock(return_value=httpx.Response(500))
+    async with OpenTargetsClient() as client:
+        assert await client.resolve_disease_efo("breast cancer") == ""
+
+
+async def test_resolve_disease_efo_null_data(respx_mock: respx.MockRouter) -> None:
+    """A null GraphQL ``data`` payload yields '' without raising."""
+    respx_mock.post(_GQL_URL).mock(return_value=httpx.Response(200, json={"data": None}))
+    async with OpenTargetsClient() as client:
+        assert await client.resolve_disease_efo("breast cancer") == ""
