@@ -1093,11 +1093,16 @@ async def synthesize_protein_dossier(
         "clinvar": "https://www.ncbi.nlm.nih.gov/clinvar/",
         "ensembl": "https://rest.ensembl.org",
     }
+    # Stamp the upstreams actually fused into the dossier (see data_sources
+    # above), not tool parameters. ClinVar / Ensembl / DisGeNET serve current
+    # releases and are not pinned to a version here.
     dossier["provenance"] = _provenance(
-        depth=params.depth,
         open_targets="24.06",
         gnomad="v4",
         chembl="v36",
+        clinvar="current",
+        ensembl="current",
+        disgenet="current",
     )
 
     log.info("complete.dossier", tier=tier)
