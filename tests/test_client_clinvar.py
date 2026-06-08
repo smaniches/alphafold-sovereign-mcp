@@ -14,7 +14,6 @@ from alphafold_sovereign.clients.clinvar import (
 )
 from alphafold_sovereign.domain.disease import PathogenicityClass
 
-
 # ---------------------------------------------------------------------------
 # _parse_classification
 # ---------------------------------------------------------------------------

@@ -178,6 +178,17 @@ def test_parse_hgvs_gene_ensembl_transcript_returns_empty() -> None:
     assert change == "c.181T>G"
 
 
+def test_parse_hgvs_gene_genomic_accession_returns_empty() -> None:
+    # Genomic RefSeq accessions are not gene symbols.
+    assert _parse_hgvs_gene("NC_000017.11:g.43044295G>C") == ("", "g.43044295G>C")
+
+
+def test_parse_hgvs_gene_chromosome_returns_empty() -> None:
+    # Bare chromosome names are not gene symbols.
+    assert _parse_hgvs_gene("chr17:g.43094692G>A") == ("", "g.43094692G>A")
+    assert _parse_hgvs_gene("chrX:g.100A>G") == ("", "g.100A>G")
+
+
 @pytest.mark.parametrize(
     ("score", "expected_substring"),
     [

@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import Any
 
 import structlog
 
@@ -134,7 +134,7 @@ class HPOClient(BaseAsyncClient):
             "/hp/search",
             params={"q": query, "limit": max_results},
         )
-        return [self._parse_term(t) for t in data.get("terms", [])]
+        return [self._parse_term(t) for t in (data.get("terms") or [])]
 
     # ------------------------------------------------------------------
     # Disease ↔ phenotype associations
@@ -157,7 +157,7 @@ class HPOClient(BaseAsyncClient):
         """
         hpo_id = _normalise_hpo_id(hpo_id)
         data = await self._get(f"/network/annotation/{hpo_id}")
-        diseases = data.get("diseases", [])
+        diseases = data.get("diseases") or []
         results: list[DiseaseByPhenotype] = []
         for disease in diseases[:limit]:
             results.append(
@@ -220,9 +220,9 @@ class HPOClient(BaseAsyncClient):
             List of ``PhenotypeAssociation`` objects.
         """
         data = await self._get(f"/network/annotation/{disease_id}")
-        disease_name = data.get("disease", {}).get("name", "")
+        disease_name = (data.get("disease") or {}).get("name", "")
         associations: list[PhenotypeAssociation] = []
-        for terms in data.get("categories", {}).values():
+        for terms in (data.get("categories") or {}).values():
             for item in terms:
                 metadata = item.get("metadata", {}) or {}
                 associations.append(
@@ -247,14 +247,19 @@ class HPOClient(BaseAsyncClient):
     async def ancestors(self, hpo_id: str) -> list[OntologyTerm]:
         """Return ancestor terms (parents and above) for an HPO term."""
         hpo_id = _normalise_hpo_id(hpo_id)
-        # These endpoints return a JSON array of term objects.
-        data = cast("list[dict[str, Any]]", await self._get(f"/hp/terms/{hpo_id}/parents"))
+        # These endpoints return a JSON array of term objects; guard against an
+        # unexpected non-list payload (e.g. an error object).
+        data: Any = await self._get(f"/hp/terms/{hpo_id}/parents")
+        if not isinstance(data, list):
+            return []
         return [self._parse_term(t) for t in data]
 
     async def children(self, hpo_id: str) -> list[OntologyTerm]:
         """Return direct children of an HPO term."""
         hpo_id = _normalise_hpo_id(hpo_id)
-        data = cast("list[dict[str, Any]]", await self._get(f"/hp/terms/{hpo_id}/children"))
+        data: Any = await self._get(f"/hp/terms/{hpo_id}/children")
+        if not isinstance(data, list):
+            return []
         return [self._parse_term(t) for t in data]
 
     # ------------------------------------------------------------------

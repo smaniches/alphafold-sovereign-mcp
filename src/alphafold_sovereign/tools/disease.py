@@ -1259,8 +1259,14 @@ def _parse_hgvs_gene(hgvs: str) -> tuple[str, str]:
     match = re.match(r"^([A-Za-z][A-Za-z0-9_\-\.]*):(.+)$", hgvs)
     if match:
         raw_gene = match.group(1)
-        # A bare RefSeq/Ensembl transcript accession is not a gene symbol.
-        if raw_gene.startswith(("NM_", "NR_", "NP_", "XM_", "ENST", "ENSP")):
+        # A bare RefSeq/Ensembl transcript or genomic accession, or a bare
+        # chromosome name (genomic HGVS like 'NC_000017.11:g.…' / 'chr17:g.…'),
+        # is not a gene symbol.
+        is_accession = raw_gene.startswith(
+            ("NM_", "NR_", "NP_", "XM_", "XR_", "ENST", "ENSP", "NC_", "NG_", "NT_", "NW_", "NZ_")
+        )
+        is_chromosome = re.match(r"^chr([0-9]+|[XYM]|MT)$", raw_gene, re.IGNORECASE) is not None
+        if is_accession or is_chromosome:
             return ("", match.group(2))
         return (raw_gene, match.group(2))
     return ("", "")

@@ -12,7 +12,6 @@ import respx
 
 from alphafold_sovereign.clients.ensembl import EnsemblClient, _first_uniprot
 
-
 # ---------------------------------------------------------------------------
 # parse_gene_from_hgvs (static helper)
 # ---------------------------------------------------------------------------
@@ -283,8 +282,23 @@ async def test_ncbi_gene_id_no_primary_id(respx_mock: respx.MockRouter) -> None:
     respx_mock.get("https://rest.ensembl.org/lookup/symbol/human/BRCA1").mock(
         return_value=httpx.Response(200, json={"id": "ENSG0001", "display_name": "BRCA1"}),
     )
+    # A dict with an empty primary_id and a non-dict entry are both skipped.
     respx_mock.get("https://rest.ensembl.org/xrefs/id/ENSG0001").mock(
-        return_value=httpx.Response(200, json=[{"dbname": "EntrezGene", "primary_id": ""}]),
+        return_value=httpx.Response(
+            200, json=[{"dbname": "EntrezGene", "primary_id": ""}, "not-a-dict"]
+        ),
+    )
+    async with EnsemblClient() as client:
+        assert await client.ncbi_gene_id("BRCA1") == ""
+
+
+async def test_ncbi_gene_id_non_list_payload(respx_mock: respx.MockRouter) -> None:
+    """An unexpected non-list payload (e.g. an error object) yields ''."""
+    respx_mock.get("https://rest.ensembl.org/lookup/symbol/human/BRCA1").mock(
+        return_value=httpx.Response(200, json={"id": "ENSG0001", "display_name": "BRCA1"}),
+    )
+    respx_mock.get("https://rest.ensembl.org/xrefs/id/ENSG0001").mock(
+        return_value=httpx.Response(200, json={"error": "boom"}),
     )
     async with EnsemblClient() as client:
         assert await client.ncbi_gene_id("BRCA1") == ""

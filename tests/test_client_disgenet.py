@@ -10,7 +10,6 @@ import respx
 
 from alphafold_sovereign.clients.disgenet import DisGeNETClient
 
-
 # ---------------------------------------------------------------------------
 # Constructor
 # ---------------------------------------------------------------------------

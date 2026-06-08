@@ -17,7 +17,7 @@ Reference:
 from __future__ import annotations
 
 import re
-from typing import Any, cast
+from typing import Any
 
 import structlog
 
@@ -180,21 +180,22 @@ class EnsemblClient(BaseAsyncClient):
         if not ensembl_id:
             return ""
         try:
-            # This endpoint returns a JSON array of cross-reference objects.
-            data = cast(
-                "list[dict[str, Any]]",
-                await self._get(
-                    f"/xrefs/id/{ensembl_id}",
-                    params={"external_db": "EntrezGene"},
-                ),
+            data: Any = await self._get(
+                f"/xrefs/id/{ensembl_id}",
+                params={"external_db": "EntrezGene"},
             )
         except Exception as exc:
             logger.warning("ensembl.ncbi_gene_id.error", gene=gene_symbol, exc=str(exc))
             return ""
+        # This endpoint returns a JSON array of cross-reference objects; guard
+        # against an unexpected non-list payload (e.g. an error object).
+        if not isinstance(data, list):
+            return ""
         for xref in data:
-            primary_id = xref.get("primary_id", "")
-            if primary_id:
-                return str(primary_id)
+            if isinstance(xref, dict):
+                primary_id = xref.get("primary_id", "")
+                if primary_id:
+                    return str(primary_id)
         return ""
 
     # ------------------------------------------------------------------

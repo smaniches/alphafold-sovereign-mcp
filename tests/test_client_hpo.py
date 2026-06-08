@@ -308,3 +308,20 @@ async def test_children(respx_mock: respx.MockRouter) -> None:
     async with HPOClient() as client:
         results = await client.children("HP:0001250")
     assert results[0].id == "HP:0011168"
+
+
+async def test_ancestors_non_list_payload(respx_mock: respx.MockRouter) -> None:
+    """A non-list payload (e.g. an error object) yields an empty list."""
+    respx_mock.get(f"{_BASE}/hp/terms/HP:0001250/parents").mock(
+        return_value=httpx.Response(200, json={"error": "boom"}),
+    )
+    async with HPOClient() as client:
+        assert await client.ancestors("HP:0001250") == []
+
+
+async def test_children_non_list_payload(respx_mock: respx.MockRouter) -> None:
+    respx_mock.get(f"{_BASE}/hp/terms/HP:0001250/children").mock(
+        return_value=httpx.Response(200, json={"error": "boom"}),
+    )
+    async with HPOClient() as client:
+        assert await client.children("HP:0001250") == []

@@ -15,7 +15,6 @@ import respx
 
 from alphafold_sovereign.clients.chembl import ChEMBLClient, _coerce_phase
 
-
 # ---------------------------------------------------------------------------
 # target_by_gene
 # ---------------------------------------------------------------------------

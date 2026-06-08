@@ -4,8 +4,8 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import AsyncIterator
 
 import pytest
 
@@ -15,7 +15,6 @@ from alphafold_sovereign.storage.knowledge_graph import (
     _default_db_path,
     get_knowledge_graph,
 )
-
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
