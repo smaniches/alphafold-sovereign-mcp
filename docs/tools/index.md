@@ -1,15 +1,15 @@
 # Tool reference
 
-`alphafold-sovereign-mcp` exposes 25 MCP tools organised into four
+`alphafold-sovereign-mcp` exposes 29 MCP tools organised into four
 modules.
 
 ## At a glance
 
 | Module | Tools | What it does |
 |---|---|---|
-| [Disease](disease.md) | `query_disease_ontology`, `explore_disease_target_landscape`, … | Ontology lookups (MONDO, HPO), disease-target evidence from Open Targets. |
+| [Disease](disease.md) | `lookup_disease`, `search_diseases`, `get_disease_targets`, … | Ontology lookups (MONDO, HPO), disease-target evidence from Open Targets. |
 | [Precision medicine](precision-medicine.md) | `generate_variant_clinical_report`, `classify_variant_acmg`, `assess_target_druggability`, … | Variant triage (Ensembl VEP + ClinVar + gnomAD + AlphaMissense + AlphaFold), druggability heuristic. |
-| [Structure intelligence](structure-intelligence.md) | `fetch_alphafold_structure`, `compute_structure_fingerprint`, `compare_structures`, … | AlphaFold model retrieval, pLDDT, PAE matrices, persistent-homology fingerprints. |
+| [Structure intelligence](structure-intelligence.md) | `analyze_structural_confidence`, `compute_topology_fingerprint`, `compare_proteins_topologically`, … | AlphaFold model retrieval, pLDDT, PAE matrices, persistent-homology fingerprints. |
 | [Knowledge graph](knowledge-graph.md) | `query_variant_database`, `find_drug_gene_network`, `export_research_dataset`, … | Traversal and export of the accumulated SQLite knowledge graph. |
 
 ## Tool annotations
