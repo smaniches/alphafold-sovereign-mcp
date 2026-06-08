@@ -132,7 +132,7 @@ typically issues them.
 > **Off-targets:** imatinib also inhibits c-KIT (P10721) and PDGFRα
 > (P16234), which is why it works in GIST tumours (KIT-driven) as well.
 >
-> **⚠ Disclaimers**: druggability tier is a heuristic; the resistance-
+> **Disclaimers**: druggability tier is a heuristic; the resistance-
 > mutation list comes from ChEMBL and the literature but is not
 > exhaustive.
 

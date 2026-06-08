@@ -13,7 +13,7 @@ significant changes. All decisions are made in the open.
 
 Everyone who uses the software. No formal membership required.
 Users are encouraged to open issues, ask questions in Discussions,
-and vote on roadmap items with 👍 reactions.
+and vote on roadmap items with thumbs-up reactions.
 
 ### Contributors
 

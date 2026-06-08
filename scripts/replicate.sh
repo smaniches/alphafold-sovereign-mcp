@@ -40,9 +40,9 @@ done
 # Colours
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
 
-pass() { echo -e "${GREEN}✓${NC} $1"; }
-fail() { echo -e "${RED}✗${NC} $1"; exit 1; }
-warn() { echo -e "${YELLOW}⚠${NC} $1"; }
+pass() { echo -e "${GREEN}[PASS]${NC} $1"; }
+fail() { echo -e "${RED}[FAIL]${NC} $1"; exit 1; }
+warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 
 echo "AlphaFold Sovereign MCP — Supply-Chain Verification"
 echo "Package: ${PKG_NAME} v${VERSION}"

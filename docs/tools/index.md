@@ -32,7 +32,7 @@ record tool invocations via `KnowledgeGraph.log_tool_invocation`, but
 this writer is not yet hooked into tool dispatch, so the audit trail is
 populated only when a caller logs explicitly.
 
-## ⚠ Limitations
+## Limitations
 
 The scientific outputs of the precision-medicine tools (the ACMG
 draft and the druggability tier) are **not validated** by independent

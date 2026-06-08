@@ -8,10 +8,10 @@ small group of volunteer maintainers.
 
 | Version | Supported |
 |---|---|
-| `main` branch | ✓ |
-| Latest minor release | ✓ |
-| Previous minor release | ✓ (6 months after a new minor releases) |
-| All older releases | ✗ |
+| `main` branch | Yes |
+| Latest minor release | Yes |
+| Previous minor release | Yes (6 months after a new minor releases) |
+| All older releases | No |
 
 ## Coordinated disclosure
 

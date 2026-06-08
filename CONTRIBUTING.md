@@ -55,16 +55,16 @@ CI blocks unsigned commits.
 
 | Type | Status |
 |---|---|
-| Bug fixes | ✅ always welcome |
-| Documentation improvements | ✅ always welcome |
-| New upstream-API clients (under `clients/`) | ✅ welcome — model them on `clients/_base.py` and the nine shipped clients |
-| New tools that compose existing capabilities | ✅ welcome |
-| Performance improvements with benchmarks | ✅ welcome |
-| Refactors of >500 LOC | 🟡 discuss in an issue first |
-| Build-system overhauls | 🟡 discuss in an issue first |
-| New transports beyond stdio + Streamable HTTP | 🟡 must include MCP-spec citation |
-| Features that bypass biosecurity screening | ❌ not accepted |
-| Features that ship credentials, default API keys, or call-home telemetry | ❌ not accepted |
+| Bug fixes | Accepted — always welcome |
+| Documentation improvements | Accepted — always welcome |
+| New upstream-API clients (under `clients/`) | Accepted — model them on `clients/_base.py` and the nine shipped clients |
+| New tools that compose existing capabilities | Accepted — welcome |
+| Performance improvements with benchmarks | Accepted — welcome |
+| Refactors of >500 LOC | Discuss first — open an issue before starting |
+| Build-system overhauls | Discuss first — open an issue before starting |
+| New transports beyond stdio + Streamable HTTP | Discuss first — must include MCP-spec citation |
+| Features that bypass biosecurity screening | Not accepted |
+| Features that ship credentials, default API keys, or call-home telemetry | Not accepted |
 
 ## What We Do Not Accept
 

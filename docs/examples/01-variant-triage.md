@@ -135,7 +135,7 @@ Claude Desktop, the server's tools become available in the conversation.
 >   region is partly disordered. The variant truncates the BRCT domain.
 > - **Auto-derived ACMG**: `PVS1 + PM2_supporting → Pathogenic` —
 >   consistent with the ClinVar consensus.
-> - **⚠ Disclaimer**: The ACMG draft surfaced by this server has not
+> - **Disclaimer**: The ACMG draft surfaced by this server has not
 >   been validated by an independent clinical geneticist. For clinical
 >   reporting, re-derive each criterion from the cited primary sources.
 
