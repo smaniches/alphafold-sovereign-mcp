@@ -338,6 +338,69 @@ async def test_drug_indications_missing_required() -> None:
 
 
 # ---------------------------------------------------------------------------
+# molecule_names
+# ---------------------------------------------------------------------------
+
+
+async def test_molecule_names_success(respx_mock: respx.MockRouter) -> None:
+    route = respx_mock.get("https://www.ebi.ac.uk/chembl/api/data/molecule.json").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "molecules": [
+                    {"molecule_chembl_id": "CHEMBL941", "pref_name": "IMATINIB"},
+                    {"molecule_chembl_id": "CHEMBL2", "pref_name": ""},  # blank name dropped
+                    {"molecule_chembl_id": "", "pref_name": "X"},  # blank id dropped
+                ]
+            },
+        ),
+    )
+    async with ChEMBLClient() as client:
+        # Duplicates and blanks are de-duplicated / dropped before the request.
+        names = await client.molecule_names(["CHEMBL941", "CHEMBL941", "CHEMBL2", ""])
+    assert names == {"CHEMBL941": "IMATINIB"}
+    url = str(route.calls.last.request.url)
+    assert "molecule_chembl_id__in=" in url
+    # Duplicates collapsed to a single occurrence; the blank ID is dropped.
+    assert url.count("CHEMBL941") == 1
+    assert "CHEMBL2" in url
+
+
+async def test_molecule_names_empty_input_skips_request() -> None:
+    async with ChEMBLClient() as client:
+        assert await client.molecule_names([]) == {}
+        assert await client.molecule_names(["", ""]) == {}
+
+
+async def test_molecule_names_error_returns_empty(respx_mock: respx.MockRouter) -> None:
+    respx_mock.get("https://www.ebi.ac.uk/chembl/api/data/molecule.json").mock(
+        return_value=httpx.Response(500),
+    )
+    async with ChEMBLClient() as client:
+        assert await client.molecule_names(["CHEMBL941"]) == {}
+
+
+async def test_molecule_names_chunks_large_input(respx_mock: respx.MockRouter) -> None:
+    """More than 50 IDs are chunked into multiple requests and aggregated."""
+    ids = [f"CHEMBL{i}" for i in range(51)]  # 51 unique → two batches (50 + 1)
+    route = respx_mock.get("https://www.ebi.ac.uk/chembl/api/data/molecule.json").mock(
+        side_effect=[
+            httpx.Response(
+                200, json={"molecules": [{"molecule_chembl_id": "CHEMBL0", "pref_name": "DRUG0"}]}
+            ),
+            httpx.Response(
+                200,
+                json={"molecules": [{"molecule_chembl_id": "CHEMBL50", "pref_name": "DRUG50"}]},
+            ),
+        ]
+    )
+    async with ChEMBLClient() as client:
+        names = await client.molecule_names(ids)
+    assert route.call_count == 2
+    assert names == {"CHEMBL0": "DRUG0", "CHEMBL50": "DRUG50"}
+
+
+# ---------------------------------------------------------------------------
 # mechanism_of_action
 # ---------------------------------------------------------------------------
 

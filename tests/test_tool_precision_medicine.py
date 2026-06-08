@@ -1286,31 +1286,39 @@ async def test_map_disease_drug_landscape_success(
 ) -> None:
     mocks = _patch_clients(monkeypatch)
     # spec=DiseaseRecord so the mock carries the real attribute set:
-    # lookup returns a DiseaseRecord (.name), never a .label.
+    # lookup returns a DiseaseRecord (.name/.efo_ids), never a .label.
     mondo_result = MagicMock(spec=DiseaseRecord)
-    mondo_result.name = "breast cancer"
+    mondo_result.name = "chronic myeloid leukemia"
+    mondo_result.efo_ids = ("EFO:0000339",)
     mocks["mondo"].lookup = AsyncMock(return_value=mondo_result)
 
     target = MagicMock()
-    target.to_dict.return_value = {"target_gene_symbol": "BRCA1", "tractable": True}
+    target.to_dict.return_value = {"target_gene_symbol": "ABL1", "tractable": True}
     mocks["opentargets"].associated_targets = AsyncMock(return_value=[target])
 
+    # ChEMBL returns max_phase_for_indication as a string (e.g. '4.0').
     mocks["chembl"].drug_indications = AsyncMock(
         return_value=[
-            {"max_phase_for_indication": 4, "molecule_chembl_id": "C1"},
-            {"max_phase_for_indication": 3, "molecule_chembl_id": "C2"},
-            {"max_phase_for_indication": 2, "molecule_chembl_id": "C3"},
-            {"max_phase_for_indication": 1, "molecule_chembl_id": "C4"},
+            {"max_phase_for_indication": "4.0", "molecule_chembl_id": "C1"},
+            # Already carries a name → the bulk backfill must skip it.
+            {"max_phase_for_indication": "3.0", "molecule_chembl_id": "C2", "pref_name": "KEEPME"},
+            {"max_phase_for_indication": "2.0", "molecule_chembl_id": "C3"},
+            {"max_phase_for_indication": "1.0", "molecule_chembl_id": "C4"},
         ]
     )
+    mocks["chembl"].molecule_names = AsyncMock(return_value={"C1": "IMATINIB"})
 
     out = await map_disease_drug_landscape(
-        DiseaseDrugLandscapeInput(disease_mondo_id="MONDO:0007254")
+        DiseaseDrugLandscapeInput(disease_mondo_id="MONDO:0011996")
     )
-    assert out["disease"]["mondo_id"] == "MONDO:0007254"
+    assert out["disease"]["mondo_id"] == "MONDO:0011996"
     # D3 regression: the human-readable label, not the raw MONDO CURIE.
-    assert out["disease"]["name"] == "breast cancer"
+    assert out["disease"]["name"] == "chronic myeloid leukemia"
     assert out["competitive_intelligence"]["approved_count"] == 1
+    # ChEMBL was queried by the EFO cross-reference, not the MONDO ID.
+    assert mocks["chembl"].drug_indications.await_args.kwargs["efo_id"] == "EFO:0000339"
+    # Drug names are backfilled from the bulk molecule lookup.
+    assert out["drug_landscape"]["approved_drugs"][0]["pref_name"] == "IMATINIB"
 
 
 async def test_map_disease_drug_landscape_mondo_exception(
@@ -1333,7 +1341,9 @@ async def test_map_disease_drug_landscape_chembl_exception(
     mocks = _patch_clients(monkeypatch)
     mondo_result = MagicMock(spec=DiseaseRecord)
     mondo_result.name = "X"
+    mondo_result.efo_ids = ("EFO:0000339",)
     mocks["mondo"].lookup = AsyncMock(return_value=mondo_result)
+    # OT fails on both the MONDO attempt and the EFO fallback retry.
     mocks["opentargets"].associated_targets = AsyncMock(side_effect=RuntimeError("ot fail"))
     mocks["chembl"].drug_indications = AsyncMock(side_effect=RuntimeError("c fail"))
 
@@ -1341,6 +1351,60 @@ async def test_map_disease_drug_landscape_chembl_exception(
         DiseaseDrugLandscapeInput(disease_mondo_id="MONDO:0007254")
     )
     assert out["drug_landscape"]["approved_drugs"] == []
+
+
+async def test_map_disease_drug_landscape_ot_efo_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The MONDO ID yields no OT targets, so the EFO cross-reference is retried."""
+    mocks = _patch_clients(monkeypatch)
+    mondo_result = MagicMock(spec=DiseaseRecord)
+    mondo_result.name = "chronic myeloid leukemia"
+    mondo_result.efo_ids = ("EFO:0000339",)
+    mocks["mondo"].lookup = AsyncMock(return_value=mondo_result)
+
+    target = MagicMock()
+    target.to_dict.return_value = {"target_gene_symbol": "ABL1", "tractable": True}
+    # First (MONDO) attempt: empty; second (EFO) attempt: a real target.
+    mocks["opentargets"].associated_targets = AsyncMock(side_effect=[[], [target]])
+    mocks["chembl"].drug_indications = AsyncMock(return_value=[])
+    mocks["chembl"].molecule_names = AsyncMock(return_value={})
+
+    out = await map_disease_drug_landscape(
+        DiseaseDrugLandscapeInput(disease_mondo_id="MONDO:0011996")
+    )
+    assert len(out["target_landscape"]["top_targets"]) == 1
+    # The fallback queried Open Targets with the underscore-form EFO ID.
+    assert mocks["opentargets"].associated_targets.await_args.args[0] == "EFO_0000339"
+
+
+async def test_map_disease_drug_landscape_mesh_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With no EFO cross-reference, ChEMBL is queried by MeSH disease name."""
+    mocks = _patch_clients(monkeypatch)
+    mondo_result = MagicMock(spec=DiseaseRecord)
+    mondo_result.name = "some disease"
+    mondo_result.efo_ids = ()
+    mocks["mondo"].lookup = AsyncMock(return_value=mondo_result)
+    mocks["opentargets"].associated_targets = AsyncMock(return_value=[])
+    mocks["chembl"].drug_indications = AsyncMock(return_value=[])
+
+    out = await map_disease_drug_landscape(
+        DiseaseDrugLandscapeInput(disease_mondo_id="MONDO:0007254")
+    )
+    assert out["drug_landscape"]["approved_drugs"] == []
+    assert mocks["chembl"].drug_indications.await_args.kwargs["mesh_heading"] == "some disease"
+
+
+def test_indication_phase_coercion() -> None:
+    from alphafold_sovereign.tools.precision_medicine import _indication_phase
+
+    assert _indication_phase({"max_phase_for_indication": "4.0"}) == 4
+    assert _indication_phase({"max_phase_for_indication": 3}) == 3
+    assert _indication_phase({"max_phase_for_indication": None}) == 0
+    assert _indication_phase({"max_phase_for_indication": "n/a"}) == 0
+    assert _indication_phase({}) == 0
 
 
 # ---------------------------------------------------------------------------

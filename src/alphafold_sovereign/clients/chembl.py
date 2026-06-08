@@ -342,6 +342,45 @@ class ChEMBLClient(BaseAsyncClient):
             for i in data.get("drug_indications", [])
         ]
 
+    async def molecule_names(self, chembl_ids: list[str]) -> dict[str, str]:
+        """Resolve a batch of molecule ChEMBL IDs to their preferred names.
+
+        The drug-indication endpoint returns molecule IDs but not names; this
+        backfills them, chunking large inputs into requests of 50 IDs so no
+        ID is silently dropped.
+
+        Args:
+            chembl_ids: Molecule ChEMBL IDs, e.g. ``['CHEMBL941', 'CHEMBL1421']``.
+
+        Returns:
+            Mapping of ``molecule_chembl_id`` → ``pref_name`` (entries without
+            a name are omitted).
+        """
+        ids = [c for c in dict.fromkeys(chembl_ids) if c]  # dedupe, drop blanks
+        if not ids:
+            return {}
+        names: dict[str, str] = {}
+        for start in range(0, len(ids), 50):
+            chunk = ids[start : start + 50]
+            try:
+                data = await self._get(
+                    f"{self._API_ROOT}/molecule.json",
+                    params={
+                        "molecule_chembl_id__in": ",".join(chunk),
+                        "limit": 50,
+                        "format": "json",
+                    },
+                )
+            except Exception as exc:
+                logger.warning("chembl.molecule_names.failed", exc=str(exc))
+                continue
+            for m in data.get("molecules", []):
+                cid = m.get("molecule_chembl_id")
+                name = m.get("pref_name")
+                if cid and name:
+                    names[cid] = name
+        return names
+
     # ------------------------------------------------------------------
     # Mechanism of action lookup
     # ------------------------------------------------------------------

@@ -50,6 +50,7 @@ def test_extract_xrefs_all_buckets() -> None:
             "Orphanet:524",
             "MeSH:D001943",
             "DOID:1909",
+            "EFO:0000339",
             "BOGUS:should-not-match",
         ]
     )
@@ -59,6 +60,8 @@ def test_extract_xrefs_all_buckets() -> None:
     assert buckets["orphanet"] == ["524"]
     assert buckets["mesh"] == ["D001943"]
     assert buckets["doid"] == ["1909"]
+    # EFO is stored as the full CURIE (the native key for OT / ChEMBL).
+    assert buckets["efo"] == ["EFO:0000339"]
 
 
 def test_url_encode_double_quoted() -> None:
