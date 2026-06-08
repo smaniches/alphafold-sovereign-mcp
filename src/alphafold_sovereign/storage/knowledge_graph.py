@@ -154,13 +154,22 @@ class KnowledgeGraph:
         if os.environ.get("AFSMCP_DISABLE_KG_SEED"):
             return False
 
-        def _count_proteins() -> int:
+        def _count_entities() -> int:
+            # Seed only a fully empty graph: counting every entity table (not
+            # just proteins) avoids overwriting a DB that holds, e.g.,
+            # variants stored without a linked protein.
             assert self._conn is not None
-            return int(self._conn.execute("SELECT COUNT(*) FROM proteins").fetchone()[0])
+            c = self._conn
+            return int(
+                c.execute("SELECT COUNT(*) FROM proteins").fetchone()[0]
+                + c.execute("SELECT COUNT(*) FROM variants").fetchone()[0]
+                + c.execute("SELECT COUNT(*) FROM diseases").fetchone()[0]
+                + c.execute("SELECT COUNT(*) FROM drugs").fetchone()[0]
+            )
 
         async with self._lock:
             loop = asyncio.get_event_loop()
-            existing = await loop.run_in_executor(None, _count_proteins)
+            existing = await loop.run_in_executor(None, _count_entities)
         if existing > 0:
             return False
 
@@ -918,7 +927,10 @@ class KnowledgeGraph:
                 (uniprot_id, mondo_id, source, score, genetic_assoc, known_drug, n_pmids, created_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(uniprot_id, mondo_id, source) DO UPDATE SET
-                score = excluded.score, known_drug = excluded.known_drug
+                score = excluded.score,
+                genetic_assoc = excluded.genetic_assoc,
+                known_drug = excluded.known_drug,
+                n_pmids = excluded.n_pmids
         """
         await self._write(sql, params)
 
@@ -940,6 +952,8 @@ class KnowledgeGraph:
                 (uniprot_id, chembl_id, target_chembl_id, activity_type, value_nm, mechanism, created_at)
             VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(uniprot_id, chembl_id, activity_type) DO UPDATE SET
+                target_chembl_id = excluded.target_chembl_id,
+                value_nm = excluded.value_nm,
                 mechanism = excluded.mechanism
         """
         await self._write(sql, params)
@@ -959,7 +973,8 @@ class KnowledgeGraph:
         sql = """
             INSERT INTO variant_disease (hgvs, mondo_id, source, score, p_value, created_at)
             VALUES (?, ?, ?, ?, ?, ?)
-            ON CONFLICT(hgvs, mondo_id, source) DO UPDATE SET score = excluded.score
+            ON CONFLICT(hgvs, mondo_id, source) DO UPDATE SET
+                score = excluded.score, p_value = excluded.p_value
         """
         await self._write(sql, params)
 
@@ -1245,6 +1260,11 @@ async def get_knowledge_graph(
     Creates a new connection if not yet initialised or if a custom path
     is provided.
 
+    Seeding is a startup concern, not a read concern: this accessor never
+    writes, so the read-only KG tools that use it honour their
+    ``readOnlyHint``. The curated seed is loaded once at server boot (see
+    ``server.stdio.run_stdio``) or explicitly via ``seed_if_empty``.
+
     Usage::
 
         async with get_knowledge_graph() as kg:
@@ -1257,5 +1277,4 @@ async def get_knowledge_graph(
                 await _KG_SINGLETON.close()
             _KG_SINGLETON = KnowledgeGraph(db_path)
             await _KG_SINGLETON.connect()
-            await _KG_SINGLETON.seed_if_empty()
     yield _KG_SINGLETON

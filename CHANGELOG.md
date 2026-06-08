@@ -51,12 +51,26 @@ were brought in line with what the code actually returns.
   accessions or chromosome names as gene symbols.
 - **`synthesize_protein_dossier` provenance** stamped the wrong field and omitted
   several sources; scientific-accuracy and source-honesty defects (licenses,
-  ACMG PS1→PP5, MONDO/version claims) were corrected across the docs.
+  ACMG PS1→PP5, MONDO/version claims) were corrected across the docs. It now also
+  stamps `alphafold_db` (queried for pLDDT) in both the provenance footer and the
+  `data_sources` map.
+- **Seed scientific accuracy:** the curated KG seed linked olaparib as a
+  drug-*target* of BRCA1; olaparib targets **PARP1** (synthetic lethality in
+  BRCA-mutant tumours), so the edge was corrected to PARP1 (P09874).
+- **KG read-only contract:** the curated seed is now loaded once at server
+  startup, not lazily on first tool access, so the `readOnlyHint: true`
+  query/export tools never write. The emptiness check counts every entity table
+  (not just `proteins`), so an existing variants-only DB is never overwritten.
+- **Provenance version stamps refreshed to the live releases:** ChEMBL
+  `v36`→`v37`, Open Targets `24.06`→`26.03`.
+- **Relationship upserts** (`store_protein_disease` / `store_protein_drug` /
+  `store_variant_disease`) now refresh all mutable evidence columns on conflict.
 
 ### Changed
-- **Example 03 re-captured from a live run** and relabelled "Captured live",
-  with the real `WARM` / pLDDT-63 / `CAUTION` output and a transparent note on
-  why the druggability heuristic under-rates ABL1 on the full-length chain.
+- **All three worked examples re-captured from live runs** and relabelled
+  "Captured live": 01 (BRCA1 c.181T>G → ClinVar Pathogenic / ACMG PP3+PP5),
+  02 (EGFR druggability → HOT), 03 (CML drug landscape), each with the real
+  output and transparent notes on the heuristic's limitations.
 - **CI:** Dependabot grouping + low-risk auto-merge; `fetch-metadata` v3.1.0.
 
 ### Security
