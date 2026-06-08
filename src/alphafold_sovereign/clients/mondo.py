@@ -54,6 +54,7 @@ _OMIM_RE = re.compile(r"^OMIM:(\d+)$")
 _ORPHANET_RE = re.compile(r"^Orphanet:(\d+)$", re.IGNORECASE)
 _MESH_RE = re.compile(r"^MeSH:(.+)$", re.IGNORECASE)
 _DOID_RE = re.compile(r"^DOID:(\d+)$", re.IGNORECASE)
+_EFO_RE = re.compile(r"^EFO:(\d+)$", re.IGNORECASE)
 
 
 def _normalise_mondo_id(raw: str) -> str:
@@ -65,7 +66,7 @@ def _normalise_mondo_id(raw: str) -> str:
 
 
 def _extract_xrefs(xref_list: list[str]) -> dict[str, list[str]]:
-    """Bucket raw xref strings into ICD-10, ICD-11, OMIM, Orphanet, MeSH, DOID."""
+    """Bucket raw xref strings into ICD-10, ICD-11, OMIM, Orphanet, MeSH, DOID, EFO."""
     buckets: dict[str, list[str]] = {
         "icd10": [],
         "icd11": [],
@@ -73,6 +74,7 @@ def _extract_xrefs(xref_list: list[str]) -> dict[str, list[str]]:
         "orphanet": [],
         "mesh": [],
         "doid": [],
+        "efo": [],
     }
     for xref in xref_list:
         if m := _ICD10_RE.match(xref):
@@ -87,6 +89,8 @@ def _extract_xrefs(xref_list: list[str]) -> dict[str, list[str]]:
             buckets["mesh"].append(m.group(1))
         elif m := _DOID_RE.match(xref):
             buckets["doid"].append(m.group(1))
+        elif m := _EFO_RE.match(xref):
+            buckets["efo"].append(f"EFO:{m.group(1)}")
     return buckets
 
 
@@ -305,6 +309,7 @@ class MONDOClient(BaseAsyncClient):
             orphanet_ids=tuple(xrefs["orphanet"]),
             mesh_ids=tuple(xrefs["mesh"]),
             doid_ids=tuple(xrefs["doid"]),
+            efo_ids=tuple(xrefs["efo"]),
         )
 
     @staticmethod

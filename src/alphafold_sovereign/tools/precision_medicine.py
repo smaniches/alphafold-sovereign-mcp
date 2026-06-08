@@ -1140,8 +1140,9 @@ async def map_disease_drug_landscape(
     log = logger.bind(disease=mid, tool="map_disease_drug_landscape")
     log.info("start")
 
-    # Open Targets and ChEMBL key disease data on underscore-form IDs
-    # (e.g. MONDO_0007254), not the colon form used in the public API.
+    # Open Targets accepts the underscore-form disease ID (e.g. MONDO_0007254),
+    # but not every MONDO term is indexed there — some are reachable only via
+    # their EFO cross-reference, which we resolve from the MONDO record below.
     ot_disease_id = mid.replace("MONDO:", "MONDO_")
 
     # Parallel: MONDO lookup + OT targets
@@ -1154,27 +1155,52 @@ async def map_disease_drug_landscape(
     )
 
     disease_name = ""
+    efo_curie = ""  # e.g. "EFO:0000339" — the native key for OT and ChEMBL
     if isinstance(mondo_result, Exception):
         log.warning("mondo.failed", exc=str(mondo_result))
     else:
         disease_name = mondo_result.name or mid
+        if mondo_result.efo_ids:
+            efo_curie = mondo_result.efo_ids[0]
+
+    # When the MONDO ID yields no Open Targets associations, retry via the
+    # EFO cross-reference (OT's native disease ontology).
+    if (isinstance(ot_targets, Exception) or not ot_targets) and efo_curie:
+        try:
+            ot_targets = await _opentargets().associated_targets(
+                efo_curie.replace("EFO:", "EFO_"), limit=20
+            )
+        except Exception as exc:
+            log.warning("opentargets.efo_fallback.failed", exc=str(exc))
 
     top_targets = []
     if not isinstance(ot_targets, Exception):
         top_targets = [t.to_dict() if hasattr(t, "to_dict") else t for t in ot_targets[:10]]
 
-    # ChEMBL drug indications for this disease
-    efo_id = ot_disease_id
+    # ChEMBL drug indications are keyed on EFO / MeSH, not MONDO. Use the EFO
+    # cross-reference when available, falling back to the disease name (MeSH).
     chembl_drugs: list[dict[str, Any]] = []
     try:
-        chembl_drugs = await _chembl().drug_indications(efo_id=efo_id, limit=20)
+        if efo_curie:
+            chembl_drugs = await _chembl().drug_indications(efo_id=efo_curie, limit=20)
+        elif disease_name:
+            chembl_drugs = await _chembl().drug_indications(mesh_heading=disease_name, limit=20)
     except Exception as exc:
         log.warning("chembl.indications.failed", exc=str(exc))
 
     # Classify drugs by phase
-    approved = [d for d in chembl_drugs if (d.get("max_phase_for_indication") or 0) >= 4]
-    phase3 = [d for d in chembl_drugs if (d.get("max_phase_for_indication") or 0) == 3]
-    phase12 = [d for d in chembl_drugs if (d.get("max_phase_for_indication") or 0) in (1, 2)]
+    approved = [d for d in chembl_drugs if _indication_phase(d) >= 4]
+    phase3 = [d for d in chembl_drugs if _indication_phase(d) == 3]
+    phase12 = [d for d in chembl_drugs if _indication_phase(d) in (1, 2)]
+
+    # The drug-indication endpoint returns molecule IDs but not names; backfill
+    # preferred names for the entries we surface in one bulk request.
+    shown = approved[:10] + phase3[:10] + phase12[:10]
+    if shown:
+        names = await _chembl().molecule_names([d.get("molecule_chembl_id", "") for d in shown])
+        for d in shown:
+            if not d.get("pref_name"):
+                d["pref_name"] = names.get(d.get("molecule_chembl_id", ""), "")
 
     # Druggable top targets
     druggable_targets = [t for t in top_targets if t.get("tractable")]
@@ -1705,6 +1731,18 @@ def _criteria_not_met(criteria: dict[str, dict[str, Any]]) -> list[str]:
         "BP7",
     ]
     return [c for c in all_codes if c not in criteria]
+
+
+def _indication_phase(drug: dict[str, Any]) -> int:
+    """Coerce a ChEMBL ``max_phase_for_indication`` to an integer phase.
+
+    ChEMBL returns this field as a string (e.g. ``'4.0'``); blank/unknown
+    values collapse to ``0``.
+    """
+    try:
+        return int(float(drug.get("max_phase_for_indication")))  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return 0
 
 
 def _investability_rating(

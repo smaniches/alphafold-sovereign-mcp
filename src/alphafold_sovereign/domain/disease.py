@@ -91,6 +91,9 @@ class DiseaseRecord:
     orphanet_ids: tuple[str, ...] = field(default_factory=tuple)
     mesh_ids: tuple[str, ...] = field(default_factory=tuple)
     doid_ids: tuple[str, ...] = field(default_factory=tuple)
+    efo_ids: tuple[str, ...] = field(default_factory=tuple)
+    """Cross-referenced EFO IDs, e.g. ('EFO:0000339',). Native key for
+    Open Targets and ChEMBL drug-indication lookups."""
     hpo_terms: tuple[str, ...] = field(default_factory=tuple)
     """Associated HPO phenotype IDs."""
     parent_mondo_ids: tuple[str, ...] = field(default_factory=tuple)
@@ -114,6 +117,7 @@ class DiseaseRecord:
             "orphanet_ids": list(self.orphanet_ids),
             "mesh_ids": list(self.mesh_ids),
             "doid_ids": list(self.doid_ids),
+            "efo_ids": list(self.efo_ids),
             "hpo_terms": list(self.hpo_terms),
             "parent_mondo_ids": list(self.parent_mondo_ids),
             "child_mondo_ids": list(self.child_mondo_ids),
