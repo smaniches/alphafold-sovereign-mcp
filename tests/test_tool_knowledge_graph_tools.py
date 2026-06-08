@@ -27,8 +27,13 @@ from alphafold_sovereign.tools.knowledge_graph_tools import (
 
 
 @pytest.fixture(autouse=True)
-def _reset_kg_singleton() -> Any:
-    """Reset module-level KG singleton between tests."""
+def _reset_kg_singleton(monkeypatch: pytest.MonkeyPatch) -> Any:
+    """Reset module-level KG singleton between tests.
+
+    Seeding is disabled by default so these tests exercise the empty-graph
+    behaviour; the seed path is covered explicitly in ``test_kg_autoseed``.
+    """
+    monkeypatch.setenv("AFSMCP_DISABLE_KG_SEED", "1")
     kg_mod._KG_SINGLETON = None
     yield
     if kg_mod._KG_SINGLETON is not None:
@@ -347,3 +352,32 @@ async def test_query_variant_database_kg_patch(
 
     out = await query_variant_database(VariantQueryInput(gene="BRCA1"))
     assert out["result_count"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Auto-seed (out-of-the-box data)
+# ---------------------------------------------------------------------------
+
+
+async def test_kg_autoseed_populates_tools(
+    monkeypatch: pytest.MonkeyPatch, kg_db_path: Path
+) -> None:
+    """With seeding enabled, an empty graph auto-seeds and the tools return data."""
+    monkeypatch.delenv("AFSMCP_DISABLE_KG_SEED", raising=False)
+    proteins = await query_protein_database(ProteinQueryInput(limit=10))
+    assert len(proteins["proteins"]) >= 5
+    variants = await query_variant_database(VariantQueryInput(limit=10))
+    assert len(variants["variants"]) >= 2
+    net = await find_drug_gene_network(DrugNetworkInput(seed="MONDO:0011996", max_hops=2))
+    assert len(net["network"]["nodes"]) > 0
+    assert len(net["network"]["edges"]) > 0
+
+
+async def test_kg_autoseed_skips_when_populated(
+    monkeypatch: pytest.MonkeyPatch, kg_db_path: Path
+) -> None:
+    """seed_if_empty is a no-op once the graph already holds proteins."""
+    monkeypatch.delenv("AFSMCP_DISABLE_KG_SEED", raising=False)
+    async with kg_mod.get_knowledge_graph() as kg:
+        # First access already seeded the graph, so a second call does nothing.
+        assert await kg.seed_if_empty() is False

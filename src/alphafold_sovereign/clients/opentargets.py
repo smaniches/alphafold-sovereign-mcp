@@ -105,6 +105,14 @@ query UniProtToEnsembl($uniprotId: String!) {
 }
 """
 
+_DISEASE_SEARCH_QUERY = """
+query DiseaseSearch($q: String!) {
+  search(queryString: $q, entityNames: ["disease"]) {
+    hits { id entity name }
+  }
+}
+"""
+
 
 def _to_curie(raw: object) -> str:
     """Return an ontology disease id in canonical colon-form CURIE.
@@ -287,6 +295,30 @@ class OpenTargetsClient(BaseAsyncClient):
             if hit.get("entity") == "target" and hit.get("id"):
                 return {"ensembl_id": hit["id"], "symbol": hit.get("name", "")}
         return {}
+
+    async def resolve_disease_efo(self, query: str) -> str:
+        """Resolve a disease name or ID to an EFO CURIE via full-text search.
+
+        ChEMBL keys drug indications on EFO IDs, but many MONDO terms carry no
+        direct EFO cross-reference (e.g. the broad ``MONDO:0007254`` "breast
+        cancer" node). The Open Targets search index maps free-text disease
+        names to ontology IDs; this returns the first EFO hit as a colon-form
+        CURIE (e.g. ``'EFO:0000305'``), or ``''`` when none is found.
+
+        Args:
+            query: Disease name or ID, e.g. ``'breast cancer'``.
+        """
+        try:
+            data = await self._graphql(self._GQL_PATH, _DISEASE_SEARCH_QUERY, {"q": query})
+        except Exception as exc:
+            logger.warning("opentargets.disease_search.failed", q=query, exc=str(exc))
+            return ""
+        hits = (data.get("search") or {}).get("hits") or []
+        for hit in hits:
+            hid: str = hit.get("id", "")
+            if hid.startswith("EFO_"):
+                return hid.replace("_", ":")
+        return ""
 
     # ------------------------------------------------------------------
     # Helpers

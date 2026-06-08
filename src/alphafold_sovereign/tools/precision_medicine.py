@@ -1163,6 +1163,15 @@ async def map_disease_drug_landscape(
         if mondo_result.efo_ids:
             efo_curie = mondo_result.efo_ids[0]
 
+    # Many MONDO terms carry no direct EFO cross-reference (e.g. the broad
+    # "breast cancer" node). Resolve one via Open Targets full-text search so
+    # the disease still reaches ChEMBL's EFO-keyed drug indications.
+    if not efo_curie and disease_name:
+        try:
+            efo_curie = await _opentargets().resolve_disease_efo(disease_name)
+        except Exception as exc:
+            log.warning("opentargets.disease_search.failed", exc=str(exc))
+
     # When the MONDO ID yields no Open Targets associations, retry via the
     # EFO cross-reference (OT's native disease ontology).
     if (isinstance(ot_targets, Exception) or not ot_targets) and efo_curie:
