@@ -46,9 +46,20 @@ The open-source license guarantees your right to fork the code. The
 trademark policy ensures that downstream users can always trust that
 something called **"AlphaFold Sovereign"** is, in fact, the project
 governed by this repository — with the security, signing, compliance,
-and audit guarantees documented here. That trust protects everyone
-who depends on this project for regulated work in pharma, defense,
-and clinical research.
+and audit guarantees documented here. That trust protects everyone who
+relies on this project — researchers in academia, pharma, biotech, and
+clinical settings — while noting that the software is **not certified
+for any regulated use** (see STATUS.md and LIMITATIONS.md).
+
+## Third-Party Marks
+
+"AlphaFold" is a trademark of Google DeepMind. This project is an
+independent work that consumes the public AlphaFold DB API; it is **not
+affiliated with, endorsed by, or sponsored by Google DeepMind or
+EMBL-EBI**. The "AlphaFold Sovereign" name describes this project's
+relationship to that public data and is not a claim of ownership over
+the "AlphaFold" mark. The names of the other upstream data sources
+referenced by this project are trademarks of their respective owners.
 
 ## Permission Requests
 

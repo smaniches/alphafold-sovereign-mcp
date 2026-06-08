@@ -89,7 +89,7 @@ typically issues them.
   },
   "structure_ABL1": {
     "uniprot_id": "P00519",
-    "model_url": "https://alphafold.ebi.ac.uk/files/AF-P00519-F1-model_v4.pdb",
+    "model_url": "https://alphafold.ebi.ac.uk/files/AF-P00519-F1-model_v6.pdb",
     "n_residues": 1130,
     "plddt_mean": 71.8,
     "kinase_domain_residues": [242, 493],

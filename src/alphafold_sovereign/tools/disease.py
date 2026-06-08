@@ -2,7 +2,7 @@
 # Copyright 2024-2026 Santiago Maniches
 """Disease ontology and clinical intelligence MCP tools.
 
-18 tools spanning:
+12 tools spanning:
 - MONDO disease lookup and hierarchy traversal
 - HPO phenotype-to-disease and gene-to-phenotype
 - Common disease protein target profiling (all major ICD chapters)
@@ -804,9 +804,11 @@ async def triage_variant_3d(params: VariantTriageInput) -> str:
             coro_map["gnomad"] = gnomad_coro
             sources.append("gnomAD")
         if disease_coro:
+            # Disease context is a local pointer note, not an upstream query
+            # (the Open Targets / MONDO traversal is a Wave-3 roadmap item),
+            # so it is deliberately not added to sources_queried or to the
+            # provenance footer.
             coro_map["disease"] = disease_coro
-            sources.append("OpenTargets")
-            sources.append("MONDO")
 
         gathered = await asyncio.gather(*coro_map.values(), return_exceptions=True)
         results = dict(zip(coro_map.keys(), gathered))
@@ -853,11 +855,13 @@ async def triage_variant_3d(params: VariantTriageInput) -> str:
                 "Wave-3 roadmap item."
             )
 
-        return json.dumps(report, indent=2) + _provenance(
-            clinvar="NCBI-ClinVar",
-            gnomad="gnomAD-r4",
-            open_targets="OT-24.06",
-        )
+        # Stamp only the upstreams actually queried for this call: ClinVar
+        # always, gnomAD when requested. Open Targets / MONDO are not
+        # queried (disease context is a stub), so they are not stamped.
+        prov: dict[str, str] = {"clinvar": "NCBI-ClinVar"}
+        if params.include_gnomad:
+            prov["gnomad"] = "gnomAD-r4"
+        return json.dumps(report, indent=2) + _provenance(**prov)
 
     except Exception as exc:
         logger.error("triage_variant_3d_failed", hgvs=hgvs, error=str(exc))

@@ -75,7 +75,7 @@
   },
   "alphafold": {
     "uniprot_id": "P00533",
-    "model_url": "https://alphafold.ebi.ac.uk/files/AF-P00533-F1-model_v4.pdb",
+    "model_url": "https://alphafold.ebi.ac.uk/files/AF-P00533-F1-model_v6.pdb",
     "plddt_mean": 73.6,
     "plddt_note": "High mean confidence; kinase domain (residues 712-979) is well-resolved (pLDDT > 90).",
     "n_residues": 1210
@@ -91,7 +91,7 @@
     },
     "rationale": "Strong drug precedent (14 approved drugs), tractable small-molecule and antibody modalities, well-resolved kinase domain. Tier is a HEURISTIC, not a validated prediction — see LIMITATIONS.md L2."
   },
-  "sources_cited": ["UniProt P00533", "Open Targets ENSG00000146648", "ChEMBL CHEMBL203", "gnomAD v4.1.0 constraint table", "AlphaFold DB v4 (P00533)"],
+  "sources_cited": ["UniProt P00533", "Open Targets ENSG00000146648", "ChEMBL CHEMBL203", "gnomAD v4.1.0 constraint table", "AlphaFold DB v6 (P00533)"],
   "report_generated_at": "2026-05-11T14:35:12Z"
 }
 ```

@@ -92,7 +92,7 @@ Claude Desktop, the server's tools become available in the conversation.
   },
   "alphafold": {
     "uniprot_id": "P38398",
-    "model_url": "https://alphafold.ebi.ac.uk/files/AF-P38398-F1-model_v4.pdb",
+    "model_url": "https://alphafold.ebi.ac.uk/files/AF-P38398-F1-model_v6.pdb",
     "residue": 1756,
     "plddt_at_residue": 38.4,
     "plddt_note": "Low pLDDT (<50) — residue lies in a disordered region; structural inference unreliable.",
@@ -110,7 +110,7 @@ Claude Desktop, the server's tools become available in the conversation.
     "Ensembl VEP REST",
     "ClinVar VCV00017661",
     "gnomAD v4.1.0",
-    "AlphaFold DB v4 (P38398)"
+    "AlphaFold DB v6 (P38398)"
   ],
   "report_generated_at": "2026-05-11T14:23:47Z"
 }

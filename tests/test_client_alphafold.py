@@ -70,12 +70,12 @@ async def test_get_pdb_bytes_with_files_url(respx_mock: respx.MockRouter) -> Non
                 {
                     "uniprotAccession": "P04637",
                     "entryId": "AF-P04637-F1",
-                    "pdbUrl": "https://alphafold.ebi.ac.uk/files/AF-P04637-F1-model_v4.pdb",
+                    "pdbUrl": "https://alphafold.ebi.ac.uk/files/AF-P04637-F1-model_v6.pdb",
                 }
             ],
         ),
     )
-    respx_mock.get("https://alphafold.ebi.ac.uk/files/AF-P04637-F1-model_v4.pdb").mock(
+    respx_mock.get("https://alphafold.ebi.ac.uk/files/AF-P04637-F1-model_v6.pdb").mock(
         return_value=httpx.Response(200, content=b"ATOM 1 N MET A 1"),
     )
     async with AlphaFoldClient() as client:

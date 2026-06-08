@@ -29,8 +29,6 @@ Tool inventory:
   4. find_evolutionary_structural_shifts — Cross-species TDA fingerprint compare
   5. score_binding_pocket_geometry       — Heuristic pocket detection + score
   6. detect_intrinsically_disordered     — IDR region map
-  7. assess_structural_novelty           — AlphaFold-coverage and confidence summary
-  8. identify_allosteric_sites           — PAE-based long-range coupling map
 """
 
 from __future__ import annotations

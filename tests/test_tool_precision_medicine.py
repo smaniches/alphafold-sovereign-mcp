@@ -66,8 +66,8 @@ def _reset_singletons() -> Any:
 
 
 def test_provenance_contains_sources() -> None:
-    p = _provenance(chembl="v34", gnomad="v4")
-    assert "chembl=v34" in p
+    p = _provenance(chembl="v36", gnomad="v4")
+    assert "chembl=v36" in p
     assert "gnomad=v4" in p
 
 
