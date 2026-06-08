@@ -380,6 +380,26 @@ async def test_molecule_names_error_returns_empty(respx_mock: respx.MockRouter) 
         assert await client.molecule_names(["CHEMBL941"]) == {}
 
 
+async def test_molecule_names_chunks_large_input(respx_mock: respx.MockRouter) -> None:
+    """More than 50 IDs are chunked into multiple requests and aggregated."""
+    ids = [f"CHEMBL{i}" for i in range(51)]  # 51 unique → two batches (50 + 1)
+    route = respx_mock.get("https://www.ebi.ac.uk/chembl/api/data/molecule.json").mock(
+        side_effect=[
+            httpx.Response(
+                200, json={"molecules": [{"molecule_chembl_id": "CHEMBL0", "pref_name": "DRUG0"}]}
+            ),
+            httpx.Response(
+                200,
+                json={"molecules": [{"molecule_chembl_id": "CHEMBL50", "pref_name": "DRUG50"}]},
+            ),
+        ]
+    )
+    async with ChEMBLClient() as client:
+        names = await client.molecule_names(ids)
+    assert route.call_count == 2
+    assert names == {"CHEMBL0": "DRUG0", "CHEMBL50": "DRUG50"}
+
+
 # ---------------------------------------------------------------------------
 # mechanism_of_action
 # ---------------------------------------------------------------------------
