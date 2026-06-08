@@ -6,6 +6,16 @@
 > AlphaFold DB. Live-API validation is on the v1.2.0 roadmap; see
 > [`STATUS.md`](../../STATUS.md).
 
+> **Outdated tool names.** This walk-through was authored against the
+> `v1.1.0-rc1` tool surface and references tools — `drug_lookup`,
+> `explore_disease_target_landscape`, `fetch_alphafold_structure` —
+> that are **not present in the current release**. The drug-name entry
+> point in particular has no equivalent in the current 29-tool surface
+> (all drug paths are disease-keyed). The trace below is therefore not
+> runnable as written against this release and has not yet been
+> re-authored. For the current tool inventory see the
+> [README tool tables](../../README.md#tool-inventory).
+
 ## User prompt
 
 > Imatinib is approved for chronic myeloid leukaemia. Walk me through

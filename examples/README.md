@@ -6,8 +6,8 @@ Three end-to-end illustrations of what an MCP session against
 | Example | Tools exercised | What it shows |
 |---|---|---|
 | [`01-variant-triage/`](01-variant-triage/) | `generate_variant_clinical_report`, `classify_variant_acmg` | Pulling Ensembl VEP + ClinVar + gnomAD + AlphaMissense + AlphaFold structural context for **BRCA1 c.5266dupC**; draft ACMG/AMP evidence. |
-| [`02-target-characterization/`](02-target-characterization/) | `assess_target_druggability`, `fetch_alphafold_structure` | Characterising **EGFR** as a drug target: Open Targets, ChEMBL, gnomAD constraint, AlphaFold pLDDT. |
-| [`03-drug-discovery/`](03-drug-discovery/) | `drug_lookup`, `assess_target_druggability`, `explore_disease_target_landscape`, `fetch_alphafold_structure` | Multi-turn flow: **Imatinib → BCR-ABL → CML**. The molecular story behind a TKI, plus the T315I resistance gatekeeper. |
+| [`02-target-characterization/`](02-target-characterization/) | `assess_target_druggability` | Characterising **EGFR** as a drug target: Open Targets, ChEMBL, gnomAD constraint, AlphaFold pLDDT (structure folds in via the tool's `include_alphafold` parameter). |
+| [`03-drug-discovery/`](03-drug-discovery/) | `assess_target_druggability` (+ three `v1.1.0-rc1` tools no longer in the current surface — see the note in that example) | Multi-turn flow: **Imatinib → BCR-ABL → CML**. The molecular story behind a TKI, plus the T315I resistance gatekeeper. |
 
 ## ⚠ Status of these examples
 
