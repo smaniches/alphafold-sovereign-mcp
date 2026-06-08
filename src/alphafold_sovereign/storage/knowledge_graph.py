@@ -46,6 +46,7 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import datetime
 import hashlib
 import json
@@ -181,10 +182,8 @@ class KnowledgeGraph:
                 "DELETE FROM diseases",
                 "DELETE FROM proteins",
             ):
-                try:
+                with contextlib.suppress(Exception):
                     await self._write(stmt, [])
-                except Exception:
-                    pass
             return False
         logger.info("kg.seeded")
         return True
