@@ -40,23 +40,19 @@ Claude Desktop, the server's tools become available in the conversation.
 {
   "tool": "generate_variant_clinical_report",
   "params": {
-    "gene_symbol": "BRCA1",
-    "hgvs_c": "c.5266dupC",
-    "include_alphafold_structure": true,
-    "include_clinvar": true,
-    "include_gnomad": true,
-    "include_alphamissense": true
+    "hgvs": "BRCA1:c.5266dupC",
+    "include_population_breakdown": true,
+    "include_drug_context": true
   }
 }
 ```
 
-## What the server returns (schema-accurate; values illustrative)
+## What the server returns (illustrative — field names abridged for readability)
 
 ```jsonc
 {
   "input": {
-    "gene_symbol": "BRCA1",
-    "hgvs_c": "c.5266dupC",
+    "hgvs": "BRCA1:c.5266dupC",
     "transcript": "NM_007294.4"
   },
   "ensembl_vep": {
@@ -98,7 +94,7 @@ Claude Desktop, the server's tools become available in the conversation.
     "plddt_note": "Low pLDDT (<50) — residue lies in a disordered region; structural inference unreliable.",
     "pae_neighbourhood_p95_residues_within_8A": [1750, 1751, 1752, 1755, 1757, 1758, 1761]
   },
-  "acmg_evidence_draft": {
+  "acmg_criteria_draft": {
     "PVS1": "applied",
     "PS1": "not applied",
     "PM2_supporting": "applied (gnomAD AF < 0.0001)",

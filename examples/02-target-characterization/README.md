@@ -21,19 +21,17 @@
 {
   "tool": "assess_target_druggability",
   "params": {
-    "gene_symbol": "EGFR",
-    "include_drugs": true,
-    "include_alphafold": true,
-    "include_constraint": true
+    "uniprot_id": "P00533",
+    "include_clinical_stage": true
   }
 }
 ```
 
-## What the server returns (schema-accurate; values illustrative)
+## What the server returns (illustrative — field names abridged for readability)
 
 ```jsonc
 {
-  "input": {"gene_symbol": "EGFR"},
+  "input": {"uniprot_id": "P00533"},
   "uniprot": {
     "uniprot_id": "P00533",
     "protein_name": "Epidermal growth factor receptor",
