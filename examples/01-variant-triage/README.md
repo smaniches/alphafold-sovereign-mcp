@@ -1,159 +1,84 @@
-# Example: Variant Triage — BRCA1 c.5266dupC
+# Example: Variant Triage — BRCA1 c.181T>G (p.Cys61Gly)
 
-> **Status: Illustrative.** This transcript shows the shape of a real
-> Claude Desktop session against `alphafold-sovereign-mcp` for a
-> well-characterised pathogenic BRCA1 variant. Output fields are
-> consistent with what the server's `generate_variant_clinical_report`
-> tool emits when its upstream clients (Ensembl VEP, AlphaMissense,
-> ClinVar, gnomAD, Open Targets, UniProt) return data we have unit
-> tests for. End-to-end validation against the live upstreams is on
-> the v1.2.0 roadmap (see [`STATUS.md`](../../STATUS.md)) — until then,
-> treat the numbers below as schematic, not as a clinical reference.
-
-## Setup
-
-```jsonc
-// claude_desktop_config.json
-{
-  "mcpServers": {
-    "alphafold-sovereign": {
-      "command": "alphafold-sovereign-mcp",
-      "args": []
-    }
-  }
-}
-```
-
-After installing from source (see top-level README) and restarting
-Claude Desktop, the server's tools become available in the conversation.
+> **Status: Captured live.** The response below was captured from a real
+> run against the live Ensembl VEP, ClinVar, gnomAD, AlphaMissense, Open
+> Targets, and AlphaFold DB APIs on **2026-06-08** (arrays abridged for
+> readability; full payload in [`transcript.jsonl`](transcript.jsonl)).
+> See [`STATUS.md`](../../STATUS.md) for what "verified" covers.
 
 ## User prompt
 
-> Triage the BRCA1 c.5266dupC variant for me. Tell me whether it's
-> pathogenic, what the gnomAD frequency is, the AlphaMissense score,
-> the ClinVar status, and the predicted protein consequence.
+> I have a BRCA1 variant, c.181T>G. Is it clinically significant, and what
+> is the supporting evidence?
 
 ## What the model calls
 
 ```jsonc
-// MCP tool call
-{
-  "tool": "generate_variant_clinical_report",
-  "params": {
-    "hgvs": "BRCA1:c.5266dupC",
-    "include_population_breakdown": true,
-    "include_drug_context": true
-  }
-}
+{"tool": "generate_variant_clinical_report", "params": {"hgvs": "BRCA1:c.181T>G"}}
 ```
 
-## What the server returns (illustrative — field names abridged for readability)
+## What the server returns (captured live; abridged)
 
 ```jsonc
 {
-  "input": {
-    "hgvs": "BRCA1:c.5266dupC",
-    "transcript": "NM_007294.4"
+  "hgvs": "BRCA1:c.181T>G",
+  "gene_symbol": "BRCA1",
+  "clinical_tier": "HIGH",
+  "clinical_tier_explanation": "Strong evidence of clinical pathogenicity from ClinVar expert curation and/or multiple concordant computational predictors.",
+  "functional_consequence": {
+    "consequence_terms": ["missense_variant"], "impact": "MODERATE",
+    "amino_acids": "C/G", "sift_prediction": "deleterious", "sift_score": 0.0,
+    "polyphen_prediction": "benign", "polyphen_score": 0.027
   },
-  "ensembl_vep": {
-    "predicted_consequence": "frameshift_variant",
-    "impact": "HIGH",
-    "canonical_transcript": "ENST00000357654",
-    "protein_consequence": "p.Gln1756ProfsTer74",
-    "exon": "20/23"
-  },
-  "alphamissense": {
-    "score": null,
-    "note": "AlphaMissense scores apply to missense variants only; this is a frameshift."
-  },
-  "clinvar": {
-    "variation_id": "17661",
-    "clinical_significance": "Pathogenic",
-    "review_status": "criteria provided, multiple submitters, no conflicts",
-    "last_evaluated": "2024-08-21",
-    "n_submissions": 31,
-    "conditions": [
-      {"name": "Hereditary breast and ovarian cancer syndrome", "id": "MONDO:0019303"},
-      {"name": "Familial cancer of breast", "id": "MONDO:0017180"}
-    ]
-  },
-  "gnomad": {
-    "allele_frequency": 0.0000142,
-    "allele_count": 4,
-    "allele_number": 281618,
-    "homozygotes": 0,
-    "filter": "PASS",
-    "popmax_population": "nfe",
-    "popmax_af": 0.0000301
-  },
-  "alphafold": {
-    "uniprot_id": "P38398",
-    "model_url": "https://alphafold.ebi.ac.uk/files/AF-P38398-F1-model_v6.pdb",
-    "residue": 1756,
-    "plddt_at_residue": 38.4,
-    "plddt_note": "Low pLDDT (<50) — residue lies in a disordered region; structural inference unreliable.",
-    "pae_neighbourhood_p95_residues_within_8A": [1750, 1751, 1752, 1755, 1757, 1758, 1761]
-  },
+  "clinvar": {"found": true, "classification": "Pathogenic", "acmg_code": "P", "review_status": "reviewed by expert panel", "variation_id": "17661"},
+  "population_genetics": {"global_af": null, "alphamissense_score": 0.9904, "populations": []},
+  "gene_constraint": {"pLI": 0.0, "loeuf": 0.928, "mis_z": 1.73, "interpretation": "Tolerant to loss-of-function (LOEUF=0.928): LoF variants are tolerated in the population."},
   "acmg_criteria_draft": {
-    "PVS1": "applied",
-    "PS1": "not applied",
-    "PM2_supporting": "applied (gnomAD AF < 0.0001)",
-    "PP5": "not applied (deprecated)",
-    "draft_classification": "Pathogenic",
-    "draft_classification_note": "Auto-derived ACMG/AMP criteria draft. NOT independently validated by a clinical geneticist. See LIMITATIONS.md L1."
+    "criteria": {
+      "PP3": "AlphaMissense=0.990 — likely pathogenic (≥0.564)",
+      "PP5": "ClinVar: Pathogenic (reviewed by expert panel). Reputable source with strong concordance."
+    },
+    "note": "Draft ACMG/AMP criteria based on computational and population evidence. Professional review by a clinical geneticist is required before clinical reporting."
   },
-  "sources_cited": [
-    "Ensembl VEP REST",
-    "ClinVar VCV00017661",
-    "gnomAD v4.1.0",
-    "AlphaFold DB v6 (P38398)"
-  ],
-  "report_generated_at": "2026-05-11T14:23:47Z"
+  "disease_associations": {"open_targets_top_diseases": [
+    {"disease_mondo_id": "MONDO:0007254", "disease_name": "breast cancer", "overall_score": 0.839},
+    {"disease_mondo_id": "Orphanet:145", "disease_name": "Hereditary breast and ovarian cancer syndrome", "overall_score": 0.828},
+    {"disease_mondo_id": "MONDO:0054748", "disease_name": "Fanconi anemia, complementation group S", "overall_score": 0.821}
+  ]},
+  "data_sources_status": {"ensembl_vep": "ok", "clinvar": "ok", "gnomad": "skipped", "disgenet": "ok", "open_targets": "ok", "chembl": "no_data", "alphamissense": "ok"},
+  "provenance": "AlphaFold Sovereign MCP v1.2.0 · 2026-06-08 · ensembl_vep=GRCh38 | clinvar=current | gnomad=v4 | alphamissense=2023"
 }
 ```
 
 ## What Claude says back (paraphrased)
 
-> **BRCA1 c.5266dupC** is a well-known pathogenic frameshift variant.
-> Here is the triage summary:
+> **BRCA1 c.181T>G** (p.Cys61Gly, "C61G") triages **HIGH** — clinically
+> significant.
 >
-> - **Predicted effect**: frameshift at codon 1756 (`p.Gln1756ProfsTer74`),
->   high-impact.
-> - **ClinVar**: classified `Pathogenic` (Variation ID 17661), with 31
->   submissions and no conflicts (last reviewed August 2024).
-> - **gnomAD v4.1.0**: extremely rare (allele frequency 1.42×10⁻⁵
->   globally; popmax 3.0×10⁻⁵ in non-Finnish European). No homozygotes.
-> - **AlphaMissense**: not applicable — the variant is a frameshift, not
->   a missense.
-> - **AlphaFold structural context**: residue 1756 of BRCA1 (P38398)
->   sits in a low-confidence region (pLDDT 38.4 of 100). Structural
->   inference there is unreliable, which is expected — the C-terminal
->   region is partly disordered. The variant truncates the BRCT domain.
-> - **Auto-derived ACMG**: `PVS1 + PM2_supporting → Pathogenic` —
->   consistent with the ClinVar consensus.
-> - **Disclaimer**: The ACMG draft surfaced by this server has not
->   been validated by an independent clinical geneticist. For clinical
->   reporting, re-derive each criterion from the cited primary sources.
-
-## What the same call looks like in `--self-test` mode
-
-`alphafold-sovereign --self-test` runs an offline, deterministic
-subset of this flow against a built-in `BRCA1:c.5266dupC` fixture
-that does not require live network access. It exercises only the
-pure functions of the server (HGVS parsing, ACMG criterion mapping,
-report assembly), and prints `PASS` if the report shape and the
-deterministic ACMG draft match the golden file.
+> - **ClinVar:** classified **Pathogenic**, *reviewed by expert panel*
+>   (variation 17661) — the strongest review tier short of a practice
+>   guideline.
+> - **Computational:** AlphaMissense 0.99 (likely pathogenic) and SIFT
+>   "deleterious". PolyPhen disagrees ("benign", 0.03) — a genuine
+>   predictor conflict the report surfaces rather than hides.
+> - **ACMG draft:** PP3 (computational) + PP5 (reputable-source pathogenic).
+>   This is a *draft* — a clinical geneticist must review before reporting.
+> - **Mechanism (background):** C61G sits in the BRCA1 RING domain and
+>   disrupts the BARD1 heterodimer / E3 ubiquitin-ligase activity —
+>   consistent with the expert-panel pathogenic call.
+> - **Disease context:** Open Targets links BRCA1 to breast cancer (0.84)
+>   and hereditary breast-and-ovarian-cancer syndrome (0.83).
+>
+> **Caveats:** the gnomAD population lookup was skipped for this variant
+> (absent from the common-variant index — consistent with a rare
+> pathogenic allele), and the ACMG assignment is a heuristic draft, not a
+> clinical determination.
 
 ## Reproducing this example for real
 
-1. Install: see top-level [`README.md`](../../README.md#install).
-2. Configure Claude Desktop as shown above.
-3. Restart Claude Desktop.
-4. Paste the user prompt at the top of this document.
+Point an MCP client (Claude Desktop, etc.) at the server and issue the tool
+call above; see the repository README for setup.
 
 ## Files
 
-- `transcript.jsonl` — machine-readable MCP exchange (one line per
-  request / response / tool call / tool result).
-- `expected_output_schema.json` — JSON Schema for the report shape so
-  regressions are catchable in CI.
+- `transcript.jsonl` — full MCP exchange for the tool call.

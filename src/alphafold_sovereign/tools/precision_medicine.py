@@ -899,7 +899,7 @@ async def assess_target_druggability(
             "alphafold_db": "https://alphafold.ebi.ac.uk",
         },
         "provenance": _provenance(
-            chembl="v36", open_targets="24.06", gnomad="v4", alphafold_db="v6"
+            chembl="v37", open_targets="26.03", gnomad="v4", alphafold_db="v6"
         ),
     }
 
@@ -1092,14 +1092,16 @@ async def synthesize_protein_dossier(
         "gnomad": "https://gnomad.broadinstitute.org",
         "clinvar": "https://www.ncbi.nlm.nih.gov/clinvar/",
         "ensembl": "https://rest.ensembl.org",
+        "alphafold_db": "https://alphafold.ebi.ac.uk",
     }
     # Stamp the upstreams actually fused into the dossier (see data_sources
     # above), not tool parameters. ClinVar / Ensembl / DisGeNET serve current
     # releases and are not pinned to a version here.
     dossier["provenance"] = _provenance(
-        open_targets="24.06",
+        open_targets="26.03",
         gnomad="v4",
-        chembl="v36",
+        chembl="v37",
+        alphafold_db="v6",
         clinvar="current",
         ensembl="current",
         disgenet="current",
@@ -1246,8 +1248,8 @@ async def map_disease_drug_landscape(
             "chembl": "https://www.ebi.ac.uk/chembl/",
         },
         "provenance": _provenance(
-            open_targets="24.06",
-            chembl="v36",
+            open_targets="26.03",
+            chembl="v37",
         ),
     }
 
@@ -1555,7 +1557,7 @@ async def find_drug_repurposing_candidates(
             "open_targets": "https://platform.opentargets.org",
             "chembl": "https://www.ebi.ac.uk/chembl/",
         },
-        "provenance": _provenance(open_targets="24.06", chembl="v36"),
+        "provenance": _provenance(open_targets="26.03", chembl="v37"),
     }
 
 

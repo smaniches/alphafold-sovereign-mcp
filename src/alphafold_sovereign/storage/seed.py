@@ -29,6 +29,7 @@ _PROTEINS = [
     ("P10721", "KIT", "Mast/stem cell growth factor receptor Kit", 976, 72.1, "HIGH", "HOT"),
     ("P38398", "BRCA1", "Breast cancer type 1 susceptibility protein", 1863, 44.6, "LOW", "COLD"),
     ("P04637", "TP53", "Cellular tumor antigen p53", 393, 68.0, "HIGH", "WARM"),
+    ("P09874", "PARP1", "Poly [ADP-ribose] polymerase 1", 1014, 72.0, "HIGH", "HOT"),
 ]
 
 # (mondo_id, name)
@@ -61,7 +62,9 @@ _PROTEIN_DRUG = [
     ("P00519", "CHEMBL1171837", "BCR-ABL tyrosine kinase inhibitor"),
     ("P00519", "CHEMBL288441", "BCR-ABL tyrosine kinase inhibitor"),
     ("P10721", "CHEMBL941", "KIT inhibitor (off-target)"),
-    ("P38398", "CHEMBL521686", "PARP inhibitor (synthetic lethality in BRCA-mutant)"),
+    # Olaparib targets PARP1 (P09874); its benefit in BRCA-mutant tumours is via
+    # synthetic lethality, not BRCA1 binding — so the drug-target edge is to PARP1.
+    ("P09874", "CHEMBL521686", "PARP inhibitor"),
 ]
 
 # protein↔disease (uniprot_id, mondo_id, score)
@@ -71,6 +74,7 @@ _PROTEIN_DISEASE = [
     ("P10721", "MONDO:0011996", 0.71),
     ("P38398", "MONDO:0007254", 0.92),
     ("P04637", "MONDO:0007254", 0.88),
+    ("P09874", "MONDO:0007254", 0.55),
 ]
 
 # variant↔disease (hgvs, mondo_id, score)

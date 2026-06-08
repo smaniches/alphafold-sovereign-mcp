@@ -68,7 +68,7 @@ structure.
     },
     "competitive_intelligence": {"approved_count": 9, "pipeline_count": 11, "druggable_target_count": 10, "investability": "HIGH — well-validated therapeutic area with multiple approved agents and druggable targets."},
     "data_sources": {"mondo": "https://www.ebi.ac.uk/ols4/ontologies/mondo", "open_targets": "https://platform.opentargets.org", "chembl": "https://www.ebi.ac.uk/chembl/"},
-    "provenance": "AlphaFold Sovereign MCP v1.1.10 · 2026-06-08 · open_targets=24.06 | chembl=v36"
+    "provenance": "AlphaFold Sovereign MCP v1.1.10 · 2026-06-08 · open_targets=26.03 | chembl=v37"
   },
   "assess_target_druggability": {
     "uniprot_id": "P00519",
@@ -93,7 +93,7 @@ structure.
     "approved_drugs": [{"molecule_chembl_id": "CHEMBL288441", "pref_name": "BOSUTINIB", "max_phase": 4, "max_phase_label": "Approved", "mechanism": "Tyrosine-protein kinase ABL inhibitor", "oral": true, "first_approval": 2012}],
     "tractability_assessment": {"small_molecule": false, "antibody": false, "protac": false},
     "actionability": "Target is WARM: limited clinical precedent (18 drugs). Recommend structural analysis + FBDD.",
-    "provenance": "AlphaFold Sovereign MCP v1.1.10 · 2026-06-08 · chembl=v36 | open_targets=24.06 | gnomad=v4 | alphafold_db=v6"
+    "provenance": "AlphaFold Sovereign MCP v1.1.10 · 2026-06-08 · chembl=v37 | open_targets=26.03 | gnomad=v4 | alphafold_db=v6"
   },
   "analyze_structural_confidence": {
     "uniprot_id": "P00519",

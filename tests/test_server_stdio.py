@@ -54,6 +54,7 @@ def test_run_stdio_offline_truthy(
             type(self).ran = True
 
     monkeypatch.setattr(stdio, "_build_server", _StubServer)
+    monkeypatch.setattr(stdio, "_seed_kg_at_startup", lambda: None)
 
     stdio.run_stdio()
 
@@ -82,6 +83,7 @@ def test_run_stdio_offline_falsy(monkeypatch: pytest.MonkeyPatch) -> None:
             return None
 
     monkeypatch.setattr(stdio, "_build_server", _StubServer)
+    monkeypatch.setattr(stdio, "_seed_kg_at_startup", lambda: None)
 
     stdio.run_stdio()
     assert captured["offline"] is False
@@ -104,8 +106,51 @@ def test_run_stdio_offline_parsing_truthy(monkeypatch: pytest.MonkeyPatch, raw: 
             return None
 
     monkeypatch.setattr(stdio, "_build_server", _StubServer)
+    monkeypatch.setattr(stdio, "_seed_kg_at_startup", lambda: None)
     stdio.run_stdio()
     assert captured["offline"] is True
+
+
+def test_seed_kg_at_startup_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    """With ``AFSMCP_DISABLE_KG_SEED`` set, startup seeding is a no-op."""
+    monkeypatch.setenv("AFSMCP_DISABLE_KG_SEED", "1")
+    import alphafold_sovereign.storage.knowledge_graph as kg_mod
+
+    class _Boom:
+        def __init__(self, *a: Any, **k: Any) -> None:
+            raise AssertionError("must not seed when disabled")
+
+    monkeypatch.setattr(kg_mod, "KnowledgeGraph", _Boom)
+    stdio._seed_kg_at_startup()  # returns before constructing KnowledgeGraph
+
+
+def test_seed_kg_at_startup_seeds(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
+    """Startup seeding populates the on-disk database."""
+    import sqlite3
+
+    monkeypatch.delenv("AFSMCP_DISABLE_KG_SEED", raising=False)
+    db = tmp_path / "kg.db"
+    monkeypatch.setenv("ALPHAFOLD_KG_PATH", str(db))
+    stdio._seed_kg_at_startup()
+    conn = sqlite3.connect(str(db))
+    try:
+        count = conn.execute("SELECT COUNT(*) FROM proteins").fetchone()[0]
+    finally:
+        conn.close()
+    assert count >= 5
+
+
+def test_seed_kg_at_startup_swallows_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A seeding failure at startup is logged and swallowed, never blocking boot."""
+    monkeypatch.delenv("AFSMCP_DISABLE_KG_SEED", raising=False)
+    import alphafold_sovereign.storage.knowledge_graph as kg_mod
+
+    class _Boom:
+        def __init__(self, *a: Any, **k: Any) -> None:
+            raise RuntimeError("boom")
+
+    monkeypatch.setattr(kg_mod, "KnowledgeGraph", _Boom)
+    stdio._seed_kg_at_startup()  # must not raise
 
 
 def test_logger_is_structlog_bound() -> None:

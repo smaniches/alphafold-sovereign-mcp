@@ -362,8 +362,11 @@ async def test_query_variant_database_kg_patch(
 async def test_kg_autoseed_populates_tools(
     monkeypatch: pytest.MonkeyPatch, kg_db_path: Path
 ) -> None:
-    """With seeding enabled, an empty graph auto-seeds and the tools return data."""
+    """Once seeded at startup, the read-only tools return the curated data."""
     monkeypatch.delenv("AFSMCP_DISABLE_KG_SEED", raising=False)
+    # The server seeds the on-disk DB at boot; emulate that here.
+    async with kg_mod.KnowledgeGraph() as kg:
+        assert await kg.seed_if_empty() is True
     proteins = await query_protein_database(ProteinQueryInput(limit=10))
     assert len(proteins["proteins"]) >= 5
     variants = await query_variant_database(VariantQueryInput(limit=10))
@@ -376,10 +379,17 @@ async def test_kg_autoseed_populates_tools(
 async def test_kg_autoseed_skips_when_populated(
     monkeypatch: pytest.MonkeyPatch, kg_db_path: Path
 ) -> None:
-    """seed_if_empty is a no-op once the graph already holds proteins."""
+    """seed_if_empty is a no-op once the graph already holds entities."""
     monkeypatch.delenv("AFSMCP_DISABLE_KG_SEED", raising=False)
-    async with kg_mod.get_knowledge_graph() as kg:
-        # First access already seeded the graph, so a second call does nothing.
+    async with kg_mod.KnowledgeGraph() as kg:
+        assert await kg.seed_if_empty() is True
+        # Already populated, so a second call does nothing.
+        assert await kg.seed_if_empty() is False
+
+
+async def test_seed_if_empty_disabled_by_env(kg_db_path: Path) -> None:
+    """The autouse fixture sets AFSMCP_DISABLE_KG_SEED, so seeding is skipped."""
+    async with kg_mod.KnowledgeGraph() as kg:
         assert await kg.seed_if_empty() is False
 
 

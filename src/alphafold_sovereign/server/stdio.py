@@ -61,9 +61,36 @@ def run_stdio() -> None:
         offline=offline,
         allow_hosts=os.environ.get("ALPHAFOLD_ALLOW_HOSTS", ""),
     )
+    _seed_kg_at_startup()
     server = _build_server()
     # FastMCP exposes ``.run()`` for synchronous stdio loop.
     server.run()  # type: ignore[attr-defined]
+
+
+def _seed_kg_at_startup() -> None:
+    """Load the curated knowledge-graph seed once, before serving requests.
+
+    Seeding at boot (rather than lazily on first tool call) keeps the KG
+    query/export tools genuinely read-only. Uses a throwaway instance so the
+    on-disk DB is populated without binding the request-time singleton's lock
+    to this transient event loop. Honours ``AFSMCP_DISABLE_KG_SEED`` and never
+    blocks startup on failure.
+    """
+    import asyncio  # noqa: PLC0415
+
+    from alphafold_sovereign.storage.knowledge_graph import KnowledgeGraph  # noqa: PLC0415
+
+    if os.environ.get("AFSMCP_DISABLE_KG_SEED"):
+        return
+
+    async def _seed() -> None:
+        async with KnowledgeGraph() as kg:
+            await kg.seed_if_empty()
+
+    try:
+        asyncio.run(_seed())
+    except Exception as exc:
+        logger.warning("alphafold_sovereign.kg.seed_startup_failed", exc=str(exc))
 
 
 if TYPE_CHECKING:
