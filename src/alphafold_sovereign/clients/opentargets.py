@@ -313,7 +313,7 @@ class OpenTargetsClient(BaseAsyncClient):
         except Exception as exc:
             logger.warning("opentargets.disease_search.failed", q=query, exc=str(exc))
             return ""
-        hits = (data.get("search") or {}).get("hits") or []
+        hits = ((data or {}).get("search") or {}).get("hits") or []
         for hit in hits:
             hid: str = hit.get("id", "")
             if hid.startswith("EFO_"):

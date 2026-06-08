@@ -381,3 +381,32 @@ async def test_kg_autoseed_skips_when_populated(
     async with kg_mod.get_knowledge_graph() as kg:
         # First access already seeded the graph, so a second call does nothing.
         assert await kg.seed_if_empty() is False
+
+
+async def test_seed_if_empty_requires_connection(tmp_path: Path) -> None:
+    """seed_if_empty raises a clear error when the DB connection is not open."""
+    kg = kg_mod.KnowledgeGraph(tmp_path / "unconnected.db")
+    with pytest.raises(RuntimeError, match="connection is not open"):
+        await kg.seed_if_empty()
+
+
+async def test_seed_if_empty_rolls_back_on_failure(
+    monkeypatch: pytest.MonkeyPatch, kg_db_path: Path
+) -> None:
+    """A failed seed is rolled back and swallowed; the graph stays empty/usable."""
+    monkeypatch.delenv("AFSMCP_DISABLE_KG_SEED", raising=False)
+
+    async def _boom(_kg: Any) -> None:
+        raise RuntimeError("seed boom")
+
+    async def _boom_write(_self: Any, _sql: str, _params: Any) -> None:
+        # Force the best-effort cleanup DELETEs to fail too — they must be
+        # swallowed rather than masking the seed failure.
+        raise RuntimeError("write boom")
+
+    monkeypatch.setattr("alphafold_sovereign.storage.seed.seed_knowledge_graph", _boom)
+    monkeypatch.setattr(kg_mod.KnowledgeGraph, "_write", _boom_write)
+    async with kg_mod.get_knowledge_graph() as kg:
+        assert await kg.seed_if_empty() is False
+        proteins = await kg.query_proteins(limit=5)
+    assert proteins == []

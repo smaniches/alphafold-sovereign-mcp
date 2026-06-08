@@ -144,8 +144,12 @@ class KnowledgeGraph:
 
         Gives the local-knowledge-graph tools representative results out of the
         box. Set ``AFSMCP_DISABLE_KG_SEED=1`` to keep the graph empty. Returns
-        ``True`` when seeding ran.
+        ``True`` when seeding ran. Seeding is best-effort: a partial failure is
+        rolled back and swallowed so the graph stays usable (empty) and a later
+        run retries.
         """
+        if self._conn is None:
+            raise RuntimeError("Database connection is not open; call connect() first.")
         if os.environ.get("AFSMCP_DISABLE_KG_SEED"):
             return False
 
@@ -161,7 +165,27 @@ class KnowledgeGraph:
 
         from alphafold_sovereign.storage.seed import seed_knowledge_graph
 
-        await seed_knowledge_graph(self)
+        try:
+            await seed_knowledge_graph(self)
+        except Exception as exc:
+            # Seeding is not atomic; roll back any partial seed so the empty
+            # check holds and a later run can retry, rather than leaving the
+            # graph permanently half-populated.
+            logger.error("kg.seed.failed", exc=str(exc))
+            for stmt in (
+                "DELETE FROM variant_disease",
+                "DELETE FROM protein_drug",
+                "DELETE FROM protein_disease",
+                "DELETE FROM variants",
+                "DELETE FROM drugs",
+                "DELETE FROM diseases",
+                "DELETE FROM proteins",
+            ):
+                try:
+                    await self._write(stmt, [])
+                except Exception:
+                    pass
+            return False
         logger.info("kg.seeded")
         return True
 
