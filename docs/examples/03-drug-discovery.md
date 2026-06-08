@@ -4,17 +4,8 @@
 > server returns this shape consistent with its unit-tested
 > orchestration over Open Targets, ChEMBL, UniProt, ClinVar, and
 > AlphaFold DB. Live-API validation is on the v1.2.0 roadmap; see
-> [`STATUS.md`](../status.md).
-
-> **Outdated tool names.** This walk-through was authored against the
-> `v1.1.0-rc1` tool surface and references tools — `drug_lookup`,
-> `explore_disease_target_landscape`, `fetch_alphafold_structure` —
-> that are **not present in the current release**. The drug-name entry
-> point in particular has no equivalent in the current 29-tool surface
-> (all drug paths are disease-keyed). The trace below is therefore not
-> runnable as written against this release and has not yet been
-> re-authored. For the current tool inventory see the
-> [tool reference](../tools/index.md).
+> [`STATUS.md`](../status.md). The responses below use the tools' real
+> top-level response keys; the **values** are illustrative.
 
 ## User prompt
 
@@ -24,81 +15,72 @@
 
 ## What the model calls
 
-This is a multi-turn flow where Claude chains tool calls. The
-illustrative trace below shows the four tool calls in the order Claude
-typically issues them.
+A multi-turn flow where Claude chains three tool calls. The server's
+drug paths are disease-keyed (there is no drug-name entry point), so the
+walk-through starts from the disease and pivots to the target and its
+structure.
 
 ```jsonc
-// Turn 1: look up the drug
-{"tool": "drug_lookup", "params": {"name": "Imatinib"}}
+// Turn 1: the disease's approved + pipeline drug landscape
+//         (surfaces Imatinib and the later-generation TKIs)
+{"tool": "map_disease_drug_landscape", "params": {"disease_mondo_id": "MONDO:0011996"}}
 
-// Turn 2: characterise the primary target
+// Turn 2: characterise the primary target — ABL1 (the BCR-ABL fusion driver)
 {"tool": "assess_target_druggability", "params": {"uniprot_id": "P00519", "include_clinical_stage": true}}
 
-// Turn 3: pull the disease-target link
-{"tool": "explore_disease_target_landscape", "params": {"disease_id": "MONDO_0011996", "target_gene": "ABL1"}}
-
-// Turn 4: look at the structural context
-{"tool": "fetch_alphafold_structure", "params": {"uniprot_id": "P00519"}}
+// Turn 3: structural context for ABL1 (kinase domain + PAE-derived boundaries)
+{"tool": "analyze_structural_confidence", "params": {"uniprot_id": "P00519"}}
 ```
 
-## What the server returns (composite; values illustrative)
+## What the server returns (real response keys; values illustrative)
 
 ```jsonc
 {
-  "drug_lookup": {
-    "chembl_id": "CHEMBL941",
-    "name": "IMATINIB",
-    "first_approval": 2001,
-    "max_phase": 4,
-    "indications": [
-      {"mesh": "D015464", "name": "Leukaemia, myeloid, chronic-phase"},
-      {"mesh": "D018263", "name": "Gastrointestinal stromal tumors"},
-      {"mesh": "D015451", "name": "Leukaemia, lymphocytic, acute"}
-    ],
-    "mechanism_of_action": "ABL1/BCR-ABL tyrosine kinase inhibitor",
-    "targets": [
-      {"chembl_id": "CHEMBL1862", "uniprot_id": "P00519", "name": "Tyrosine-protein kinase ABL1", "primary": true},
-      {"chembl_id": "CHEMBL1936", "uniprot_id": "P10721", "name": "Mast/stem cell growth factor receptor Kit"},
-      {"chembl_id": "CHEMBL2007", "uniprot_id": "P16234", "name": "Platelet-derived growth factor receptor alpha"}
-    ]
+  "map_disease_drug_landscape": {
+    "disease": {"mondo_id": "MONDO:0011996", "name": "chronic myelogenous leukemia"},
+    "drug_landscape": {
+      "approved_drugs": [
+        {"molecule_chembl_id": "CHEMBL941", "pref_name": "IMATINIB", "max_phase": 4},
+        {"molecule_chembl_id": "CHEMBL1201583", "pref_name": "DASATINIB", "max_phase": 4},
+        {"molecule_chembl_id": "CHEMBL255863", "pref_name": "NILOTINIB", "max_phase": 4},
+        {"molecule_chembl_id": "CHEMBL1873475", "pref_name": "PONATINIB", "max_phase": 4}
+      ],
+      "phase_3_drugs": [],
+      "phase_1_2_drugs": [],
+      "total_indication_entries": 20
+    },
+    "target_landscape": {
+      "top_targets": [{"uniprot_id": "P00519", "approved_symbol": "ABL1", "association_score": 0.99, "tractable": true}],
+      "druggable_targets": [{"uniprot_id": "P00519", "approved_symbol": "ABL1"}],
+      "total_associated_targets": 18
+    },
+    "competitive_intelligence": {"approved_count": 6, "pipeline_count": 14, "druggable_target_count": 5, "investability": "Crowded — multiple approved therapies"},
+    "data_sources": {"mondo": "https://www.ebi.ac.uk/ols4/ontologies/mondo", "open_targets": "https://platform.opentargets.org", "chembl": "https://www.ebi.ac.uk/chembl/"},
+    "provenance": "AlphaFold Sovereign MCP v1.1.10 · 2026-05-11 · open_targets=24.06 | chembl=v36"
   },
-  "target_ABL1": {
+  "assess_target_druggability": {
     "uniprot_id": "P00519",
-    "function_summary": "Non-receptor tyrosine kinase regulating proliferation, differentiation, adhesion, stress response. The BCR-ABL fusion is the oncogenic driver of CML.",
-    "open_targets_association_cml": 0.99,
-    "tractability": {"labels": ["Approved Drug", "Advanced Clinical"], "small_molecule": true},
-    "druggability_tier_draft": {"tier": "HOT", "score": 6}
+    "druggability_tier": "HOT",
+    "tier_rationale": "Approved-drug precedent + tractable small molecule + high-confidence kinase domain. HEURISTIC — see LIMITATIONS.md L2.",
+    "scoring_breakdown": {"drug_precedent": 2, "tractability": 2, "structure_confidence": 1, "constraint": 1, "total": 6},
+    "evidence": {"drug_count": 6, "tractability_labels": ["Approved Drug", "Advanced Clinical"], "plddt_mean": 71.8, "gene_constraint": {"loeuf": 0.41, "pLI": 0.86, "interpretation": "moderately constrained"}},
+    "approved_drugs": [{"molecule_chembl_id": "CHEMBL941", "pref_name": "IMATINIB", "max_phase": 4, "max_phase_label": "Approved", "mechanism": "BCR-ABL tyrosine kinase inhibitor", "oral": true, "first_approval": 2001}],
+    "tractability_assessment": {"small_molecule": true, "antibody": false, "protac": false, "labels_raw": ["Approved Drug", "Advanced Clinical"]},
+    "actionability": "High — approved small-molecule inhibitors exist; strong structure-based design support.",
+    "data_sources": {"chembl": "https://www.ebi.ac.uk/chembl/", "open_targets": "https://platform.opentargets.org", "gnomad": "https://gnomad.broadinstitute.org", "alphafold_db": "https://alphafold.ebi.ac.uk"},
+    "provenance": "AlphaFold Sovereign MCP v1.1.10 · 2026-05-11 · chembl=v36 | open_targets=24.06 | gnomad=v4 | alphafold_db=v6"
   },
-  "disease_landscape_cml": {
-    "disease_id": "MONDO_0011996",
-    "disease_label": "Chronic myelogenous leukaemia",
-    "target_gene": "ABL1",
-    "association_score": 0.99,
-    "key_drugs_for_disease_target": [
-      {"chembl_id": "CHEMBL941", "name": "IMATINIB", "generation": "1st-gen TKI"},
-      {"chembl_id": "CHEMBL1201583", "name": "DASATINIB", "generation": "2nd-gen TKI"},
-      {"chembl_id": "CHEMBL255863", "name": "NILOTINIB", "generation": "2nd-gen TKI"},
-      {"chembl_id": "CHEMBL1873475", "name": "PONATINIB", "generation": "3rd-gen TKI"}
-    ],
-    "known_resistance_mutations": [
-      {"variant": "T315I", "effect": "Disrupts imatinib binding; sensitive to ponatinib"},
-      {"variant": "Y253H", "effect": "Reduces imatinib affinity"},
-      {"variant": "E255K", "effect": "Reduces imatinib affinity"}
-    ]
-  },
-  "structure_ABL1": {
+  "analyze_structural_confidence": {
     "uniprot_id": "P00519",
+    "mean_plddt": 71.8,
+    "confidence_tier": "High",
+    "confidence_tier_explanation": "Backbone largely correct; some sidechain uncertainty.",
+    "sequence_length": 1130,
+    "pae_summary": {"mean_pae_angstrom": 9.4, "max_pae_angstrom": 31.2, "high_uncertainty_pairs": []},
+    "domain_boundaries": {"candidate_positions": [241, 493], "n_putative_domains": 2, "note": "Boundary positions are zero-indexed residue numbers where PAE rises sharply. Validate with InterPro or UniProt feature annotations."},
+    "druggability_pre_screen": {"ordered_fraction": 0.62, "structural_suitability": "SUITABLE for structure-based drug design"},
     "model_url": "https://alphafold.ebi.ac.uk/files/AF-P00519-F1-model_v6.pdb",
-    "n_residues": 1130,
-    "plddt_mean": 71.8,
-    "kinase_domain_residues": [242, 493],
-    "kinase_domain_plddt_mean": 92.4,
-    "key_residue_t315": {
-      "position": 315,
-      "plddt": 95.1,
-      "note": "T315 is the gatekeeper residue. Mutation to isoleucine (T315I) sterically clashes with imatinib and is the canonical clinical resistance variant."
-    }
+    "provenance": "AlphaFold Sovereign MCP v1.1.10 · 2026-05-11 · alphafold_db=v6 | plddt_version=v6"
   }
 }
 ```
@@ -114,27 +96,34 @@ typically issues them.
 >   a `BCR-ABL` fusion — a constitutively active version of the
 >   `ABL1` tyrosine kinase. Imatinib binds the ATP-binding pocket of
 >   ABL1 in its inactive conformation and locks the kinase shut.
-> - Open Targets scores `ABL1` ↔ CML at 0.99 (essentially axiomatic),
->   and the druggability heuristic classifies ABL1 as HOT
->   (kinase, approved drugs, high-confidence structure).
+> - The disease→drug landscape surfaces `ABL1` as the top CML target
+>   (Open Targets association 0.99), and the druggability heuristic
+>   classifies ABL1 as HOT (score 6: approved drugs, tractable small
+>   molecule, high-confidence structure).
 >
 > **Why it works for CML specifically:** CML is one of the few cancers
 > driven by a single, defined molecular lesion. Inhibiting BCR-ABL
-> reverses the proliferative phenotype directly.
+> reverses the proliferative phenotype directly. The landscape also
+> shows the later-generation TKIs (dasatinib, nilotinib, ponatinib)
+> developed to handle resistance.
 >
 > **Structural context (AlphaFold P00519):**
-> - The kinase domain (residues 242–493) is well-resolved (pLDDT 92.4).
-> - Residue **T315 is the gatekeeper** — pLDDT 95.1. Mutating it to
->   isoleucine (`T315I`) sterically clashes with imatinib and is the
->   canonical clinical resistance variant. Ponatinib was designed to
->   accommodate T315I.
+> - Mean pLDDT 71.8 places the model in the "High" confidence tier, the
+>   PAE-derived domain boundary (~residues 241–493) brackets the kinase
+>   domain, and the structural pre-screen returns SUITABLE for
+>   structure-based drug design.
+> - **Background (not a per-residue field this tool returns):** the
+>   gatekeeper residue **T315** — its `T315I` mutation sterically clashes
+>   with imatinib and is the canonical clinical resistance variant;
+>   ponatinib was designed to accommodate it.
 >
-> **Off-targets:** imatinib also inhibits c-KIT (P10721) and PDGFRα
-> (P16234), which is why it works in GIST tumours (KIT-driven) as well.
+> **Off-targets (background, not from these calls):** imatinib also
+> inhibits c-KIT and PDGFRα, which is why it also treats GIST tumours —
+> established pharmacology rather than output of the three tools above.
 >
-> **Disclaimers**: druggability tier is a heuristic; the resistance-
-> mutation list comes from ChEMBL and the literature but is not
-> exhaustive.
+> **Disclaimers:** the druggability tier is a heuristic; clinical-phase
+> and approval data come from ChEMBL / Open Targets and are not a
+> substitute for a regulatory label.
 
 ## Reproducing this example for real
 
@@ -142,4 +131,4 @@ Same setup as Example 01.
 
 ## Files
 
-- `transcript.jsonl` — full MCP exchange across the four tool calls.
+- `transcript.jsonl` — full MCP exchange across the three tool calls.
