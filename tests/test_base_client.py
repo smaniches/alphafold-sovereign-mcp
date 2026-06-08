@@ -13,7 +13,6 @@ from alphafold_sovereign.clients._base import (
     UpstreamError,
 )
 
-
 # ── CircuitBreaker ─────────────────────────────────────────────────────────────
 
 

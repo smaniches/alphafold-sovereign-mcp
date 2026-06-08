@@ -17,7 +17,6 @@ from alphafold_sovereign.clients.gnomad import (
     _interpret_constraint,
 )
 
-
 # ---------------------------------------------------------------------------
 # Pure-function helpers
 # ---------------------------------------------------------------------------

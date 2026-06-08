@@ -9,41 +9,41 @@ import pytest
 
 @pytest.mark.unit
 def test_alphafold_client_import() -> None:
-    from alphafold_sovereign.clients.alphafold import AlphaFoldClient  # noqa: F401
+    from alphafold_sovereign.clients.alphafold import AlphaFoldClient
 
     assert AlphaFoldClient is not None
 
 
 @pytest.mark.unit
 def test_ensembl_client_import() -> None:
-    from alphafold_sovereign.clients.ensembl import EnsemblClient  # noqa: F401
+    from alphafold_sovereign.clients.ensembl import EnsemblClient
 
     assert EnsemblClient is not None
 
 
 @pytest.mark.unit
 def test_chembl_client_import() -> None:
-    from alphafold_sovereign.clients.chembl import ChEMBLClient  # noqa: F401
+    from alphafold_sovereign.clients.chembl import ChEMBLClient
 
     assert ChEMBLClient is not None
 
 
 @pytest.mark.unit
 def test_disgenet_client_import() -> None:
-    from alphafold_sovereign.clients.disgenet import DisGeNETClient  # noqa: F401
+    from alphafold_sovereign.clients.disgenet import DisGeNETClient
 
     assert DisGeNETClient is not None
 
 
 @pytest.mark.unit
 def test_gnomad_client_import() -> None:
-    from alphafold_sovereign.clients.gnomad import GnomADClient  # noqa: F401
+    from alphafold_sovereign.clients.gnomad import GnomADClient
 
     assert GnomADClient is not None
 
 
 @pytest.mark.unit
 def test_clinvar_client_import() -> None:
-    from alphafold_sovereign.clients.clinvar import ClinVarClient  # noqa: F401
+    from alphafold_sovereign.clients.clinvar import ClinVarClient
 
     assert ClinVarClient is not None

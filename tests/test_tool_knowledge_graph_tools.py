@@ -11,7 +11,6 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from alphafold_sovereign.storage import knowledge_graph as kg_mod
-from alphafold_sovereign.tools import knowledge_graph_tools as kgt
 from alphafold_sovereign.tools.knowledge_graph_tools import (
     DrugNetworkInput,
     ExportInput,

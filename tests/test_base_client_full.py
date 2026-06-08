@@ -13,9 +13,7 @@ Exercises:
 
 from __future__ import annotations
 
-import asyncio
 import importlib
-from typing import Any
 
 import httpx
 import pytest
@@ -32,7 +30,6 @@ from alphafold_sovereign.clients._base import (
     UpstreamError,
     _is_retryable,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -340,7 +337,7 @@ async def test_rate_limiter_path_invoked(
             self.period = period
             self.entered = 0
 
-        async def __aenter__(self) -> "_FakeLimiter":
+        async def __aenter__(self) -> _FakeLimiter:
             self.entered += 1
             return self
 

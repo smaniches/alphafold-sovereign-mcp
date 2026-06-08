@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from alphafold_sovereign.domain.disease import DiseaseRecord, PathogenicityClass
+from alphafold_sovereign.domain.disease import DiseaseRecord
 from alphafold_sovereign.tools import precision_medicine as pm
 from alphafold_sovereign.tools.precision_medicine import (
     ACMGVariantInput,
@@ -17,7 +17,6 @@ from alphafold_sovereign.tools.precision_medicine import (
     DruggabilityInput,
     DrugRepurposingInput,
     ProteinDossierInput,
-    TargetSelectivityInput,
     VariantClinicalReportInput,
     _acmg_code,
     _acmg_strength,
@@ -1435,7 +1434,7 @@ async def test_classify_variant_acmg_clinvar_likely_pathogenic(
     mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
 
     out = await classify_variant_acmg(ACMGVariantInput(hgvs="BRCA1:c.18T>G"))
-    assert "Likely Pathogenic (ClinVar-supported)" == out["draft_classification"]
+    assert out["draft_classification"] == "Likely Pathogenic (ClinVar-supported)"
 
 
 async def test_classify_variant_acmg_pvs1_with_high_loeuf(

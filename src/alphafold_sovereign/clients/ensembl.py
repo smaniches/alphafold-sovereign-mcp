@@ -161,6 +161,43 @@ class EnsemblClient(BaseAsyncClient):
             "uniprot_ids": uniprot_ids,
         }
 
+    async def ncbi_gene_id(self, gene_symbol: str) -> str:
+        """Resolve an HGNC symbol to its NCBI/Entrez Gene ID.
+
+        Two hops: ``/lookup/symbol`` (symbol → Ensembl gene ID) then
+        ``/xrefs/id`` filtered to ``EntrezGene`` (the symbol-lookup response
+        does not itself carry cross-references). Returns ``''`` when no
+        mapping is found.
+
+        Args:
+            gene_symbol: HGNC gene symbol, e.g. ``'BRCA1'``.
+
+        Returns:
+            The Entrez Gene ID as a string, e.g. ``'672'``, or ``''``.
+        """
+        lookup = await self.gene_lookup(gene_symbol)
+        ensembl_id = lookup.get("ensembl_gene_id", "") if lookup.get("found") else ""
+        if not ensembl_id:
+            return ""
+        try:
+            data: Any = await self._get(
+                f"/xrefs/id/{ensembl_id}",
+                params={"external_db": "EntrezGene"},
+            )
+        except Exception as exc:
+            logger.warning("ensembl.ncbi_gene_id.error", gene=gene_symbol, exc=str(exc))
+            return ""
+        # This endpoint returns a JSON array of cross-reference objects; guard
+        # against an unexpected non-list payload (e.g. an error object).
+        if not isinstance(data, list):
+            return ""
+        for xref in data:
+            if isinstance(xref, dict):
+                primary_id = xref.get("primary_id", "")
+                if primary_id:
+                    return str(primary_id)
+        return ""
+
     # ------------------------------------------------------------------
     # HGVS → gene symbol (quick parse for pipeline use)
     # ------------------------------------------------------------------
@@ -259,7 +296,10 @@ class EnsemblClient(BaseAsyncClient):
 
         try:
             data = await self._get(
-                f"/homology/id/{ensembl_id}",
+                # Ensembl's homology-by-id endpoint requires the species in
+                # the path (``/homology/id/{species}/{id}``); the species-less
+                # form (``/homology/id/{id}``) now returns HTTP 404.
+                f"/homology/id/{self.species}/{ensembl_id}",
                 params={"type": "orthologues", "aligned": 0, "sequence": "none"},
             )
         except Exception as exc:

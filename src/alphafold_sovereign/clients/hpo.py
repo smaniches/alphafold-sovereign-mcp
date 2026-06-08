@@ -3,8 +3,8 @@
 """Human Phenotype Ontology (HPO) async client.
 
 Data sources:
-- HPO REST API (hpo.jax.org)  — phenotype terms, disease-phenotype links
-- OLS4 REST API               — hierarchy traversal fallback
+- HPO REST API (ontology.jax.org)  — phenotype terms, disease-phenotype links
+- OLS4 REST API                    — hierarchy traversal fallback
 
 HPO provides a standardised vocabulary for describing human disease
 phenotypes.  It is the canonical ontology for rare-disease phenotyping,
@@ -28,7 +28,7 @@ from alphafold_sovereign.domain.disease import OntologyTerm, PhenotypeAssociatio
 
 logger = structlog.get_logger(__name__)
 
-_HPO_BASE = "https://hpo.jax.org/api"
+_HPO_BASE = "https://ontology.jax.org/api"
 _HPO_CONFIG = UpstreamConfig(
     base_url=_HPO_BASE,
     calls_per_second=5.0,
@@ -62,7 +62,9 @@ class DiseaseByPhenotype:
     """OMIM or Orphanet ID, e.g. 'OMIM:114480'."""
     disease_name: str
     hpo_id: str
-    hpo_label: str
+    hpo_label: str = ""
+    mondo_id: str = ""
+    """Cross-referenced MONDO ID, e.g. 'MONDO:0007254' (when provided by HPO)."""
     frequency: str = ""
     onset: str = ""
     sex: str = ""
@@ -73,6 +75,7 @@ class DiseaseByPhenotype:
             "disease_name": self.disease_name,
             "hpo_id": self.hpo_id,
             "hpo_label": self.hpo_label,
+            "mondo_id": self.mondo_id,
             "frequency": self.frequency,
             "onset": self.onset,
             "sex": self.sex,
@@ -108,7 +111,7 @@ class HPOClient(BaseAsyncClient):
             ``OntologyTerm`` with label, definition, and synonyms.
         """
         hpo_id = _normalise_hpo_id(hpo_id)
-        data = await self._get(f"/hpo/term/{hpo_id}")
+        data = await self._get(f"/hp/terms/{hpo_id}")
         return self._parse_term(data)
 
     async def search(
@@ -128,10 +131,10 @@ class HPOClient(BaseAsyncClient):
         """
         max_results = max(1, min(max_results, 50))
         data = await self._get(
-            "/hpo/search",
-            params={"q": query, "max": max_results},
+            "/hp/search",
+            params={"q": query, "limit": max_results},
         )
-        return [self._parse_term(t) for t in data.get("terms", [])]
+        return [self._parse_term(t) for t in (data.get("terms") or [])]
 
     # ------------------------------------------------------------------
     # Disease ↔ phenotype associations
@@ -153,54 +156,50 @@ class HPOClient(BaseAsyncClient):
             List of ``DiseaseByPhenotype`` sorted by disease name.
         """
         hpo_id = _normalise_hpo_id(hpo_id)
-        data = await self._get(f"/hpo/term/{hpo_id}/diseases")
-        associations = data.get("diseaseAssoc", [])
+        data = await self._get(f"/network/annotation/{hpo_id}")
+        diseases = data.get("diseases") or []
         results: list[DiseaseByPhenotype] = []
-        for assoc in associations[:limit]:
+        for disease in diseases[:limit]:
             results.append(
                 DiseaseByPhenotype(
-                    disease_id=assoc.get("diseaseId", ""),
-                    disease_name=assoc.get("diseaseName", ""),
+                    disease_id=disease.get("id", ""),
+                    disease_name=disease.get("name", ""),
                     hpo_id=hpo_id,
-                    hpo_label=assoc.get("ontologyTerm", {}).get("name", ""),
-                    frequency=assoc.get("frequency", ""),
-                    onset=assoc.get("onset", ""),
-                    sex=assoc.get("sex", ""),
+                    mondo_id=disease.get("mondoId") or "",
                 )
             )
         return sorted(results, key=lambda d: d.disease_name)
 
-    async def phenotypes_for_gene(
+    async def phenotypes_for_gene_id(
         self,
-        gene_symbol: str,
+        ncbi_gene_id: str,
         *,
+        gene_symbol: str = "",
         limit: int = 50,
     ) -> list[PhenotypeAssociation]:
-        """Return HPO phenotype annotations for a human gene.
+        """Return HPO phenotype annotations for a gene by its NCBI Gene ID.
+
+        The HPO network-annotation endpoint is keyed on entity CURIEs, so a
+        gene must be addressed by its Entrez/NCBI Gene ID (e.g.
+        ``'NCBIGene:672'`` for BRCA1) rather than its HGNC symbol. Resolve the
+        symbol upstream (e.g. via Ensembl ``gene_lookup``) before calling.
 
         Args:
-            gene_symbol: HGNC gene symbol, e.g. ``'BRCA1'``.
+            ncbi_gene_id: NCBI Gene CURIE, e.g. ``'NCBIGene:672'``.
+            gene_symbol: Optional HGNC symbol, recorded on each association.
             limit: Maximum phenotype associations to return.
 
         Returns:
             List of ``PhenotypeAssociation`` objects.
         """
-        data = await self._get(
-            "/hpo/gene",
-            params={"gene": gene_symbol},
-        )
+        data = await self._get(f"/network/annotation/{ncbi_gene_id}")
         associations: list[PhenotypeAssociation] = []
-        for item in (data.get("termAssoc") or [])[:limit]:
-            term = item.get("ontologyTerm", {})
+        for term in (data.get("phenotypes") or [])[:limit]:
             associations.append(
                 PhenotypeAssociation(
                     hpo_id=term.get("id", ""),
                     hpo_label=term.get("name", ""),
                     gene_symbol=gene_symbol,
-                    frequency=item.get("frequency", ""),
-                    onset=item.get("onset", ""),
-                    evidence_codes=tuple(item.get("evidenceCodes", [])),
-                    references=tuple(item.get("references", [])),
                 )
             )
         return associations
@@ -220,22 +219,19 @@ class HPOClient(BaseAsyncClient):
         Returns:
             List of ``PhenotypeAssociation`` objects.
         """
-        data = await self._get(
-            "/hpo/disease",
-            params={"disease_id": disease_id},
-        )
+        data = await self._get(f"/network/annotation/{disease_id}")
+        disease_name = (data.get("disease") or {}).get("name", "")
         associations: list[PhenotypeAssociation] = []
-        for cat in data.get("catTermsMap", {}).values():
-            for item in cat.get("terms", []):
-                term = item.get("ontologyTerm", {})
+        for terms in (data.get("categories") or {}).values():
+            for item in terms:
+                metadata = item.get("metadata", {}) or {}
                 associations.append(
                     PhenotypeAssociation(
-                        hpo_id=term.get("id", ""),
-                        hpo_label=term.get("name", ""),
-                        disease_name=data.get("disease", {}).get("diseaseName", ""),
-                        frequency=item.get("frequency", {}).get("id", ""),
-                        onset=item.get("onset", {}).get("id", "") if item.get("onset") else "",
-                        evidence_codes=tuple(e.get("id", "") for e in (item.get("evidence") or [])),
+                        hpo_id=item.get("id", ""),
+                        hpo_label=item.get("name", ""),
+                        disease_name=disease_name,
+                        frequency=metadata.get("frequency", ""),
+                        onset=metadata.get("onset", ""),
                     )
                 )
                 if len(associations) >= limit:
@@ -251,14 +247,20 @@ class HPOClient(BaseAsyncClient):
     async def ancestors(self, hpo_id: str) -> list[OntologyTerm]:
         """Return ancestor terms (parents and above) for an HPO term."""
         hpo_id = _normalise_hpo_id(hpo_id)
-        data = await self._get(f"/hpo/term/{hpo_id}/parents")
-        return [self._parse_term(t) for t in data.get("parents", [])]
+        # These endpoints return a JSON array of term objects; guard against an
+        # unexpected non-list payload (e.g. an error object).
+        data: Any = await self._get(f"/hp/terms/{hpo_id}/parents")
+        if not isinstance(data, list):
+            return []
+        return [self._parse_term(t) for t in data]
 
     async def children(self, hpo_id: str) -> list[OntologyTerm]:
         """Return direct children of an HPO term."""
         hpo_id = _normalise_hpo_id(hpo_id)
-        data = await self._get(f"/hpo/term/{hpo_id}/children")
-        return [self._parse_term(t) for t in data.get("children", [])]
+        data: Any = await self._get(f"/hp/terms/{hpo_id}/children")
+        if not isinstance(data, list):
+            return []
+        return [self._parse_term(t) for t in data]
 
     # ------------------------------------------------------------------
     # Internal
