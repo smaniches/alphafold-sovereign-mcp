@@ -9,7 +9,10 @@ tool results across sessions.  Every tool result can be stored, enabling:
   - **Cross-session synthesis**: "find all HIGH-tier variants I've ever triaged"
   - **Longitudinal tracking**: monitor how database updates change classifications
   - **Batch analytics**: pandas/polars export for ML feature engineering
-  - **Audit compliance**: immutable provenance trail for every inference
+  - **Audit capability**: an insert-only ``tool_invocations`` table that a
+    caller can write to via ``log_tool_invocation`` (opt-in; this module does
+    not auto-log every tool call — automatic per-invocation logging is a
+    roadmap item)
 
 Architecture:
   - Primary store: SQLite (zero-dependency, embedded, ACID, WAL mode)
@@ -29,13 +32,14 @@ Schema (6 entity tables + 4 relationship tables + 1 provenance table):
   protein_drug      — ChEMBL drug-target links
   variant_disease   — ClinVar + DisGeNET VDA links
   gene_phenotype    — HPO gene-phenotype associations
-  tool_invocations  — Every MCP tool call (input + output + timing)
+  tool_invocations  — Opt-in audit table; a caller may record a tool call
+                      (input + output + timing) via log_tool_invocation()
   provenance        — Data-source version snapshot per invocation
 
 Usage:
   >>> from alphafold_sovereign.storage.knowledge_graph import KnowledgeGraph
   >>> async with KnowledgeGraph() as kg:
-  ...     await kg.store_variant_report(hgvs="BRCA1:c.181T>G", report={...})
+  ...     await kg.store_variant(hgvs="BRCA1:c.181T>G", gene_symbol="BRCA1")
   ...     df = await kg.query_variants(gene="BRCA1", tier="HIGH")
 """
 
