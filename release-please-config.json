@@ -11,6 +11,14 @@
         "CITATION.cff",
         "src/alphafold_sovereign/__init__.py",
         {
+          "type": "generic",
+          "path": "smithery.yaml"
+        },
+        {
+          "type": "generic",
+          "path": "uv.lock"
+        },
+        {
           "type": "json",
           "path": "server.json",
           "jsonpath": "$.version"
@@ -19,6 +27,11 @@
           "type": "json",
           "path": "server.json",
           "jsonpath": "$.packages[0].version"
+        },
+        {
+          "type": "json",
+          "path": ".well-known/mcp.json",
+          "jsonpath": "$.version"
         }
       ]
     }
