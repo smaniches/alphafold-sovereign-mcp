@@ -1,0 +1,47 @@
+name: Release Please
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+  # Needed so this workflow can dispatch release.yml after release-please
+  # creates the GitHub Release. workflow_dispatch is the documented exception
+  # that lets a GITHUB_TOKEN-driven workflow start a downstream workflow —
+  # without it the release: published / tag-push events authored by
+  # GITHUB_TOKEN are suppressed and PyPI never sees the new version.
+  #   docs: https://docs.github.com/en/actions/security-guides/automatic-token-authentication
+  actions: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - id: release
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+      # When release-please created a release, fan out to the existing
+      # tag-format release pipeline (build + SLSA L3 provenance + CycloneDX/
+      # SPDX SBOM + cosign signing + PyPI Trusted Publishing). We use
+      # workflow_dispatch rather than the native tag-push / release:published
+      # trigger because release-please runs under GITHUB_TOKEN and GitHub
+      # deliberately suppresses cascade triggers from GITHUB_TOKEN-authored
+      # events. release.yml's `tag` input drives its checkout ref, so the
+      # published artefacts reflect the released code rather than main HEAD,
+      # and its release-upload step is idempotent (gh release view / --clobber)
+      # so attaching assets to the release-please-created release is safe.
+      - name: Dispatch build + sign + PyPI publish (release.yml)
+        if: ${{ steps.release.outputs.release_created }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run release.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref "${{ steps.release.outputs.tag_name }}" \
+            --field tag="${{ steps.release.outputs.tag_name }}"
