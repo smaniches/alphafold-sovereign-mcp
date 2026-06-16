@@ -2,6 +2,13 @@
 
 <!-- mcp-name: io.github.smaniches/alphafold-sovereign-mcp -->
 
+Answering a structural-biology or variant question usually means querying
+a dozen public databases by hand — AlphaFold DB, Open Targets, ClinVar,
+gnomAD, and more — and reconciling their formats. This server puts those
+sources behind one set of MCP tool calls that run entirely on your own
+machine: no hosted service, no account, no telemetry. "Sovereign" here
+means local-first — your queries and any stored results stay local.
+
 A Model Context Protocol server — an AlphaFold MCP server — that
 wraps AlphaFold DB and 8 other public biomedical data sources behind
 a set of MCP tool calls, backed by a local SQLite knowledge graph with
@@ -135,19 +142,21 @@ uv pip install -e .
 
 ### Verify the install
 
-```bash
-alphafold-sovereign --version       # → 1.2.2
-alphafold-sovereign --self-test     # → PASS on the offline BRCA1 fixture
+```console
+$ alphafold-sovereign --version
+1.2.2
+$ alphafold-sovereign --self-test
+SELF-TEST PASS - ACMG helpers behave as expected on the BRCA1 c.5266dupC fixture.
 ```
 
 If you ran it via `uvx` without installing, use
 `uvx alphafold-sovereign-mcp --self-test` instead (the bare
 `alphafold-sovereign` script is only on PATH after a pip/uv install).
 
-`--self-test` runs fully offline (no network) and checks the
-deterministic ACMG-evidence helpers (VEP, gnomAD, and AlphaMissense
-mapped to ACMG criteria) against a built-in `BRCA1:c.5266dupC` fixture. No network calls; returns exit
-code 0 on PASS, non-zero on FAIL.
+`--self-test` runs fully offline: it checks the deterministic ACMG-evidence
+helpers (VEP, gnomAD, and AlphaMissense mapped to ACMG criteria) against a
+built-in `BRCA1:c.5266dupC` fixture. Returns exit code 0 on PASS, non-zero on
+FAIL. No network calls, no credentials required.
 
 ### Configure Claude Desktop
 
