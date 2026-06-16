@@ -2,7 +2,7 @@ site_name: AlphaFold Sovereign MCP
 site_description: >-
   MCP server wrapping AlphaFold DB and 8 other biomedical data sources.
   Engineering-validated infrastructure; scientifically unvalidated by
-  independent domain experts. v1.2.1.
+  independent domain experts. v1.2.2.
 site_url: https://smaniches.github.io/alphafold-sovereign-mcp/
 site_author: Santiago Maniches
 repo_url: https://github.com/smaniches/alphafold-sovereign-mcp

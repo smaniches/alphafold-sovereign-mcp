@@ -136,7 +136,7 @@ uv pip install -e .
 ### Verify the install
 
 ```bash
-alphafold-sovereign --version       # → 1.2.1
+alphafold-sovereign --version       # → 1.2.2
 alphafold-sovereign --self-test     # → PASS on the offline BRCA1 fixture
 ```
 

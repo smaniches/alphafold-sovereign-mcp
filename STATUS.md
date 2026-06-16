@@ -1,6 +1,6 @@
 # Project Status
 
-**Version:** v1.2.1
+**Version:** v1.2.2
 **Stage:** Beta. Engineering-validated infrastructure; scientifically
 unvalidated by independent domain experts.
 
@@ -122,7 +122,7 @@ expectation of what this project is and is not.
 - **Single maintainer.** No bus factor > 1.
 - **No external contributors yet.** Review process is documented in
   ``CONTRIBUTING.md`` but has not been exercised.
-- **No formal release cadence.** v1.2.1 is the current release;
+- **No formal release cadence.** v1.2.2 is the current release;
   later versions will be tagged as the validation milestones below
   are met.
 
