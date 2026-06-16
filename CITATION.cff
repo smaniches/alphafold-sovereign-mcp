@@ -51,7 +51,7 @@ keywords:
   - biosecurity
   - drug-discovery
   - clinical-research
-version: "1.2.0"  # x-release-please-version
+version: "1.2.1"  # x-release-please-version
 date-released: "2026-06-08"
 references:
   - type: software

@@ -7,6 +7,24 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.2.1](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.2.0...v1.2.1) (2026-06-16)
+
+
+### Bug Fixes
+
+* align user-facing capability claims with the implementation; ship py.typed ([#107](https://github.com/smaniches/alphafold-sovereign-mcp/issues/107)) ([590583e](https://github.com/smaniches/alphafold-sovereign-mcp/commit/590583e779a29215df39fdc5f3c47ec9cc38468e))
+* **deps:** bump starlette, python-multipart, cryptography (clears 9 Dependabot alerts) ([#108](https://github.com/smaniches/alphafold-sovereign-mcp/issues/108)) ([a9a658d](https://github.com/smaniches/alphafold-sovereign-mcp/commit/a9a658d05c13cb3f960ef41d564654441f3b90a2))
+
+
+### Testing
+
+* add metadata contract tests and Zenodo deposition metadata ([#101](https://github.com/smaniches/alphafold-sovereign-mcp/issues/101)) ([70db7c0](https://github.com/smaniches/alphafold-sovereign-mcp/commit/70db7c08bf03699a302e442c43688a75f13dfef3))
+
+
+### Refactoring
+
+* type-check the full source tree under mypy --strict ([#102](https://github.com/smaniches/alphafold-sovereign-mcp/issues/102)) ([772dd3d](https://github.com/smaniches/alphafold-sovereign-mcp/commit/772dd3dab1c5db0801e30d16af975e57253c0ee2))
+
 ## [Unreleased]
 
 ## [1.2.0] - 2026-06-08
