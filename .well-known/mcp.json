@@ -15,5 +15,5 @@
   },
   "maturity": "beta",
   "scientific_validation": "unvalidated",
-  "scientific_validation_note": "Engineering-validated (723 tests, 100% line and branch coverage) and exercised end-to-end against the live upstream APIs. Scientific outputs (ACMG draft, druggability tier) have NOT been reviewed by independent domain experts. Not yet deployed in production. See STATUS.md and LIMITATIONS.md."
+  "scientific_validation_note": "Engineering-validated (100% line and branch coverage) and exercised end-to-end against the live upstream APIs. Scientific outputs (ACMG draft, druggability tier) have NOT been reviewed by independent domain experts. Not yet deployed in production. See STATUS.md and LIMITATIONS.md."
 }

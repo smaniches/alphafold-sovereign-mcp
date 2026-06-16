@@ -26,12 +26,12 @@ respective owner and is used here only to describe the public data
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](pyproject.toml)
 [![MCP Spec 2025-06-18](https://img.shields.io/badge/MCP-2025--06--18-purple)](https://modelcontextprotocol.io)
-[![Tests](https://img.shields.io/badge/tests-730%20passing-success)](https://github.com/smaniches/alphafold-sovereign-mcp/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/tests-740%20passing-success)](https://github.com/smaniches/alphafold-sovereign-mcp/actions/workflows/ci.yml)
 [![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)](https://github.com/smaniches/alphafold-sovereign-mcp/actions/workflows/ci.yml)
 [![ORCID](https://img.shields.io/badge/ORCID-0009--0005--6480--1987-A6CE39?logo=orcid&logoColor=white)](https://orcid.org/0009-0005-6480-1987)
 [![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.20134773-3C5A99?logo=zenodo&logoColor=white)](https://doi.org/10.5281/zenodo.20134773)
 
-**Status:** `v1.2.0` (Beta). Engineering-validated (730 tests, 100%
+**Status:** Beta. Engineering-validated (740 tests, 100%
 line and branch coverage). Not yet scientifically validated by
 independent domain experts; not yet deployed in production. See
 [`STATUS.md`](STATUS.md) and [`LIMITATIONS.md`](LIMITATIONS.md).
@@ -328,7 +328,7 @@ See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the full module map.
 
 ## Testing & quality
 
-- 730 unit tests with respx-mocked upstreams; the full suite runs
+- 740 unit tests with respx-mocked upstreams; the full suite runs
   hermetically in under a minute on a laptop. Test count includes
   parametrised expansions as reported by `pytest --collect-only`.
 - Coverage on the shipped surface (`src/alphafold_sovereign/clients`,
@@ -368,6 +368,7 @@ Machine-readable metadata: [`CITATION.cff`](CITATION.cff) (GitHub
 renders a "Cite this repository" button in the sidebar that consumes
 this file).
 
+<!-- x-release-please-start-version -->
 ```bibtex
 @software{maniches_alphafold_sovereign_mcp,
   author    = {Maniches, Santiago},
@@ -380,6 +381,7 @@ this file).
   doi       = {10.5281/zenodo.20134773}
 }
 ```
+<!-- x-release-please-end-version -->
 
 When citing results derived from this software, please also cite the
 upstream data sources (AlphaFold DB, Open Targets, ChEMBL, Ensembl,

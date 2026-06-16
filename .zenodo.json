@@ -1,0 +1,59 @@
+{
+  "title": "AlphaFold Sovereign MCP: a Model Context Protocol server for AlphaFold DB and eight other biomedical data sources",
+  "description": "<p>AlphaFold Sovereign MCP is an open-source Model Context Protocol (MCP) server that exposes the AlphaFold Protein Structure Database together with eight other public biomedical data sources - Open Targets, ChEMBL, Ensembl VEP, ClinVar, gnomAD, MONDO, HPO, and DisGeNET - as read-only tool calls that a Claude (or other MCP-capable) client can invoke directly.</p><p>Tool results can be persisted to a local SQLite knowledge graph through the storage API; the exposed MCP tools query and export that store read-only (automatic per-invocation persistence is not yet wired). The server is engineering-validated with 100% line and branch coverage in continuous integration, but its scientific outputs - draft ACMG/AMP variant evidence and a heuristic druggability tier - have NOT been reviewed by independent domain experts and must be treated as research aids, not as clinical decision support. See LIMITATIONS.md.</p><p>The PyPI distribution, the installed console script, and the MCP server identity are all <code>alphafold-sovereign-mcp</code>. The package is Apache-2.0 licensed.</p>",
+  "upload_type": "software",
+  "access_right": "open",
+  "license": "Apache-2.0",
+  "version": "1.2.0",
+  "creators": [
+    {
+      "name": "Maniches, Santiago",
+      "affiliation": "TOPOLOGICA LLC",
+      "orcid": "0009-0005-6480-1987"
+    }
+  ],
+  "keywords": [
+    "alphafold",
+    "protein-structure",
+    "model-context-protocol",
+    "mcp",
+    "mcp-server",
+    "bioinformatics",
+    "structural-biology",
+    "topological-data-analysis",
+    "persistent-homology",
+    "disease-ontology",
+    "mondo",
+    "precision-medicine",
+    "drug-discovery",
+    "knowledge-graph",
+    "anthropic-claude"
+  ],
+  "communities": [
+    {"identifier": "fairsoftware"}
+  ],
+  "related_identifiers": [
+    {
+      "scheme": "url",
+      "identifier": "https://github.com/smaniches/alphafold-sovereign-mcp",
+      "relation": "isSupplementTo",
+      "resource_type": "software"
+    },
+    {
+      "scheme": "url",
+      "identifier": "https://pypi.org/project/alphafold-sovereign-mcp/",
+      "relation": "isIdenticalTo",
+      "resource_type": "software"
+    },
+    {
+      "scheme": "doi",
+      "identifier": "10.1038/s41586-021-03819-2",
+      "relation": "cites",
+      "resource_type": "publication-article"
+    }
+  ],
+  "references": [
+    "Jumper, J. et al. Highly accurate protein structure prediction with AlphaFold. Nature 596, 583-589 (2021). doi:10.1038/s41586-021-03819-2"
+  ],
+  "notes": "Engineering-validated with 100% line and branch coverage in CI. Scientific outputs - draft ACMG/AMP variant evidence and a heuristic druggability tier - have NOT been reviewed by independent domain experts and must be treated as research aids, not clinical decision support. See LIMITATIONS.md and STATUS.md in the repository."
+}
