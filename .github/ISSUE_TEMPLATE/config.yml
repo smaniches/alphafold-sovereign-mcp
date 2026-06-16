@@ -1,0 +1,7 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security or biosecurity-sensitive report
+    url: https://github.com/smaniches/alphafold-sovereign-mcp/security/advisories/new
+    about: >-
+      Report vulnerabilities privately via GitHub Security Advisories.
+      Do not open a public issue for security-sensitive reports. See SECURITY.md.

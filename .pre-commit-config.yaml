@@ -1,0 +1,31 @@
+# Pre-commit hooks for alphafold-sovereign-mcp.
+#
+# One-time setup:
+#   uv tool install pre-commit
+#   pre-commit install
+#
+# These mirror the CI lint/format/type gate using the project's own pinned
+# ruff and mypy (via `uv run`), so local results match CI exactly. They run
+# the same commands CI runs (see .github/workflows/ci.yml); nothing here is
+# a separate tool version to keep in sync.
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check (src)
+        entry: uv run ruff check src/
+        language: system
+        types: [python]
+        pass_filenames: false
+      - id: ruff-format-check
+        name: ruff format --check
+        entry: uv run ruff format --check .
+        language: system
+        types: [python]
+        pass_filenames: false
+      - id: mypy-strict
+        name: mypy --strict (src)
+        entry: uv run mypy src/alphafold_sovereign
+        language: system
+        types: [python]
+        pass_filenames: false
