@@ -76,7 +76,7 @@ def _run_self_test() -> int:
             print(f"  - {f}", file=sys.stderr)
         return 1
 
-    print("SELF-TEST PASS — ACMG helpers behave as expected on the BRCA1 c.5266dupC fixture.")
+    print("SELF-TEST PASS - ACMG helpers behave as expected on the BRCA1 c.5266dupC fixture.")
     return 0
 
 

@@ -63,7 +63,8 @@ src/alphafold_sovereign/
 ├── clients/             Async HTTP clients — one per upstream (9 + base)
 │   ├── _base.py         BaseAsyncClient: httpx HTTP/2, tenacity retry with
 │   │                    jitter, aiolimiter per-host rate limiting, a circuit
-│   │                    breaker, the offline allowlist, SHA-256 verification
+│   │                    breaker, and the offline allowlist (raises AirGapError);
+│   │                    a _sha256 helper is available to callers, not auto-applied
 │   ├── alphafold.py     AlphaFold DB (prediction metadata, PDB, PAE, AlphaMissense)
 │   ├── opentargets.py   Open Targets Platform GraphQL
 │   ├── chembl.py        ChEMBL REST

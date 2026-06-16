@@ -18,7 +18,7 @@ arrays for readability, so cross-check a specific number against the
 corresponding `transcript.jsonl` line rather than the prose.
 
 What is still future work (tracked in [`STATUS.md`](../STATUS.md)
-§"Roadmap to v1.2.0", step 1) is turning these into **CI-diffed golden
+§"Roadmap (validation, post-1.2.0)", step 1) is turning these into **CI-diffed golden
 tests**: re-running the pipeline on a fixed variant set and asserting
 the stored JSON in continuous integration. Until that lands, the
 transcripts here are point-in-time captures, not regression-gated

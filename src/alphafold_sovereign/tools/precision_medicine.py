@@ -395,6 +395,21 @@ def _vep_to_acmg(consequences: list[dict[str, Any]]) -> dict[str, str]:
     return criteria
 
 
+def _has_small_molecule_tractability(tractability_labels: list[str] | None) -> bool:
+    """True if any label indicates small-molecule tractability.
+
+    This is the exact signal ``_druggability_tier`` credits toward the score, so the
+    tier scoring and the user-facing actionability text never disagree. None,
+    empty, and whitespace-only labels are ignored.
+    """
+    small_mol_labels = {"Small molecule", "Discovery_small_molecule", "SM_clinical"}
+    return any(
+        lab in small_mol_labels or "small_mol" in lab.lower()
+        for lab in (tractability_labels or [])
+        if lab and lab.strip()
+    )
+
+
 def _druggability_tier(
     *,
     drug_count: int,
@@ -416,11 +431,8 @@ def _druggability_tier(
         drug_contrib = 0
         components["drug_precedent"] = {"contribution": 0, "input": f"drug_count={drug_count}"}
 
-    # Tractability labels from Open Targets
-    small_mol_labels = {"Small molecule", "Discovery_small_molecule", "SM_clinical"}
-    has_tractability = any(
-        lab in small_mol_labels or "small_mol" in lab.lower() for lab in tractability_labels
-    )
+    # Tractability labels from Open Targets (same predicate as the actionability text)
+    has_tractability = _has_small_molecule_tractability(tractability_labels)
     tract_contrib = 2 if has_tractability else 0
     components["tractability"] = {
         "contribution": tract_contrib,
@@ -1650,10 +1662,10 @@ def _tier_explanation(tier: str) -> str:
 
 def _druggability_actionability(tier: str, drug_count: int, tractability_labels: list[str]) -> str:
     if tier == "HOT":
-        if tractability_labels:
-            basis = f"{drug_count} known drug(s) + tractability label(s) present"
+        if _has_small_molecule_tractability(tractability_labels):
+            basis = f"{drug_count} known drug(s) + small-molecule tractability label(s)"
         else:
-            basis = f"{drug_count} known drug(s) on drug precedent alone (no tractability label)"
+            basis = f"{drug_count} known drug(s) on drug precedent alone (no small-molecule tractability label)"
         return f"Target is HOT: {basis}. Prioritise for lead optimisation or repurposing screen."
     if tier == "WARM":
         return (

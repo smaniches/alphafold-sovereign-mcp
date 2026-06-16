@@ -138,6 +138,10 @@ alphafold-sovereign --version       # → 1.2.0
 alphafold-sovereign --self-test     # → PASS on the offline BRCA1 fixture
 ```
 
+If you ran it via `uvx` without installing, use
+`uvx alphafold-sovereign-mcp --self-test` instead (the bare
+`alphafold-sovereign` script is only on PATH after a pip/uv install).
+
 `--self-test` boots the server in offline mode and exercises the
 deterministic logic of `generate_variant_clinical_report` against a
 built-in `BRCA1:c.5266dupC` fixture. No network calls; returns exit
@@ -159,7 +163,8 @@ Add to `claude_desktop_config.json`:
 ```
 
 Restart Claude Desktop and the tools become available in conversations.
-See the [`examples/`](examples/) directory for three end-to-end
+Try asking, for example: *"Triage BRCA1 c.5266dupC"* or *"Assess EGFR
+as a drug target"*. See the [`examples/`](examples/) directory for three end-to-end
 illustrations of what a session looks like.
 
 ### Offline mode
@@ -228,7 +233,7 @@ are not a substitute for clinical-laboratory review.
 | `query_protein_database` | Search locally stored protein assessments |
 | `get_knowledge_graph_stats` | Database size, entity counts, last activity |
 | `export_research_dataset` | Export tables to JSON for pandas/ML pipelines |
-| `find_drug_gene_network` | Traverse the accumulated drug–gene–disease graph |
+| `find_drug_gene_network` | Traverse the local drug–gene–disease graph |
 
 ---
 

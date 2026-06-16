@@ -45,7 +45,7 @@
     // … also OSIMERTINIB, AFATINIB, NERATINIB, MOBOCERTINIB, AMIVANTAMAB, NECITUMUMAB, LAZERTINIB
   ],
   "tractability_assessment": {"small_molecule": false, "antibody": false, "protac": false},
-  "actionability": "Target is HOT: 50 known drug(s) + tractability confirmed. Prioritise for lead optimisation or repurposing screen.",
+  "actionability": "Target is HOT: 50 known drug(s) on drug precedent alone (no small-molecule tractability label). Prioritise for lead optimisation or repurposing screen.",
   "provenance": "AlphaFold Sovereign MCP v1.2.0 · 2026-06-08 · chembl=v37 | open_targets=26.03 | gnomad=v4 | alphafold_db=v6"
 }
 ```

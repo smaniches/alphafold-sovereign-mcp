@@ -25,7 +25,7 @@
   "hgvs": "BRCA1:c.181T>G",
   "gene_symbol": "BRCA1",
   "clinical_tier": "HIGH",
-  "clinical_tier_explanation": "Strong evidence of clinical pathogenicity from ClinVar expert curation and/or multiple concordant computational predictors.",
+  "clinical_tier_explanation": "Strong evidence of clinical pathogenicity from a ClinVar pathogenic classification (see review_status for the supporting review level) and/or multiple concordant computational predictors.",
   "functional_consequence": {
     "consequence_terms": ["missense_variant"], "impact": "MODERATE",
     "amino_acids": "C/G", "sift_prediction": "deleterious", "sift_score": 0.0,
