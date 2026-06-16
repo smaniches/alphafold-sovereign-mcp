@@ -384,7 +384,7 @@ this file).
   author    = {Maniches, Santiago},
   title     = {AlphaFold Sovereign MCP},
   year      = {2026},
-  version   = {1.2.1},
+  version   = {1.2.2},
   url       = {https://github.com/smaniches/alphafold-sovereign-mcp},
   license   = {Apache-2.0},
   orcid     = {0009-0005-6480-1987},

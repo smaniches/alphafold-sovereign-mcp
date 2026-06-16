@@ -1,6 +1,6 @@
 {
   "name": "alphafold-sovereign-mcp",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "protocol_version": "2025-06-18",
   "description": "MCP server wrapping AlphaFold DB and 8 other biomedical data sources.",
   "vendor": "Santiago Maniches",
