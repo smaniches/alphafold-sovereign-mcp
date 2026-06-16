@@ -10,7 +10,7 @@ modules.
 | [Disease](disease.md) | `lookup_disease`, `search_diseases`, `get_disease_targets`, … | Ontology lookups (MONDO, HPO), disease-target evidence from Open Targets. |
 | [Precision medicine](precision-medicine.md) | `generate_variant_clinical_report`, `classify_variant_acmg`, `assess_target_druggability`, … | Variant triage (Ensembl VEP + ClinVar + gnomAD + AlphaMissense + AlphaFold), druggability heuristic. |
 | [Structure intelligence](structure-intelligence.md) | `analyze_structural_confidence`, `compute_topology_fingerprint`, `compare_proteins_topologically`, … | AlphaFold model retrieval, pLDDT, PAE matrices, persistent-homology fingerprints. |
-| [Knowledge graph](knowledge-graph.md) | `query_variant_database`, `find_drug_gene_network`, `export_research_dataset`, … | Traversal and export of the accumulated SQLite knowledge graph. |
+| [Knowledge graph](knowledge-graph.md) | `query_variant_database`, `find_drug_gene_network`, `export_research_dataset`, … | Traversal and export of the local SQLite knowledge graph. |
 
 ## Tool annotations
 
@@ -37,5 +37,5 @@ populated only when a caller logs explicitly.
 The scientific outputs of the precision-medicine tools (the ACMG
 draft and the druggability tier) are **not validated** by independent
 domain experts. See [Limitations L1 + L2](../limitations.md) for
-details and [Status — Roadmap to v1.2.0](../status.md) for the
+details and [Status — Roadmap (validation, post-1.2.0)](../status.md) for the
 validation plan.

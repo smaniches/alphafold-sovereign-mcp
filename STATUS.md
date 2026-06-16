@@ -139,7 +139,7 @@ expectation of what this project is and is not.
 
 ---
 
-## Roadmap to v1.2.0 (validation)
+## Roadmap (validation, post-1.2.0)
 
 The validation gap is the highest-priority work after v1.2.0. The
 planned, sequenced steps are:

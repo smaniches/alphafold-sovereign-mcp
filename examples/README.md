@@ -5,27 +5,24 @@ Three end-to-end illustrations of what an MCP session against
 
 | Example | Tools exercised | What it shows |
 |---|---|---|
-| [`01-variant-triage/`](01-variant-triage/) | `generate_variant_clinical_report`, `classify_variant_acmg` | Pulling Ensembl VEP + ClinVar + gnomAD + AlphaMissense + AlphaFold structural context for **BRCA1 c.5266dupC**; draft ACMG/AMP evidence. |
+| [`01-variant-triage/`](01-variant-triage/) | `generate_variant_clinical_report`, `classify_variant_acmg` | Pulling Ensembl VEP + ClinVar + gnomAD + AlphaMissense + AlphaFold structural context for **BRCA1 c.181T>G**; draft ACMG/AMP evidence. |
 | [`02-target-characterization/`](02-target-characterization/) | `assess_target_druggability` | Characterising **EGFR** as a drug target: Open Targets, ChEMBL, gnomAD constraint, AlphaFold pLDDT (structure folds in via the tool's `include_alphafold` parameter). |
 | [`03-drug-discovery/`](03-drug-discovery/) | `assess_target_druggability` (+ three `v1.1.0-rc1` tools no longer in the current surface — see the note in that example) | Multi-turn flow: **Imatinib → BCR-ABL → CML**. The molecular story behind a TKI, plus the T315I resistance gatekeeper. |
 
 ## Status of these examples
 
-These are **illustrative**. The transcripts (`transcript.jsonl`) and
-the prose responses are consistent with what the server emits when
-its upstream clients return data we have unit tests for — but the
-specific numbers (gnomAD AFs, association scores, drug lists) have
-not been verified against a live API call for this exact target.
+These transcripts were **captured live** against the upstream APIs on
+2026-06-08; each example's `README.md` records the exact run and the
+full payload is in its `transcript.jsonl`. The READMEs abridge long
+arrays for readability, so cross-check a specific number against the
+corresponding `transcript.jsonl` line rather than the prose.
 
-Why we publish them anyway: they (1) document the **shape** of a
-real session, (2) let a reviewer audit our tool contracts before
-running anything, and (3) form the basis of regression tests under
-[`benchmarks/`](../benchmarks/).
-
-**End-to-end live-API validation** is on the v1.2.0 roadmap — see
-[`STATUS.md`](../STATUS.md) §"Roadmap to v1.2.0", step 1 (golden
-examples). When that lands, this directory becomes the set of
-captured-and-replayed transcripts.
+What is still future work (tracked in [`STATUS.md`](../STATUS.md)
+§"Roadmap (validation, post-1.2.0)", step 1) is turning these into **CI-diffed golden
+tests**: re-running the pipeline on a fixed variant set and asserting
+the stored JSON in continuous integration. Until that lands, the
+transcripts here are point-in-time captures, not regression-gated
+fixtures.
 
 ## Reproducing locally
 

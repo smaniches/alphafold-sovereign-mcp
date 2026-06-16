@@ -45,8 +45,10 @@ env:
   ALPHAFOLD_OFFLINE:
     description: >-
       If set to "1", "true", or "yes", the server refuses all outbound
-      HTTP calls and serves only from the local SQLite cache. Useful
-      for air-gap deployments and the deterministic --self-test.
+      HTTP before a socket is opened (raising AirGapError). The
+      knowledge-graph query and export tools still answer from the local
+      SQLite store; the upstream-querying tools fail closed. Useful for
+      air-gap deployments and the deterministic --self-test.
     required: false
     default: ""
   ALPHAFOLD_ALLOW_HOSTS:

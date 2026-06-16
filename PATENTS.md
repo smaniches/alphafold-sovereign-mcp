@@ -25,8 +25,8 @@ are practiced by this Work:
    regression.
 2. **Topological fingerprinting of protein structures** via
    persistent homology over Vietoris-Rips filtrations of Cα backbone
-   coordinates, with Wasserstein- and bottleneck-comparable
-   signatures.
+   coordinates, summarising the resulting persistence diagrams as
+   fixed-length topological fingerprints.
 3. **Hybrid local-first retrieval architecture** for AlphaFold
    structures combining a dynamically indexed local cache with a
    public-database fallback and content-addressed verification.

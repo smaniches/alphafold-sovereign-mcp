@@ -5,18 +5,13 @@ Three end-to-end illustrations of a Claude Desktop session against
 
 | Example | What it shows |
 |---|---|
-| [Variant triage on BRCA1 c.5266dupC](01-variant-triage.md) | Ensembl VEP + ClinVar + gnomAD + AlphaMissense + AlphaFold for a well-characterised pathogenic frameshift. |
+| [Variant triage on BRCA1 c.181T>G](01-variant-triage.md) | Ensembl VEP + ClinVar + gnomAD + AlphaMissense + AlphaFold for a well-characterised pathogenic missense variant. |
 | [Target characterisation on EGFR](02-target-characterization.md) | Open Targets, ChEMBL, gnomAD constraint, AlphaFold pLDDT for a HOT-tier drug target. |
 | [Drug discovery: Imatinib → BCR-ABL → CML](03-drug-discovery.md) | Multi-turn flow tying a drug to its target to the disease to the structural gatekeeper (T315I). |
 
 ## Status
 
-These examples are **illustrative**. The transcripts and prose
-responses are consistent with what the server emits when its upstream
-clients return data we have unit tests for — but the specific numbers
-have not been verified against a live API call for these exact
-queries. End-to-end live-API validation is on the
-[v1.2.0 roadmap](../status.md).
+These transcripts were **captured live** against the upstream APIs on 2026-06-08; the per-example pages record the exact run and the full payload is in each example's `transcript.jsonl`. Turning these into CI-diffed golden tests is tracked on the [validation roadmap](../status.md).
 
 ## Reproducing locally
 

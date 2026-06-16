@@ -12,9 +12,10 @@ wires together:
   configurable cooldown
 - Structured logging via ``structlog`` (request-id propagation)
 - An outbound-host allow-list that blocks all egress when
-  ``ALPHAFOLD_OFFLINE=1`` is set
-- SHA-256 content-hash verification for responses that the caller
-  passes through the cache layer
+  ``ALPHAFOLD_OFFLINE=1`` is set (raising ``AirGapError`` before a
+  socket is opened)
+- A ``_sha256`` static helper available to callers for content hashing
+  (not invoked automatically on responses)
 """
 
 from __future__ import annotations

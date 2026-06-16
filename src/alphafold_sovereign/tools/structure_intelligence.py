@@ -939,8 +939,8 @@ async def detect_intrinsically_disordered(
     """Map intrinsically disordered regions (IDRs) using pLDDT as proxy.
 
     IDRs with pLDDT < 50 are predicted to be disordered in isolation by AlphaFold.
-    This approach is validated by Ruff & Pappu (2021) and is the highest-throughput
-    IDR detection method available for the full human proteome.
+    This pLDDT-as-disorder-proxy approach is consistent with Ruff & Pappu (2021)
+    and scales to the full human proteome from precomputed AlphaFold confidence.
 
     IDR functional categories returned:
     - **Linkers**: short (< 20 aa) disordered regions between domains
@@ -948,7 +948,7 @@ async def detect_intrinsically_disordered(
     - **Long IDRs**: candidate intrinsically disordered protein (IDP) segments
 
     Clinical relevance:
-    - IDRs are enriched for disease-causing mutations (40% of cancer driver mutations)
+    - IDRs are enriched for disease-causing mutations
     - IDRs host post-translational modification sites (phosphorylation, ubiquitination)
     - Long IDRs are emerging drug targets (targeted covalent inhibitors, phase separation modulators)
 
@@ -1312,7 +1312,7 @@ def _drift_interpretation(drift: float | None, dn_ds: float | None) -> str:
     if drift is None:
         return "Structural drift not quantifiable (AF DB coverage unavailable for this species)."
     if drift < 0.1:
-        return "Highly conserved structural topology — strong candidate for cross-species drug modelling."
+        return "Highly conserved structural topology — supports cross-species structural comparison (validate binding site separately)."
     if drift < 0.3:
         return "Moderate structural drift — drug binding site may differ; validate binding pose."
     return "High structural drift — independent validation required before using as disease model."
@@ -1320,7 +1320,7 @@ def _drift_interpretation(drift: float | None, dn_ds: float | None) -> str:
 
 def _cross_reactivity_risk(identity: float, dn_ds: float | None) -> str:
     if identity >= 90:
-        return "HIGH — near-identical epitopes; cross-reactive immunity highly likely."
+        return "HIGH — near-identical sequence; antibody cross-reactivity likely."
     if identity >= 70:
         return "MODERATE — shared structural epitopes likely; antibody cross-reactivity possible."
     if identity >= 50:

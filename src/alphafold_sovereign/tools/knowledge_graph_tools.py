@@ -2,24 +2,27 @@
 # Copyright 2024-2026 Santiago Maniches
 """MCP tools for querying the local AlphaFold Sovereign Knowledge Graph.
 
-These tools expose the accumulated research intelligence stored in the local
-relational database — turning every past query into a reusable asset.
+These tools read and traverse the local SQLite knowledge graph — a genuine
+ACID store (WAL journalling, versioned migrations, schema v3) with foreign-key
+integrity across proteins, variants, diseases, drugs and their relationships.
 
-This is one of the most powerful aspects of AlphaFold Sovereign:
-the platform LEARNS from usage.  Every variant triage, druggability assessment,
-and protein dossier enriches the local graph, enabling:
+The graph ships with a curated boot seed (loaded automatically when the store
+is empty; disable with ``AFSMCP_DISABLE_KG_SEED=1``) so these tools return
+representative results out of the box. It is extended by writing through the
+knowledge-graph storage API; the analysis tools do not write to it on their own
+(no automatic per-invocation persistence). On top of that store the tools provide:
 
-  - Instant recall of previously analysed entities (no API call required)
-  - Cross-session pattern discovery ("which HIGH-tier variants share a WARM target?")
-  - Batch analytics export to pandas for downstream ML
-  - Audit-complete provenance for regulatory submissions
+  - Recall of stored entities with no upstream API call required
+  - Cross-entity pattern queries ("which HIGH-tier variants share a WARM target?")
+  - Batch export to JSON for pandas/ML pipelines
+  - Optional provenance/audit tables (opt-in; empty by default)
 
 Tool inventory:
-  1. query_variant_database  — search accumulated variant triage results
-  2. query_protein_database  — search accumulated protein assessments
+  1. query_variant_database  — search stored variant triage results
+  2. query_protein_database  — search stored protein assessments
   3. get_knowledge_graph_stats — database health and coverage summary
   4. export_research_dataset  — export to JSON for pandas/ML pipelines
-  5. find_drug_gene_network   — traverse the accumulated drug-gene-disease graph
+  5. find_drug_gene_network   — traverse the stored drug-gene-disease graph
 """
 
 from __future__ import annotations
@@ -117,15 +120,13 @@ class DrugNetworkInput(BaseModel):
 async def query_variant_database(
     params: VariantQueryInput,
 ) -> dict[str, Any]:
-    """Search the local knowledge graph for previously analysed variants.
+    """Search the local knowledge graph for stored variants.
 
-    Returns variants matching the filter criteria from your accumulated
-    research sessions.  No API calls are made — all data is served from
-    the local SQLite knowledge graph.
-
-    This is how AlphaFold Sovereign enables longitudinal research:
-    every variant triaged by ``generate_variant_clinical_report`` is
-    automatically stored and becomes instantly searchable here.
+    Returns variants matching the filter criteria. No upstream API calls are
+    made — all data is served from the local SQLite knowledge graph, which is
+    populated by the curated boot seed and by any explicit writes through the
+    knowledge-graph storage API (the analysis tools do not write to it on their
+    own).
 
     Args:
         params.gene: Gene symbol filter.
@@ -156,8 +157,9 @@ async def query_variant_database(
         "result_count": len(rows),
         "variants": rows,
         "note": (
-            "Results served from local knowledge graph. "
-            "Run generate_variant_clinical_report to populate this database."
+            "Results served from the local knowledge graph. The store is populated "
+            "by the curated boot seed (disable with AFSMCP_DISABLE_KG_SEED=1) and by "
+            "explicit writes through the knowledge-graph storage API."
         ),
         "provenance": _provenance(source="local-kg"),
     }
@@ -174,10 +176,11 @@ async def query_variant_database(
 async def query_protein_database(
     params: ProteinQueryInput,
 ) -> dict[str, Any]:
-    """Search the local knowledge graph for previously assessed proteins.
+    """Search the local knowledge graph for stored proteins.
 
-    Returns proteins matching the filter criteria from accumulated
-    research.  Serves from local SQLite — no API calls.
+    Returns proteins matching the filter criteria. Serves from the local
+    SQLite knowledge graph — no upstream API calls. The store is populated by
+    the curated boot seed and by explicit writes through the storage API.
 
     Args:
         params.druggability_tier: HOT/WARM/COLD/NOT_DRUGGABLE filter.
@@ -199,9 +202,9 @@ async def query_protein_database(
         "result_count": len(rows),
         "proteins": rows,
         "note": (
-            "Results served from local knowledge graph. "
-            "Run synthesize_protein_dossier or analyze_structural_confidence "
-            "to populate this database."
+            "Results served from the local knowledge graph. The store is populated "
+            "by the curated boot seed (disable with AFSMCP_DISABLE_KG_SEED=1) and by "
+            "explicit writes through the knowledge-graph storage API."
         ),
         "provenance": _provenance(source="local-kg"),
     }
@@ -219,14 +222,14 @@ async def get_knowledge_graph_stats() -> dict[str, Any]:
     """Return statistics about the local knowledge graph.
 
     Shows entity counts, database size, and last activity — useful for
-    understanding the breadth of your accumulated research.
+    understanding the current contents and coverage of the local store.
     """
     async with get_knowledge_graph() as kg:
         stats = await kg.get_statistics()
 
     stats["description"] = (
         "AlphaFold Sovereign local knowledge graph — "
-        "persistent relational store for all research intelligence. "
+        "persistent ACID SQLite store (curated seed plus explicitly stored entities). "
         f"Database: {stats['database_path']}"
     )
     stats["provenance"] = _provenance(source="local-kg")
@@ -244,7 +247,7 @@ async def get_knowledge_graph_stats() -> dict[str, Any]:
 async def export_research_dataset(
     params: ExportInput,
 ) -> dict[str, Any]:
-    """Export accumulated research data for downstream analysis.
+    """Export the stored knowledge-graph data for downstream analysis.
 
     Returns all stored entities as JSON-serialisable dicts, suitable for:
     - Loading into pandas DataFrames for ML feature engineering
@@ -294,13 +297,12 @@ async def find_drug_gene_network(
 ) -> dict[str, Any]:
     """Traverse the local knowledge graph from a seed entity.
 
-    Given any seed (UniProt ID, gene symbol, or MONDO disease ID),
-    expands up to ``max_hops`` through the drug-gene-disease graph
-    stored in the local knowledge graph.
-
-    This reveals hidden connections between entities accumulated across
-    multiple research sessions — a form of network medicine powered by
-    your own research history.
+    Given a seed (UniProt ID, gene symbol, or MONDO disease ID), expands its
+    immediate neighbourhood in the stored drug-gene-disease graph: a gene
+    symbol resolves to its encoded proteins and reported variants, a UniProt
+    accession resolves to its stored protein record, and a MONDO disease
+    resolves to drugs with an indication for it. The store is populated by the
+    curated boot seed and by explicit writes through the storage API.
 
     Args:
         params.seed: Starting entity identifier.
@@ -317,7 +319,9 @@ async def find_drug_gene_network(
         "network": network,
         "note": (
             "Network contains only entities stored in the local knowledge graph. "
-            "Run more research tools to enrich the graph."
+            "The store is populated by the curated boot seed (disable with "
+            "AFSMCP_DISABLE_KG_SEED=1) and by explicit writes through the "
+            "knowledge-graph storage API."
         ),
         "provenance": _provenance(source="local-kg"),
     }

@@ -15,9 +15,10 @@
 
 A Model Context Protocol server that wraps **AlphaFold DB** and 8
 other public biomedical data sources behind a set of MCP tool calls,
-backed by a local SQLite knowledge graph with query and export tools.
-Results can be persisted to the graph through its API; automatic
-per-invocation persistence is not yet wired.
+backed by a local SQLite knowledge graph with query, export, and
+traversal tools. The graph loads a curated boot seed automatically when
+empty and can be extended through its API; there is no automatic
+per-invocation persistence.
 
 ## What it does
 
@@ -26,10 +27,12 @@ per-invocation persistence is not yet wired.
 - Composes upstreams into multi-source workflows — variant triage
   reports, disease–target landscape summaries, drug-repurposing
   candidates, cross-species structural divergence.
-- Ships a local SQLite knowledge graph with query and export tools.
-  Results can be persisted through its API; automatic per-invocation
-  persistence is not yet wired, so the graph is populated only when a
-  caller writes to it explicitly.
+- Ships a local SQLite knowledge graph with query, export, and
+  traversal tools. It loads a curated boot seed automatically when
+  empty (16 entities and 15 relationships; disable with
+  `AFSMCP_DISABLE_KG_SEED=1`) and can be extended through its storage
+  API. There is no automatic per-invocation persistence: the analysis
+  tools do not write to the store on their own.
 
 See [Tool reference](tools/index.md) for the full inventory.
 
