@@ -54,11 +54,7 @@ jobs:
       - name: Run mypy
         run: |
           uv run mypy \
-            src/alphafold_sovereign/domain/ \
-            src/alphafold_sovereign/clients/ \
-            src/alphafold_sovereign/storage/ \
-            src/alphafold_sovereign/server/ \
-            src/alphafold_sovereign/__main__.py \
+            src/alphafold_sovereign/ \
             --config-file pyproject.toml
 
   # ── Test matrix ───────────────────────────────────────────────────────────────────────
