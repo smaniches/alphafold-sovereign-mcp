@@ -7,6 +7,20 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.2.2](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.2.1...v1.2.2) (2026-06-16)
+
+
+### Bug Fixes
+
+* align governance, supply-chain, and science claims with the implementation ([#111](https://github.com/smaniches/alphafold-sovereign-mcp/issues/111)) ([6c170db](https://github.com/smaniches/alphafold-sovereign-mcp/commit/6c170dbcb53199ce933bf846734a852f18b72227))
+
+
+### Documentation
+
+* align CONTRIBUTING Python prerequisite with the 3.10+ support matrix ([#112](https://github.com/smaniches/alphafold-sovereign-mcp/issues/112)) ([86db87f](https://github.com/smaniches/alphafold-sovereign-mcp/commit/86db87f668c222c330d3572d2ed50d0ae7de5a65))
+* bump human-readable version stamps to 1.2.2 ([#114](https://github.com/smaniches/alphafold-sovereign-mcp/issues/114)) ([245fb2e](https://github.com/smaniches/alphafold-sovereign-mcp/commit/245fb2e9f227fba290d057f16e7ba25d7eb8bfc9))
+* log the v1.2.1 hardening review in AUDIT.md; correct CITATION release date ([#109](https://github.com/smaniches/alphafold-sovereign-mcp/issues/109)) ([4b0ff1d](https://github.com/smaniches/alphafold-sovereign-mcp/commit/4b0ff1dde31b119301a44a65c272ddcb534222a5))
+
 ## [1.2.1](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.2.0...v1.2.1) (2026-06-16)
 
 
