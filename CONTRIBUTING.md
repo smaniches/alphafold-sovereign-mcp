@@ -155,7 +155,9 @@ A reviewer will not start until all of these are true:
 - [ ] If the change touches the audit trail (`tool_invocations`
       table, SHA-256 input/output hashing, etc.), the audit
       semantics are documented in the PR description.
-- [ ] CHANGELOG.md has a Keep-a-Changelog entry under `## [Unreleased]`.
+- [ ] PR title follows Conventional Commits — release-please generates
+      CHANGELOG.md and the next version from it, so the changelog is not
+      edited by hand.
 - [ ] No new tracked secrets, no new outbound endpoints without an
       allowlist entry.
 
