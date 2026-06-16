@@ -1465,10 +1465,13 @@ async def find_drug_repurposing_candidates(
       4. Cross-reference against disease indication history (avoids circular reasoning).
       5. Score candidates by (OT evidence × clinical phase).
 
-    This is the structural-biology-informed drug repurposing pipeline:
-    by anchoring in AlphaFold structures, future extensions will apply
-    topological fingerprinting to find structurally similar pockets with
-    existing binding agents.
+    This pipeline ranks candidates from clinical and association evidence
+    only: Open Targets evidence scores combined with ChEMBL clinical-phase
+    data. It does not use protein structure in the current scoring.
+
+    Roadmap (not yet implemented): anchor candidates in AlphaFold structures
+    and apply topological pocket fingerprinting to surface structurally
+    similar binding sites with existing agents.
 
     Args:
         params.disease_mondo_id: MONDO ID for the target disease.
@@ -1626,7 +1629,8 @@ def _compute_clinical_tier(
 def _tier_explanation(tier: str) -> str:
     return {
         "HIGH": (
-            "Strong evidence of clinical pathogenicity from ClinVar expert curation "
+            "Strong evidence of clinical pathogenicity from a ClinVar pathogenic "
+            "classification (see review_status for the supporting review level) "
             "and/or multiple concordant computational predictors."
         ),
         "MEDIUM": (
@@ -1646,10 +1650,11 @@ def _tier_explanation(tier: str) -> str:
 
 def _druggability_actionability(tier: str, drug_count: int, tractability_labels: list[str]) -> str:
     if tier == "HOT":
-        return (
-            f"Target is HOT: {drug_count} known drug(s) + tractability confirmed. "
-            "Prioritise for lead optimisation or repurposing screen."
-        )
+        if tractability_labels:
+            basis = f"{drug_count} known drug(s) + tractability label(s) present"
+        else:
+            basis = f"{drug_count} known drug(s) on drug precedent alone (no tractability label)"
+        return f"Target is HOT: {basis}. Prioritise for lead optimisation or repurposing screen."
     if tier == "WARM":
         return (
             f"Target is WARM: limited clinical precedent ({drug_count} drugs). "

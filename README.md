@@ -51,10 +51,12 @@ A Python MCP server that:
   heuristic target-druggability scoring, drug-repurposing candidate
   ranking, and cross-species structural-distance computation.
 - Ships a local SQLite knowledge graph (`storage/knowledge_graph.py`)
-  with query and export tools. Tool results can be persisted to it
-  through the knowledge-graph API; automatic per-invocation persistence
-  is not yet wired, so the store is populated only when a caller writes
-  to it explicitly.
+  with query, export, and traversal tools. It loads a curated boot
+  seed automatically when empty (`storage/seed.py`, 16 entities and 15
+  relationships; disable with `AFSMCP_DISABLE_KG_SEED=1`) and can be
+  extended by writing through the knowledge-graph API. There is no
+  automatic per-invocation persistence: the analysis tools do not write
+  to the store on their own.
 - Includes a topological-data-analysis (TDA) module that computes
   persistent-homology fingerprints (Betti numbers β₀, β₁, β₂) over
   Vietoris-Rips filtrations of Cα coordinates, and an
@@ -166,7 +168,7 @@ illustrations of what a session looks like.
 ALPHAFOLD_OFFLINE=1 alphafold-sovereign-mcp
 ```
 
-Refuses all outbound HTTP. Serves only from the local SQLite cache.
+Refuses all outbound HTTP before a socket is opened (raising `AirGapError`). The knowledge-graph query and export tools still answer from the local SQLite store; the upstream-querying tools fail closed.
 
 ---
 
@@ -309,7 +311,7 @@ clients/_base.py
   ├── Token-bucket rate limiting (aiolimiter)
   ├── Exponential backoff with jitter (tenacity)
   ├── Circuit breaker (CLOSED / OPEN / HALF_OPEN)
-  └── Content-addressed SHA-256 dedup of upstream responses
+  └── HTTP/2 transport with connection pooling and keep-alive (httpx)
 
 storage/knowledge_graph.py
   ├── SQLite WAL mode (embedded, ACID)
@@ -335,7 +337,7 @@ See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the full module map.
   `domain`, `storage`, `server`, `tools`): **100% line + branch**,
   every shipped module at 100%.
 - Lint: `ruff` (full ruleset). Type checking: `mypy --strict` on the
-  domain, clients, and storage subtrees.
+  full source tree.
 - Security: `bandit` plus CodeQL `security-extended`.
 - Supply chain: SBOM generation in CI; reproducible-build script at
   `scripts/replicate.sh`.

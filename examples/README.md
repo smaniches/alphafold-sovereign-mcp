@@ -11,21 +11,18 @@ Three end-to-end illustrations of what an MCP session against
 
 ## Status of these examples
 
-These are **illustrative**. The transcripts (`transcript.jsonl`) and
-the prose responses are consistent with what the server emits when
-its upstream clients return data we have unit tests for — but the
-specific numbers (gnomAD AFs, association scores, drug lists) have
-not been verified against a live API call for this exact target.
+These transcripts were **captured live** against the upstream APIs on
+2026-06-08; each example's `README.md` records the exact run and the
+full payload is in its `transcript.jsonl`. The READMEs abridge long
+arrays for readability, so cross-check a specific number against the
+corresponding `transcript.jsonl` line rather than the prose.
 
-Why we publish them anyway: they (1) document the **shape** of a
-real session, (2) let a reviewer audit our tool contracts before
-running anything, and (3) form the basis of regression tests under
-[`benchmarks/`](../benchmarks/).
-
-**End-to-end live-API validation** is on the v1.2.0 roadmap — see
-[`STATUS.md`](../STATUS.md) §"Roadmap to v1.2.0", step 1 (golden
-examples). When that lands, this directory becomes the set of
-captured-and-replayed transcripts.
+What is still future work (tracked in [`STATUS.md`](../STATUS.md)
+§"Roadmap to v1.2.0", step 1) is turning these into **CI-diffed golden
+tests**: re-running the pipeline on a fixed variant set and asserting
+the stored JSON in continuous integration. Until that lands, the
+transcripts here are point-in-time captures, not regression-gated
+fixtures.
 
 ## Reproducing locally
 
