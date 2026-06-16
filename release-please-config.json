@@ -32,6 +32,15 @@
           "type": "json",
           "path": ".well-known/mcp.json",
           "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": ".zenodo.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "generic",
+          "path": "README.md"
         }
       ]
     }
