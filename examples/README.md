@@ -6,8 +6,8 @@ Three end-to-end illustrations of what an MCP session against
 | Example | Tools exercised | What it shows |
 |---|---|---|
 | [`01-variant-triage/`](01-variant-triage/) | `generate_variant_clinical_report`, `classify_variant_acmg` | Pulling Ensembl VEP + ClinVar + gnomAD + AlphaMissense + AlphaFold structural context for **BRCA1 c.181T>G**; draft ACMG/AMP evidence. |
-| [`02-target-characterization/`](02-target-characterization/) | `assess_target_druggability` | Characterising **EGFR** as a drug target: Open Targets, ChEMBL, gnomAD constraint, AlphaFold pLDDT (structure folds in via the tool's `include_alphafold` parameter). |
-| [`03-drug-discovery/`](03-drug-discovery/) | `assess_target_druggability` (+ three `v1.1.0-rc1` tools no longer in the current surface — see the note in that example) | Multi-turn flow: **Imatinib → BCR-ABL → CML**. The molecular story behind a TKI, plus the T315I resistance gatekeeper. |
+| [`02-target-characterization/`](02-target-characterization/) | `assess_target_druggability` | Characterising **EGFR** as a drug target: Open Targets, ChEMBL, gnomAD constraint, AlphaFold pLDDT (fetched automatically as the structural-confidence component of the druggability score). |
+| [`03-drug-discovery/`](03-drug-discovery/) | `map_disease_drug_landscape`, `assess_target_druggability`, `analyze_structural_confidence` | Multi-turn flow: **Imatinib → BCR-ABL → CML**. The molecular story behind a TKI, plus the T315I resistance gatekeeper. |
 
 ## Status of these examples
 
@@ -33,7 +33,7 @@ cd alphafold-sovereign-mcp
 uv pip install -e .
 
 # 2. Verify the install
-alphafold-sovereign --version       # → 1.2.0
+alphafold-sovereign --version       # → 1.2.1
 alphafold-sovereign --self-test     # → PASS on the deterministic BRCA1 fixture
 
 # 3. Configure Claude Desktop

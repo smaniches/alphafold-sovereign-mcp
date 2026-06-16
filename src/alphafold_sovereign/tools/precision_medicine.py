@@ -1303,7 +1303,7 @@ async def classify_variant_acmg(
       PVS1 — Null variant in LoF-intolerant gene
       PM2   — Absent/extremely rare in gnomAD population databases
       PP3   — Multiple in-silico predictors (AlphaMissense ≥0.564, SIFT, PolyPhen, CADD)
-      BP4   — Multiple in-silico predictors benign (AlphaMissense ≤0.340)
+      BP4   — In-silico benign evidence (AlphaMissense ≤0.340)
       BP7   — Silent variant, no splicing impact
       BS1   — Allele frequency > 5% in gnomAD
       PP5   — ClinVar reports the variant pathogenic / likely pathogenic

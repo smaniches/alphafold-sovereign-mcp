@@ -16,7 +16,7 @@ than described as if it exists. For the threat model, see
    closed in offline mode -- any upstream call raises `AirGapError`. The
    deterministic `--self-test` makes no network calls.
 2. **Provenance by capability.** Every tool result *can* be persisted to a
-   local, content-addressed SQLite store through the knowledge-graph API. The
+   local SQLite store through the knowledge-graph API. The
    `tool_invocations` and `provenance` tables are designed to hold the tool
    name, parameters, input and output SHA-256 hashes, the upstream
    data-source versions, and a UTC timestamp; the writer
@@ -83,7 +83,7 @@ src/alphafold_sovereign/
 └── storage/             Persistence and provenance
     └── knowledge_graph.py   SQLite knowledge graph (WAL mode); six entity,
                              four relationship, and two provenance tables;
-                             SHA-256-keyed JSON blobs
+                             per-row SHA-256 fingerprint columns (not keys)
 ```
 
 The package also contains six reserved namespace packages — `compliance/`,
@@ -149,8 +149,11 @@ The schema comprises:
   is not yet called from the tool-dispatch path, so the table is populated
   only when a caller invokes it explicitly.
 
-Result blobs are stored as SHA-256-keyed JSON, so identical inputs deduplicate
-and stored analyses can be re-read offline. A columnar analytical layer
+Result blobs are stored as JSON in the `tool_invocations` table; each row also
+carries SHA-256 fingerprint columns (params/result hashes) recorded for integrity
+inspection, not used as keys -- so there is no content-addressing and identical
+results are not deduplicated. Data already written to the store can be queried and
+exported offline through the knowledge-graph tools. A columnar analytical layer
 (DuckDB) for aggregation and export is planned but not yet wired: there is no
 DuckDB runtime dependency and the code does not import it. See the
 [Roadmap](#roadmap-not-yet-shipped).

@@ -67,7 +67,7 @@ fi
 echo ""
 echo "Step 2: SLSA Level 3 provenance verification"
 if command -v slsa-verifier &> /dev/null; then
-  ATTESTATION_URL="https://github.com/${REPO}/releases/latest/download/multiple.intoto.jsonl"
+  ATTESTATION_URL="https://github.com/${REPO}/releases/latest/download/alphafold-sovereign-mcp.intoto.jsonl"
   if curl -fsSL "$ATTESTATION_URL" -o /tmp/slsa.intoto.jsonl 2>/dev/null; then
     if slsa-verifier verify-artifact \
         --provenance-path /tmp/slsa.intoto.jsonl \
@@ -79,7 +79,7 @@ if command -v slsa-verifier &> /dev/null; then
       warn "SLSA verification failed — release may not yet have L3 attestation"
     fi
   else
-    warn "SLSA attestation not found — run after first tagged release"
+    warn "SLSA provenance is generated in CI but not yet attached to releases (roadmap); nothing to verify here yet"
   fi
 else
   warn "slsa-verifier not installed. Install: https://github.com/slsa-framework/slsa-verifier/releases"
@@ -106,8 +106,8 @@ fi
 # ── 4. SBOM presence check ────────────────────────────────────────────────────
 echo ""
 echo "Step 4: SBOM presence verification"
-CYCLONE_URL="https://github.com/${REPO}/releases/latest/download/sbom-cyclonedx.json"
-SPDX_URL="https://github.com/${REPO}/releases/latest/download/sbom-spdx.json"
+CYCLONE_URL="https://github.com/${REPO}/releases/latest/download/sbom.cyclonedx.json"
+SPDX_URL="https://github.com/${REPO}/releases/latest/download/sbom.spdx.json"
 
 if curl -fsSL "$CYCLONE_URL" > /dev/null 2>&1; then
   pass "CycloneDX SBOM: present"

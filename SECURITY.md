@@ -59,9 +59,10 @@ vulnerabilities by impact:
 
 ## Defensive biology
 
-If your report relates to sequence-of-concern screening or related
-tooling — bypasses, false negatives, suspected misuse — please use
-the GitHub Security Advisory channel and mark it as
+Sequence-of-concern screening is a roadmap item; no screening tooling
+ships today. If a future report relates to such screening or related
+dual-use tooling — bypasses, false negatives, suspected misuse — please
+use the GitHub Security Advisory channel and mark it as
 biosecurity-sensitive in the report body. We will route it through
 the project's coordinated-disclosure process before any public
 discussion.

@@ -1,6 +1,6 @@
 # Project Status
 
-**Version:** v1.2.0
+**Version:** v1.2.1
 **Stage:** Beta. Engineering-validated infrastructure; scientifically
 unvalidated by independent domain experts.
 
@@ -18,7 +18,7 @@ expectation of what this project is and is not.
 | Line + branch coverage | 100% on shipped surface | `nox -s cov`; enforced by `--cov-fail-under=100` |
 | Static analysis | Clean | `ruff check`, `mypy --strict`, `bandit` on every PR |
 | Security scanning | Clean | CodeQL `security-extended` on every push; no open findings |
-| Release provenance | SLSA L3 + Sigstore | `release.yml` workflow; verify with `scripts/replicate.sh` |
+| Release provenance | Sigstore signatures + SBOMs attached; SLSA L3 generated in CI | `release.yml`; verify signatures and SBOMs with `scripts/replicate.sh` |
 | Integration tests (live APIs) | Not run in CI | Tests mock all upstreams via `respx`; no live-API CI job |
 | Scientific validation | Not performed | ACMG mapping and druggability tier are unreviewed by domain experts |
 | Clinical validation | Not performed | No clinical geneticist has signed off on any output |
@@ -32,9 +32,9 @@ expectation of what this project is and is not.
 ### Code architecture
 - Five subpackages with clear single responsibilities — ``clients/``
   (9 upstream clients + 1 shared base), ``domain/`` (1 module), ``tools/`` (4
-  MCP-tool modules), ``storage/`` (1 SQLite KG module), ``server/``
-  (2 transport modules). 18 substantive ``.py`` files on the shipped
-  surface.
+  MCP-tool modules), ``storage/`` (2 modules: SQLite KG + boot seed),
+  ``server/`` (2 transport modules). 19 substantive ``.py`` files on the
+  shipped surface.
 - The previous monolith (~6,000 lines) is archived under
   ``_archive/legacy/`` and excluded from coverage and lint.
 - No circular imports; client retry/circuit-breaker logic is a
@@ -52,11 +52,11 @@ expectation of what this project is and is not.
   implementation.
 
 ### Security & supply chain
-- Bandit + Safety + pip-audit on every PR.
+- Bandit + pip-audit on every PR (Safety in the local ``nox -s security`` session).
 - CodeQL ``security-extended`` on every push (public repo).
 - SBOM (CycloneDX + SPDX) generated on every release tag.
-- SLSA L3 in-toto build provenance + Sigstore (``cosign``) keyless
-  signing of every release artefact.
+- SLSA L3 in-toto build provenance generated in CI; Sigstore
+  (``cosign``) keyless signing of every release artefact.
 - PyPI publishing via OIDC Trusted Publishing (no API tokens stored
   in repo secrets).
 - SQL parameterised everywhere; CWE-89 closed.
@@ -122,7 +122,7 @@ expectation of what this project is and is not.
 - **Single maintainer.** No bus factor > 1.
 - **No external contributors yet.** Review process is documented in
   ``CONTRIBUTING.md`` but has not been exercised.
-- **No formal release cadence.** v1.2.0 is the current release;
+- **No formal release cadence.** v1.2.1 is the current release;
   later versions will be tagged as the validation milestones below
   are met.
 
@@ -165,5 +165,5 @@ planned, sequenced steps are:
 
 ## Last updated
 
-2026-06-05. This document is part of the repo; PRs to correct or
+2026-06-16. This document is part of the repo; PRs to correct or
 expand it are welcome.

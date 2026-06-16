@@ -10,4 +10,4 @@ Expires: 2027-05-11T00:00:00Z
 Preferred-Languages: en
 Canonical: https://smaniches.github.io/alphafold-sovereign-mcp/.well-known/security.txt
 Policy: https://github.com/smaniches/alphafold-sovereign-mcp/blob/main/SECURITY.md
-Acknowledgments: https://github.com/smaniches/alphafold-sovereign-mcp/blob/main/SECURITY.md#acknowledgments
+Acknowledgments: https://github.com/smaniches/alphafold-sovereign-mcp/blob/main/SECURITY.md#credit
