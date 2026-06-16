@@ -18,8 +18,10 @@ Architecture:
   - Primary store: SQLite (zero-dependency, embedded, ACID, WAL mode)
   - Analytical layer: a columnar DuckDB path is planned but not yet wired
     (no DuckDB dependency; this module does not import it)
-  - Content-addressed JSON blobs: SHA-256 keyed, dedup-safe
-  - Full provenance: source, version, timestamp, tool, parameters, hash
+  - Per-row content fingerprints: each entity stores a SHA-256 data_hash and
+    each logged invocation stores params/result hashes, for integrity inspection
+    only (not used as keys; no content-addressing or deduplication)
+  - Provenance fields: source, version, timestamp, tool, parameters, hash
 
 Schema (6 entity tables + 4 relationship tables + 1 provenance table):
   proteins      — UniProt entities with structure metadata
@@ -34,7 +36,8 @@ Schema (6 entity tables + 4 relationship tables + 1 provenance table):
   gene_phenotype    — HPO gene-phenotype associations
   tool_invocations  — Opt-in audit table; a caller may record a tool call
                       (input + output + timing) via log_tool_invocation()
-  provenance        — Data-source version snapshot per invocation
+  provenance        — reserved schema for a per-invocation data-source version
+                      snapshot; no writer ships yet, so the table stays empty
 
 Usage:
   >>> from alphafold_sovereign.storage.knowledge_graph import KnowledgeGraph

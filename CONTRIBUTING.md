@@ -14,7 +14,7 @@ and what will happen to my contribution?"
 2. Branch from `main`: `claude/<short-topic>` or `<gh-username>/<short-topic>`.
 3. Make the change. Run `nox -s lint type test`. Add tests.
 4. Sign your commits with `-s` (Developer Certificate of Origin).
-5. Open a pull request with the PR template filled out.
+5. Open a pull request and complete the checklist below.
 6. A maintainer responds within 5 business days.
 
 ## Code of Conduct
@@ -49,7 +49,7 @@ git commit --amend --no-edit --signoff
 git push --force-with-lease
 ```
 
-CI blocks unsigned commits.
+Sign-off is required by policy; please sign each commit with `-s`.
 
 ## What We Accept
 
@@ -63,7 +63,7 @@ CI blocks unsigned commits.
 | Refactors of >500 LOC | Discuss first — open an issue before starting |
 | Build-system overhauls | Discuss first — open an issue before starting |
 | New transports beyond stdio + Streamable HTTP | Discuss first — must include MCP-spec citation |
-| Features that bypass biosecurity screening | Not accepted |
+| Features that would undermine the project's dual-use / biosecurity posture | Not accepted |
 | Features that ship credentials, default API keys, or call-home telemetry | Not accepted |
 
 ## What We Do Not Accept
@@ -71,7 +71,8 @@ CI blocks unsigned commits.
 - **Anything that requires removing the Apache 2.0 license or NOTICE.**
 - **Anything that weakens the audit trail** (e.g., mutable log
   storage, unsigned events, optional provenance).
-- **Anything that disables biosecurity screening by default.**
+- **Anything that weakens the project's dual-use / biosecurity posture**
+  (sequence-of-concern screening is a roadmap item; see `GOVERNANCE.md`).
 - **Dependencies with restrictive licenses** (GPL family, SSPL, BUSL,
   CC-NC) without prior maintainer approval and a license-compatibility
   analysis in the PR description.
@@ -132,7 +133,7 @@ refactor(tools): extract feature computation to compute/
 perf(topology): swap homegrown Vietoris-Rips for ripser.py (12× faster)
 test(integration): add live alphafold round-trip with golden hash
 ci(release): sign wheels with Sigstore keyless
-security(screening): add HHS Annex IV reference list
+ci(security): pin bandit and pip-audit in CI
 ```
 
 The first line is ≤ 72 characters. The body explains *why*, not
@@ -149,8 +150,8 @@ A reviewer will not start until all of these are true:
 - [ ] Public APIs have docstrings; tools have MCP annotations.
 - [ ] If the change affects security, the threat-model section is
       updated.
-- [ ] If the change touches biosecurity screening, a bioethics-aware
-      reviewer is requested.
+- [ ] If the change touches biosecurity or dual-use risk (a roadmap
+      area), a bioethics-aware reviewer is requested.
 - [ ] If the change touches the audit trail (`tool_invocations`
       table, SHA-256 input/output hashing, etc.), the audit
       semantics are documented in the PR description.

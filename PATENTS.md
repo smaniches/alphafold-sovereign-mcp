@@ -15,24 +15,29 @@ this Work.**
 This file describes which patent applications are involved and what
 is reserved.
 
-## Patent applications practiced by this work
+## Patent applications related to this Work
 
-The following patent applications, authored by Santiago Maniches
+The following pending patent applications, authored by Santiago Maniches
 (ORCID: [0009-0005-6480-1987](https://orcid.org/0009-0005-6480-1987)),
-are practiced by this Work:
+relate to this project. The Apache 2.0 §3 patent grant reaches only the
+claims actually practiced by the shipped code; each application is marked
+accordingly:
 
 1. **Drift-tensor correction framework** for structural-property
-   regression.
+   regression. *(Not implemented in this repository.)*
 2. **Topological fingerprinting of protein structures** via
    persistent homology over Vietoris-Rips filtrations of Cα backbone
    coordinates, summarising the resulting persistence diagrams as
-   fixed-length topological fingerprints.
+   fixed-length topological fingerprints. *(Practiced by this Work; see
+   `tools/structure_intelligence.py`.)*
 3. **Hybrid local-first retrieval architecture** for AlphaFold
    structures combining a dynamically indexed local cache with a
    public-database fallback and content-addressed verification.
+   *(Roadmap; not implemented in this repository.)*
 
-The Apache 2.0 patent grant applies to all three above, for use of
-this Work and Derivative Works thereof.
+The Apache 2.0 patent grant applies to whichever of the above are
+practiced by this Work — currently the topological-fingerprinting
+application — for use of this Work and Derivative Works thereof.
 
 These are pending applications. No claim of issued patent rights is
 made here.

@@ -108,7 +108,7 @@ def test_estimate_ordered_fraction() -> None:
 def test_interpret_tda_multi_domain() -> None:
     out = _interpret_tda({"betti_numbers": [3, 5, 1]})
     assert "disconnected components" in out
-    assert "rich in α-helices" in out
+    assert "ring-like topology" in out
     assert "cavity" in out
 
 

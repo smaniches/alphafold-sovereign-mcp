@@ -17,8 +17,9 @@ and vote on roadmap items with thumbs-up reactions.
 
 ### Contributors
 
-Anyone with a merged pull request. Listed in `AUTHORS`. Eligible
-for promotion to Committer after sustained contribution.
+Anyone with a merged pull request; contributors appear in the project's
+Git history and on the GitHub contributors page. Eligible for promotion
+to Committer after sustained contribution.
 
 ### Committers
 
@@ -38,8 +39,8 @@ Current committers are listed in `CODEOWNERS`.
 | *(open seat)* | — | Seeking: clinical-genomics background |
 | *(open seat)* | — | Seeking: community / governance |
 
-TSC meets monthly (async via GitHub Discussions). Minutes are
-published in `docs/governance/`.
+TSC meets monthly (async via GitHub Discussions). Once the TSC is
+active, minutes will be published under `docs/governance/`.
 
 ### BDFL
 
@@ -66,7 +67,8 @@ counter-proposal.
 1. Discuss in the relevant issue or PR.
 2. Escalate to the TSC mailing list (`tsc@topologica.ai`).
 3. TSC votes. BDFL breaks ties.
-4. Decisions are final and documented in `docs/governance/decisions/`.
+4. Decisions are final and, once the TSC is active, recorded under
+   `docs/governance/decisions/`.
 
 ## Becoming a Committer
 
@@ -84,20 +86,22 @@ category, open for 7 days, then closed by TSC vote.
 
 ## Biosecurity Governance Annex
 
-Given the project's sequence-of-concern screening tooling, a
-**Biosecurity Advisory Board (BAB)** of at least two subject-matter
-experts (biology, policy, or ethics) reviews:
+Sequence-of-concern screening is a roadmap item: no screening tooling
+ships today, and the Biosecurity Advisory Board (BAB) is not yet
+constituted. When screening is implemented, a **Biosecurity Advisory
+Board (BAB)** of at least two subject-matter experts (biology, policy,
+or ethics), external to TOPOLOGICA LLC, will review:
 
-- Any change to `src/alphafold_sovereign/security/screening.py`
+- Any change to the sequence-of-concern screening module
 - Any change to the dual-use risk classification framework
-- Any new tools in `tools/biothreat.py`
+- Any new biothreat-analysis tools
 
-BAB members are listed in `docs/governance/biosecurity-board.md` and
-are external to TOPOLOGICA LLC.
+The BAB roster will be published under `docs/governance/` once the
+board is constituted.
 
 ## Project Health Commitments
 
 - Security patches released within SLA in `SECURITY.md`.
 - No unaddressed P0 bugs older than 7 days.
-- Quarterly roadmap review published in `ROADMAP.md`.
+- Quarterly roadmap review published in the Roadmap section of `STATUS.md`.
 - Annual dependency and supply-chain audit published in `AUDIT.md`.

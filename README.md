@@ -117,8 +117,10 @@ uvx alphafold-sovereign-mcp
 
 Every release on PyPI is built by the `release.yml` workflow under
 OIDC Trusted Publishing, attached to a signed GitHub Release with
-SLSA L3 build provenance and Sigstore (`cosign`) signatures, and
-mirrored to a Zenodo DOI. Verify the supply chain with
+Sigstore (`cosign`) signatures and CycloneDX/SPDX SBOMs, and mirrored
+to a Zenodo DOI. SLSA L3 build provenance is generated in CI by
+`slsa-github-generator`; attaching the attestation to each release is
+a roadmap item. Verify the published signatures and SBOMs with
 `scripts/replicate.sh`.
 
 ### From source
@@ -134,7 +136,7 @@ uv pip install -e .
 ### Verify the install
 
 ```bash
-alphafold-sovereign --version       # → 1.2.0
+alphafold-sovereign --version       # → 1.2.1
 alphafold-sovereign --self-test     # → PASS on the offline BRCA1 fixture
 ```
 
@@ -344,13 +346,14 @@ See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the full module map.
 - Lint: `ruff` (full ruleset). Type checking: `mypy --strict` on the
   full source tree.
 - Security: `bandit` plus CodeQL `security-extended`.
-- Supply chain: SBOM generation in CI; reproducible-build script at
-  `scripts/replicate.sh`.
+- Supply chain: SBOM generation in CI; supply-chain verification script
+  at `scripts/replicate.sh` (verifies the published signatures, SBOMs,
+  and PyPI hashes).
 
 The full CI matrix (Python 3.10, 3.11, 3.12, 3.13 × Ubuntu, macOS)
 runs on every push. The coverage percentage above is the number a
-`git clone && uv run pytest` produces on the current HEAD; if you find
-a divergence, please open an issue.
+`git clone && uv run nox -s cov` produces on the current HEAD; if you
+find a divergence, please open an issue.
 
 ---
 

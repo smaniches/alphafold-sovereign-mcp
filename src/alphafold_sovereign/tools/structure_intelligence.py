@@ -18,9 +18,9 @@ AlphaFold DB) and derive a small set of summaries from them:
 * a geometric pocket-detection heuristic, and
 * an intrinsic-disorder-region map.
 
-All tools are read-only. Tools that require outbound HTTP raise when
-``ALPHAFOLD_OFFLINE=1`` and the requested structure is not in the
-local cache.
+All tools are read-only. Tools that require outbound HTTP fail closed when
+``ALPHAFOLD_OFFLINE=1`` (they raise ``AirGapError``); there is no local
+structure cache.
 
 Tool inventory:
   1. analyze_structural_confidence       — pLDDT + PAE domain map
@@ -687,9 +687,11 @@ async def compare_proteins_topologically(
         "most_topologically_similar": most_similar,
         "protein_metadata": protein_meta,
         "interpretation": (
-            "Distance < 0.1: near-identical topology (likely same fold family). "
-            "Distance 0.1–0.4: related topology (same superfold, different features). "
-            "Distance > 0.4: distinct topology (different fold class)."
+            "Distance < 0.1: very similar fingerprints. "
+            "Distance 0.1-0.4: moderately divergent. "
+            "Distance > 0.4: clearly divergent. "
+            "These bands are heuristic and are not calibrated to any "
+            "fold-classification scheme such as SCOP/CATH."
         ),
         "provenance": _provenance(alphafold_db="v6", methodology="VR-persistent-homology"),
     }
@@ -1297,7 +1299,7 @@ def _interpret_tda(tda: dict[str, Any]) -> str:
     else:
         parts.append("β₀=1 single connected component (compact globular)")
     if b1 > 3:
-        parts.append(f"β₁={b1} loops (rich in α-helices or β-barrel topology)")
+        parts.append(f"β₁={b1} loops (ring-like topology such as β-barrels or large macrocycles)")
     elif b1 > 0:
         parts.append(f"β₁={b1} loop(s) detected")
     if b2 > 0:

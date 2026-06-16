@@ -48,7 +48,6 @@ keywords:
   - persistent-homology
   - disease-ontology
   - MONDO
-  - biosecurity
   - drug-discovery
   - clinical-research
 version: "1.2.1"  # x-release-please-version
