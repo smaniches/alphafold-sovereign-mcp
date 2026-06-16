@@ -142,9 +142,9 @@ If you ran it via `uvx` without installing, use
 `uvx alphafold-sovereign-mcp --self-test` instead (the bare
 `alphafold-sovereign` script is only on PATH after a pip/uv install).
 
-`--self-test` boots the server in offline mode and exercises the
-deterministic logic of `generate_variant_clinical_report` against a
-built-in `BRCA1:c.5266dupC` fixture. No network calls; returns exit
+`--self-test` runs fully offline (no network) and checks the
+deterministic ACMG-evidence helpers (VEP, gnomAD, and AlphaMissense
+mapped to ACMG criteria) against a built-in `BRCA1:c.5266dupC` fixture. No network calls; returns exit
 code 0 on PASS, non-zero on FAIL.
 
 ### Configure Claude Desktop
