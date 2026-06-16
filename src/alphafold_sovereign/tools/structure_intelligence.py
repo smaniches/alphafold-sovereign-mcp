@@ -1100,7 +1100,7 @@ def _geometric_pocket_detection(
 
 def _pocket_druggability_index(pocket: dict[str, Any]) -> float:
     """Score 0–100 for druggability based on pocket geometry."""
-    n_res: float = pocket.get("n_residues", 0)
+    n_res: int = pocket.get("n_residues", 0)
     rog: float = pocket.get("radius_of_gyration_angstrom", 0.0)
     plddt: float = pocket.get("mean_plddt", 0.0)
     burial: float = pocket.get("burial_from_centroid", 0.0)
