@@ -5,8 +5,9 @@
 These tests fail CI when the release, citation, and deposition metadata
 surfaces drift apart: the package version, the Zenodo deposition metadata,
 the citation files, and the headline claims in the README and docs (tool
-count, module count, data-source count and names, test count, DOI, and the
-install command).
+count, module count, data-source count and names, DOI, and the install
+command). It also enforces that no surface publishes an exact, volatile
+test count.
 
 They are the mechanical guard that replaces the manual "fix stale counts"
 cleanup releases (see the 1.1.8-1.1.10 entries in CHANGELOG.md). Every claim
@@ -68,7 +69,7 @@ _NUMBER_WORDS = {
     "ten": 10,
 }
 
-# Doc surfaces that state an exact test count, and the patterns counts appear in.
+# Doc surfaces that must not publish an exact test count, and the patterns it would appear in.
 _TEST_COUNT_FILES = ("README.md", "CITATION.cff", "STATUS.md", "docs/index.md")
 _TEST_COUNT_PATTERNS = (
     r"tests-(\d+)%20passing",  # shields.io badge
@@ -311,11 +312,18 @@ def test_data_sources_count_and_names() -> None:
 
 
 @pytest.mark.unit
-def test_test_count_claims_agree() -> None:
-    counts = _collect_test_counts()
-    assert counts, "no test-count claim found on any documented surface"
-    all_counts = set().union(*counts.values())
-    assert len(all_counts) == 1, f"test-count claims disagree across surfaces: {counts}"
+def test_no_doc_surface_publishes_an_exact_test_count() -> None:
+    # The suite size is volatile (parametrised expansions shift it), so a
+    # hardcoded "N tests" silently drifts from reality while a consistency-only
+    # check would still pass. The enforced quality signal is 100% line+branch
+    # coverage (--cov-fail-under=100); the live tool/module counts are checked
+    # in test_tool_count_and_module_count_match_readme. No doc surface may
+    # publish an exact test count.
+    found = _collect_test_counts()
+    assert not found, (
+        f"these surfaces still publish an exact test count: {found}; drop the "
+        "number (enforced 100% coverage is the quality signal, not a raw count)"
+    )
 
 
 @pytest.mark.unit

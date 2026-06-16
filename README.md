@@ -26,13 +26,13 @@ respective owner and is used here only to describe the public data
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](pyproject.toml)
 [![MCP Spec 2025-06-18](https://img.shields.io/badge/MCP-2025--06--18-purple)](https://modelcontextprotocol.io)
-[![Tests](https://img.shields.io/badge/tests-740%20passing-success)](https://github.com/smaniches/alphafold-sovereign-mcp/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/tests-passing-success)](https://github.com/smaniches/alphafold-sovereign-mcp/actions/workflows/ci.yml)
 [![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)](https://github.com/smaniches/alphafold-sovereign-mcp/actions/workflows/ci.yml)
 [![ORCID](https://img.shields.io/badge/ORCID-0009--0005--6480--1987-A6CE39?logo=orcid&logoColor=white)](https://orcid.org/0009-0005-6480-1987)
 [![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.20134773-3C5A99?logo=zenodo&logoColor=white)](https://doi.org/10.5281/zenodo.20134773)
 
-**Status:** Beta. Engineering-validated (740 tests, 100%
-line and branch coverage). Not yet scientifically validated by
+**Status:** Beta. Engineering-validated (100% line and branch
+coverage). Not yet scientifically validated by
 independent domain experts; not yet deployed in production. See
 [`STATUS.md`](STATUS.md) and [`LIMITATIONS.md`](LIMITATIONS.md).
 
@@ -328,9 +328,9 @@ See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the full module map.
 
 ## Testing & quality
 
-- 740 unit tests with respx-mocked upstreams; the full suite runs
-  hermetically in under a minute on a laptop. Test count includes
-  parametrised expansions as reported by `pytest --collect-only`.
+- A comprehensive offline unit-test suite (respx-mocked upstreams,
+  including parametrised expansions); the full suite runs hermetically
+  in under a minute on a laptop.
 - Coverage on the shipped surface (`src/alphafold_sovereign/clients`,
   `domain`, `storage`, `server`, `tools`): **100% line + branch**,
   every shipped module at 100%.
@@ -341,9 +341,9 @@ See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the full module map.
   `scripts/replicate.sh`.
 
 The full CI matrix (Python 3.10, 3.11, 3.12, 3.13 × Ubuntu, macOS)
-runs on every push. Test counts and coverage percentages above are
-the numbers a `git clone && uv run pytest` produces on the current
-HEAD; if you find a divergence, please open an issue.
+runs on every push. The coverage percentage above is the number a
+`git clone && uv run pytest` produces on the current HEAD; if you find
+a divergence, please open an issue.
 
 ---
 
