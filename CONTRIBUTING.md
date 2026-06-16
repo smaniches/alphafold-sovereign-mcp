@@ -49,7 +49,8 @@ git commit --amend --no-edit --signoff
 git push --force-with-lease
 ```
 
-Sign-off is required by policy; please sign each commit with `-s`.
+Sign-off is requested (not enforced in CI): please sign each commit
+with `-s`. It keeps provenance clean and is appreciated.
 
 ## What We Accept
 
@@ -144,7 +145,8 @@ The first line is ≤ 72 characters. The body explains *why*, not
 A reviewer will not start until all of these are true:
 
 - [ ] Branch is up to date with `main`.
-- [ ] All commits are signed (`Signed-off-by:` trailer).
+- [ ] Commits are signed off (`Signed-off-by:` trailer) — requested,
+      not required (see DCO).
 - [ ] `nox -s lint type test cov` passes locally.
 - [ ] New code has tests at the right layer (see above).
 - [ ] Public APIs have docstrings; tools have MCP annotations.

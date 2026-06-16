@@ -18,7 +18,7 @@ Closes #
 ## Checklist
 
 - [ ] Branch is up to date with `main`.
-- [ ] Commits are signed off (`git commit -s`; DCO — see `CONTRIBUTING.md`).
+- [ ] Commits are signed off (`git commit -s`; DCO, requested — see `CONTRIBUTING.md`).
 - [ ] PR title follows Conventional Commits (the changelog is generated, not hand-edited).
 - [ ] `uv run nox -s lint type test cov` passes locally (ruff + mypy --strict + pytest + 100% coverage).
 - [ ] New code has tests at the right layer; the 100% line+branch coverage gate still holds.
