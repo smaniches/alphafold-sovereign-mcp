@@ -35,7 +35,7 @@ from __future__ import annotations
 import asyncio
 import datetime
 import re
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import structlog
 from pydantic import BaseModel, ConfigDict, Field
@@ -52,60 +52,63 @@ from alphafold_sovereign.clients.opentargets import OpenTargetsClient
 from alphafold_sovereign.domain.disease import PathogenicityClass
 from alphafold_sovereign.server.app import mcp
 
+if TYPE_CHECKING:
+    from alphafold_sovereign.clients._base import BaseAsyncClient
+
 logger = structlog.get_logger(__name__)
 
 
 # ── Shared client singletons (initialised on first use) ──────────────────────
 
-_CLIENTS: dict[str, Any] = {}
+_CLIENTS: dict[str, BaseAsyncClient] = {}
 
 
 def _ensembl() -> EnsemblClient:
     if "ensembl" not in _CLIENTS:
         _CLIENTS["ensembl"] = EnsemblClient()
-    return _CLIENTS["ensembl"]  # type: ignore[return-value]
+    return cast("EnsemblClient", _CLIENTS["ensembl"])
 
 
 def _clinvar() -> ClinVarClient:
     if "clinvar" not in _CLIENTS:
         _CLIENTS["clinvar"] = ClinVarClient()
-    return _CLIENTS["clinvar"]  # type: ignore[return-value]
+    return cast("ClinVarClient", _CLIENTS["clinvar"])
 
 
 def _gnomad() -> GnomADClient:
     if "gnomad" not in _CLIENTS:
         _CLIENTS["gnomad"] = GnomADClient()
-    return _CLIENTS["gnomad"]  # type: ignore[return-value]
+    return cast("GnomADClient", _CLIENTS["gnomad"])
 
 
 def _mondo() -> MONDOClient:
     if "mondo" not in _CLIENTS:
         _CLIENTS["mondo"] = MONDOClient()
-    return _CLIENTS["mondo"]  # type: ignore[return-value]
+    return cast("MONDOClient", _CLIENTS["mondo"])
 
 
 def _opentargets() -> OpenTargetsClient:
     if "opentargets" not in _CLIENTS:
         _CLIENTS["opentargets"] = OpenTargetsClient()
-    return _CLIENTS["opentargets"]  # type: ignore[return-value]
+    return cast("OpenTargetsClient", _CLIENTS["opentargets"])
 
 
 def _disgenet() -> DisGeNETClient:
     if "disgenet" not in _CLIENTS:
         _CLIENTS["disgenet"] = DisGeNETClient()
-    return _CLIENTS["disgenet"]  # type: ignore[return-value]
+    return cast("DisGeNETClient", _CLIENTS["disgenet"])
 
 
 def _chembl() -> ChEMBLClient:
     if "chembl" not in _CLIENTS:
         _CLIENTS["chembl"] = ChEMBLClient()
-    return _CLIENTS["chembl"]  # type: ignore[return-value]
+    return cast("ChEMBLClient", _CLIENTS["chembl"])
 
 
 def _alphafold() -> AlphaFoldClient:
     if "alphafold" not in _CLIENTS:
         _CLIENTS["alphafold"] = AlphaFoldClient()
-    return _CLIENTS["alphafold"]  # type: ignore[return-value]
+    return cast("AlphaFoldClient", _CLIENTS["alphafold"])
 
 
 # ── Provenance footer ─────────────────────────────────────────────────────────
@@ -522,25 +525,29 @@ async def generate_variant_clinical_report(
     vep_task = _ensembl().vep_hgvs(hgvs, canonical=True)
     clinvar_task = _clinvar().search_by_hgvs(hgvs)
 
-    vep_results, clinvar_results = await asyncio.gather(
-        vep_task, clinvar_task, return_exceptions=True
-    )
-    if isinstance(vep_results, Exception):
-        log.warning("vep.failed", exc=str(vep_results))
+    gathered: list[Any] = await asyncio.gather(vep_task, clinvar_task, return_exceptions=True)
+    vep_raw, clinvar_raw = gathered[0], gathered[1]
+    vep_results: list[dict[str, Any]] = []
+    clinvar_results: list[dict[str, Any]] = []
+    # gather(return_exceptions=True) yields each result or a BaseException;
+    # checking BaseException (not Exception) is intentional so a captured
+    # CancelledError is treated as a failed source, not misread as result data.
+    if isinstance(vep_raw, BaseException):
+        log.warning("vep.failed", exc=str(vep_raw))
         source_status["ensembl_vep"] = "failed"
-        vep_results = []
     else:
+        vep_results = vep_raw
         source_status["ensembl_vep"] = "ok"
-    if isinstance(clinvar_results, Exception):
-        log.warning("clinvar.failed", exc=str(clinvar_results))
+    if isinstance(clinvar_raw, BaseException):
+        log.warning("clinvar.failed", exc=str(clinvar_raw))
         source_status["clinvar"] = "failed"
-        clinvar_results = []
     else:
+        clinvar_results = clinvar_raw
         source_status["clinvar"] = "ok"
 
     # ── Step 3: gnomAD variant ID construction ───────────────────────────────
     gnomad_data: dict[str, Any] = {}
-    gnomad_id = _build_gnomad_id(hgvs, vep_results)  # type: ignore[arg-type]
+    gnomad_id = _build_gnomad_id(hgvs, vep_results)
     if gnomad_id:
         try:
             gnomad_data = await _gnomad().variant_frequencies(gnomad_id)
@@ -579,13 +586,13 @@ async def generate_variant_clinical_report(
             tasks.append(_empty_list())
 
         results = await asyncio.gather(*tasks, return_exceptions=True)
-        if not isinstance(results[0], Exception):
-            disgenet_assocs = results[0]  # type: ignore
+        if not isinstance(results[0], BaseException):
+            disgenet_assocs = results[0]
             source_status["disgenet"] = "ok"
         else:
             source_status["disgenet"] = "failed"
-        if len(results) > 1 and not isinstance(results[1], Exception):
-            ot_diseases = [s.to_dict() if hasattr(s, "to_dict") else s for s in results[1]]  # type: ignore
+        if len(results) > 1 and not isinstance(results[1], BaseException):
+            ot_diseases = [s.to_dict() if hasattr(s, "to_dict") else s for s in results[1]]
             source_status["open_targets"] = "ok"
         else:
             source_status["open_targets"] = "failed"
@@ -617,7 +624,7 @@ async def generate_variant_clinical_report(
     # ── Step 7: Consolidate ClinVar ───────────────────────────────────────────
     clinvar_record: dict[str, Any] | None = None
     if clinvar_results:
-        clinvar_record = clinvar_results[0] if not isinstance(clinvar_results, Exception) else None
+        clinvar_record = clinvar_results[0]
 
     clinvar_class = (clinvar_record or {}).get(
         "classification", PathogenicityClass.NOT_PROVIDED.value
@@ -626,7 +633,7 @@ async def generate_variant_clinical_report(
     # ── Step 8: AlphaMissense pathogenicity (AlphaFold DB) ─────────────────────────────
     am_score: float | None = await _alphamissense_for_variant(
         gene_symbol,
-        vep_results,  # type: ignore[arg-type]
+        vep_results,
     )
     source_status["alphamissense"] = "ok" if am_score is not None else "no_data"
 
@@ -1158,7 +1165,7 @@ async def map_disease_drug_landscape(
 
     disease_name = ""
     efo_curie = ""  # e.g. "EFO:0000339" — the native key for OT and ChEMBL
-    if isinstance(mondo_result, Exception):
+    if isinstance(mondo_result, BaseException):
         log.warning("mondo.failed", exc=str(mondo_result))
     else:
         disease_name = mondo_result.name or mid
@@ -1176,7 +1183,7 @@ async def map_disease_drug_landscape(
 
     # When the MONDO ID yields no Open Targets associations, retry via the
     # EFO cross-reference (OT's native disease ontology).
-    if (isinstance(ot_targets, Exception) or not ot_targets) and efo_curie:
+    if (isinstance(ot_targets, BaseException) or not ot_targets) and efo_curie:
         try:
             ot_targets = await _opentargets().associated_targets(
                 efo_curie.replace("EFO:", "EFO_"), limit=20
@@ -1184,9 +1191,12 @@ async def map_disease_drug_landscape(
         except Exception as exc:
             log.warning("opentargets.efo_fallback.failed", exc=str(exc))
 
-    top_targets = []
-    if not isinstance(ot_targets, Exception):
-        top_targets = [t.to_dict() if hasattr(t, "to_dict") else t for t in ot_targets[:10]]
+    top_targets: list[dict[str, Any]] = []
+    if not isinstance(ot_targets, BaseException):
+        top_targets = [
+            cast("dict[str, Any]", t.to_dict() if hasattr(t, "to_dict") else t)
+            for t in ot_targets[:10]
+        ]
 
     # ChEMBL drug indications are keyed on EFO / MeSH, not MONDO. Use the EFO
     # cross-reference when available, falling back to the disease name (MeSH).
@@ -1298,11 +1308,12 @@ async def classify_variant_acmg(
     clinvar_task = _clinvar().search_by_hgvs(hgvs)
     gene_symbol = EnsemblClient.parse_gene_from_hgvs(hgvs)
 
-    vep_results, clinvar_results = await asyncio.gather(
-        vep_task, clinvar_task, return_exceptions=True
+    gathered: list[Any] = await asyncio.gather(vep_task, clinvar_task, return_exceptions=True)
+    vep_raw, clinvar_raw = gathered[0], gathered[1]
+    vep_results: list[dict[str, Any]] = [] if isinstance(vep_raw, BaseException) else vep_raw
+    clinvar_results: list[dict[str, Any]] = (
+        [] if isinstance(clinvar_raw, BaseException) else clinvar_raw
     )
-    vep_results = [] if isinstance(vep_results, Exception) else vep_results
-    clinvar_results = [] if isinstance(clinvar_results, Exception) else clinvar_results
 
     # gnomAD
     gnomad_data: dict[str, Any] = {}
@@ -1323,7 +1334,7 @@ async def classify_variant_acmg(
 
     am_score: float | None = await _alphamissense_for_variant(
         gene_symbol,
-        vep_results,  # type: ignore[arg-type]
+        vep_results,
     )
     global_af: float | None = gnomad_data.get("global_af")
     clinvar_record = clinvar_results[0] if clinvar_results else None
@@ -1512,7 +1523,7 @@ async def find_drug_repurposing_candidates(
     seen_drug_ids: set[str] = set()
 
     for result in drug_results:
-        if isinstance(result, Exception):
+        if isinstance(result, BaseException):
             continue
         target, drugs = result
         target_dict = target.to_dict() if hasattr(target, "to_dict") else target

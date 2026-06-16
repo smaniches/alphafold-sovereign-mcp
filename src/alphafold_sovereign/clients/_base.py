@@ -27,7 +27,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
+from typing import Any, TypeVar
 
 import httpx
 import structlog
@@ -44,6 +44,11 @@ except ImportError:  # pragma: no cover
     AsyncLimiter = None  # type: ignore[assignment,misc]
 
 logger = structlog.get_logger(__name__)
+
+# Bound to ``BaseAsyncClient`` so ``async with EnsemblClient() as c`` (and the
+# ``session()`` helper) yields the concrete subclass rather than the base type.
+# ``typing.Self`` is unavailable on Python 3.10, which this project supports.
+_T = TypeVar("_T", bound="BaseAsyncClient")
 
 # ---------------------------------------------------------------------------
 # Air-gap mode: if set, ALL outbound requests are refused before a socket
@@ -188,7 +193,7 @@ class BaseAsyncClient:
             request_id=request_id,
         )
 
-    async def __aenter__(self) -> BaseAsyncClient:
+    async def __aenter__(self: _T) -> _T:
         self._client = httpx.AsyncClient(
             base_url=self.config.base_url,
             headers={
@@ -365,7 +370,7 @@ class BaseAsyncClient:
         return hashlib.sha256(data).hexdigest()
 
     @asynccontextmanager
-    async def session(self) -> AsyncIterator[BaseAsyncClient]:
+    async def session(self: _T) -> AsyncIterator[_T]:
         """Convenience context manager for explicit session lifetime."""
         async with self:
             yield self

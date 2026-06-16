@@ -460,8 +460,8 @@ async def lookup_phenotype(params: HPOTermInput) -> str:
     try:
         async with HPOClient() as client:
             term = await client.lookup(params.hpo_id)
-            diseases = []
-            parents = []
+            diseases: list[Any] = []
+            parents: list[Any] = []
             if params.include_diseases:  # pragma: no branch
                 diseases, parents = await asyncio.gather(
                     client.diseases_for_phenotype(
@@ -530,19 +530,19 @@ async def get_gene_phenotype_profile(params: GenePhenotypeInput) -> str:
                     )
                 )
             if params.include_constraint:
-                coros.append(gnomad_client.gene_constraint(params.gene_symbol))  # type: ignore[arg-type]
+                coros.append(gnomad_client.gene_constraint(params.gene_symbol))
             results = await asyncio.gather(*coros, return_exceptions=True)
 
         phenotypes_result = results[0] if ncbi_gene_id else None
-        constraint_result = results[-1] if params.include_constraint else {}
+        constraint_result: Any = results[-1] if params.include_constraint else {}
 
         phenotypes: list[dict[str, Any]] = []
-        if phenotypes_result is not None and not isinstance(phenotypes_result, Exception):
+        if phenotypes_result is not None and not isinstance(phenotypes_result, BaseException):
             phenotypes = [p.to_dict() for p in phenotypes_result]
 
         constraint: dict[str, Any] = {}
-        if not isinstance(constraint_result, Exception) and constraint_result:
-            constraint = constraint_result  # type: ignore[assignment]
+        if not isinstance(constraint_result, BaseException) and constraint_result:
+            constraint = constraint_result
 
         return json.dumps(
             {
@@ -1042,12 +1042,12 @@ async def get_orphan_disease_atlas(params: OrphanDiseaseInput) -> str:
             "mondo_id": mondo_id,
         }
 
-        if not isinstance(record, Exception):
-            result["disease"] = record.to_dict()  # type: ignore[union-attr]
-        if not isinstance(hpo_diseases, Exception):
-            result["phenotypes"] = [p.to_dict() for p in hpo_diseases[:20]]  # type: ignore[union-attr]
-        if not isinstance(ot_targets, Exception):
-            result["protein_targets"] = [t.to_dict() for t in ot_targets]  # type: ignore[union-attr]
+        if not isinstance(record, BaseException):
+            result["disease"] = record.to_dict()
+        if not isinstance(hpo_diseases, BaseException):
+            result["phenotypes"] = [p.to_dict() for p in hpo_diseases[:20]]
+        if not isinstance(ot_targets, BaseException):
+            result["protein_targets"] = [t.to_dict() for t in ot_targets]
 
         return json.dumps(result, indent=2) + _provenance(
             mondo="OLS4", hpo="JAX-HPO", open_targets="OT-24.06"

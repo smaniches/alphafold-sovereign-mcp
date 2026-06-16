@@ -36,7 +36,7 @@ from __future__ import annotations
 import asyncio
 import datetime
 import math
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import structlog
@@ -46,6 +46,9 @@ from alphafold_sovereign import __version__
 from alphafold_sovereign.clients.alphafold import AlphaFoldClient
 from alphafold_sovereign.clients.ensembl import EnsemblClient
 from alphafold_sovereign.server.app import mcp
+
+if TYPE_CHECKING:
+    from alphafold_sovereign.clients._base import BaseAsyncClient
 
 logger = structlog.get_logger(__name__)
 
@@ -116,14 +119,14 @@ class BindingPocketInput(BaseModel):
 # ── AF structure fetcher (uses existing fetcher infrastructure) ───────────────
 
 
-_CLIENTS: dict[str, Any] = {}
+_CLIENTS: dict[str, BaseAsyncClient] = {}
 
 
 def _alphafold() -> AlphaFoldClient:
     """Return the process-wide AlphaFold DB client (lazily constructed)."""
     if "alphafold" not in _CLIENTS:
         _CLIENTS["alphafold"] = AlphaFoldClient()
-    return _CLIENTS["alphafold"]  # type: ignore[return-value]
+    return cast("AlphaFoldClient", _CLIENTS["alphafold"])
 
 
 async def _fetch_af_structure(uniprot_id: str) -> dict[str, Any] | None:
@@ -641,7 +644,7 @@ async def compare_proteins_topologically(
     protein_meta: dict[str, dict[str, Any]] = {}
 
     for uid, struct in zip(ids, structures):
-        if isinstance(struct, Exception) or struct is None:
+        if isinstance(struct, BaseException) or struct is None:
             errors[uid] = "No AlphaFold model for this accession."
             continue
         ca = _parse_ca_coords_from_pdb(struct["pdb_text"])
@@ -1097,10 +1100,10 @@ def _geometric_pocket_detection(
 
 def _pocket_druggability_index(pocket: dict[str, Any]) -> float:
     """Score 0–100 for druggability based on pocket geometry."""
-    n_res = pocket.get("n_residues", 0)
-    rog = pocket.get("radius_of_gyration_angstrom", 0.0)
-    plddt = pocket.get("mean_plddt", 0.0)
-    burial = pocket.get("burial_from_centroid", 0.0)
+    n_res: float = pocket.get("n_residues", 0)
+    rog: float = pocket.get("radius_of_gyration_angstrom", 0.0)
+    plddt: float = pocket.get("mean_plddt", 0.0)
+    burial: float = pocket.get("burial_from_centroid", 0.0)
 
     # Ideal pocket: 4–12 residues, rog 3–8 Å, plddt > 80, well-buried
     n_score = min(1.0, n_res / 12.0) * 25
@@ -1263,7 +1266,10 @@ def _estimate_ordered_fraction(plddt: float | None) -> float | None:
 async def _resolve_ortholog_uniprot(ensembl: EnsemblClient, ensembl_gene_id: str) -> str:
     """Resolve an Ensembl gene ID to a UniProt accession via the Ensembl xref endpoint."""
     try:
-        data = await ensembl._get(
+        # The Ensembl /xrefs endpoint returns a JSON *array*; ``_get`` is
+        # annotated ``dict[str, Any]`` for the common object case, so widen
+        # locally to keep the list branch reachable.
+        data: Any = await ensembl._get(
             f"/xrefs/id/{ensembl_gene_id}",
             params={"external_db": "Uniprot/SWISSPROT"},
         )
@@ -1271,7 +1277,7 @@ async def _resolve_ortholog_uniprot(ensembl: EnsemblClient, ensembl_gene_id: str
             for xref in data:
                 pid = xref.get("primary_id", "")
                 if pid:
-                    return pid
+                    return str(pid)
     except Exception:
         pass
     return ""
