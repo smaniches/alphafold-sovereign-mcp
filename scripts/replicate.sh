@@ -2,13 +2,22 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2024-2026 Santiago Maniches and TOPOLOGICA LLC
 #
-# scripts/replicate.sh — Cryptographic supply-chain verification
+# scripts/replicate.sh — supply-chain reporter for a published release
 #
-# Verifies that the installed distribution matches the published provenance:
-#   1. SLSA provenance attestation (via slsa-verifier)
-#   2. cosign container image signature
-#   3. SBOM presence (CycloneDX + SPDX)
-#   4. SHA-256 of the installed wheel vs. PyPI checksum
+# Reports the provenance surface of a release. This is a convenience
+# reporter, not yet a full cryptographic verifier:
+#   1. Prints the PyPI-published wheel SHA-256 (does not yet recompute and
+#      compare a locally installed wheel — roadmap)
+#   2. SLSA provenance via slsa-verifier, if the attestation is attached
+#      (attaching it to each release is itself a roadmap item)
+#   3. cosign container-image signature, only with --image and only if a
+#      published image exists (none is published today)
+#   4. SBOM presence on the release (CycloneDX; an SPDX document is also
+#      attached)
+#   5. Git tag signature, if locally verifiable
+#
+# Verifying the release `.sigstore` signature bundles with
+# `cosign verify-blob` is a roadmap item not yet implemented here.
 #
 # Usage:
 #   ./scripts/replicate.sh                  # verify latest release

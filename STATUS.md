@@ -18,7 +18,7 @@ expectation of what this project is and is not.
 | Line + branch coverage | 100% on shipped surface | `nox -s cov`; enforced by `--cov-fail-under=100` |
 | Static analysis | Clean | `ruff check`, `mypy --strict`, `bandit` on every PR |
 | Security scanning | Clean | CodeQL `security-extended` on every push; no open findings |
-| Release provenance | Sigstore signatures + SBOMs attached; SLSA L3 generated in CI | `release.yml`; verify signatures and SBOMs with `scripts/replicate.sh` |
+| Release provenance | Sigstore signature bundles + CycloneDX SBOM attached; SLSA L3 generated in CI | `release.yml`; `scripts/replicate.sh` checks the PyPI wheel hash and SBOM/provenance presence (`cosign verify-blob` of the bundles is a roadmap item) |
 | Integration tests (live APIs) | Not run in CI | Tests mock all upstreams via `respx`; no live-API CI job |
 | Scientific validation | Not performed | ACMG mapping and druggability tier are unreviewed by domain experts |
 | Clinical validation | Not performed | No clinical geneticist has signed off on any output |
@@ -54,7 +54,9 @@ expectation of what this project is and is not.
 ### Security & supply chain
 - Bandit + pip-audit on every PR (Safety in the local ``nox -s security`` session).
 - CodeQL ``security-extended`` on every push (public repo).
-- SBOM (CycloneDX + SPDX) generated on every release tag.
+- CycloneDX SBOM generated from the installed package on every release
+  tag (an SPDX document is also attached; populating it from the full
+  dependency tree is a roadmap item).
 - SLSA L3 in-toto build provenance generated in CI; Sigstore
   (``cosign``) keyless signing of every release artefact.
 - PyPI publishing via OIDC Trusted Publishing (no API tokens stored
