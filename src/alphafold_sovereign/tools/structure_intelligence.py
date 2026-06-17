@@ -463,12 +463,15 @@ def _parse_ca_coords_from_pdb(pdb_text: str) -> np.ndarray:
 async def analyze_structural_confidence(
     params: UniProtInput,
 ) -> dict[str, Any]:
-    """Analyze AlphaFold structural confidence using pLDDT and PAE matrices.
+    """Analyze AlphaFold structural confidence using pLDDT and PAE.
 
-    Returns a multi-layered structural reliability assessment:
-    - **pLDDT** (per-residue): mean confidence, low-confidence segments (disordered/novel)
-    - **PAE** (predicted aligned error): inter-domain uncertainty, domain boundaries
-    - **Druggability pre-screen**: high-pLDDT + low-PAE regions → ordered pockets
+    Returns a structural reliability summary (not a per-residue profile):
+    - **pLDDT**: the model's mean confidence (AlphaFold DB ``globalMetricValue``)
+      plus a coarse confidence tier
+    - **PAE** (predicted aligned error): mean and max inter-residue uncertainty
+      and PAE-derived domain boundaries
+    - **Druggability pre-screen**: an ordered-fraction estimate and a
+      structure-based-drug-design suitability flag
 
     pLDDT interpretation:
       > 90: Very high confidence — likely correct at backbone + sidechain level

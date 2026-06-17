@@ -2,6 +2,21 @@
 
 <!-- mcp-name: io.github.smaniches/alphafold-sovereign-mcp -->
 
+Answering a structural-biology or variant question usually means querying
+many public databases by hand — AlphaFold DB, Open Targets, ClinVar,
+gnomAD, and more — and reconciling their formats. This server wraps those
+sources behind one set of MCP tool calls that run as a local process on
+your own machine, with no hosted service of ours in the path, no
+telemetry, and a local SQLite knowledge graph that never leaves your disk.
+In the default online mode the tools query those public upstreams
+directly, so the identifiers you look up are sent to them (and one,
+DisGeNET, needs its own free API key); set `ALPHAFOLD_OFFLINE=1` to refuse
+outbound requests before any socket opens, so no identifier leaves the
+machine (the knowledge-graph tools still answer from local data; the
+upstream tools report their source as unavailable). "Sovereign" here means
+local-first — your compute and stored results stay on your machine — not
+that the server runs without a network.
+
 A Model Context Protocol server — an AlphaFold MCP server — that
 wraps AlphaFold DB and 8 other public biomedical data sources behind
 a set of MCP tool calls, backed by a local SQLite knowledge graph with
@@ -116,12 +131,14 @@ uvx alphafold-sovereign-mcp
 ```
 
 Every release on PyPI is built by the `release.yml` workflow under
-OIDC Trusted Publishing, attached to a signed GitHub Release with
-Sigstore (`cosign`) signatures and CycloneDX/SPDX SBOMs, and mirrored
-to a Zenodo DOI. SLSA L3 build provenance is generated in CI by
-`slsa-github-generator`; attaching the attestation to each release is
-a roadmap item. Verify the published signatures and SBOMs with
-`scripts/replicate.sh`.
+OIDC Trusted Publishing and attached to a signed GitHub Release with
+Sigstore (`cosign`) signature bundles, a CycloneDX SBOM, and a Zenodo
+DOI mirror. SLSA L3 build provenance is generated in CI by
+`slsa-github-generator`; attaching the attestation to each release is a
+roadmap item. `scripts/replicate.sh` checks the published PyPI wheel hash
+and the presence of the release SBOM and provenance; verifying the
+`cosign` signature bundles with `cosign verify-blob` is not yet wired into
+the script (roadmap).
 
 ### From source
 
@@ -135,19 +152,21 @@ uv pip install -e .
 
 ### Verify the install
 
-```bash
-alphafold-sovereign --version       # → 1.2.2
-alphafold-sovereign --self-test     # → PASS on the offline BRCA1 fixture
+```console
+$ alphafold-sovereign --version
+1.2.2
+$ alphafold-sovereign --self-test
+SELF-TEST PASS - ACMG helpers behave as expected on the BRCA1 c.5266dupC fixture.
 ```
 
 If you ran it via `uvx` without installing, use
 `uvx alphafold-sovereign-mcp --self-test` instead (the bare
 `alphafold-sovereign` script is only on PATH after a pip/uv install).
 
-`--self-test` runs fully offline (no network) and checks the
-deterministic ACMG-evidence helpers (VEP, gnomAD, and AlphaMissense
-mapped to ACMG criteria) against a built-in `BRCA1:c.5266dupC` fixture. No network calls; returns exit
-code 0 on PASS, non-zero on FAIL.
+`--self-test` runs fully offline: it checks the deterministic ACMG-evidence
+helpers (VEP, gnomAD, and AlphaMissense mapped to ACMG criteria) against a
+built-in `BRCA1:c.5266dupC` fixture. Returns exit code 0 on PASS, non-zero on
+FAIL. No network calls, no credentials required.
 
 ### Configure Claude Desktop
 
@@ -175,7 +194,7 @@ illustrations of what a session looks like.
 ALPHAFOLD_OFFLINE=1 alphafold-sovereign-mcp
 ```
 
-Refuses all outbound HTTP before a socket is opened (raising `AirGapError`). The knowledge-graph query and export tools still answer from the local SQLite store; the upstream-querying tools fail closed.
+Refuses outbound HTTP before a socket is opened (raising `AirGapError`), except to hosts you explicitly allowlist via `ALPHAFOLD_ALLOW_HOSTS`. The knowledge-graph query and export tools still answer from the local SQLite store. The upstream-querying tools have no local cache and report their source as unavailable; note that the structure tools currently surface this as a "no AlphaFold model" result rather than an explicit offline error.
 
 ---
 
@@ -220,7 +239,7 @@ are not a substitute for clinical-laboratory review.
 
 | Tool | What it does |
 |---|---|
-| `analyze_structural_confidence` | pLDDT distribution + PAE-derived domain map |
+| `analyze_structural_confidence` | mean pLDDT + confidence tier + PAE-derived domain boundaries |
 | `compute_topology_fingerprint` | 64-dim TDA fingerprint (Betti numbers β₀ β₁ β₂) |
 | `compare_proteins_topologically` | Pairwise L2 fingerprint-distance matrix for 2–10 proteins |
 | `find_evolutionary_structural_shifts` | Cross-species structural divergence (TDA + Ensembl orthologs) |
@@ -346,9 +365,10 @@ See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the full module map.
 - Lint: `ruff` (full ruleset). Type checking: `mypy --strict` on the
   full source tree.
 - Security: `bandit` plus CodeQL `security-extended`.
-- Supply chain: SBOM generation in CI; supply-chain verification script
-  at `scripts/replicate.sh` (verifies the published signatures, SBOMs,
-  and PyPI hashes).
+- Supply chain: CycloneDX SBOM generated in CI from the installed
+  package; `scripts/replicate.sh` checks the PyPI wheel hash and the
+  presence of the release SBOM and provenance (`cosign verify-blob`
+  signature-bundle verification is a roadmap item, not yet in the script).
 
 The full CI matrix (Python 3.10, 3.11, 3.12, 3.13 × Ubuntu, macOS)
 runs on every push. The coverage percentage above is the number a
