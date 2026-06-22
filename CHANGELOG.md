@@ -10,6 +10,18 @@ Versioning: [Semantic Versioning](https://semver.org/).
 ## [1.2.3](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.2.2...v1.2.3) (2026-06-22)
 
 
+### Dependencies
+
+* **security:** bump msgpack 1.1.2 -> 1.2.1, addressing a high-severity use-after-free / out-of-bounds read on `Unpacker` reuse after a caught error ([#127](https://github.com/smaniches/alphafold-sovereign-mcp/issues/127))
+* **security:** bump pydantic-settings 2.14.1 -> 2.14.2, addressing a path-traversal / link-following advisory in `NestedSecretsSettingsSource` ([#126](https://github.com/smaniches/alphafold-sovereign-mcp/issues/126))
+* bump the production-minor-patch group with 3 updates ([#125](https://github.com/smaniches/alphafold-sovereign-mcp/issues/125))
+* bump actions/checkout 6 -> 7 ([#124](https://github.com/smaniches/alphafold-sovereign-mcp/issues/124))
+
+
+### Bug Fixes
+
+* restore the verbatim Apache-2.0 Section 9 text in `LICENSE` so the license is correctly detected ([#123](https://github.com/smaniches/alphafold-sovereign-mcp/issues/123))
+
 ### Documentation
 
 * add README motivation lead and align supply-chain, offline, and pLDDT claims with the code ([#116](https://github.com/smaniches/alphafold-sovereign-mcp/issues/116)) ([5bd6b7f](https://github.com/smaniches/alphafold-sovereign-mcp/commit/5bd6b7f79762651a1fffadf349be3d17d4d0f0cc))
