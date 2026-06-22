@@ -7,6 +7,13 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.2.3](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.2.2...v1.2.3) (2026-06-22)
+
+
+### Documentation
+
+* add README motivation lead and align supply-chain, offline, and pLDDT claims with the code ([#116](https://github.com/smaniches/alphafold-sovereign-mcp/issues/116)) ([5bd6b7f](https://github.com/smaniches/alphafold-sovereign-mcp/commit/5bd6b7f79762651a1fffadf349be3d17d4d0f0cc))
+
 ## [1.2.2](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.2.1...v1.2.2) (2026-06-16)
 
 
