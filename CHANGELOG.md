@@ -7,19 +7,6 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [Unreleased]
-
-### Fixed
-
-- Disease tools now raise `ToolError` on failure so failed calls set `isError`
-  (mirrors uniprot-mcp #88). Under the standalone `fastmcp` runtime, a handler
-  that returned an error-shaped JSON string was reported to the client as a
-  successful result (`isError=False`); the 11 disease tool handlers now re-raise
-  upstream failures as a sanitized `ToolError`. Validation guard clauses and
-  not-found / no-results negative results are unchanged and remain successful
-  results (`isError=False`). This changes the error contract for the affected
-  tools.
-
 ## [1.2.3](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.2.2...v1.2.3) (2026-06-22)
 
 
