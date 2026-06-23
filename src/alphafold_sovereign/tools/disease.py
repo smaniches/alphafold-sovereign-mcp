@@ -325,7 +325,7 @@ def _provenance(**sources: str) -> str:
     return f"\n\n---\n*AlphaFold Sovereign MCP v{_SERVER_VERSION} · {ts} · {src_str}*"
 
 
-def _raise_tool_error(tool: str, exc: BaseException) -> NoReturn:
+def _raise_tool_error(tool: str, exc: Exception) -> NoReturn:
     """Re-raise a failed tool call as a ToolError so FastMCP sets isError=True.
 
     Returning an error-shaped JSON string makes FastMCP report the call as a
