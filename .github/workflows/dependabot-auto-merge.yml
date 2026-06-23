@@ -29,12 +29,14 @@ name: Dependabot auto-merge
 on: pull_request
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
   dependabot:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write          # native auto-merge arms a merge of the PR branch
+      pull-requests: write      # `gh pr merge --auto` updates the PR
     # Only run for Dependabot's own PRs on this repository (never forks).
     if: >-
       github.event.pull_request.user.login == 'dependabot[bot]' &&
