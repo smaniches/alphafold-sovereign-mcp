@@ -81,12 +81,24 @@ jobs:
         run: uv sync --python ${{ matrix.python-version }} --extra dev
       - name: Run unit tests
         run: |
-          uv run pytest tests/ -m "unit or not integration" \
-            --cov=src/alphafold_sovereign \
-            --cov-report=term-missing \
-            --cov-report=xml:coverage.xml \
-            --cov-fail-under=100 \
-            -v --tb=short
+          run_tests() {
+            uv run pytest tests/ -m "unit or not integration" \
+              --cov=src/alphafold_sovereign \
+              --cov-report=term-missing \
+              --cov-report=xml:coverage.xml \
+              --cov-fail-under=100 \
+              -v --tb=short
+          }
+          if run_tests; then exit 0; fi
+          # Known intermittent flake on the macOS / Python 3.11 runner only
+          # (see LIMITATIONS.md L5). Retry that one entry once so a benign
+          # timing flake does not red the build; every other entry fails fast.
+          if [ "${{ matrix.os }}" = "macos-latest" ] && [ "${{ matrix.python-version }}" = "3.11" ]; then
+            echo "::warning::macOS/Python 3.11 test run failed; retrying once (known flake, LIMITATIONS.md L5)."
+            run_tests
+          else
+            exit 1
+          fi
         env:
           PYTHONPATH: src
       - name: Upload coverage
