@@ -5,19 +5,21 @@ on:
     branches: [main]
 
 permissions:
-  contents: write
-  pull-requests: write
-  # Needed so this workflow can dispatch release.yml after release-please
-  # creates the GitHub Release. workflow_dispatch is the documented exception
-  # that lets a GITHUB_TOKEN-driven workflow start a downstream workflow —
-  # without it the release: published / tag-push events authored by
-  # GITHUB_TOKEN are suppressed and PyPI never sees the new version.
-  #   docs: https://docs.github.com/en/actions/security-guides/automatic-token-authentication
-  actions: write
+  contents: read
 
 jobs:
   release-please:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write          # release-please creates release commits/tags
+      pull-requests: write      # release-please opens/updates the release PR
+      # Needed so this workflow can dispatch release.yml after release-please
+      # creates the GitHub Release. workflow_dispatch is the documented exception
+      # that lets a GITHUB_TOKEN-driven workflow start a downstream workflow —
+      # without it the release: published / tag-push events authored by
+      # GITHUB_TOKEN are suppressed and PyPI never sees the new version.
+      #   docs: https://docs.github.com/en/actions/security-guides/automatic-token-authentication
+      actions: write
     steps:
       - id: release
         uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5
