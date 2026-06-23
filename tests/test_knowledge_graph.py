@@ -52,6 +52,20 @@ async def test_connect_idempotent(tmp_path: Path) -> None:
     await db.close()
 
 
+@pytest.mark.unit
+async def test_open_db_sets_busy_timeout(tmp_path: Path) -> None:
+    """_open_db must set a non-zero busy_timeout so a concurrent writer waits
+    for a contended lock instead of failing immediately with 'database is locked'."""
+    db = KnowledgeGraph(db_path=tmp_path / "busy.db")
+    await db.connect()
+    try:
+        assert db._conn is not None
+        (timeout,) = db._conn.execute("PRAGMA busy_timeout").fetchone()
+        assert timeout == 5000
+    finally:
+        await db.close()
+
+
 # ── store_protein ──────────────────────────────────────────────────────────────
 
 
