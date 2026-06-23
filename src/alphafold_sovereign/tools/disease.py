@@ -21,9 +21,10 @@ from __future__ import annotations
 import asyncio
 import json
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, NoReturn
 
 import structlog
+from fastmcp.exceptions import ToolError
 from pydantic import BaseModel, ConfigDict, Field
 
 from alphafold_sovereign import __version__
@@ -324,6 +325,16 @@ def _provenance(**sources: str) -> str:
     return f"\n\n---\n*AlphaFold Sovereign MCP v{_SERVER_VERSION} · {ts} · {src_str}*"
 
 
+def _raise_tool_error(tool: str, exc: Exception) -> NoReturn:
+    """Re-raise a failed tool call as a ToolError so FastMCP sets isError=True.
+
+    Returning an error-shaped JSON string makes FastMCP report the call as a
+    successful result (isError=False); raising makes it a real error result.
+    Information-equivalent to the previous str(exc) text, so nothing new leaks.
+    """
+    raise ToolError(f"Error in {tool}: {exc}") from exc
+
+
 # ---------------------------------------------------------------------------
 # Tool 1: MONDO disease lookup
 # ---------------------------------------------------------------------------
@@ -383,7 +394,7 @@ async def lookup_disease(params: MONDOLookupInput) -> str:
         )
     except Exception as exc:
         logger.error("lookup_disease_failed", mondo_id=params.mondo_id, error=str(exc))
-        return json.dumps({"status": "error", "error": str(exc)})
+        _raise_tool_error("lookup_disease", exc)
 
 
 # ---------------------------------------------------------------------------
@@ -430,7 +441,7 @@ async def search_diseases(params: MONDOSearchInput) -> str:
         ) + _provenance(mondo="OLS4")
     except Exception as exc:
         logger.error("search_diseases_failed", query=params.query, error=str(exc))
-        return json.dumps({"status": "error", "error": str(exc)})
+        _raise_tool_error("search_diseases", exc)
 
 
 # ---------------------------------------------------------------------------
@@ -483,7 +494,7 @@ async def lookup_phenotype(params: HPOTermInput) -> str:
 
     except Exception as exc:
         logger.error("lookup_phenotype_failed", hpo_id=params.hpo_id, error=str(exc))
-        return json.dumps({"status": "error", "error": str(exc)})
+        _raise_tool_error("lookup_phenotype", exc)
 
 
 # ---------------------------------------------------------------------------
@@ -557,7 +568,7 @@ async def get_gene_phenotype_profile(params: GenePhenotypeInput) -> str:
 
     except Exception as exc:
         logger.error("gene_phenotype_failed", gene=params.gene_symbol, error=str(exc))
-        return json.dumps({"status": "error", "error": str(exc)})
+        _raise_tool_error("get_gene_phenotype_profile", exc)
 
 
 # ---------------------------------------------------------------------------
@@ -614,7 +625,7 @@ async def get_disease_targets(params: DiseaseTargetsInput) -> str:
 
     except Exception as exc:
         logger.error("get_disease_targets_failed", disease=params.disease_id, error=str(exc))
-        return json.dumps({"status": "error", "error": str(exc)})
+        _raise_tool_error("get_disease_targets", exc)
 
 
 # ---------------------------------------------------------------------------
@@ -663,7 +674,7 @@ async def get_target_diseases(params: TargetDiseaseInput) -> str:
 
     except Exception as exc:
         logger.error("get_target_diseases_failed", uniprot=params.uniprot_id, error=str(exc))
-        return json.dumps({"status": "error", "error": str(exc)})
+        _raise_tool_error("get_target_diseases", exc)
 
 
 # ---------------------------------------------------------------------------
@@ -880,7 +891,7 @@ async def triage_variant_3d(params: VariantTriageInput) -> str:
 
     except Exception as exc:
         logger.error("triage_variant_3d_failed", hgvs=hgvs, error=str(exc))
-        return json.dumps({"status": "error", "hgvs": hgvs, "error": str(exc)})
+        _raise_tool_error("triage_variant_3d", exc)
 
 
 # ---------------------------------------------------------------------------
@@ -978,7 +989,7 @@ async def phenotype_to_structures(params: PhenotypeToStructureInput) -> str:
 
     except Exception as exc:
         logger.error("phenotype_to_structures_failed", hpo_id=params.hpo_id, error=str(exc))
-        return json.dumps({"status": "error", "error": str(exc)})
+        _raise_tool_error("phenotype_to_structures", exc)
 
 
 # ---------------------------------------------------------------------------
@@ -1055,7 +1066,7 @@ async def get_orphan_disease_atlas(params: OrphanDiseaseInput) -> str:
 
     except Exception as exc:
         logger.error("orphan_disease_atlas_failed", orphanet=params.orphanet_id, error=str(exc))
-        return json.dumps({"status": "error", "error": str(exc)})
+        _raise_tool_error("get_orphan_disease_atlas", exc)
 
 
 # ---------------------------------------------------------------------------
@@ -1163,7 +1174,7 @@ async def compare_disease_target_overlap(params: DiseaseSimilarityInput) -> str:
 
     except Exception as exc:
         logger.error("compare_diseases_failed", error=str(exc))
-        return json.dumps({"status": "error", "error": str(exc)})
+        _raise_tool_error("compare_disease_target_overlap", exc)
 
 
 # ---------------------------------------------------------------------------
@@ -1227,7 +1238,7 @@ async def resolve_icd10_to_mondo(params: ICD10ToMONDOInput) -> str:
 
     except Exception as exc:
         logger.error("resolve_icd10_failed", icd10=params.icd10_code, error=str(exc))
-        return json.dumps({"status": "error", "error": str(exc)})
+        _raise_tool_error("resolve_icd10_to_mondo", exc)
 
 
 # ---------------------------------------------------------------------------
