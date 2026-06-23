@@ -1,9 +1,8 @@
 ---
 name: Limitation report
-about: Report or discuss a known or suspected limitation of the server
+about: Report or discuss a known or suspected limitation of alphafold-sovereign-mcp
 title: "limitation: "
-labels: limitation
-assignees: ""
+labels: [limitation]
 ---
 
 ## The limitation
