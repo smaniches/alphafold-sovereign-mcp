@@ -9,6 +9,8 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from fastmcp import Client
+from fastmcp.exceptions import ToolError
 
 from alphafold_sovereign.clients.hpo import DiseaseByPhenotype
 from alphafold_sovereign.domain.disease import (
@@ -17,6 +19,7 @@ from alphafold_sovereign.domain.disease import (
     PhenotypeAssociation,
     TargetEvidenceScore,
 )
+from alphafold_sovereign.server.app import mcp
 from alphafold_sovereign.tools.disease import (
     COMMON_DISEASE_ROOTS,
     CommonDiseaseInput,
@@ -277,10 +280,48 @@ async def test_lookup_disease_error(monkeypatch: pytest.MonkeyPatch) -> None:
     mock_client.lookup = AsyncMock(side_effect=RuntimeError("oops"))
     _patch_client_class(monkeypatch, "alphafold_sovereign.tools.disease.MONDOClient", mock_client)
 
-    result = await lookup_disease(MONDOLookupInput(mondo_id="MONDO:9999"))
-    parsed = json.loads(result)
-    assert parsed["status"] == "error"
-    assert "oops" in parsed["error"]
+    with pytest.raises(ToolError):
+        await lookup_disease(MONDOLookupInput(mondo_id="MONDO:9999"))
+
+
+# ---------------------------------------------------------------------------
+# MCP contract: failures set isError, negative results do not (end-to-end)
+# ---------------------------------------------------------------------------
+
+
+async def test_lookup_disease_mcp_contract_iserror(monkeypatch: pytest.MonkeyPatch) -> None:
+    """End-to-end MCP contract check via an in-memory FastMCP Client.
+
+    A genuine upstream failure (RuntimeError) must surface as a real error
+    result (``is_error is True``); a not-found negative result (KeyError →
+    ``status: not_found``) must remain a successful result
+    (``is_error is False``). Mirrors uniprot-mcp #88.
+    """
+    # 1. Upstream failure → isError True.
+    failing = MagicMock()
+    failing.lookup = AsyncMock(side_effect=RuntimeError("upstream boom"))
+    _patch_client_class(monkeypatch, "alphafold_sovereign.tools.disease.MONDOClient", failing)
+
+    async with Client(mcp) as client:
+        error_result = await client.call_tool(
+            "lookup_disease",
+            {"params": {"mondo_id": "MONDO:9999"}},
+            raise_on_error=False,
+        )
+        assert error_result.is_error is True
+
+    # 2. Not-found negative result → isError False (guard clause preserved).
+    not_found = MagicMock()
+    not_found.lookup = AsyncMock(side_effect=KeyError("missing"))
+    _patch_client_class(monkeypatch, "alphafold_sovereign.tools.disease.MONDOClient", not_found)
+
+    async with Client(mcp) as client:
+        ok_result = await client.call_tool(
+            "lookup_disease",
+            {"params": {"mondo_id": "MONDO:9999"}},
+            raise_on_error=False,
+        )
+        assert ok_result.is_error is False
 
 
 # ---------------------------------------------------------------------------
@@ -316,9 +357,8 @@ async def test_search_diseases_error(monkeypatch: pytest.MonkeyPatch) -> None:
     mock_client.search = AsyncMock(side_effect=RuntimeError("boom"))
     _patch_client_class(monkeypatch, "alphafold_sovereign.tools.disease.MONDOClient", mock_client)
 
-    out = await search_diseases(MONDOSearchInput(query="xy"))
-    parsed = json.loads(out)
-    assert parsed["status"] == "error"
+    with pytest.raises(ToolError):
+        await search_diseases(MONDOSearchInput(query="xy"))
 
 
 # ---------------------------------------------------------------------------
@@ -361,9 +401,8 @@ async def test_lookup_phenotype_error(monkeypatch: pytest.MonkeyPatch) -> None:
     mock_client.lookup = AsyncMock(side_effect=RuntimeError("err"))
     _patch_client_class(monkeypatch, "alphafold_sovereign.tools.disease.HPOClient", mock_client)
 
-    out = await lookup_phenotype(HPOTermInput(hpo_id="HP:0001"))
-    parsed = json.loads(out)
-    assert parsed["status"] == "error"
+    with pytest.raises(ToolError):
+        await lookup_phenotype(HPOTermInput(hpo_id="HP:0001"))
 
 
 # ---------------------------------------------------------------------------
@@ -477,9 +516,8 @@ async def test_gene_phenotype_profile_outer_error(monkeypatch: pytest.MonkeyPatc
 
     monkeypatch.setattr("alphafold_sovereign.tools.disease.EnsemblClient", lambda *a, **kw: _Boom())
     monkeypatch.setattr("alphafold_sovereign.tools.disease.HPOClient", lambda *a, **kw: _Boom())
-    out = await get_gene_phenotype_profile(GenePhenotypeInput(gene_symbol="X"))
-    parsed = json.loads(out)
-    assert parsed["status"] == "error"
+    with pytest.raises(ToolError):
+        await get_gene_phenotype_profile(GenePhenotypeInput(gene_symbol="X"))
 
 
 # ---------------------------------------------------------------------------
@@ -540,9 +578,8 @@ async def test_get_disease_targets_error(monkeypatch: pytest.MonkeyPatch) -> Non
         monkeypatch, "alphafold_sovereign.tools.disease.OpenTargetsClient", mock_client
     )
 
-    out = await get_disease_targets(DiseaseTargetsInput(disease_id="MONDO:0001"))
-    parsed = json.loads(out)
-    assert parsed["status"] == "error"
+    with pytest.raises(ToolError):
+        await get_disease_targets(DiseaseTargetsInput(disease_id="MONDO:0001"))
 
 
 # ---------------------------------------------------------------------------
@@ -595,9 +632,8 @@ async def test_get_target_diseases_error(monkeypatch: pytest.MonkeyPatch) -> Non
         monkeypatch, "alphafold_sovereign.tools.disease.OpenTargetsClient", mock_client
     )
 
-    out = await get_target_diseases(TargetDiseaseInput(uniprot_id="P38398"))
-    parsed = json.loads(out)
-    assert parsed["status"] == "error"
+    with pytest.raises(ToolError):
+        await get_target_diseases(TargetDiseaseInput(uniprot_id="P38398"))
 
 
 # ---------------------------------------------------------------------------
@@ -793,9 +829,8 @@ async def test_triage_variant_3d_outer_exception(monkeypatch: pytest.MonkeyPatch
         raise RuntimeError("parse fail")
 
     monkeypatch.setattr("alphafold_sovereign.tools.disease._parse_hgvs_gene", bad_parse)
-    out = await triage_variant_3d(VariantTriageInput(hgvs="BRCA1:c.1T>G"))
-    parsed = json.loads(out)
-    assert parsed["status"] == "error"
+    with pytest.raises(ToolError):
+        await triage_variant_3d(VariantTriageInput(hgvs="BRCA1:c.1T>G"))
 
 
 # ---------------------------------------------------------------------------
@@ -948,9 +983,8 @@ async def test_phenotype_to_structures_outer_error(monkeypatch: pytest.MonkeyPat
             return None
 
     monkeypatch.setattr("alphafold_sovereign.tools.disease.HPOClient", lambda *a, **kw: _Boom())
-    out = await phenotype_to_structures(PhenotypeToStructureInput(hpo_id="HP:0001"))
-    parsed = json.loads(out)
-    assert parsed["status"] == "error"
+    with pytest.raises(ToolError):
+        await phenotype_to_structures(PhenotypeToStructureInput(hpo_id="HP:0001"))
 
 
 # ---------------------------------------------------------------------------
@@ -1028,9 +1062,8 @@ async def test_orphan_atlas_outer_error(monkeypatch: pytest.MonkeyPatch) -> None
             return None
 
     monkeypatch.setattr("alphafold_sovereign.tools.disease.MONDOClient", lambda *a, **kw: _Boom())
-    out = await get_orphan_disease_atlas(OrphanDiseaseInput(orphanet_id="79318"))
-    parsed = json.loads(out)
-    assert parsed["status"] == "error"
+    with pytest.raises(ToolError):
+        await get_orphan_disease_atlas(OrphanDiseaseInput(orphanet_id="79318"))
 
 
 # ---------------------------------------------------------------------------
@@ -1082,11 +1115,10 @@ async def test_compare_disease_target_overlap_error(monkeypatch: pytest.MonkeyPa
         monkeypatch, "alphafold_sovereign.tools.disease.OpenTargetsClient", mock_client
     )
 
-    out = await compare_disease_target_overlap(
-        DiseaseSimilarityInput(mondo_id_a="MONDO:0001", mondo_id_b="MONDO:0002")
-    )
-    parsed = json.loads(out)
-    assert parsed["status"] == "error"
+    with pytest.raises(ToolError):
+        await compare_disease_target_overlap(
+            DiseaseSimilarityInput(mondo_id_a="MONDO:0001", mondo_id_b="MONDO:0002")
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -1121,9 +1153,8 @@ async def test_resolve_icd10_error(monkeypatch: pytest.MonkeyPatch) -> None:
     mock_client.from_icd10 = AsyncMock(side_effect=RuntimeError("err"))
     _patch_client_class(monkeypatch, "alphafold_sovereign.tools.disease.MONDOClient", mock_client)
 
-    out = await resolve_icd10_to_mondo(ICD10ToMONDOInput(icd10_code="X99"))
-    parsed = json.loads(out)
-    assert parsed["status"] == "error"
+    with pytest.raises(ToolError):
+        await resolve_icd10_to_mondo(ICD10ToMONDOInput(icd10_code="X99"))
 
 
 # ---------------------------------------------------------------------------
