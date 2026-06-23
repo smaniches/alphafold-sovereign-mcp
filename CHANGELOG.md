@@ -7,6 +7,31 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.3.0](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.2.3...v1.3.0) (2026-06-23)
+
+> **Behavior change (error reporting):** failed disease-tool calls now return an MCP error result (`isError=true`) instead of a *successful* result whose text content was an error-shaped JSON string (`{"status": "error", ...}`). Clients that parsed that JSON to detect failures should switch to checking `isError` on the result. Successful results and not-found / no-results negative results are unchanged. See [#133](https://github.com/smaniches/alphafold-sovereign-mcp/pull/133); mirrors uniprot-mcp [#88](https://github.com/smaniches/uniprot-mcp/pull/88).
+
+
+### Features
+
+* **disease:** raise ToolError on tool failures so isError is set (mirrors [#88](https://github.com/smaniches/alphafold-sovereign-mcp/issues/88)) ([66b9379](https://github.com/smaniches/alphafold-sovereign-mcp/commit/66b93798e7cf121435fa20c23ad59ac6614bb724))
+
+
+### Bug Fixes
+
+* **storage:** set SQLite busy_timeout in _open_db ([#128](https://github.com/smaniches/alphafold-sovereign-mcp/issues/128)) ([4a1c3d1](https://github.com/smaniches/alphafold-sovereign-mcp/commit/4a1c3d1749a47c939165a39a0f1a43323f79c291))
+
+
+### Documentation
+
+* add limitation issue template ([#129](https://github.com/smaniches/alphafold-sovereign-mcp/issues/129)) ([9e58a33](https://github.com/smaniches/alphafold-sovereign-mcp/commit/9e58a3343396f5425b528ff52fb3f41618bccfd3))
+
+
+### CI/CD
+
+* scope workflow token permissions to job level (OpenSSF Scorecard) ([#132](https://github.com/smaniches/alphafold-sovereign-mcp/issues/132)) ([b8fc96e](https://github.com/smaniches/alphafold-sovereign-mcp/commit/b8fc96e4c27090e5b1d4fc142899a73d5aa78df6))
+* stabilise the macOS/Python 3.11 test flake (scoped retry) ([#131](https://github.com/smaniches/alphafold-sovereign-mcp/issues/131)) ([40bd931](https://github.com/smaniches/alphafold-sovereign-mcp/commit/40bd931410e9c0a963b78b59a51ad260de56c7b6))
+
 ## [1.2.3](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.2.2...v1.2.3) (2026-06-22)
 
 
