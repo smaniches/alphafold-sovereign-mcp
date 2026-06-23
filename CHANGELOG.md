@@ -9,6 +9,8 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ## [1.3.0](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.2.3...v1.3.0) (2026-06-23)
 
+> **Behavior change (error reporting):** failed disease-tool calls now return an MCP error result (`isError=true`) instead of a *successful* result whose text content was an error-shaped JSON string (`{"status": "error", ...}`). Clients that parsed that JSON to detect failures should switch to checking `isError` on the result. Successful results and not-found / no-results negative results are unchanged. See [#133](https://github.com/smaniches/alphafold-sovereign-mcp/pull/133); mirrors uniprot-mcp [#88](https://github.com/smaniches/uniprot-mcp/pull/88).
+
 
 ### Features
 
