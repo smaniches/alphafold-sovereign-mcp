@@ -38,7 +38,6 @@ respective owner and is used here only to describe the public data
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/smaniches/alphafold-sovereign-mcp/badge)](https://api.securityscorecards.dev/projects/github.com/smaniches/alphafold-sovereign-mcp)
 [![Release](https://img.shields.io/github/v/release/smaniches/alphafold-sovereign-mcp?sort=semver)](https://github.com/smaniches/alphafold-sovereign-mcp/releases)
 [![PyPI](https://img.shields.io/pypi/v/alphafold-sovereign-mcp?label=PyPI)](https://pypi.org/project/alphafold-sovereign-mcp/)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20134773.svg)](https://doi.org/10.5281/zenodo.20134773)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](pyproject.toml)
 [![MCP Spec 2025-06-18](https://img.shields.io/badge/MCP-2025--06--18-purple)](https://modelcontextprotocol.io)
