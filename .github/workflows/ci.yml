@@ -237,10 +237,22 @@ jobs:
           name: dist
           path: dist/
 
+  # ── Version coherence ───────────────────────────────────────────────────────────────────
+  version-coherence:
+    name: Version Coherence
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          version: "latest"
+      - name: Assert all version-bearing files agree with pyproject.toml
+        run: uv run --no-project --python 3.12 python scripts/version_coherence.py
+
   # ── All-green gate ─────────────────────────────────────────────────────────────────────
   all-checks:
     name: All Checks Pass
-    needs: [lint, typecheck, test, security, mcp-validate, build]
+    needs: [lint, typecheck, test, security, mcp-validate, build, version-coherence]
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -250,6 +262,7 @@ jobs:
              [[ "${{ needs.typecheck.result }}" != "success" ]] || \
              [[ "${{ needs.test.result }}" != "success" ]] || \
              [[ "${{ needs.mcp-validate.result }}" != "success" ]] || \
+             [[ "${{ needs.version-coherence.result }}" != "success" ]] || \
              [[ "${{ needs.build.result }}" != "success" ]]; then
             echo "One or more required checks failed."
             exit 1
