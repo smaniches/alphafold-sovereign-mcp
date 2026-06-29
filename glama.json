@@ -1,1 +1,9 @@
-{"$schema":"https://glama.ai/mcp/schemas/server.json","maintainers":["smaniches"],"emoji":"🧬"}
+{
+  "$schema": "https://glama.ai/mcp/schemas/server.json",
+  "maintainers": ["smaniches"],
+  "emoji": "🧬",
+  "name": "AlphaFold Sovereign MCP",
+  "description": "MCP server wrapping the AlphaFold Protein Structure Database, MONDO disease ontology, Open Targets, ClinVar, gnomAD, ChEMBL, DisGeNET, HPO, and Ensembl VEP — with a local SQLite knowledge graph for protein structure analysis, variant triage, drug discovery, and precision medicine.",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/smaniches/alphafold-sovereign-mcp"
+}
