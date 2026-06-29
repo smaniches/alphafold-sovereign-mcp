@@ -4,6 +4,7 @@ WORKDIR /app
 
 ENV PYTHONUNBUFFERED=1
 
-RUN pip install --no-cache-dir alphafold-sovereign-mcp
+COPY . .
+RUN pip install --no-cache-dir .
 
 ENTRYPOINT ["alphafold-sovereign-mcp"]
