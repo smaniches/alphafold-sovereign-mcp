@@ -17,9 +17,10 @@
 # so they each arrive as their own PR and stand out for manual review.
 #
 # Auto-merge: see .github/workflows/dependabot-auto-merge.yml. The low-risk
-# subset (dev-tooling + actions minor/patch, and runtime patch) is merged
-# automatically once the "All Checks Pass" CI gate is green. Runtime minors
-# and all majors are held for the maintainer to merge by hand.
+# subset (dev-tooling + actions minor/patch, runtime patch, transitive patch,
+# and any patch/minor security fix) is merged automatically once the "All
+# Checks Pass" CI gate is green. Runtime minors, transitive minors, and all
+# majors (security majors included) are held for the maintainer by hand.
 
 version: 2
 
