@@ -181,8 +181,6 @@ select = [
     "PERF", # perflint
 ]
 ignore = [
-    "ANN101",  # self annotation not required
-    "ANN102",  # cls annotation not required
     "S101",    # assert usage in tests
     "PLR0913", # too many arguments (domain objects need many)
     "ERA001",  # allow some commented-out code

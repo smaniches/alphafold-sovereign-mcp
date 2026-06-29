@@ -20,13 +20,38 @@ jobs:
       # GITHUB_TOKEN are suppressed and PyPI never sees the new version.
       #   docs: https://docs.github.com/en/actions/security-guides/automatic-token-authentication
       actions: write
+    env:
+      # Full-auto releases need a token whose pushes/PRs are NOT suppressed by
+      # GitHub's GITHUB_TOKEN cascade rule. With RELEASE_PLEASE_TOKEN set
+      # (a fine-grained PAT or GitHub App token with contents + pull-requests
+      # write), the release PR is opened under that identity, its CI runs, and
+      # the auto-merge step below squash-merges it — so a feat/fix reaches PyPI
+      # with zero clicks. With no secret, the token falls back to GITHUB_TOKEN
+      # and auto-merge is skipped: behaviour is identical to the previous
+      # one-click flow (your own merge of the release PR triggers the follow-up
+      # run that cuts the release).
+      HAS_RELEASE_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN != '' }}
     steps:
       - id: release
         uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+      # Arm native auto-merge on the freshly created/updated release PR so the
+      # release lands without a manual click. Gated on RELEASE_PLEASE_TOKEN:
+      # a GITHUB_TOKEN-authored merge would not re-trigger this workflow, so the
+      # release would never be cut — auto-merge only makes sense with a PAT/App
+      # token. Requires "Allow auto-merge" + the required "All Checks Pass"
+      # branch-protection check (already configured for Dependabot auto-merge).
+      - name: Auto-merge the release PR
+        if: ${{ steps.release.outputs.pr && env.HAS_RELEASE_TOKEN == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+        run: |
+          gh pr merge --auto --squash --repo "$GITHUB_REPOSITORY" \
+            "${{ fromJSON(steps.release.outputs.pr).number }}"
 
       # When release-please created a release, fan out to the existing
       # tag-format release pipeline (build + SLSA L3 provenance + CycloneDX/

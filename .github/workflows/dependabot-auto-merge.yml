@@ -6,19 +6,22 @@
 #   - dev-tooling / CI-action   minor + patch  -> auto-merge
 #   - runtime (production)       patch          -> auto-merge
 #   - transitive (indirect)      patch          -> auto-merge  (lockfile-only)
-#   - security fix (any dep)     patch + minor  -> auto-merge  (GHSA-flagged)
 #   - runtime (production)       minor          -> HELD for manual review
 #   - transitive (indirect)      minor          -> HELD for manual review
 #   - anything                   major          -> HELD for manual review
 #
-# Rationale for the two transitive / security rules:
-#   - Transitive deps are never written to pyproject.toml, so their bumps are
-#     lockfile-only and outside this package's public surface; a patch
-#     (bug-fix) bump that clears the full CI gate is low-risk. This is the
-#     case that previously fell through every rule (e.g. the joserfc bump).
-#   - Dependabot security updates (non-empty `ghsa-id`) are the ones most
-#     worth landing fast. Patch + minor security fixes auto-merge regardless
-#     of dependency type; a security *major* still breaks out for review.
+# Rationale for the transitive rule: transitive deps are never written to
+# pyproject.toml, so their bumps are lockfile-only and outside this package's
+# public surface; a patch (bug-fix) bump that clears the full CI gate is
+# low-risk. This is the case that previously fell through every rule (e.g. the
+# joserfc bump).
+#
+# Note on security updates: there is deliberately NO ghsa-id rule. A security
+# *patch* on a direct or transitive dep already auto-merges via the patch rules
+# above; security minors/majors are held for manual review (the safe default).
+# A `ghsa-id`-based rule would be dead code here anyway — fetch-metadata only
+# populates `ghsa-id` when run with `alert-lookup: true` plus a token that can
+# read Dependabot alerts, which GITHUB_TOKEN cannot.
 #
 # "Auto-merge" only ARMS GitHub's native auto-merge; the PR is not merged
 # until the required "All Checks Pass" status check on `main` is green. If a
@@ -78,13 +81,6 @@ jobs:
           (
             steps.meta.outputs.update-type == 'version-update:semver-patch' &&
             steps.meta.outputs.dependency-type == 'indirect'
-          ) ||
-          (
-            steps.meta.outputs.ghsa-id != '' &&
-            (
-              steps.meta.outputs.update-type == 'version-update:semver-patch' ||
-              steps.meta.outputs.update-type == 'version-update:semver-minor'
-            )
           )
         run: gh pr merge --auto --squash "${PR_URL}"
         env:
