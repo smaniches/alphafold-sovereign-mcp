@@ -7,6 +7,13 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.3.2](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.3.1...v1.3.2) (2026-07-06)
+
+
+### Bug Fixes
+
+* correct silent data-loss defects in KG traversal, orphan atlas, and ClinVar parsing ([#146](https://github.com/smaniches/alphafold-sovereign-mcp/issues/146)) ([b5a8298](https://github.com/smaniches/alphafold-sovereign-mcp/commit/b5a8298c42ffe244f4068be0751495e0fb10ea07))
+
 ## [1.3.1](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.3.0...v1.3.1) (2026-06-29)
 
 
