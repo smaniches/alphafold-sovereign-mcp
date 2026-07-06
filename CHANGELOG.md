@@ -7,6 +7,13 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.3.3](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.3.2...v1.3.3) (2026-07-06)
+
+
+### Bug Fixes
+
+* **acmg:** count pathogenic Strong criteria by key; sync + guard uv.lock version ([#149](https://github.com/smaniches/alphafold-sovereign-mcp/issues/149)) ([39033a9](https://github.com/smaniches/alphafold-sovereign-mcp/commit/39033a9242c08713873942018e8f1a47f9c40390))
+
 ## [1.3.2](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.3.1...v1.3.2) (2026-07-06)
 
 
