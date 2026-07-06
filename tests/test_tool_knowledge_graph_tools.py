@@ -194,12 +194,30 @@ async def test_find_drug_gene_network_disease_seed(kg_db_path: Path) -> None:
 
 
 async def test_find_drug_gene_network_uniprot_seed(kg_db_path: Path) -> None:
-    """UniProt-prefix seed → queries proteins."""
+    """UniProt-prefix seed → resolves the stored protein record."""
     async with kg_mod.get_knowledge_graph(kg_db_path) as kg:
         await kg.store_protein(uniprot_id="P38398", gene_symbol="BRCA1")
 
     out = await find_drug_gene_network(DrugNetworkInput(seed="P38398"))
     assert out["seed"] == "P38398"
+    node_ids = {n.get("uniprot_id") for n in out["network"]["nodes"]}
+    assert "P38398" in node_ids
+
+
+async def test_find_drug_gene_network_uniprot_seed_not_top_plddt(kg_db_path: Path) -> None:
+    """A protein seed that is not the highest-pLDDT row is still resolved.
+
+    Regression: the protein branch previously fetched only the single
+    highest-pLDDT protein and matched the seed by coincidence, so any other
+    accession returned a success-shaped empty network.
+    """
+    async with kg_mod.get_knowledge_graph(kg_db_path) as kg:
+        await kg.store_protein(uniprot_id="P00001", gene_symbol="TOP", mean_plddt=99.0)
+        await kg.store_protein(uniprot_id="P38398", gene_symbol="BRCA1", mean_plddt=44.6)
+
+    out = await find_drug_gene_network(DrugNetworkInput(seed="P38398"))
+    node_ids = {n.get("uniprot_id") for n in out["network"]["nodes"]}
+    assert "P38398" in node_ids
 
 
 # ---------------------------------------------------------------------------
@@ -226,18 +244,20 @@ async def test_traverse_network_disease_with_drug_rows() -> None:
 async def test_traverse_network_uniprot_seed_found() -> None:
     """UniProt seed matches a protein in the DB."""
     mock_kg = MagicMock()
-    mock_kg.query_proteins = AsyncMock(
-        return_value=[{"uniprot_id": "P38398", "gene_symbol": "BRCA1"}]
-    )
+    # fetch is the locked async read; it filters by uniprot_id.
+    mock_kg.fetch = AsyncMock(return_value=[{"uniprot_id": "P38398", "gene_symbol": "BRCA1"}])
 
     out = await _traverse_network(mock_kg, "P38398", max_hops=1)
     assert any(n.get("type") == "protein" for n in out["nodes"])
+    # The seed accession is the value the store is queried with.
+    mock_kg.fetch.assert_awaited_once()
+    assert mock_kg.fetch.call_args.args[1] == ["P38398"]
 
 
 async def test_traverse_network_uniprot_seed_not_found() -> None:
     """UniProt seed has no match - no node added."""
     mock_kg = MagicMock()
-    mock_kg.query_proteins = AsyncMock(return_value=[{"uniprot_id": "OTHER"}])
+    mock_kg.fetch = AsyncMock(return_value=[])
 
     out = await _traverse_network(mock_kg, "P12345", max_hops=1)
     assert out["node_count"] == 0
@@ -246,8 +266,7 @@ async def test_traverse_network_uniprot_seed_not_found() -> None:
 async def test_traverse_network_gene_seed_protein_and_variant() -> None:
     """Gene seed → encodes protein + has_variant edges."""
     mock_kg = MagicMock()
-    # _fetchall is sync
-    mock_kg._fetchall = MagicMock(
+    mock_kg.fetch = AsyncMock(
         return_value=[
             {
                 "uniprot_id": "P38398",
@@ -263,7 +282,6 @@ async def test_traverse_network_gene_seed_protein_and_variant() -> None:
             {"hgvs": ""},  # empty hgvs skipped
         ]
     )
-    mock_kg.query_proteins = AsyncMock(return_value=[])
 
     out = await _traverse_network(mock_kg, "BRCA1", max_hops=2)
     assert any(e["rel"] == "encodes" for e in out["edges"])
@@ -273,14 +291,13 @@ async def test_traverse_network_gene_seed_protein_and_variant() -> None:
 async def test_traverse_network_gene_seed_no_recursion_at_max_hop() -> None:
     """Gene at max_hops should not recurse into protein expand."""
     mock_kg = MagicMock()
-    mock_kg._fetchall = MagicMock(
+    mock_kg.fetch = AsyncMock(
         return_value=[
             {"uniprot_id": "P38398", "gene_symbol": "BRCA1"},
             {"uniprot_id": "P38399", "gene_symbol": "BRCA1"},
         ]
     )
     mock_kg.query_variants = AsyncMock(return_value=[])
-    mock_kg.query_proteins = AsyncMock(return_value=[])
 
     # max_hops=1 + initial hop=0 - the gene path runs at hop=0,
     # then `if hop < max_hops:` (0 < 1) → recurses for first protein at hop=1.
@@ -293,16 +310,15 @@ async def test_traverse_network_gene_seed_no_recursion_at_max_hop() -> None:
 
 
 async def test_traverse_network_visited_dedup() -> None:
-    """Duplicate proteins in _fetchall trigger visited short-circuit (line 340)."""
+    """Duplicate proteins from the store trigger the visited short-circuit."""
     mock_kg = MagicMock()
-    mock_kg._fetchall = MagicMock(
+    mock_kg.fetch = AsyncMock(
         return_value=[
             {"uniprot_id": "P38398", "gene_symbol": "BRCA1"},
             {"uniprot_id": "P38398", "gene_symbol": "BRCA1"},  # duplicate
         ]
     )
     mock_kg.query_variants = AsyncMock(return_value=[])
-    mock_kg.query_proteins = AsyncMock(return_value=[])
 
     out = await _traverse_network(mock_kg, "BRCA1", max_hops=2)
     # Second expand call for P38398 hits the visited guard.

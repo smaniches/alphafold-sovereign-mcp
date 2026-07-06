@@ -359,15 +359,19 @@ async def _traverse_network(
                     edges.append({"from": drug_id, "to": entity_id, "rel": "indication"})
 
         elif entity_id.startswith(("P", "Q", "A")):
-            # UniProt-like protein node
-            proteins = await kg.query_proteins(limit=1)
-            p = next((r for r in proteins if r.get("uniprot_id") == entity_id), None)
-            if p:
-                nodes[entity_id] = {"type": "protein", **p}
+            # UniProt-like protein node. Filter by accession: a bare
+            # query_proteins(limit=1) returns the single highest-pLDDT row and
+            # matches the seed only by coincidence, so any other protein seed
+            # would be silently dropped.
+            proteins = await kg.fetch(
+                "SELECT * FROM proteins WHERE uniprot_id = ? LIMIT 1",
+                [entity_id],
+            )
+            if proteins:
+                nodes[entity_id] = {"type": "protein", **proteins[0]}
         else:
-            # Gene symbol — find linked proteins and variants
-            # _fetchall is a sync method on the KG; do not await.
-            proteins = kg._fetchall(
+            # Gene symbol — find linked proteins and variants.
+            proteins = await kg.fetch(
                 "SELECT uniprot_id, gene_symbol, druggability_tier, mean_plddt "
                 "FROM proteins WHERE gene_symbol = ? LIMIT 5",
                 [entity_id.upper()],

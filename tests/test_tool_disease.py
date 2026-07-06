@@ -1024,6 +1024,9 @@ async def test_orphan_atlas_success(monkeypatch: pytest.MonkeyPatch) -> None:
     parsed = json.loads(out.split("---")[0].strip())
     assert parsed["status"] == "success"
     assert parsed["mondo_id"] == "MONDO:0001"
+    # HPO phenotype annotations must be requested with the Orphanet CURIE,
+    # not an OMIM prefix on an Orphanet number (a different disease).
+    hpo_client.phenotypes_for_disease.assert_awaited_once_with("ORPHA:79318")
 
 
 async def test_orphan_atlas_partial_exceptions(monkeypatch: pytest.MonkeyPatch) -> None:

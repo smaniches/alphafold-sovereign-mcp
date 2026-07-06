@@ -34,10 +34,12 @@ uv pip install -e ".[tda]"
 
 ## Verify the install
 
+<!-- x-release-please-start-version -->
 ```bash
-alphafold-sovereign --version       # → 1.2.2
+alphafold-sovereign --version       # → 1.3.1
 alphafold-sovereign --self-test     # → SELF-TEST PASS
 ```
+<!-- x-release-please-end-version -->
 
 `--self-test` boots the server in offline mode and exercises the
 deterministic logic of the ACMG helpers against a built-in BRCA1

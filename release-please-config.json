@@ -41,6 +41,14 @@
         {
           "type": "generic",
           "path": "README.md"
+        },
+        {
+          "type": "generic",
+          "path": "STATUS.md"
+        },
+        {
+          "type": "generic",
+          "path": "docs/installation.md"
         }
       ]
     }

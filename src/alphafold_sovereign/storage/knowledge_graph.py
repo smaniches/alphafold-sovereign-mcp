@@ -1241,6 +1241,18 @@ class KnowledgeGraph:
                 )
         return result
 
+    async def fetch(self, sql: str, params: list[Any]) -> list[dict[str, Any]]:
+        """Run a parameterised read under the connection lock.
+
+        The lock and executor serialise access to the shared singleton
+        connection exactly as every other query path does. Callers must use
+        this rather than reaching for the synchronous ``_fetchall`` from the
+        event-loop thread, which would race the connection state.
+        """
+        async with self._lock:
+            loop = asyncio.get_event_loop()
+            return await loop.run_in_executor(None, self._fetchall, sql, params)
+
     def _fetchall(self, sql: str, params: list[Any]) -> list[dict[str, Any]]:
         assert self._conn is not None
         cursor = self._conn.execute(sql, params)

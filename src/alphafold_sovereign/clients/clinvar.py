@@ -218,9 +218,11 @@ class ClinVarClient(BaseAsyncClient):
             if trait_name:
                 conditions.append(trait_name)
 
-        # Molecular consequence
+        # Molecular consequence. ``variation_set`` may be absent OR present but
+        # empty ([]); ``or [{}]`` covers both so the [0] index never raises.
         mol_cons: list[str] = []
-        for loc in raw.get("variation_set", [{}])[0].get("variation_loc", []):
+        variation_set = raw.get("variation_set") or [{}]
+        for loc in variation_set[0].get("variation_loc", []):
             mc = loc.get("molecular_consequence", "")
             if mc:
                 mol_cons.append(mc)

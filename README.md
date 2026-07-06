@@ -152,12 +152,14 @@ uv pip install -e .
 
 ### Verify the install
 
+<!-- x-release-please-start-version -->
 ```console
 $ alphafold-sovereign --version
-1.2.2
+1.3.1
 $ alphafold-sovereign --self-test
 SELF-TEST PASS - ACMG helpers behave as expected on the BRCA1 c.5266dupC fixture.
 ```
+<!-- x-release-please-end-version -->
 
 If you ran it via `uvx` without installing, use
 `uvx alphafold-sovereign-mcp --self-test` instead (the bare

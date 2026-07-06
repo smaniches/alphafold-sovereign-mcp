@@ -295,6 +295,29 @@ async def test_parse_summary_missing_fields(respx_mock: respx.MockRouter) -> Non
     assert v["last_evaluated"] == ""
 
 
+async def test_parse_summary_empty_variation_set(respx_mock: respx.MockRouter) -> None:
+    """A present-but-empty ``variation_set`` ([]) parses without an IndexError."""
+    respx_mock.get(
+        "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi",
+    ).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "result": {
+                    "1": {
+                        "uid": "1",
+                        "title": "x",
+                        "variation_set": [],
+                    }
+                }
+            },
+        ),
+    )
+    async with ClinVarClient() as client:
+        v = await client.get_variant("1")
+    assert v["molecular_consequence"] == []
+
+
 async def test_parse_summary_skips_non_dict_payload(
     respx_mock: respx.MockRouter,
 ) -> None:
