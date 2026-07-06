@@ -49,8 +49,10 @@ git commit --amend --no-edit --signoff
 git push --force-with-lease
 ```
 
-Sign-off is requested (not enforced in CI): please sign each commit
-with `-s`. It keeps provenance clean and is appreciated.
+Sign-off is enforced in CI: the **DCO Sign-off** check fails a pull
+request whose human-authored commits lack a `Signed-off-by` trailer, so
+please sign each commit with `-s`. Bot commits (Dependabot, release
+automation) and merge commits are exempt.
 
 ## What We Accept
 
