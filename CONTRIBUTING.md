@@ -177,6 +177,17 @@ A reviewer will not start until all of these are true:
 If we miss an SLA, ping `@maintainers` in the PR — politely. We have
 backlog and we appreciate the nudge.
 
+## Releases (maintainers)
+
+Releases are cut by release-please from Conventional Commit history. It
+stamps the version across `pyproject.toml`, the package `__init__`, the
+citation/Zenodo/MCP manifests, and more — but it does **not** rewrite the
+`uv.lock` self-entry. After any version bump, run `uv lock` and
+`python scripts/version_coherence.py` so the lockfile's own
+`alphafold-sovereign-mcp` package version stays in step. CI's
+**Version Coherence** check enforces this and will fail the release PR if
+the lockfile drifts.
+
 ## Style
 
 - **Python**: 3.10+ (3.12 for the primary dev environment, matching the

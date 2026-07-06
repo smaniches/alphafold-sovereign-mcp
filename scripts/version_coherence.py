@@ -5,11 +5,12 @@
 
 The project publishes its identity across many surfaces — PyPI metadata, the
 Python package, the Citation File Format record, the Zenodo deposition, the
-MCP ``server.json`` and ``.well-known/mcp.json`` manifests, and the Smithery
-manifest. release-please stamps all of them on each release, but a hand-edit or
-a botched merge could silently desync them. This script is the guard: it reads
-the canonical version from ``pyproject.toml`` and fails loudly if any other
-surface disagrees.
+MCP ``server.json`` and ``.well-known/mcp.json`` manifests, the Smithery
+manifest, and the editable self-entry in the ``uv.lock`` lockfile. release-please
+stamps most of them on each release, but a hand-edit, a botched merge, or a
+version bump that skips ``uv lock`` could silently desync them. This script is
+the guard: it reads the canonical version from ``pyproject.toml`` and fails
+loudly if any other surface disagrees.
 
 Run locally with ``python scripts/version_coherence.py``; CI runs it on
 every push and pull request. Exit code 0 means perfect coherence; 1 means a
@@ -62,6 +63,23 @@ def _toplevel_yaml_version(rel: str) -> str | None:
     return _re_version(rel, r'^version:\s*"?([^"\s#]+)"?')
 
 
+def _uv_lock_self_version(rel: str) -> str | None:
+    """Version of this project's own editable ``[[package]]`` entry in uv.lock.
+
+    ``uv.lock`` pins a ``[[package]]`` block for every dependency plus one for
+    this project itself (``source = { editable = "." }``). release-please does
+    not rewrite it, so it only tracks ``pyproject`` if ``uv lock`` is re-run
+    after a bump — exactly the drift this guard now catches. The lookup is
+    scoped to the block whose ``name`` matches, so no dependency's version can
+    be picked up by mistake.
+    """
+    for block in re.split(r"(?m)^\[\[package\]\]\s*$", _read(rel)):
+        if re.search(r'(?m)^name\s*=\s*"alphafold-sovereign-mcp"\s*$', block):
+            m = re.search(r'(?m)^version\s*=\s*"([^"]+)"', block)
+            return m.group(1) if m else None
+    return None
+
+
 def _json_path(rel: str, *keys: str | int) -> Any:  # noqa: ANN401 - returns the raw JSON node
     """Walk ``keys`` (dict keys or list indices) into a parsed JSON file."""
     node: Any = json.loads(_read(rel))
@@ -102,6 +120,7 @@ def collect() -> dict[str, str | None]:
         "server.json [packages[0].version]": _safe(
             lambda: _json_path("server.json", "packages", 0, "version")
         ),
+        "uv.lock [alphafold-sovereign-mcp]": _safe(lambda: _uv_lock_self_version("uv.lock")),
     }
 
 

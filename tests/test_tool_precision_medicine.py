@@ -35,6 +35,8 @@ from alphafold_sovereign.tools.precision_medicine import (
     _gnomad,
     _gnomad_to_acmg,
     _investability_rating,
+    _is_benign_strong_key,
+    _is_pathogenic_strong_key,
     _mondo,
     _narrative_summary,
     _opentargets,
@@ -1660,6 +1662,71 @@ async def test_classify_variant_acmg_likely_pathogenic_two_strong(
 
     out = await classify_variant_acmg(ACMGVariantInput(hgvs="BRCA1:c.18T>G"))
     assert out["draft_classification"] == "Likely Pathogenic"
+
+
+async def test_classify_variant_acmg_lone_pvs1_not_pathogenic(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A lone real PVS1 (null variant) with no other strong evidence stays a VUS.
+
+    Regression for the pathogenic-Strong counter: it is keyed on the ACMG
+    criterion code and excludes PVS1, so a single PVS1 does not self-call
+    Pathogenic. Real PVS1 evidence begins "Null variant…" — the text the old
+    ``evidence[0] == "P"`` check silently missed.
+    """
+    mocks = _patch_clients(monkeypatch)
+    mocks["ensembl"].vep_hgvs = AsyncMock(
+        return_value=[
+            {
+                "canonical": True,
+                "consequence_terms": ["stop_gained"],
+                "seq_region_name": "17",
+                "start": 12345,
+                "allele_string": "G/A",
+            }
+        ]
+    )
+    mocks["clinvar"].search_by_hgvs = AsyncMock(return_value=[])
+    # Mid-range AF: too common for PM2, too rare for BS1 → no extra criteria.
+    mocks["gnomad"].variant_frequencies = AsyncMock(return_value={"global_af": 0.01})
+    mocks["gnomad"].gene_constraint = AsyncMock(return_value={"loeuf": 0.2})
+
+    out = await classify_variant_acmg(ACMGVariantInput(hgvs="BRCA1:c.181T>G"))
+    assert "PVS1" in out["criteria_met"]
+    assert out["criteria_met"]["PVS1"]["evidence"].startswith("Null variant")
+    assert out["draft_classification"] == "Variant of Uncertain Significance"
+
+
+def test_is_pathogenic_strong_key_counts_by_key_not_evidence() -> None:
+    """Pathogenic-Strong is keyed on the criterion code, never on evidence text."""
+    # A PS-tier criterion whose evidence begins "Null variant…" is counted —
+    # the old evidence-first-character check would have missed it.
+    assert _is_pathogenic_strong_key(
+        "PS1", {"met": True, "strength": "Strong", "evidence": "Null variant in a LoF gene."}
+    )
+    # Empty or absent evidence never crashes and never changes the verdict.
+    assert _is_pathogenic_strong_key("PS3", {"met": True, "strength": "Strong", "evidence": ""})
+    assert _is_pathogenic_strong_key("PS3", {"met": True, "strength": "Strong"})
+    # PVS1 is the separate Very Strong gate — excluded by key even when the
+    # LOEUF rule has downgraded its strength to "Strong".
+    assert not _is_pathogenic_strong_key(
+        "PVS1", {"met": True, "strength": "Strong", "evidence": "Null variant… downgrade."}
+    )
+    assert not _is_pathogenic_strong_key("PVS1", {"met": True, "strength": "Very Strong"})
+    # Not met, wrong tier, or a benign key → not counted.
+    assert not _is_pathogenic_strong_key("PS1", {"met": False, "strength": "Strong"})
+    assert not _is_pathogenic_strong_key("PM2", {"met": True, "strength": "Moderate"})
+    assert not _is_pathogenic_strong_key("BS1", {"met": True, "strength": "Strong"})
+
+
+def test_is_benign_strong_key_predicate() -> None:
+    """Benign-Strong is symmetric with pathogenic-Strong and key-based."""
+    assert _is_benign_strong_key("BS1", {"met": True, "strength": "Strong"})
+    assert _is_benign_strong_key("BA1", {"met": True, "strength": "Stand-alone"})
+    # Supporting tier, not met, or a pathogenic key → not counted.
+    assert not _is_benign_strong_key("BP4", {"met": True, "strength": "Supporting"})
+    assert not _is_benign_strong_key("BS1", {"met": False, "strength": "Strong"})
+    assert not _is_benign_strong_key("PS1", {"met": True, "strength": "Strong"})
 
 
 async def test_classify_variant_acmg_canonical_skip(
