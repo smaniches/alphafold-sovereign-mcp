@@ -1042,7 +1042,7 @@ async def get_orphan_disease_atlas(params: OrphanDiseaseInput) -> str:
         async with MONDOClient() as mc, HPOClient() as hpo, OpenTargetsClient() as ot:
             record, hpo_diseases, ot_targets = await asyncio.gather(
                 mc.lookup(mondo_id),
-                hpo.phenotypes_for_disease(f"OMIM:{params.orphanet_id}"),
+                hpo.phenotypes_for_disease(f"ORPHA:{params.orphanet_id}"),
                 ot.associated_targets(mondo_id, limit=10),
                 return_exceptions=True,
             )
