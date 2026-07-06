@@ -154,7 +154,7 @@ uv pip install -e .
 
 ```console
 $ alphafold-sovereign --version
-1.2.2
+1.3.1
 $ alphafold-sovereign --self-test
 SELF-TEST PASS - ACMG helpers behave as expected on the BRCA1 c.5266dupC fixture.
 ```
