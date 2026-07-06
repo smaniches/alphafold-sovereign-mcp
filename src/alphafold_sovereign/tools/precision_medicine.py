@@ -1282,6 +1282,36 @@ async def map_disease_drug_landscape(
 # ── Tool 5: ACMG variant classification framework ────────────────────────────
 
 
+def _is_pathogenic_strong_key(key: str, criterion: dict[str, Any]) -> bool:
+    """True for a met, Strong-tier pathogenic criterion (PS1–PS4).
+
+    Classification is keyed on the ACMG criterion code, never on the free-text
+    evidence string — so an empty or unusually-worded evidence value can neither
+    change the count nor crash the tool. PVS1 is the separate Very Strong gate
+    and is excluded by key: even when the LOEUF rule downgrades its strength to
+    "Strong", a lone PVS1 must not count itself into a Pathogenic call.
+    """
+    return (
+        bool(criterion.get("met"))
+        and key.startswith("P")
+        and key != "PVS1"
+        and criterion.get("strength") == "Strong"
+    )
+
+
+def _is_benign_strong_key(key: str, criterion: dict[str, Any]) -> bool:
+    """True for a met, Strong or Stand-alone benign criterion (BA1, BS1–BS4).
+
+    Symmetric with :func:`_is_pathogenic_strong_key`: keyed on the criterion
+    code, independent of the evidence text.
+    """
+    return (
+        bool(criterion.get("met"))
+        and key.startswith("B")
+        and criterion.get("strength") in ("Strong", "Stand-alone")
+    )
+
+
 @mcp.tool(
     annotations={
         "title": "Draft ACMG/AMP Variant Classification",
@@ -1395,19 +1425,13 @@ async def classify_variant_acmg(
                 f" Note: LOEUF={loeuf:.3f} indicates moderate LoF tolerance — downgrade PVS1→PS1."
             )
 
-    # Final classification rules (simplified Richards et al.)
-    pathogenic_strong = sum(
-        1
-        for c in criteria.values()
-        if c.get("met")
-        and c.get("strength") in ("Very Strong", "Strong")
-        and c.get("evidence", "").split()[0][0] == "P"
-    )
-    benign_strong = sum(
-        1
-        for k, c in criteria.items()
-        if c.get("met") and k.startswith("B") and c.get("strength") in ("Strong", "Stand-alone")
-    )
+    # Final classification rules (simplified Richards et al.). Counts are keyed
+    # on the ACMG criterion code — never on the free-text evidence — so empty or
+    # unusually-worded evidence can neither skew the result nor crash the tool.
+    # PVS1 (Very Strong) is a separate named gate below and is not counted among
+    # the Strong-tier criteria, so a lone PVS1 is never Pathogenic on its own.
+    pathogenic_strong = sum(1 for k, c in criteria.items() if _is_pathogenic_strong_key(k, c))
+    benign_strong = sum(1 for k, c in criteria.items() if _is_benign_strong_key(k, c))
 
     final_class = "Variant of Uncertain Significance"
     if "PVS1" in criteria and pathogenic_strong >= 1:
