@@ -202,7 +202,7 @@ Refuses outbound HTTP before a socket is opened (raising `AirGapError`), except 
 
 ## Tool inventory
 
-The server exposes 29 MCP tools across four modules. Each tool's
+The server exposes 30 MCP tools across four modules. Each tool's
 input schema is a Pydantic model; results are JSON.
 
 ### Disease & ontology (`tools/disease.py`)
@@ -247,6 +247,7 @@ are not a substitute for clinical-laboratory review.
 | `find_evolutionary_structural_shifts` | Cross-species structural divergence (TDA + Ensembl orthologs) |
 | `score_binding_pocket_geometry` | Geometric pocket detection + heuristic druggability index |
 | `detect_intrinsically_disordered` | IDR map (linkers, tails, long IDRs) |
+| `get_protein_structure` | Retrieve an AlphaFold model: metadata, download URLs, optional coordinates |
 
 ### Knowledge graph (`tools/knowledge_graph_tools.py`)
 

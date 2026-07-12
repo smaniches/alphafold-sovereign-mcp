@@ -161,7 +161,9 @@ class HPOTermInput(BaseModel):
         default=True,
         description="Include diseases annotated with this phenotype.",
     )
-    disease_limit: int = Field(default=20, ge=1, le=100)
+    disease_limit: int = Field(
+        default=20, ge=1, le=100, description="Maximum associated diseases to return (1–100)."
+    )
 
 
 class GenePhenotypeInput(BaseModel):
@@ -189,7 +191,9 @@ class DiseaseTargetsInput(BaseModel):
         min_length=1,
         max_length=30,
     )
-    limit: int = Field(default=20, ge=1, le=100)
+    limit: int = Field(
+        default=20, ge=1, le=100, description="Maximum top targets to return (1–100)."
+    )
     min_score: float = Field(
         default=0.05,
         ge=0.0,
@@ -218,7 +222,9 @@ class TargetDiseaseInput(BaseModel):
         ),
         max_length=20,
     )
-    limit: int = Field(default=20, ge=1, le=100)
+    limit: int = Field(
+        default=20, ge=1, le=100, description="Maximum top diseases to return (1–100)."
+    )
 
 
 class CommonDiseaseInput(BaseModel):
@@ -291,8 +297,12 @@ class PhenotypeToStructureInput(BaseModel):
         min_length=1,
         max_length=15,
     )
-    disease_limit: int = Field(default=5, ge=1, le=20)
-    targets_per_disease: int = Field(default=5, ge=1, le=20)
+    disease_limit: int = Field(
+        default=5, ge=1, le=20, description="Maximum diseases to expand from the phenotype (1–20)."
+    )
+    targets_per_disease: int = Field(
+        default=5, ge=1, le=20, description="Maximum targets to return per disease (1–20)."
+    )
 
 
 class OrphanDiseaseInput(BaseModel):
@@ -307,11 +317,24 @@ class OrphanDiseaseInput(BaseModel):
 
 class DiseaseSimilarityInput(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
-    mondo_id_a: str = Field(..., description="First MONDO disease ID.", min_length=1, max_length=20)
-    mondo_id_b: str = Field(
-        ..., description="Second MONDO disease ID.", min_length=1, max_length=20
+    mondo_id_a: str = Field(
+        ...,
+        description="First MONDO disease ID, e.g. 'MONDO:0007254'.",
+        min_length=1,
+        max_length=20,
     )
-    target_limit: int = Field(default=10, ge=1, le=50)
+    mondo_id_b: str = Field(
+        ...,
+        description="Second MONDO disease ID to compare against the first.",
+        min_length=1,
+        max_length=20,
+    )
+    target_limit: int = Field(
+        default=10,
+        ge=1,
+        le=50,
+        description="Top targets per disease used to build the two overlap sets (1–50).",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -691,17 +714,29 @@ async def get_target_diseases(params: TargetDiseaseInput) -> str:
     }
 )
 async def get_common_disease_targets(params: CommonDiseaseInput) -> str:
-    """Profile protein targets for major common diseases across ICD chapters.
+    """Profile the top drug targets for a curated set of common diseases in one call.
 
-    Covers 9 disease categories with curated MONDO IDs and Open Targets
-    evidence scores.  Designed for target-identification in drug discovery
-    and for understanding the structural landscape of disease-relevant proteins.
+    Use this for a fast landscape scan across a whole disease area: given a
+    ``category`` (e.g. 'oncology'), it looks up the curated MONDO diseases in that
+    category and returns each one's top Open Targets evidence-scored targets, in
+    parallel. To profile a single disease you already have a MONDO ID for, use
+    ``get_disease_targets`` instead — this tool is its category-level,
+    multi-disease counterpart and does not accept a raw MONDO ID.
 
-    Categories: cardiovascular, oncology, neurodegeneration, metabolic,
-    autoimmune, respiratory, infectious, psychiatric, rare.
+    Queries Open Targets live. Returns a JSON string with the ``category``, the
+    number of diseases profiled, and a ``profile`` object mapping each disease to
+    its MONDO ID and top targets (per-disease errors are reported inline, not
+    raised). Returns a JSON error object listing the valid values when the category
+    — or a ``disease_name`` filter within it — is not recognised.
 
-    Example: ``get_common_disease_targets(category='neurodegeneration')``
-    returns top targets for AD, PD, ALS, MS, and Huntington disease.
+    Args:
+        params.category: Disease area to profile. One of: cardiovascular, oncology,
+            neurodegeneration, metabolic, autoimmune, respiratory, infectious,
+            psychiatric, rare.
+        params.disease_name: Restrict to one disease within the category (case-
+            insensitive substring match, e.g. 'alzheimer'); leave blank to profile
+            every disease in the category.
+        params.target_limit: Maximum top targets to return per disease (1–50).
     """
     cat = params.category.lower().strip()
     if cat not in COMMON_DISEASE_ROOTS:

@@ -29,6 +29,7 @@ Tool inventory:
   4. find_evolutionary_structural_shifts — Cross-species TDA fingerprint compare
   5. score_binding_pocket_geometry       — Heuristic pocket detection + score
   6. detect_intrinsically_disordered     — IDR region map
+  7. get_protein_structure               — Retrieve AF model metadata, URLs, coordinates
 """
 
 from __future__ import annotations
@@ -113,6 +114,23 @@ class BindingPocketInput(BaseModel):
         ge=3,
         le=20,
         description="Minimum number of residues to define a pocket.",
+    )
+
+
+class StructureRetrievalInput(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+    uniprot_id: str = Field(
+        ...,
+        description="UniProt accession whose AlphaFold model to retrieve, e.g. 'P38398' (BRCA1).",
+        pattern=r"^[A-Z][0-9][A-Z0-9]{3}[0-9](?:[A-Z][0-9][A-Z0-9]{3}[0-9])?$",
+    )
+    include_coordinates: bool = Field(
+        default=False,
+        description=(
+            "If true, embed the full PDB coordinate text in the response (large — "
+            "hundreds of KB for big proteins). Default false returns the metadata "
+            "and download URLs only, from which the coordinate files can be fetched."
+        ),
     )
 
 
@@ -538,31 +556,32 @@ async def analyze_structural_confidence(
 async def compute_topology_fingerprint(
     params: UniProtInput,
 ) -> dict[str, Any]:
-    """Compute a topological fingerprint for a protein structure.
+    """Compute a rotation-invariant topological fingerprint of a protein's fold.
 
-    Uses persistent homology (Vietoris-Rips filtration) over the Cα
-    coordinate cloud to derive a 64-dimensional fingerprint vector and
-    Betti numbers β₀, β₁, β₂. Requires `gudhi` (install with
-    ``pip install alphafold-sovereign-mcp[tda]``); without `gudhi`, a
-    coarse fallback runs that does **not** compute persistent homology
-    (see ``_fallback_tda_fingerprint``).
+    Fetches the AlphaFold model for ``uniprot_id`` and runs persistent homology
+    (a Vietoris-Rips filtration over the Cα point cloud) to produce a
+    64-dimensional fingerprint vector plus Betti numbers β₀, β₁, β₂. Use it as the
+    per-protein input to structure-similarity comparisons:
+    ``compare_proteins_topologically`` and ``find_evolutionary_structural_shifts``
+    consume these fingerprints.
 
-    What the Betti numbers count, intuitively:
+    The Betti numbers summarise fold topology: β₀ counts connected components
+    (single- vs multi-domain or fragmented chains), β₁ counts loops/holes
+    (β-barrels, large macrocycles), β₂ counts enclosed voids (cavities). Because
+    they are invariant to rotation and translation, two orientations of the same
+    fold produce the same fingerprint.
 
-    - **β₀** — connected components of the Vietoris-Rips complex at the
-      chosen filtration scale. Distinguishes single-domain from
-      multi-domain or fragmented chains.
-    - **β₁** — 1-dimensional holes / loops. Picks up ring-like
-      topology (e.g. β-barrels, large macrocycles).
-    - **β₂** — 2-dimensional voids. Picks up enclosed cavities.
-
-    Topological features are invariant to rigid-body rotation and
-    translation. They are *not* a substitute for sequence alignment,
-    RMSD, or functional homology assessment; they are a coarse,
-    geometry-only summary.
+    Returns the fingerprint vector, the Betti numbers, the residue count, and which
+    method ran. Full persistent homology needs the optional ``[tda]`` extra
+    (``gudhi``); without it a coarse fallback runs that does NOT compute persistent
+    homology, and the result flags this. Returns a no-structure result when
+    AlphaFold DB has no model for the accession. This is a coarse, geometry-only
+    summary — not a substitute for sequence alignment, RMSD, or functional-homology
+    assessment.
 
     Args:
-        params.uniprot_id: UniProt accession.
+        params.uniprot_id: UniProt accession of the protein to fingerprint,
+            e.g. 'P38398' (BRCA1).
     """
     uid = params.uniprot_id
     log = logger.bind(uniprot_id=uid, tool="compute_topology_fingerprint")
@@ -1003,6 +1022,98 @@ async def detect_intrinsically_disordered(
         "reference": "Ruff KM & Pappu RV (2021) J Mol Biol 433:167208. doi:10.1016/j.jmb.2021.167208",
         "provenance": _provenance(alphafold_db="v6", plddt_cutoff="50"),
     }
+
+
+# ── Tool 7: Retrieve AlphaFold structure ─────────────────────────────────────
+
+
+@mcp.tool(
+    annotations={
+        "title": "Retrieve AlphaFold Protein Structure",
+        "readOnlyHint": True,
+        "idempotentHint": True,
+        "openWorldHint": True,
+    }
+)
+async def get_protein_structure(
+    params: StructureRetrievalInput,
+) -> dict[str, Any]:
+    """Retrieve a protein's AlphaFold model: metadata, download URLs, optional coordinates.
+
+    The single entry point for getting the predicted structure itself. Returns the
+    AlphaFold DB entry metadata — entry ID, model version and creation date,
+    organism, gene, UniProt description, the amino-acid sequence and its length, and
+    the model's mean pLDDT — plus stable download URLs for the PDB and mmCIF
+    coordinate files, the PAE matrix and image, and the AlphaMissense substitutions
+    CSV. Set ``include_coordinates`` to embed the full PDB coordinate text directly.
+
+    Use the sibling structure tools for *interpretation* rather than retrieval, so
+    their scopes don't overlap: ``analyze_structural_confidence`` for a pLDDT/PAE
+    confidence read, ``score_binding_pocket_geometry`` for pockets,
+    ``compute_topology_fingerprint`` for fold topology, and
+    ``detect_intrinsically_disordered`` for disorder. This tool hands you the
+    structure and its handles; it does not score or interpret the model.
+
+    Returns ``structure_available: false`` with an explanatory note when AlphaFold DB
+    has no model for the accession — an expected coverage gap, not a server fault.
+
+    Args:
+        params.uniprot_id: UniProt accession to retrieve, e.g. 'P38398' (BRCA1).
+        params.include_coordinates: Embed the full PDB coordinate text (large);
+            default false returns metadata and download URLs only.
+    """
+    uid = params.uniprot_id
+    log = logger.bind(uniprot_id=uid, tool="get_protein_structure")
+    log.info("start")
+
+    try:
+        meta = await _alphafold().get_prediction(uid)
+    except Exception as exc:
+        log.warning("prediction.failed", exc=str(exc))
+        meta = {}
+
+    if not isinstance(meta, dict) or not meta.get("entryId"):
+        return _no_structure_response(uid)
+
+    sequence = str(meta.get("uniprotSequence", "") or "")
+    global_metric = meta.get("globalMetricValue")
+    result: dict[str, Any] = {
+        "uniprot_id": uid,
+        "structure_available": True,
+        "entry_id": meta.get("entryId", ""),
+        "gene": meta.get("gene", ""),
+        "organism": meta.get("organismScientificName", ""),
+        "taxonomy_id": meta.get("taxId"),
+        "description": meta.get("uniprotDescription", ""),
+        "sequence_length": len(sequence),
+        "sequence": sequence,
+        "mean_plddt": (
+            round(float(global_metric), 2) if isinstance(global_metric, (int, float)) else None
+        ),
+        "model_version": meta.get("latestVersion"),
+        "model_created": meta.get("modelCreatedDate", ""),
+        "file_urls": {
+            "pdb": meta.get("pdbUrl", ""),
+            "cif": meta.get("cifUrl", ""),
+            "pae_image": meta.get("paeImageUrl", ""),
+            "pae_doc": meta.get("paeDocUrl", ""),
+            "alphamissense_annotations": meta.get("amAnnotationsUrl", ""),
+        },
+        "note": (
+            "AlphaFold models are predicted, not experimental, and per-residue pLDDT "
+            "confidence varies along the chain — see analyze_structural_confidence for a "
+            "confidence read. Fetch the coordinate files from file_urls, or pass "
+            "include_coordinates=true to embed the PDB text in this response."
+        ),
+        "provenance": _provenance(alphafold_db="v6", source="prediction-metadata"),
+    }
+
+    if params.include_coordinates:
+        structure = await _fetch_af_structure(uid)
+        result["coordinates_pdb"] = structure["pdb_text"] if structure else ""
+
+    log.info("complete", entry_id=result["entry_id"])
+    return result
 
 
 # ── Pocket geometry helpers ───────────────────────────────────────────────────

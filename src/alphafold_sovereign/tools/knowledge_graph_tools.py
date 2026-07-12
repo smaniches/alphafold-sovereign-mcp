@@ -65,19 +65,23 @@ class VariantQueryInput(BaseModel):
     max_gnomad_af: float | None = Field(
         None, ge=0.0, le=1.0, description="Maximum gnomAD allele frequency (0.001 = rare)."
     )
-    limit: int = Field(default=50, ge=1, le=500)
+    limit: int = Field(default=50, ge=1, le=500, description="Maximum rows to return (1–500).")
 
 
 class ProteinQueryInput(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     druggability_tier: Literal["HOT", "WARM", "COLD", "NOT_DRUGGABLE"] | None = Field(
-        None, description="Druggability tier filter."
+        None,
+        description="Keep only stored proteins with this druggability tier; omit for any tier.",
     )
     min_plddt: float | None = Field(
-        None, ge=0.0, le=100.0, description="Minimum mean pLDDT confidence score."
+        None,
+        ge=0.0,
+        le=100.0,
+        description="Minimum stored mean AlphaFold pLDDT (0–100; ≥70 = high confidence).",
     )
-    limit: int = Field(default=50, ge=1, le=500)
+    limit: int = Field(default=50, ge=1, le=500, description="Maximum rows to return (1–500).")
 
 
 class ExportInput(BaseModel):
@@ -90,7 +94,9 @@ class ExportInput(BaseModel):
             "Options: proteins, variants, diseases, drugs, protein_disease, protein_drug."
         ),
     )
-    limit_per_table: int = Field(default=5000, ge=1, le=50000)
+    limit_per_table: int = Field(
+        default=5000, ge=1, le=50000, description="Maximum rows to export per table (1–50000)."
+    )
 
 
 class DrugNetworkInput(BaseModel):
@@ -176,16 +182,28 @@ async def query_variant_database(
 async def query_protein_database(
     params: ProteinQueryInput,
 ) -> dict[str, Any]:
-    """Search the local knowledge graph for stored proteins.
+    """Recall proteins already stored in the local knowledge graph.
 
-    Returns proteins matching the filter criteria. Serves from the local
-    SQLite knowledge graph — no upstream API calls. The store is populated by
-    the curated boot seed and by explicit writes through the storage API.
+    This is a local-recall query, not a live lookup: it returns only proteins that
+    have previously been written to the local SQLite store (the curated boot seed,
+    plus anything added through the knowledge-graph storage API). No upstream API is
+    called. To assess a protein that may not be stored yet, use
+    ``assess_target_druggability`` (druggability tier) or
+    ``analyze_structural_confidence`` (pLDDT), which query live sources.
+
+    Filters are combined with AND; omit a filter to leave that dimension
+    unconstrained. Returns a JSON record with the applied ``query``, a
+    ``result_count``, and the matching ``proteins`` rows. The list is empty when
+    nothing stored matches — common when only the boot seed is loaded, so a broad
+    filter returning few rows usually means the store is small, not that no such
+    protein exists.
 
     Args:
-        params.druggability_tier: HOT/WARM/COLD/NOT_DRUGGABLE filter.
-        params.min_plddt: Minimum AF2 confidence score.
-        params.limit: Maximum results.
+        params.druggability_tier: Keep only proteins whose stored tier equals this
+            (HOT, WARM, COLD, or NOT_DRUGGABLE); omit for any tier.
+        params.min_plddt: Keep only proteins whose stored mean AlphaFold pLDDT
+            (0–100; ≥70 is high confidence) is at least this value.
+        params.limit: Maximum rows to return (1–500).
     """
     async with get_knowledge_graph() as kg:
         rows = await kg.query_proteins(
