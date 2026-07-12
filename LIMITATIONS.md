@@ -36,7 +36,9 @@ source before any clinical use.
 
 ## L2 — Druggability tier thresholds are unvalidated heuristics
 
-**Module:** ``src/alphafold_sovereign/tools/precision_medicine.py``
+**Module:** ``src/alphafold_sovereign/domain/druggability.py``
+(``score_target_druggability``), surfaced by
+``src/alphafold_sovereign/tools/precision_medicine.py``
 (``_druggability_tier``).
 
 **Description:** The mapping from (``drug_count``, ``tractability``,
@@ -44,13 +46,22 @@ source before any clinical use.
 integer score cut-offs (≥4, ≥2, ≥1, 0) chosen by the author. The
 score itself is the sum of small literature-informed weights. No
 calibration against a benchmark of approved-drug vs. failed-drug
-targets has been performed.
+targets has been performed. The weights and cut-offs are now named,
+documented constants in the pure ``domain/druggability.py`` module so
+they can be inspected and, in future, re-calibrated without touching
+the tool orchestration.
 
 **Impact:** A target classified as HOT here may not be druggable in
 practice. A target classified as COLD here may have an approved drug.
 
 **Mitigation:** Use the tier only as a triage signal alongside expert
-review.
+review. To make the *strength* of each call legible, the
+``scoring_breakdown`` now also reports data completeness
+(``signals.available`` / ``signals.missing``), a ``confidence`` grade,
+and a ``borderline`` flag — so a HOT that rests on two of four signals
+and sits one point from WARM is no longer indistinguishable from a
+fully-evidenced HOT. These fields describe the *evidence base*, not the
+scientific validity of the cut-offs, which remain uncalibrated.
 
 **Planned resolution:** Roadmap step 4 (benchmark calibration).
 

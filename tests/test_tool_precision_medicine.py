@@ -928,6 +928,14 @@ async def test_assess_target_druggability_full(monkeypatch: pytest.MonkeyPatch) 
     out = await assess_target_druggability(DruggabilityInput(uniprot_id="P38398"))
     assert out["druggability_tier"] in {"HOT", "WARM"}
     assert out["evidence"]["drug_count"] == 4
+    # The 'Small molecule' label credits the tier, so the display must agree with it.
+    assert out["tractability_assessment"]["small_molecule"] is True
+    # Enriched, auditable scoring breakdown is surfaced.
+    breakdown = out["scoring_breakdown"]
+    assert breakdown["confidence"] in {"HIGH", "MODERATE", "LOW"}
+    assert breakdown["signals"]["total"] == 4
+    assert "borderline" in breakdown
+    assert "score_normalized" in breakdown
 
 
 async def test_assess_target_druggability_no_chembl_no_ot(

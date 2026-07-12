@@ -50,6 +50,10 @@ from alphafold_sovereign.clients.gnomad import GnomADClient
 from alphafold_sovereign.clients.mondo import MONDOClient
 from alphafold_sovereign.clients.opentargets import OpenTargetsClient
 from alphafold_sovereign.domain.disease import PathogenicityClass
+from alphafold_sovereign.domain.druggability import (
+    has_small_molecule_tractability,
+    score_target_druggability,
+)
 from alphafold_sovereign.server.app import mcp
 
 if TYPE_CHECKING:
@@ -395,19 +399,9 @@ def _vep_to_acmg(consequences: list[dict[str, Any]]) -> dict[str, str]:
     return criteria
 
 
-def _has_small_molecule_tractability(tractability_labels: list[str] | None) -> bool:
-    """True if any label indicates small-molecule tractability.
-
-    This is the exact signal ``_druggability_tier`` credits toward the score, so the
-    tier scoring and the user-facing actionability text never disagree. None,
-    empty, and whitespace-only labels are ignored.
-    """
-    small_mol_labels = {"Small molecule", "Discovery_small_molecule", "SM_clinical"}
-    return any(
-        lab in small_mol_labels or "small_mol" in lab.lower()
-        for lab in (tractability_labels or [])
-        if lab and lab.strip()
-    )
+# Re-exported so the tier scoring, the ``tractability_assessment`` display, and
+# the actionability text all share one predicate and can never disagree.
+_has_small_molecule_tractability = has_small_molecule_tractability
 
 
 def _druggability_tier(
@@ -417,72 +411,19 @@ def _druggability_tier(
     loeuf: float | None,
     plddt_mean: float | None,
 ) -> tuple[str, str, dict[str, Any]]:
-    """Return (tier, rationale, scoring_breakdown) for target druggability."""
-    components: dict[str, dict[str, Any]] = {}
+    """Return ``(tier, rationale, scoring_breakdown)`` for target druggability.
 
-    # Drug precedent is the strongest signal
-    if drug_count >= 3:
-        drug_contrib = 3
-        components["drug_precedent"] = {"contribution": 3, "input": f"drug_count={drug_count}, >=3"}
-    elif drug_count >= 1:
-        drug_contrib = 2
-        components["drug_precedent"] = {"contribution": 2, "input": f"drug_count={drug_count}, >=1"}
-    else:
-        drug_contrib = 0
-        components["drug_precedent"] = {"contribution": 0, "input": f"drug_count={drug_count}"}
-
-    # Tractability labels from Open Targets (same predicate as the actionability text)
-    has_tractability = _has_small_molecule_tractability(tractability_labels)
-    tract_contrib = 2 if has_tractability else 0
-    components["tractability"] = {
-        "contribution": tract_contrib,
-        "input": "small_molecule label present" if has_tractability else "no small_molecule label",
-    }
-
-    # pLDDT ≥ 70 → confident structure → analysable binding pockets
-    if plddt_mean is not None and plddt_mean >= 70:
-        plddt_contrib = 1
-        components["plddt"] = {"contribution": 1, "input": f"plddt_mean={plddt_mean:.1f}, >=70"}
-    elif plddt_mean is not None:
-        plddt_contrib = 0
-        components["plddt"] = {"contribution": 0, "input": f"plddt_mean={plddt_mean:.1f}, <70"}
-    else:
-        plddt_contrib = 0
-        components["plddt"] = {"contribution": 0, "input": "not_available"}
-
-    # LOEUF: highly constrained genes may cause toxicity on inhibition
-    if loeuf is not None and loeuf < 0.35:
-        loeuf_contrib = -1
-        components["loeuf_safety"] = {
-            "contribution": -1,
-            "input": f"loeuf={loeuf:.3f}, <0.35 — safety concern",
-        }
-    else:
-        loeuf_contrib = 0
-        loeuf_input = f"loeuf={loeuf:.3f}, >=0.35" if loeuf is not None else "not_available"
-        components["loeuf_safety"] = {"contribution": 0, "input": loeuf_input}
-
-    score = drug_contrib + tract_contrib + plddt_contrib + loeuf_contrib
-    scoring = {
-        "total_score": score,
-        "thresholds": {"HOT": ">=4", "WARM": ">=2", "COLD": ">=1", "NOT_DRUGGABLE": "<1"},
-        "components": components,
-    }
-
-    if score >= 4:
-        tier = "HOT"
-        rationale = "Strong drug precedent and tractability evidence."
-    elif score >= 2:
-        tier = "WARM"
-        rationale = "Some drug precedent or tractability; further profiling recommended."
-    elif score >= 1:
-        tier = "COLD"
-        rationale = "Limited precedent; additional evidence needed."
-    else:
-        tier = "NOT_DRUGGABLE"
-        rationale = "No current evidence of druggability."
-
-    return tier, rationale, scoring
+    Thin adapter over the pure :func:`score_target_druggability` heuristic in
+    ``domain/druggability.py``; the ``scoring_breakdown`` dict additionally
+    reports data completeness, a confidence grade, and a borderline flag.
+    """
+    assessment = score_target_druggability(
+        drug_count=drug_count,
+        tractability_labels=tractability_labels,
+        loeuf=loeuf,
+        plddt_mean=plddt_mean,
+    )
+    return assessment.tier, assessment.rationale, assessment.scoring_breakdown()
 
 
 # ── Tool 1: Full clinical variant report ─────────────────────────────────────
@@ -903,9 +844,9 @@ async def assess_target_druggability(
             for d in approved_drugs[:10]
         ],
         "tractability_assessment": {
-            "small_molecule": any(
-                "small_mol" in l.lower() or "SM" in l for l in tractability_labels
-            ),
+            # Same predicate the tier scoring credits, so the display can never
+            # contradict the score (e.g. the canonical "Small molecule" label).
+            "small_molecule": _has_small_molecule_tractability(tractability_labels),
             "antibody": any("antibody" in l.lower() or "AB" in l for l in tractability_labels),
             "protac": any("protac" in l.lower() or "PROTAC" in l for l in tractability_labels),
             "labels_raw": tractability_labels,

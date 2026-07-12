@@ -900,6 +900,7 @@ async def score_binding_pocket_geometry(
     # Score by druggability potential
     for pocket in pockets:
         pocket["druggability_index"] = _pocket_druggability_index(pocket)
+        pocket["druggability_components"] = _pocket_druggability_components(pocket)
         pocket["druggability_label"] = _pocket_druggability_label(pocket["druggability_index"])
 
     pockets.sort(key=lambda p: p["druggability_index"], reverse=True)
@@ -1103,20 +1104,49 @@ def _geometric_pocket_detection(
     return pockets
 
 
-def _pocket_druggability_index(pocket: dict[str, Any]) -> float:
-    """Score 0–100 for druggability based on pocket geometry."""
+# ── Pocket druggability sub-score model ──────────────────────────────────────
+# The druggability index is the sum of four equally weighted sub-scores, each in
+# ``[0, POCKET_SUBSCORE_MAX]`` (so the index runs 0–100). The ideal-pocket
+# constants below are geometry-only priors, not a validated pocket model — see
+# the tool's ``note`` field and ``LIMITATIONS.md``.
+POCKET_SUBSCORE_MAX = 25.0
+POCKET_IDEAL_RESIDUES = 12.0
+"""Residue count at/above which the size sub-score saturates."""
+POCKET_IDEAL_ROG_ANGSTROM = 5.0
+"""Radius of gyration (Å) scoring peak compactness."""
+POCKET_ROG_TOLERANCE_ANGSTROM = 5.0
+"""Å of radius-of-gyration deviation that drives the compactness sub-score to 0."""
+POCKET_BURIAL_SATURATION_ANGSTROM = 20.0
+"""Centroid-offset (Å) at/above which the burial sub-score saturates."""
+
+
+def _pocket_subscores(pocket: dict[str, Any]) -> dict[str, float]:
+    """Return the four unrounded 0–25 druggability sub-scores for a pocket."""
     n_res: int = pocket.get("n_residues", 0)
     rog: float = pocket.get("radius_of_gyration_angstrom", 0.0)
     plddt: float = pocket.get("mean_plddt", 0.0)
     burial: float = pocket.get("burial_from_centroid", 0.0)
 
-    # Ideal pocket: 4–12 residues, rog 3–8 Å, plddt > 80, well-buried
-    n_score = min(1.0, n_res / 12.0) * 25
-    rog_score = max(0.0, 1.0 - abs(rog - 5.0) / 5.0) * 25
-    plddt_score = (plddt / 100.0) * 25
-    burial_score = min(1.0, burial / 20.0) * 25
+    # Ideal pocket: compact, confident, well-buried, of ligand-binding size.
+    return {
+        "residue_count": min(1.0, n_res / POCKET_IDEAL_RESIDUES) * POCKET_SUBSCORE_MAX,
+        "radius_of_gyration": max(
+            0.0, 1.0 - abs(rog - POCKET_IDEAL_ROG_ANGSTROM) / POCKET_ROG_TOLERANCE_ANGSTROM
+        )
+        * POCKET_SUBSCORE_MAX,
+        "mean_plddt": (plddt / 100.0) * POCKET_SUBSCORE_MAX,
+        "burial": min(1.0, burial / POCKET_BURIAL_SATURATION_ANGSTROM) * POCKET_SUBSCORE_MAX,
+    }
 
-    return round(n_score + rog_score + plddt_score + burial_score, 1)
+
+def _pocket_druggability_index(pocket: dict[str, Any]) -> float:
+    """Score 0–100 for druggability based on pocket geometry."""
+    return round(sum(_pocket_subscores(pocket).values()), 1)
+
+
+def _pocket_druggability_components(pocket: dict[str, Any]) -> dict[str, float]:
+    """Per-sub-score breakdown (rounded) so the 0–100 index is auditable."""
+    return {name: round(value, 2) for name, value in _pocket_subscores(pocket).items()}
 
 
 def _pocket_druggability_label(pdi: float) -> str:

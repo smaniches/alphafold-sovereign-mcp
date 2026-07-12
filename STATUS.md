@@ -31,9 +31,10 @@ expectation of what this project is and is not.
 
 ### Code architecture
 - Five subpackages with clear single responsibilities — ``clients/``
-  (9 upstream clients + 1 shared base), ``domain/`` (1 module), ``tools/`` (4
+  (9 upstream clients + 1 shared base), ``domain/`` (2 modules: disease
+  types + the pure druggability heuristic), ``tools/`` (4
   MCP-tool modules), ``storage/`` (2 modules: SQLite KG + boot seed),
-  ``server/`` (2 transport modules). 19 substantive ``.py`` files on the
+  ``server/`` (2 transport modules). 20 substantive ``.py`` files on the
   shipped surface.
 - The previous monolith (~6,000 lines) is archived under
   ``_archive/legacy/`` and excluded from coverage and lint.

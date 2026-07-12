@@ -38,6 +38,7 @@ from alphafold_sovereign.tools.structure_intelligence import (
     _parse_pdb_full,
     _plddt_tier,
     _plddt_tier_explanation,
+    _pocket_druggability_components,
     _pocket_druggability_index,
     _pocket_druggability_label,
     _provenance,
@@ -229,6 +230,33 @@ def test_pocket_druggability_index_label() -> None:
     }
     pdi = _pocket_druggability_index(pocket)
     assert pdi > 0
+
+
+def test_pocket_druggability_components_sum_to_index() -> None:
+    """The four sub-scores decompose the 0–100 index exactly (to rounding)."""
+    pocket = {
+        "n_residues": 8,
+        "radius_of_gyration_angstrom": 5.0,
+        "mean_plddt": 85.0,
+        "burial_from_centroid": 20.0,
+    }
+    components = _pocket_druggability_components(pocket)
+    assert set(components) == {"residue_count", "radius_of_gyration", "mean_plddt", "burial"}
+    # rog is at the ideal (5.0) → full 25; pLDDT 85 → 21.25; burial saturates → 25.
+    assert components["radius_of_gyration"] == 25.0
+    assert components["mean_plddt"] == 21.25
+    assert components["burial"] == 25.0
+    assert _pocket_druggability_index(pocket) == round(sum(components.values()), 1)
+
+
+def test_pocket_druggability_components_defaults() -> None:
+    """Missing geometry keys default to zero sub-scores without error."""
+    assert _pocket_druggability_components({}) == {
+        "residue_count": 0.0,
+        "radius_of_gyration": 0.0,
+        "mean_plddt": 0.0,
+        "burial": 0.0,
+    }
 
 
 @pytest.mark.parametrize(
@@ -1141,6 +1169,16 @@ async def test_score_binding_pocket_normal(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setattr(si, "_fetch_af_structure", fake_fetch)
     out = await score_binding_pocket_geometry(BindingPocketInput(uniprot_id="P12345"))
     assert "putative_pockets" in out
+    for pocket in out["putative_pockets"]:
+        assert set(pocket["druggability_components"]) == {
+            "residue_count",
+            "radius_of_gyration",
+            "mean_plddt",
+            "burial",
+        }
+        assert pocket["druggability_index"] == round(
+            sum(pocket["druggability_components"].values()), 1
+        )
 
 
 # ---------------------------------------------------------------------------
