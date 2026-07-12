@@ -15,6 +15,7 @@ from alphafold_sovereign.tools.structure_intelligence import (
     BindingPocketInput,
     EvolutionaryInput,
     MultiProteinInput,
+    StructureRetrievalInput,
     UniProtInput,
     _classify_idr_protein,
     _classify_idr_segment,
@@ -47,6 +48,7 @@ from alphafold_sovereign.tools.structure_intelligence import (
     compute_topology_fingerprint,
     detect_intrinsically_disordered,
     find_evolutionary_structural_shifts,
+    get_protein_structure,
     score_binding_pocket_geometry,
 )
 
@@ -1262,3 +1264,101 @@ async def test_detect_intrinsically_disordered_zero_length(
     monkeypatch.setattr(si, "_fetch_af_structure", fake_struct)
     out = await detect_intrinsically_disordered(UniProtInput(uniprot_id="P12345"))
     assert out["sequence_length"] == 0
+
+
+# ---------------------------------------------------------------------------
+# get_protein_structure
+# ---------------------------------------------------------------------------
+
+
+def _full_af_meta() -> dict[str, Any]:
+    """A richly-populated AlphaFold prediction-metadata dict."""
+    return {
+        "entryId": "AF-P38398-F1",
+        "gene": "BRCA1",
+        "organismScientificName": "Homo sapiens",
+        "taxId": 9606,
+        "uniprotDescription": "Breast cancer type 1 susceptibility protein",
+        "uniprotSequence": "MDLSALRVEEVQNVINAMQKILECPICLELIKEPVSTKCDHIFCKFCMLKLLNQKKGPSQCPLCKNDITKRSLQ",
+        "globalMetricValue": 71.234,
+        "latestVersion": 4,
+        "modelCreatedDate": "2022-06-01",
+        "pdbUrl": "https://alphafold.ebi.ac.uk/files/AF-P38398-F1-model_v6.pdb",
+        "cifUrl": "https://alphafold.ebi.ac.uk/files/AF-P38398-F1-model_v6.cif",
+        "paeImageUrl": "https://alphafold.ebi.ac.uk/files/AF-P38398-F1-predicted_aligned_error_v6.png",
+        "paeDocUrl": "https://alphafold.ebi.ac.uk/files/AF-P38398-F1-predicted_aligned_error_v6.json",
+        "amAnnotationsUrl": "https://alphafold.ebi.ac.uk/files/AF-P38398-F1-aa-substitutions.csv",
+    }
+
+
+async def test_get_protein_structure_metadata_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    af = _fake_af(monkeypatch)
+    af.get_prediction.return_value = _full_af_meta()
+    out = await get_protein_structure(StructureRetrievalInput(uniprot_id="P38398"))
+    assert out["structure_available"] is True
+    assert out["entry_id"] == "AF-P38398-F1"
+    assert out["gene"] == "BRCA1"
+    assert out["organism"] == "Homo sapiens"
+    assert out["sequence_length"] == len(_full_af_meta()["uniprotSequence"])
+    assert out["mean_plddt"] == 71.23  # rounded to 2 dp
+    assert out["file_urls"]["pdb"].endswith("model_v6.pdb")
+    assert out["file_urls"]["cif"].endswith("model_v6.cif")
+    assert "coordinates_pdb" not in out  # default: metadata only
+
+
+async def test_get_protein_structure_with_coordinates(monkeypatch: pytest.MonkeyPatch) -> None:
+    af = _fake_af(monkeypatch)
+    af.get_prediction.return_value = _full_af_meta()
+    pdb_text = _make_pdb(6)
+
+    async def fake_struct(uid: str) -> dict[str, Any]:
+        return {"pdb_text": pdb_text, "uniprot_id": uid}
+
+    monkeypatch.setattr(si, "_fetch_af_structure", fake_struct)
+    out = await get_protein_structure(
+        StructureRetrievalInput(uniprot_id="P38398", include_coordinates=True)
+    )
+    assert out["coordinates_pdb"] == pdb_text
+
+
+async def test_get_protein_structure_coordinates_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """include_coordinates=True but the structure fetch returns None → empty string."""
+    af = _fake_af(monkeypatch)
+    af.get_prediction.return_value = _full_af_meta()
+
+    async def fake_struct(uid: str) -> None:
+        return None
+
+    monkeypatch.setattr(si, "_fetch_af_structure", fake_struct)
+    out = await get_protein_structure(
+        StructureRetrievalInput(uniprot_id="P38398", include_coordinates=True)
+    )
+    assert out["coordinates_pdb"] == ""
+
+
+async def test_get_protein_structure_non_numeric_plddt(monkeypatch: pytest.MonkeyPatch) -> None:
+    af = _fake_af(monkeypatch)
+    meta = _full_af_meta()
+    meta.pop("globalMetricValue")
+    af.get_prediction.return_value = meta
+    out = await get_protein_structure(StructureRetrievalInput(uniprot_id="P38398"))
+    assert out["mean_plddt"] is None
+
+
+async def test_get_protein_structure_no_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Metadata without an entryId → uniform no-structure response."""
+    af = _fake_af(monkeypatch)
+    af.get_prediction.return_value = {}
+    out = await get_protein_structure(StructureRetrievalInput(uniprot_id="P00000"))
+    assert out["structure_available"] is False
+    assert "error" in out
+
+
+async def test_get_protein_structure_prediction_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A prediction-fetch exception is swallowed and reported as no structure."""
+    af = _fake_af(monkeypatch)
+    af.get_prediction.side_effect = RuntimeError("boom")
+    out = await get_protein_structure(StructureRetrievalInput(uniprot_id="P38398"))
+    assert out["structure_available"] is False

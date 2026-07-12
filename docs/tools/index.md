@@ -1,6 +1,6 @@
 # Tool reference
 
-`alphafold-sovereign-mcp` exposes 29 MCP tools organised into four
+`alphafold-sovereign-mcp` exposes 30 MCP tools organised into four
 modules.
 
 ## At a glance

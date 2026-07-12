@@ -1440,27 +1440,32 @@ async def classify_variant_acmg(
 async def find_drug_repurposing_candidates(
     params: DrugRepurposingInput,
 ) -> dict[str, Any]:
-    """Find clinical-stage drugs that may be repurposed for a disease.
+    """Rank existing clinical-stage drugs as repurposing candidates for a disease.
 
-    Strategy:
-      1. Identify top evidence-scored targets from Open Targets.
-      2. For each target, find drugs in clinical development (ChEMBL).
-      3. Filter by requested development phase threshold.
-      4. Cross-reference against disease indication history (avoids circular reasoning).
-      5. Score candidates by (OT evidence × clinical phase).
+    Surfaces approved or trial-stage drugs whose target carries genetic/association
+    evidence for the disease — i.e. drug-repurposing hypotheses. For the full
+    approved-plus-pipeline drug picture of a disease (not only repurposing
+    candidates), use ``map_disease_drug_landscape`` instead.
 
-    This pipeline ranks candidates from clinical and association evidence
-    only: Open Targets evidence scores combined with ChEMBL clinical-phase
-    data. It does not use protein structure in the current scoring.
+    How it works: take the top ``target_limit`` Open Targets evidence-scored targets
+    for the disease; for each, fetch its ChEMBL drugs at or above ``min_phase``; drop
+    duplicate molecules; rank by
+    ``composite_repurposing_score = OT evidence score × (max ChEMBL phase / 4)``.
+    Ranking uses clinical and association evidence only — no protein structure.
 
-    Roadmap (not yet implemented): anchor candidates in AlphaFold structures
-    and apply topological pocket fingerprinting to surface structurally
-    similar binding sites with existing agents.
+    Returns a JSON record whose ``candidates`` list holds up to 20 drugs (each with
+    ChEMBL ID, name, max phase, target gene/UniProt, OT evidence score, composite
+    score, and mechanism), plus the candidate count and the methodology string.
+    Returns an empty ``candidates`` list with a ``message`` when the disease has no
+    Open Targets associations. The composite score is a prioritisation aid, not an
+    efficacy prediction — validate mechanistically before acting on it.
 
     Args:
-        params.disease_mondo_id: MONDO ID for the target disease.
-        params.target_limit: Number of top OT targets to screen.
-        params.min_phase: Minimum clinical phase (4=Approved).
+        params.disease_mondo_id: MONDO disease ID to repurpose against, e.g.
+            'MONDO:0007254' (breast carcinoma).
+        params.target_limit: How many top OT-evidence targets to screen (1–50).
+        params.min_phase: Minimum ChEMBL clinical phase to include
+            (1 = Phase I, 2 = Phase II, 3 = Phase III, 4 = Approved).
     """
     mid = params.disease_mondo_id
     log = logger.bind(disease=mid, tool="find_drug_repurposing_candidates")

@@ -27,7 +27,7 @@ than described as if it exists. For the threat model, see
 3. **Single licence.** The codebase is Apache 2.0 — one licence, with no
    dual-licence funnel and no feature gated behind a paid edition.
 4. **Protocol-native, tools first.** The server implements the MCP *tools*
-   surface over the stdio transport: 29 tools registered on a single FastMCP
+   surface over the stdio transport: 30 tools registered on a single FastMCP
    application. MCP resources, MCP prompts, and the Streamable HTTP transport
    are on the roadmap and are not part of the shipped surface.
 5. **Disease-integrated.** Structural data is joined with disease context.
@@ -49,13 +49,14 @@ src/alphafold_sovereign/
 │   ├── app.py           The single FastMCP application instance
 │   └── stdio.py         stdio transport; imports the tool modules and runs it
 │
-├── tools/               MCP tool implementations (29 tools; thin orchestration)
+├── tools/               MCP tool implementations (30 tools; thin orchestration)
 │   ├── precision_medicine.py     variant clinical report, ACMG draft,
 │   │                             druggability tier, protein dossier,
 │   │                             disease–drug map, drug repurposing  (6)
 │   ├── structure_intelligence.py pLDDT confidence, topology fingerprint,
 │   │                             topological comparison, evolutionary
-│   │                             shifts, pocket geometry, disorder      (6)
+│   │                             shifts, pocket geometry, disorder,
+│   │                             structure retrieval                    (7)
 │   ├── disease.py                MONDO/HPO lookups, target–disease evidence,
 │   │                             3-D variant triage, ICD-10 resolution  (12)
 │   └── knowledge_graph_tools.py  query and export the local graph        (5)
