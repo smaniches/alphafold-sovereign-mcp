@@ -350,6 +350,10 @@ storage/knowledge_graph.py
 
 domain/disease.py
   └── Pure Python frozen dataclasses (PathogenicityClass, VariantReport, ...)
+
+domain/druggability.py
+  └── Pure, I/O-free target-druggability heuristic (named/cited weights and
+      cut-offs, plus confidence / data-completeness / borderline reporting)
 ```
 
 See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the full module map.
