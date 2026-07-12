@@ -855,17 +855,19 @@ async def score_binding_pocket_geometry(
 
     Detects pockets with a geometry-only heuristic. Residues in the
     inner 60 percent of the structure by distance from the centroid are
-    treated as buried, then grown greedily into clusters within an 8
-    Angstrom radius. A cluster is kept as a putative pocket when it has
-    at least ``min_pocket_residues`` members and a mean pLDDT of at
-    least 50.
+    taken as the pocket-forming core, then grown greedily into clusters
+    within an 8 Angstrom radius. A cluster is kept as a putative pocket
+    when it has at least ``min_pocket_residues`` members and a mean pLDDT
+    of at least 50.
 
     Each pocket reports a radius of gyration (compactness of the pocket
-    residues), a burial value (distance of the pocket centroid from the
-    structure centroid), a mean pLDDT, and a druggability index. The
-    druggability index runs 0 to 100 and is the sum of four equally
+    residues), a centroid offset (distance of the pocket centroid from
+    the structure centroid; larger means more peripheral — a
+    solvent-accessible cleft rather than a dead-central cavity, and NOT a
+    measure of solvent burial), a mean pLDDT, and a druggability index.
+    The druggability index runs 0 to 100 and is the sum of four equally
     weighted 0 to 25 sub-scores: residue count, radius of gyration, mean
-    pLDDT, and burial.
+    pLDDT, and centroid offset.
 
     This is a fast, dependency-free pre-screen, not a substitute for a
     validated pocket detector such as fpocket or P2Rank. It needs no ML
@@ -912,13 +914,14 @@ async def score_binding_pocket_geometry(
         "putative_pockets": pockets[:10],
         "n_pockets_found": len(pockets),
         "methodology": (
-            "Geometric clustering of buried Cα atoms (the inner 60 percent "
+            "Geometric clustering of core Cα atoms (the inner 60 percent "
             "of residues by distance from the structure centroid), grown "
             "greedily within an 8 Angstrom radius. Clusters with fewer "
             "than min_pocket_residues members or a mean pLDDT below 50 "
             "are discarded. Druggability index is the sum of four equally "
             "weighted 0 to 25 sub-scores: residue count, radius of "
-            "gyration, mean pLDDT, and burial."
+            "gyration, mean pLDDT, and centroid offset (larger offset = more "
+            "peripheral, solvent-accessible cleft; not a burial measure)."
         ),
         "note": (
             "For production use, validate with fpocket, P2Rank, or DoGSiteScorer. "
@@ -1086,7 +1089,9 @@ def _geometric_pocket_detection(
         # Geometric pocket properties
         pocket_centroid = pocket_ca.mean(axis=0)
         rog = float(np.sqrt(np.mean(np.sum((pocket_ca - pocket_centroid) ** 2, axis=1))))
-        burial = float(np.linalg.norm(pocket_centroid - centroid))
+        # Offset of the pocket centroid from the structure centroid. Larger =
+        # more peripheral (a solvent-accessible cleft); this is NOT solvent burial.
+        centroid_offset = float(np.linalg.norm(pocket_centroid - centroid))
 
         pockets.append(
             {
@@ -1096,7 +1101,7 @@ def _geometric_pocket_detection(
                 "residue_names": sorted({r["resname"] for r in pocket_residues}),
                 "mean_plddt": round(mean_plddt, 2),
                 "radius_of_gyration_angstrom": round(rog, 2),
-                "burial_from_centroid": round(burial, 2),
+                "centroid_offset_angstrom": round(centroid_offset, 2),
                 "estimated_volume_angstrom3": round((4 / 3) * math.pi * rog**3, 1),
             }
         )
@@ -1116,8 +1121,15 @@ POCKET_IDEAL_ROG_ANGSTROM = 5.0
 """Radius of gyration (Å) scoring peak compactness."""
 POCKET_ROG_TOLERANCE_ANGSTROM = 5.0
 """Å of radius-of-gyration deviation that drives the compactness sub-score to 0."""
-POCKET_BURIAL_SATURATION_ANGSTROM = 20.0
-"""Centroid-offset (Å) at/above which the burial sub-score saturates."""
+POCKET_CENTROID_OFFSET_SATURATION_ANGSTROM = 20.0
+"""Centroid offset (Å) at/above which the offset sub-score saturates.
+
+The sub-score rises with the pocket's offset from the structure centre. Because
+pockets are detected only among the inner 60 % of residues, a larger offset
+favours the more peripheral, solvent-accessible clefts (the common shape of a
+drug-binding site) over dead-central positions. This is a geometry-only prior,
+not a validated criterion — it does not measure solvent burial.
+"""
 
 
 def _pocket_subscores(pocket: dict[str, Any]) -> dict[str, float]:
@@ -1125,9 +1137,10 @@ def _pocket_subscores(pocket: dict[str, Any]) -> dict[str, float]:
     n_res: int = pocket.get("n_residues", 0)
     rog: float = pocket.get("radius_of_gyration_angstrom", 0.0)
     plddt: float = pocket.get("mean_plddt", 0.0)
-    burial: float = pocket.get("burial_from_centroid", 0.0)
+    centroid_offset: float = pocket.get("centroid_offset_angstrom", 0.0)
 
-    # Ideal pocket: compact, confident, well-buried, of ligand-binding size.
+    # Ideal pocket: compact, confident, of ligand-binding size, and offset toward
+    # the periphery (a solvent-accessible cleft rather than a dead-central cavity).
     return {
         "residue_count": min(1.0, n_res / POCKET_IDEAL_RESIDUES) * POCKET_SUBSCORE_MAX,
         "radius_of_gyration": max(
@@ -1135,7 +1148,8 @@ def _pocket_subscores(pocket: dict[str, Any]) -> dict[str, float]:
         )
         * POCKET_SUBSCORE_MAX,
         "mean_plddt": (plddt / 100.0) * POCKET_SUBSCORE_MAX,
-        "burial": min(1.0, burial / POCKET_BURIAL_SATURATION_ANGSTROM) * POCKET_SUBSCORE_MAX,
+        "centroid_offset": min(1.0, centroid_offset / POCKET_CENTROID_OFFSET_SATURATION_ANGSTROM)
+        * POCKET_SUBSCORE_MAX,
     }
 
 

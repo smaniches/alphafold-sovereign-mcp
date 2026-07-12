@@ -226,7 +226,7 @@ def test_pocket_druggability_index_label() -> None:
         "n_residues": 8,
         "radius_of_gyration_angstrom": 5.0,
         "mean_plddt": 85.0,
-        "burial_from_centroid": 20.0,
+        "centroid_offset_angstrom": 20.0,
     }
     pdi = _pocket_druggability_index(pocket)
     assert pdi > 0
@@ -238,14 +238,19 @@ def test_pocket_druggability_components_sum_to_index() -> None:
         "n_residues": 8,
         "radius_of_gyration_angstrom": 5.0,
         "mean_plddt": 85.0,
-        "burial_from_centroid": 20.0,
+        "centroid_offset_angstrom": 20.0,
     }
     components = _pocket_druggability_components(pocket)
-    assert set(components) == {"residue_count", "radius_of_gyration", "mean_plddt", "burial"}
-    # rog is at the ideal (5.0) → full 25; pLDDT 85 → 21.25; burial saturates → 25.
+    assert set(components) == {
+        "residue_count",
+        "radius_of_gyration",
+        "mean_plddt",
+        "centroid_offset",
+    }
+    # rog at the ideal (5.0) → 25; pLDDT 85 → 21.25; centroid offset saturates → 25.
     assert components["radius_of_gyration"] == 25.0
     assert components["mean_plddt"] == 21.25
-    assert components["burial"] == 25.0
+    assert components["centroid_offset"] == 25.0
     assert _pocket_druggability_index(pocket) == round(sum(components.values()), 1)
 
 
@@ -255,7 +260,7 @@ def test_pocket_druggability_components_defaults() -> None:
         "residue_count": 0.0,
         "radius_of_gyration": 0.0,
         "mean_plddt": 0.0,
-        "burial": 0.0,
+        "centroid_offset": 0.0,
     }
 
 
@@ -1174,7 +1179,7 @@ async def test_score_binding_pocket_normal(monkeypatch: pytest.MonkeyPatch) -> N
             "residue_count",
             "radius_of_gyration",
             "mean_plddt",
-            "burial",
+            "centroid_offset",
         }
         assert pocket["druggability_index"] == round(
             sum(pocket["druggability_components"].values()), 1
