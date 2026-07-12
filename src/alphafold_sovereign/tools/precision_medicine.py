@@ -968,7 +968,7 @@ async def synthesize_protein_dossier(
         pass
 
     # Compute druggability
-    tier, rationale, _scoring = _druggability_tier(
+    tier, rationale, dossier_scoring = _druggability_tier(
         drug_count=ot_tract.get("drug_count", len(drugs)),
         tractability_labels=ot_tract.get("tractability_labels", []),
         loeuf=constraint.get("loeuf"),
@@ -1010,6 +1010,13 @@ async def synthesize_protein_dossier(
             "rationale": rationale,
             "drug_count": ot_tract.get("drug_count", len(drugs)),
             "tractability_labels": ot_tract.get("tractability_labels", []),
+            # Surface how much evidence backs the tier (same fields the
+            # assess_target_druggability scoring_breakdown reports), so the
+            # dossier no longer presents a bare tier without its uncertainty.
+            "confidence": dossier_scoring["confidence"],
+            "borderline": dossier_scoring["borderline"],
+            "signals": dossier_scoring["signals"],
+            "score_normalized": dossier_scoring["score_normalized"],
         },
         "disease_associations": list(disease_map.values()),
         "approved_drugs": [

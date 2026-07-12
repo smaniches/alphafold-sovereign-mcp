@@ -1078,6 +1078,12 @@ async def test_synthesize_protein_dossier_comprehensive(
     )
     assert out["target"]["uniprot_id"] == "P38398"
     assert "cross_species_orthologs" in out
+    # Druggability block now surfaces how much evidence backs the tier.
+    drug = out["druggability"]
+    assert drug["confidence"] in {"HIGH", "MODERATE", "LOW"}
+    assert drug["signals"]["total"] == 4
+    assert "borderline" in drug
+    assert "score_normalized" in drug
 
 
 async def test_synthesize_protein_dossier_brief(monkeypatch: pytest.MonkeyPatch) -> None:
