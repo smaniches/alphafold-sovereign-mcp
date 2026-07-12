@@ -7,6 +7,15 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.4.0](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.3.3...v1.4.0) (2026-07-12)
+
+
+### Features
+
+* **druggability:** transparent, consistent target-druggability scoring ([#152](https://github.com/smaniches/alphafold-sovereign-mcp/issues/152)) ([765c0a8](https://github.com/smaniches/alphafold-sovereign-mcp/commit/765c0a8305b377a0f87f1cb5daf3cd39e577dfa0))
+* **scoring:** dossier druggability confidence; clarify pocket centroid-offset ([#154](https://github.com/smaniches/alphafold-sovereign-mcp/issues/154)) ([8f05b3f](https://github.com/smaniches/alphafold-sovereign-mcp/commit/8f05b3fc250196d20b16bdde147f3d6ef3de8238))
+* **tools:** add get_protein_structure; sharpen tool descriptions for agents ([#155](https://github.com/smaniches/alphafold-sovereign-mcp/issues/155)) ([899f9b6](https://github.com/smaniches/alphafold-sovereign-mcp/commit/899f9b66ea129a649876a61aa9ef29fdafa0c1ff))
+
 ## [1.3.3](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.3.2...v1.3.3) (2026-07-06)
 
 

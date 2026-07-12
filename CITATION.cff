@@ -50,7 +50,7 @@ keywords:
   - MONDO
   - drug-discovery
   - clinical-research
-version: "1.3.3"  # x-release-please-version
+version: "1.4.0"  # x-release-please-version
 date-released: "2026-06-16"
 references:
   - type: software
