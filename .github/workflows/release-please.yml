@@ -39,6 +39,44 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
+      # release-please stamps the new version onto every surface EXCEPT uv.lock's
+      # own editable self-package entry: uv.lock is machine-generated, not a
+      # release-please extra-file, so its version lags pyproject on the release PR
+      # and trips the Version Coherence guard (scripts/version_coherence.py). Rather
+      # than hand-sync it every release (as #149 did), regenerate uv.lock on the
+      # release branch and push if it changed. On a version-only bump `uv lock`
+      # rewrites exactly that one line, so the diff stays minimal. Checked out with
+      # RELEASE_PLEASE_TOKEN when present so the push re-triggers the release PR's
+      # CI (letting the auto-merge step land it); GITHUB_TOKEN otherwise still
+      # leaves the merged release with a coherent lockfile.
+      - name: Check out the release PR branch
+        if: ${{ steps.release.outputs.pr }}
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ fromJSON(steps.release.outputs.pr).headBranchName }}
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Set up uv
+        if: ${{ steps.release.outputs.pr }}
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+
+      - name: Sync uv.lock self-version on the release PR
+        if: ${{ steps.release.outputs.pr }}
+        env:
+          RELEASE_BRANCH: ${{ fromJSON(steps.release.outputs.pr).headBranchName }}
+        run: |
+          set -euo pipefail
+          uv lock
+          if git diff --quiet -- uv.lock; then
+            echo "uv.lock already coherent with pyproject; nothing to push."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add uv.lock
+            git commit -s -m "chore: sync uv.lock self-version for the release"
+            git push origin "HEAD:$RELEASE_BRANCH"
+          fi
+
       # Arm native auto-merge on the freshly created/updated release PR so the
       # release lands without a manual click. Gated on RELEASE_PLEASE_TOKEN:
       # a GITHUB_TOKEN-authored merge would not re-trigger this workflow, so the
