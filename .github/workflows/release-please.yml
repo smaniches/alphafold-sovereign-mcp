@@ -53,7 +53,12 @@ jobs:
         if: ${{ steps.release.outputs.pr }}
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          ref: ${{ fromJSON(steps.release.outputs.pr).headBranchName }}
+          # Guard fromJSON: GitHub evaluates a step's `with:`/`env:` expressions
+          # even when the `if:` is false, so a bare fromJSON(steps.release.outputs.pr)
+          # throws "Error reading JToken" on every no-op push where pr == ''. The
+          # `pr && fromJSON(...) || ''` idiom short-circuits: `&&` skips fromJSON
+          # when pr is the empty string, so the template stays valid.
+          ref: ${{ steps.release.outputs.pr && fromJSON(steps.release.outputs.pr).headBranchName || '' }}
           token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Set up uv
@@ -63,7 +68,9 @@ jobs:
       - name: Sync uv.lock self-version on the release PR
         if: ${{ steps.release.outputs.pr }}
         env:
-          RELEASE_BRANCH: ${{ fromJSON(steps.release.outputs.pr).headBranchName }}
+          # Same guard as the checkout step above: short-circuit fromJSON so this
+          # env expression stays valid on no-op pushes where pr == ''.
+          RELEASE_BRANCH: ${{ steps.release.outputs.pr && fromJSON(steps.release.outputs.pr).headBranchName || '' }}
         run: |
           set -euo pipefail
           uv lock
