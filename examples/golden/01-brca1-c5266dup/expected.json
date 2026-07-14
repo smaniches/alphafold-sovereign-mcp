@@ -1,0 +1,133 @@
+{
+  "acmg_criteria_draft": {
+    "criteria": {
+      "PP5": "ClinVar: Pathogenic (reviewed by expert panel). Reputable source with strong concordance.",
+      "PVS1": "Null variant (stop-gain/frameshift/splice) in a gene where LoF is the established mechanism of disease."
+    },
+    "note": "Draft ACMG/AMP criteria based on computational and population evidence. Professional review by a clinical geneticist is required before clinical reporting."
+  },
+  "clinical_tier": "HIGH",
+  "clinical_tier_explanation": "Strong evidence of clinical pathogenicity from a ClinVar pathogenic classification (see review_status for the supporting review level) and/or multiple concordant computational predictors.",
+  "clinvar": {
+    "acmg_code": "P",
+    "classification": "Pathogenic",
+    "conditions": [],
+    "found": true,
+    "review_status": "reviewed by expert panel",
+    "variation_id": "17677"
+  },
+  "data_sources": {
+    "alphamissense": "Cheng et al. Science 2023; doi:10.1126/science.adg7492",
+    "chembl": "https://www.ebi.ac.uk/chembl/",
+    "clinvar": "https://www.ncbi.nlm.nih.gov/clinvar/",
+    "disgenet": "https://www.disgenet.com",
+    "ensembl_vep": "https://rest.ensembl.org",
+    "gnomad": "https://gnomad.broadinstitute.org",
+    "open_targets": "https://platform.opentargets.org"
+  },
+  "data_sources_status": {
+    "alphamissense": "no_data",
+    "chembl": "no_data",
+    "clinvar": "ok",
+    "disgenet": "ok",
+    "ensembl_vep": "ok",
+    "gnomad": "skipped",
+    "open_targets": "ok"
+  },
+  "disease_associations": {
+    "disgenet_top_associations": [],
+    "open_targets_top_diseases": [
+      {
+        "disease_mondo_id": "MONDO:0007254",
+        "disease_name": "breast cancer",
+        "drug_count": 0,
+        "evidence_scores": {
+          "affected_pathway": 0.0,
+          "animal_model": 0.0,
+          "genetic_association": 0.9802,
+          "known_drug": 0.0,
+          "literature": 0.9985,
+          "rna_expression": 0.0,
+          "somatic_mutation": 0.0
+        },
+        "overall_score": 0.839,
+        "target_ensembl_id": "ENSG00000012048",
+        "target_gene_symbol": "BRCA1",
+        "tractable": false,
+        "uniprot_id": "P38398"
+      },
+      {
+        "disease_mondo_id": "Orphanet:145",
+        "disease_name": "Hereditary breast and ovarian cancer syndrome",
+        "drug_count": 0,
+        "evidence_scores": {
+          "affected_pathway": 0.0,
+          "animal_model": 0.4018,
+          "genetic_association": 0.918,
+          "known_drug": 0.0,
+          "literature": 0.3753,
+          "rna_expression": 0.0,
+          "somatic_mutation": 0.0
+        },
+        "overall_score": 0.8278,
+        "target_ensembl_id": "ENSG00000012048",
+        "target_gene_symbol": "BRCA1",
+        "tractable": false,
+        "uniprot_id": "P38398"
+      },
+      {
+        "disease_mondo_id": "MONDO:0054748",
+        "disease_name": "Fanconi anemia, complementation group S",
+        "drug_count": 0,
+        "evidence_scores": {
+          "affected_pathway": 0.0,
+          "animal_model": 0.0,
+          "genetic_association": 0.9142,
+          "known_drug": 0.0,
+          "literature": 0.0607,
+          "rna_expression": 0.0,
+          "somatic_mutation": 0.0
+        },
+        "overall_score": 0.8174,
+        "target_ensembl_id": "ENSG00000012048",
+        "target_gene_symbol": "BRCA1",
+        "tractable": false,
+        "uniprot_id": "P38398"
+      }
+    ]
+  },
+  "drug_context": {
+    "note": "Drugs acting on the gene product \u2014 not necessarily on this variant.",
+    "repurposing_candidates": []
+  },
+  "functional_consequence": {
+    "amino_acids": "-/X",
+    "cadd_phred": null,
+    "consequence_terms": [
+      "frameshift_variant"
+    ],
+    "hgvsp": "",
+    "impact": "HIGH",
+    "polyphen_prediction": "",
+    "polyphen_score": null,
+    "sift_prediction": "",
+    "sift_score": null
+  },
+  "gene_constraint": {
+    "interpretation": "Tolerant to loss-of-function (LOEUF=0.928): LoF variants are tolerated in the population.",
+    "loeuf": 0.927589724465447,
+    "mis_z": 1.73357180717296,
+    "pLI": 5.517117679826164e-38
+  },
+  "gene_symbol": "BRCA1",
+  "hgvs": "BRCA1:c.5266dupC",
+  "population_genetics": {
+    "alphamissense_score": null,
+    "global_ac": null,
+    "global_af": null,
+    "global_an": null,
+    "homozygote_count": null,
+    "populations": []
+  },
+  "provenance": "\n\n---\n*AlphaFold Sovereign MCP v<VERSION> \u00b7 <TIMESTAMP> \u00b7 ensembl_vep=GRCh38, clinvar=current, gnomad=v4, alphamissense=2023*"
+}

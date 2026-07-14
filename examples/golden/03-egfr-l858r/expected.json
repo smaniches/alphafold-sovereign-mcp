@@ -1,0 +1,132 @@
+{
+  "acmg_criteria_draft": {
+    "criteria": {
+      "PP3": "Multiple computational evidence suggesting pathogenicity: SIFT=deleterious_low_confidence; PolyPhen=probably_damaging"
+    },
+    "note": "Draft ACMG/AMP criteria based on computational and population evidence. Professional review by a clinical geneticist is required before clinical reporting."
+  },
+  "clinical_tier": "MEDIUM",
+  "clinical_tier_explanation": "Computational evidence suggests pathogenicity; lacks expert ClinVar curation. Further clinical and functional evidence recommended.",
+  "clinvar": {
+    "acmg_code": "NP",
+    "classification": "Not provided",
+    "conditions": [],
+    "found": true,
+    "review_status": "reviewed by expert panel",
+    "variation_id": "16609"
+  },
+  "data_sources": {
+    "alphamissense": "Cheng et al. Science 2023; doi:10.1126/science.adg7492",
+    "chembl": "https://www.ebi.ac.uk/chembl/",
+    "clinvar": "https://www.ncbi.nlm.nih.gov/clinvar/",
+    "disgenet": "https://www.disgenet.com",
+    "ensembl_vep": "https://rest.ensembl.org",
+    "gnomad": "https://gnomad.broadinstitute.org",
+    "open_targets": "https://platform.opentargets.org"
+  },
+  "data_sources_status": {
+    "alphamissense": "ok",
+    "chembl": "no_data",
+    "clinvar": "ok",
+    "disgenet": "ok",
+    "ensembl_vep": "ok",
+    "gnomad": "skipped",
+    "open_targets": "ok"
+  },
+  "disease_associations": {
+    "disgenet_top_associations": [],
+    "open_targets_top_diseases": [
+      {
+        "disease_mondo_id": "MONDO:0005233",
+        "disease_name": "non-small cell lung carcinoma",
+        "drug_count": 0,
+        "evidence_scores": {
+          "affected_pathway": 0.821,
+          "animal_model": 0.0,
+          "genetic_association": 0.7464,
+          "known_drug": 0.0,
+          "literature": 0.9997,
+          "rna_expression": 0.0,
+          "somatic_mutation": 0.8316
+        },
+        "overall_score": 0.8526,
+        "target_ensembl_id": "ENSG00000146648",
+        "target_gene_symbol": "EGFR",
+        "tractable": false,
+        "uniprot_id": "P00533"
+      },
+      {
+        "disease_mondo_id": "MONDO:0005061",
+        "disease_name": "lung adenocarcinoma",
+        "drug_count": 0,
+        "evidence_scores": {
+          "affected_pathway": 0.8275,
+          "animal_model": 0.0,
+          "genetic_association": 0.7194,
+          "known_drug": 0.0,
+          "literature": 0.9923,
+          "rna_expression": 0.0,
+          "somatic_mutation": 0.8671
+        },
+        "overall_score": 0.7744,
+        "target_ensembl_id": "ENSG00000146648",
+        "target_gene_symbol": "EGFR",
+        "tractable": false,
+        "uniprot_id": "P00533"
+      },
+      {
+        "disease_mondo_id": "MONDO:0004992",
+        "disease_name": "cancer",
+        "drug_count": 0,
+        "evidence_scores": {
+          "affected_pathway": 0.992,
+          "animal_model": 0.0,
+          "genetic_association": 0.0,
+          "known_drug": 0.0,
+          "literature": 0.9942,
+          "rna_expression": 0.0,
+          "somatic_mutation": 0.0
+        },
+        "overall_score": 0.7369,
+        "target_ensembl_id": "ENSG00000146648",
+        "target_gene_symbol": "EGFR",
+        "tractable": false,
+        "uniprot_id": "P00533"
+      }
+    ]
+  },
+  "drug_context": {
+    "note": "Drugs acting on the gene product \u2014 not necessarily on this variant.",
+    "repurposing_candidates": []
+  },
+  "functional_consequence": {
+    "amino_acids": "L/R",
+    "cadd_phred": null,
+    "consequence_terms": [
+      "missense_variant"
+    ],
+    "hgvsp": "",
+    "impact": "MODERATE",
+    "polyphen_prediction": "probably_damaging",
+    "polyphen_score": 0.997,
+    "sift_prediction": "deleterious_low_confidence",
+    "sift_score": 0
+  },
+  "gene_constraint": {
+    "interpretation": "Moderately constrained (LOEUF=0.505): partial intolerance to loss-of-function.",
+    "loeuf": 0.504692914125459,
+    "mis_z": 2.919355815974126,
+    "pLI": 0.38906934457929465
+  },
+  "gene_symbol": "EGFR",
+  "hgvs": "EGFR:p.Leu858Arg",
+  "population_genetics": {
+    "alphamissense_score": 0.9968,
+    "global_ac": null,
+    "global_af": null,
+    "global_an": null,
+    "homozygote_count": null,
+    "populations": []
+  },
+  "provenance": "\n\n---\n*AlphaFold Sovereign MCP v<VERSION> \u00b7 <TIMESTAMP> \u00b7 ensembl_vep=GRCh38, clinvar=current, gnomad=v4, alphamissense=2023*"
+}
