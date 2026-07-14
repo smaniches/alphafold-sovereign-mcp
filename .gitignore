@@ -69,6 +69,7 @@ commit_msg.txt
 # Ad-hoc test scripts (use tests/ folder instead)
 test_*.py
 !tests/test_*.py
+!tests/**/test_*.py
 check_*.py
 merge_*.py
 insert_*.py
