@@ -67,7 +67,7 @@ From [`expected.json`](expected.json):
 |-----------|--------------|----------|---------|
 | ClinVar germline **pathogenicity** | none asserted (germline field = "drug response" / not provided) | `Not provided`, VCV000016609 | ✅ **Faithful** |
 | Molecular consequence | activating missense, kinase A-loop | `missense_variant`, MODERATE | ✅ Concordant |
-| In-silico pathogenicity | damaging | AlphaMissense 0.997; PolyPhen 0.997 → PP3 | ✅ Concordant |
+| In-silico pathogenicity | damaging | PP3 from SIFT (deleterious) + PolyPhen (probably damaging, 0.997); AlphaMissense (0.997) independently concurs | ✅ Concordant |
 | Disease | NSCLC / lung adenocarcinoma | NSCLC, lung adenocarcinoma | ✅ Concordant |
 | Germline tier | no germline pathogenic basis | MEDIUM (computational only) | ✅ **Coherent** |
 
@@ -75,8 +75,9 @@ From [`expected.json`](expected.json):
 produces a *germline variant clinical report*, and its `clinical_tier` scores
 germline pathogenicity evidence. For L858R that evidence is: no ClinVar germline
 pathogenic classification (so no PP5), but strong, concordant in-silico
-predictions (AlphaMissense 0.997, PolyPhen 0.997 → PP3). The honest result of
-that evidence is `MEDIUM` — "computational evidence suggests pathogenicity;
+predictions — the pipeline's PP3 rests on SIFT (deleterious) and PolyPhen
+(probably damaging, 0.997), with AlphaMissense (0.997) independently agreeing.
+The honest result of that evidence is `MEDIUM` — "computational evidence suggests pathogenicity;
 lacks expert ClinVar curation." The pipeline neither fabricates a germline
 pathogenic call that ClinVar does not support, nor discards a variant that every
 predictor flags as damaging. That is the coherent behaviour.
