@@ -10,6 +10,7 @@ import respx
 
 from alphafold_sovereign.clients.clinvar import (
     ClinVarClient,
+    _canonical_change,
     _parse_classification,
 )
 from alphafold_sovereign.domain.disease import PathogenicityClass
@@ -407,3 +408,116 @@ async def test_search_by_hgvs_builds_gene_scoped_term(
     # Both variants are returned; the exact change match is ranked first.
     assert len(rows) == 2
     assert rows[0]["variation_id"] == "17661"
+
+
+# ---------------------------------------------------------------------------
+# _canonical_change  and  _match_rank_key  (candidate ranking)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("change", "expected"),
+    [
+        # ClinVar drops the duplicated base: c.5266dupC -> c.5266dup.
+        ("c.5266dupC", "c.5266dup"),
+        # Already canonical -> unchanged (idempotent).
+        ("c.5266dup", "c.5266dup"),
+        # Deletion base run is dropped too: c.68_69delAG -> c.68_69del.
+        ("c.68_69delAG", "c.68_69del"),
+        # delins keeps its inserted bases (they are significant).
+        ("c.206_207delinsTG", "c.206_207delinstg"),
+        # Substitutions and protein changes pass through (lower-cased only).
+        ("c.181T>G", "c.181t>g"),
+        ("p.Arg175His", "p.arg175his"),
+        ("  c.524G>A  ", "c.524g>a"),
+        ("", ""),
+    ],
+)
+def test_canonical_change(change: str, expected: str) -> None:
+    assert _canonical_change(change) == expected
+
+
+def test_match_rank_key_exact_beats_review() -> None:
+    """An exact change match ranks ahead of a non-match regardless of review."""
+    exact_single = {
+        "name": "NM_007294.4(BRCA1):c.5266dup (p.Gln1756fs)",
+        "review_status": "criteria provided, single submitter",
+    }
+    nonmatch_expert = {
+        "name": "NM_007294.4(BRCA1):c.211A>G (p.Arg71Gly)",
+        "review_status": "reviewed by expert panel",
+    }
+    key_exact = ClinVarClient._match_rank_key("c.5266dupC", exact_single)
+    key_nonmatch = ClinVarClient._match_rank_key("c.5266dupC", nonmatch_expert)
+    # (not exact, -review): the exact match sorts first even though its review
+    # status is weaker than the non-matching expert-panel record.
+    assert key_exact < key_nonmatch
+    assert key_exact == (False, -1)
+    assert key_nonmatch == (True, -3)
+
+
+def test_match_rank_key_review_breaks_ties_among_exact() -> None:
+    """Among equally-exact matches, the better-reviewed record wins."""
+    expert = {"name": "x:c.524G>A", "review_status": "reviewed by expert panel"}
+    single = {"name": "y:c.524G>A", "review_status": "criteria provided, single submitter"}
+    unknown = {"name": "z:c.524G>A", "review_status": "brand new status"}
+    assert ClinVarClient._match_rank_key("c.524G>A", expert) == (False, -3)
+    assert ClinVarClient._match_rank_key("c.524G>A", single) == (False, -1)
+    # Unrecognised review status ranks lowest (0).
+    assert ClinVarClient._match_rank_key("c.524G>A", unknown) == (False, 0)
+
+
+async def test_search_by_hgvs_ranks_canonical_expert_panel_first(
+    respx_mock: respx.MockRouter,
+) -> None:
+    """Regression: a legacy dup/del spelling must still resolve to the right record.
+
+    ClinVar's gene-scoped search for ``BRCA1[gene] AND c.5266dupC`` returns an
+    unrelated single-submitter VUS first and the canonical expert-panel record
+    (named ``c.5266dup``, no trailing base) later. The pre-fix substring match
+    on the legacy ``c.5266dupC`` token matched neither, so ``row[0]`` was the
+    wrong variant. The canonicalised match + review-status tiebreak now surfaces
+    the correct Pathogenic record first.
+    """
+    respx_mock.get(
+        "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi",
+    ).mock(
+        return_value=httpx.Response(
+            200,
+            json={"esearchresult": {"idlist": ["3336480", "17677"]}},
+        ),
+    )
+    respx_mock.get(
+        "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi",
+    ).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "result": {
+                    # Unrelated VUS ClinVar happened to return first.
+                    "3336480": {
+                        "uid": "3336480",
+                        "title": "NM_007294.4(BRCA1):c.206_207delinsTG (p.Thr69Met)",
+                        "germline_classification": {
+                            "description": "Uncertain significance",
+                            "review_status": "criteria provided, single submitter",
+                        },
+                    },
+                    # The canonical expert-panel record (note: c.5266dup).
+                    "17677": {
+                        "uid": "17677",
+                        "title": "NM_007294.4(BRCA1):c.5266dup (p.Gln1756fs)",
+                        "germline_classification": {
+                            "description": "Pathogenic",
+                            "review_status": "reviewed by expert panel",
+                        },
+                    },
+                }
+            },
+        ),
+    )
+    async with ClinVarClient() as client:
+        rows = await client.search_by_hgvs("BRCA1:c.5266dupC")
+    assert [r["variation_id"] for r in rows] == ["17677", "3336480"]
+    assert rows[0]["classification"] == PathogenicityClass.PATHOGENIC.value
+    assert rows[0]["review_status"] == "reviewed by expert panel"
