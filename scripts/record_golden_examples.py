@@ -129,8 +129,12 @@ async def main() -> int:
             ),
             "interactions": interactions,
         }
+        # Minified: the cassette is machine-replayed fixture data, not source to
+        # read line-by-line, so it is written compact (one line) to keep the diff
+        # and repo footprint small. expected.json below stays pretty-printed —
+        # that one IS meant to be read.
         (target / "cassette.json").write_text(
-            json.dumps(cassette, indent=2) + "\n", encoding="utf-8"
+            json.dumps(cassette, separators=(",", ":")) + "\n", encoding="utf-8"
         )
         (target / "expected.json").write_text(
             json.dumps(_cassette.normalize_output(output), indent=2, sort_keys=True) + "\n",
