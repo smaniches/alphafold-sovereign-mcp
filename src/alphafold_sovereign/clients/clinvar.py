@@ -46,6 +46,34 @@ def _parse_classification(raw: str) -> PathogenicityClass:
     return _PATHO_MAP.get(raw.lower().strip(), PathogenicityClass.NOT_PROVIDED)
 
 
+# ClinVar review status → star-quality rank, used only to break ties when more
+# than one record matches a query so the best-reviewed record surfaces first
+# (higher is better; an unknown or blank status ranks lowest).
+_REVIEW_STATUS_RANK: dict[str, int] = {
+    "practice guideline": 4,
+    "reviewed by expert panel": 3,
+    "criteria provided, multiple submitters, no conflicts": 2,
+    "criteria provided, conflicting classifications": 1,
+    "criteria provided, conflicting interpretations": 1,
+    "criteria provided, single submitter": 1,
+    "no assertion criteria provided": 0,
+}
+
+
+def _canonical_change(change: str) -> str:
+    """Normalise an HGVS change token toward ClinVar's canonical spelling.
+
+    ClinVar renders duplications and deletions without their trailing bases:
+    the legacy ``c.5266dupC`` and ``c.68_69delAG`` appear in ClinVar as
+    ``c.5266dup`` and ``c.68_69del``. A raw query token therefore never
+    substring-matches the canonical record name. Stripping a trailing base run
+    after a bare ``dup`` or ``del`` — never ``delins``, whose inserted bases are
+    significant — lets the exact record be recognised. Other change forms
+    (substitutions, protein changes, ``delins``) pass through unchanged.
+    """
+    return re.sub(r"(dup|del)[acgt]+$", r"\1", change.strip().lower())
+
+
 class ClinVarClient(BaseAsyncClient):
     """
     Async client for ClinVar variant interpretation data.
@@ -98,10 +126,14 @@ class ClinVarClient(BaseAsyncClient):
         if not ids:
             return []
         summaries = await self._fetch_summaries(ids)
-        # The gene-scoped search also returns nearby variants; surface the
-        # exact change match (when present) first so callers can take row[0].
-        change = hgvs.partition(":")[2].strip().lower()
-        summaries.sort(key=lambda s: change not in s.get("name", "").lower())
+        # The gene-scoped search also returns nearby variants; rank the exact
+        # change match first so callers can take row[0]. Matching is done on the
+        # canonicalised change token (ClinVar renders c.5266dupC as c.5266dup),
+        # and ties are broken by review-status quality so an expert-panel record
+        # wins over a single-submitter one. Without this, a legacy dup/del
+        # spelling matched nothing and row[0] fell back to an arbitrary hit.
+        change = hgvs.partition(":")[2]
+        summaries.sort(key=lambda s: self._match_rank_key(change, s))
         return summaries
 
     async def get_variant(self, variation_id: str) -> dict[str, Any]:
@@ -174,6 +206,21 @@ class ClinVarClient(BaseAsyncClient):
         if re.match(r"[A-Z]{2}_\d", prefix, re.IGNORECASE):
             return hgvs
         return f"{prefix}[gene] AND {change}"
+
+    @staticmethod
+    def _match_rank_key(change: str, summary: dict[str, Any]) -> tuple[bool, int]:
+        """Rank a candidate summary for ``search_by_hgvs`` ordering.
+
+        Sorts an exact change match ahead of nearby variants, then prefers the
+        better-reviewed record. The key is ``(not exact, -review_rank)`` so that
+        Python's ascending, stable sort puts exact matches first, the highest
+        review status next, and preserves the upstream order for genuine ties.
+        """
+        canon = _canonical_change(change)
+        name = str(summary.get("name", "")).lower()
+        exact = bool(canon) and re.search(re.escape(canon) + r"(?![0-9a-z])", name) is not None
+        review_rank = _REVIEW_STATUS_RANK.get(str(summary.get("review_status", "")).lower(), 0)
+        return (not exact, -review_rank)
 
     async def _fetch_summaries(self, ids: list[str]) -> list[dict[str, Any]]:
         """Batch-fetch esummary records for a list of variation IDs."""

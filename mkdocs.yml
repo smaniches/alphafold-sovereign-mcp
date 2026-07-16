@@ -136,6 +136,7 @@ nav:
       - "Variant triage (BRCA1)": examples/01-variant-triage.md
       - "Target characterisation (EGFR)": examples/02-target-characterization.md
       - "Drug discovery (Imatinib)": examples/03-drug-discovery.md
+      - "Golden examples (CI-diffed)": examples/golden.md
   - Architecture: architecture.md
   - Quality:
       - Status: status.md

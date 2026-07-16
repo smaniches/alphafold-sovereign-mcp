@@ -275,6 +275,7 @@ markers = [
     "e2e: full end-to-end agent tests",
     "perf: performance benchmarks",
     "security: security-focused tests",
+    "golden: end-to-end golden examples replayed from recorded upstream fixtures",
 ]
 filterwarnings = [
     "error",

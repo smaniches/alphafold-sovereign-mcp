@@ -11,7 +11,9 @@ Three end-to-end illustrations of a Claude Desktop session against
 
 ## Status
 
-These transcripts were **captured live** against the upstream APIs on 2026-06-08; the per-example pages record the exact run and the full payload is in each example's `transcript.jsonl`. Turning these into CI-diffed golden tests is tracked on the [validation roadmap](../status.md).
+These transcripts were **captured live** against the upstream APIs on 2026-06-08; the per-example pages record the exact run and the full payload is in each example's `transcript.jsonl`. They are point-in-time illustrations, not regression-gated.
+
+The **CI-diffed golden examples** — the full pipeline run against BRCA1 c.5266dupC, TP53 R175H, and EGFR L858R on real recorded upstream responses, replayed offline and asserted against a pinned `expected.json`, each with a cited concordance analysis — are documented separately at [Golden examples](golden.md).
 
 ## Reproducing locally
 

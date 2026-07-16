@@ -1,0 +1,133 @@
+{
+  "acmg_criteria_draft": {
+    "criteria": {
+      "PP3": "AlphaMissense=0.986 \u2014 likely pathogenic (\u22650.564)",
+      "PP5": "ClinVar: Pathogenic (reviewed by expert panel). Reputable source with strong concordance."
+    },
+    "note": "Draft ACMG/AMP criteria based on computational and population evidence. Professional review by a clinical geneticist is required before clinical reporting."
+  },
+  "clinical_tier": "HIGH",
+  "clinical_tier_explanation": "Strong evidence of clinical pathogenicity from a ClinVar pathogenic classification (see review_status for the supporting review level) and/or multiple concordant computational predictors.",
+  "clinvar": {
+    "acmg_code": "P",
+    "classification": "Pathogenic",
+    "conditions": [],
+    "found": true,
+    "review_status": "reviewed by expert panel",
+    "variation_id": "12374"
+  },
+  "data_sources": {
+    "alphamissense": "Cheng et al. Science 2023; doi:10.1126/science.adg7492",
+    "chembl": "https://www.ebi.ac.uk/chembl/",
+    "clinvar": "https://www.ncbi.nlm.nih.gov/clinvar/",
+    "disgenet": "https://www.disgenet.com",
+    "ensembl_vep": "https://rest.ensembl.org",
+    "gnomad": "https://gnomad.broadinstitute.org",
+    "open_targets": "https://platform.opentargets.org"
+  },
+  "data_sources_status": {
+    "alphamissense": "ok",
+    "chembl": "no_data",
+    "clinvar": "ok",
+    "disgenet": "ok",
+    "ensembl_vep": "ok",
+    "gnomad": "skipped",
+    "open_targets": "ok"
+  },
+  "disease_associations": {
+    "disgenet_top_associations": [],
+    "open_targets_top_diseases": [
+      {
+        "disease_mondo_id": "MONDO:0018875",
+        "disease_name": "Li-Fraumeni syndrome",
+        "drug_count": 0,
+        "evidence_scores": {
+          "affected_pathway": 0.0,
+          "animal_model": 0.6372,
+          "genetic_association": 0.9564,
+          "known_drug": 0.0,
+          "literature": 0.3724,
+          "rna_expression": 0.0,
+          "somatic_mutation": 0.4377
+        },
+        "overall_score": 0.8763,
+        "target_ensembl_id": "ENSG00000141510",
+        "target_gene_symbol": "TP53",
+        "tractable": false,
+        "uniprot_id": "P04637"
+      },
+      {
+        "disease_mondo_id": "MONDO:0007256",
+        "disease_name": "hepatocellular carcinoma",
+        "drug_count": 0,
+        "evidence_scores": {
+          "affected_pathway": 0.0,
+          "animal_model": 0.6144,
+          "genetic_association": 0.9161,
+          "known_drug": 0.0,
+          "literature": 0.9965,
+          "rna_expression": 0.0,
+          "somatic_mutation": 0.8547
+        },
+        "overall_score": 0.797,
+        "target_ensembl_id": "ENSG00000141510",
+        "target_gene_symbol": "TP53",
+        "tractable": false,
+        "uniprot_id": "P04637"
+      },
+      {
+        "disease_mondo_id": "MONDO:0010150",
+        "disease_name": "head and neck squamous cell carcinoma",
+        "drug_count": 0,
+        "evidence_scores": {
+          "affected_pathway": 0.0,
+          "animal_model": 0.0,
+          "genetic_association": 0.8375,
+          "known_drug": 0.0,
+          "literature": 0.9872,
+          "rna_expression": 0.0,
+          "somatic_mutation": 0.8688
+        },
+        "overall_score": 0.7771,
+        "target_ensembl_id": "ENSG00000141510",
+        "target_gene_symbol": "TP53",
+        "tractable": false,
+        "uniprot_id": "P04637"
+      }
+    ]
+  },
+  "drug_context": {
+    "note": "Drugs acting on the gene product \u2014 not necessarily on this variant.",
+    "repurposing_candidates": []
+  },
+  "functional_consequence": {
+    "amino_acids": "R/H",
+    "cadd_phred": null,
+    "consequence_terms": [
+      "missense_variant"
+    ],
+    "hgvsp": "",
+    "impact": "MODERATE",
+    "polyphen_prediction": "",
+    "polyphen_score": null,
+    "sift_prediction": "tolerated",
+    "sift_score": 0.08
+  },
+  "gene_constraint": {
+    "interpretation": "Moderately constrained (LOEUF=0.418): partial intolerance to loss-of-function.",
+    "loeuf": 0.4183620979251529,
+    "mis_z": 1.121638987172852,
+    "pLI": 0.999595868281925
+  },
+  "gene_symbol": "TP53",
+  "hgvs": "TP53:p.Arg175His",
+  "population_genetics": {
+    "alphamissense_score": 0.9857,
+    "global_ac": null,
+    "global_af": null,
+    "global_an": null,
+    "homozygote_count": null,
+    "populations": []
+  },
+  "provenance": "\n\n---\n*AlphaFold Sovereign MCP v<VERSION> \u00b7 <TIMESTAMP> \u00b7 ensembl_vep=GRCh38, clinvar=current, gnomad=v4, alphamissense=2023*"
+}

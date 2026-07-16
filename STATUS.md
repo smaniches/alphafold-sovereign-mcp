@@ -51,6 +51,15 @@ expectation of what this project is and is not.
 - The ACMG mapping, druggability tier scoring, and KG queries all have
   parametrised tests covering known input/output pairs from the
   implementation.
+- **End-to-end golden examples** (``examples/golden/``) run the full
+  variant clinical-report pipeline against three canonical variants
+  (BRCA1 c.5266dupC, TP53 R175H, EGFR L858R) using **real upstream
+  responses recorded once with per-response SHA-256 provenance**, then
+  replayed offline via ``respx`` and diffed against a pinned
+  ``expected.json`` in CI. These pin pipeline behaviour and give worked,
+  source-traceable examples; they are a regression and traceability
+  artifact, not independent scientific validation of the heuristics
+  (which remains roadmap items 3–4 below).
 
 ### Security & supply chain
 - Bandit + pip-audit on every PR (Safety in the local ``nox -s security`` session).
@@ -147,10 +156,15 @@ expectation of what this project is and is not.
 The validation gap is the highest-priority work after v1.2.0. The
 planned, sequenced steps are:
 
-1. **End-to-end golden examples.** Three documented notebooks under
-   ``examples/`` running the full pipeline against well-characterised
-   variants (BRCA1 c.5266dupC, TP53 R175H, EGFR L858R) with expected
-   output stored as JSON and diffed in CI.
+1. **End-to-end golden examples.** ✅ **Shipped** in ``examples/golden/``:
+   the full variant clinical-report pipeline run against BRCA1 c.5266dupC,
+   TP53 R175H, and EGFR L858R, using real upstream responses recorded once
+   with per-response SHA-256 provenance, replayed offline and diffed
+   against a pinned ``expected.json`` in CI. Each example carries a
+   concordance analysis against the cited literature. This pins pipeline
+   behaviour and provides worked, source-traceable examples; the
+   independent scientific validation of the heuristics themselves remains
+   items 3–4.
 2. **ACMG traceability matrix.** A markdown table mapping each
    criterion (PVS1, PS1–4, PM1–6, PP1–5, BA1, BS1–4, BP1–7) to the
    line of code that implements it, the test that exercises it, and
@@ -168,5 +182,5 @@ planned, sequenced steps are:
 
 ## Last updated
 
-2026-06-16. This document is part of the repo; PRs to correct or
+2026-07-14. This document is part of the repo; PRs to correct or
 expand it are welcome.

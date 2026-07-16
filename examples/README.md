@@ -17,12 +17,14 @@ full payload is in its `transcript.jsonl`. The READMEs abridge long
 arrays for readability, so cross-check a specific number against the
 corresponding `transcript.jsonl` line rather than the prose.
 
-What is still future work (tracked in [`STATUS.md`](../STATUS.md)
-§"Roadmap (validation, post-1.2.0)", step 1) is turning these into **CI-diffed golden
-tests**: re-running the pipeline on a fixed variant set and asserting
-the stored JSON in continuous integration. Until that lands, the
-transcripts here are point-in-time captures, not regression-gated
-fixtures.
+The transcripts here are point-in-time captures, not regression-gated
+fixtures. The **CI-diffed golden examples** live separately under
+[`golden/`](golden/): the full variant clinical-report pipeline run
+against three canonical variants (BRCA1 c.5266dupC, TP53 R175H, EGFR
+L858R) on real upstream responses recorded once with SHA-256 provenance,
+replayed offline and asserted against a pinned `expected.json` in CI.
+Each carries a scientific concordance analysis against the cited
+literature. See [`golden/README.md`](golden/README.md).
 
 ## Reproducing locally
 
