@@ -7,6 +7,13 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.4.1](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.4.0...v1.4.1) (2026-07-16)
+
+
+### Bug Fixes
+
+* **clinvar:** select the exact variant record; ship CI-diffed golden examples ([#160](https://github.com/smaniches/alphafold-sovereign-mcp/issues/160)) ([85c08fc](https://github.com/smaniches/alphafold-sovereign-mcp/commit/85c08fc72e33c874451fd1e5ad9609e2d9282b82))
+
 ## [1.4.0](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.3.3...v1.4.0) (2026-07-12)
 
 
