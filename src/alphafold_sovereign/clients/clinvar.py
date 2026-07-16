@@ -134,6 +134,13 @@ class ClinVarClient(BaseAsyncClient):
         # spelling matched nothing and row[0] fell back to an arbitrary hit.
         change = hgvs.partition(":")[2]
         summaries.sort(key=lambda s: self._match_rank_key(change, s))
+        # Stamp whether each row actually matches the queried change, so a
+        # caller taking row[0] can tell "the best candidate ClinVar returned"
+        # from "the variant that was actually asked about" — without this, a
+        # query with no true match silently reports a nearby variant's
+        # classification as if it were the queried one.
+        for row in summaries:
+            row["exact_change_match"] = self._is_exact_match(change, row)
         return summaries
 
     async def get_variant(self, variation_id: str) -> dict[str, Any]:
@@ -208,7 +215,23 @@ class ClinVarClient(BaseAsyncClient):
         return f"{prefix}[gene] AND {change}"
 
     @staticmethod
-    def _match_rank_key(change: str, summary: dict[str, Any]) -> tuple[bool, int]:
+    def _is_exact_match(change: str, summary: dict[str, Any]) -> bool:
+        """Whether ``summary``'s record name contains the exact queried change.
+
+        When ``change`` is empty — a bare identifier or free-text query with no
+        HGVS change token to compare, e.g. an rsID passed straight through by
+        ``_build_search_term`` — there is nothing to verify against the record
+        name, so esearch's own lookup is treated as authoritative and this
+        returns ``True``.
+        """
+        canon = _canonical_change(change)
+        if not canon:
+            return True
+        name = str(summary.get("name", "")).lower()
+        return re.search(re.escape(canon) + r"(?![0-9a-z])", name) is not None
+
+    @classmethod
+    def _match_rank_key(cls, change: str, summary: dict[str, Any]) -> tuple[bool, int]:
         """Rank a candidate summary for ``search_by_hgvs`` ordering.
 
         Sorts an exact change match ahead of nearby variants, then prefers the
@@ -216,9 +239,7 @@ class ClinVarClient(BaseAsyncClient):
         Python's ascending, stable sort puts exact matches first, the highest
         review status next, and preserves the upstream order for genuine ties.
         """
-        canon = _canonical_change(change)
-        name = str(summary.get("name", "")).lower()
-        exact = bool(canon) and re.search(re.escape(canon) + r"(?![0-9a-z])", name) is not None
+        exact = cls._is_exact_match(change, summary)
         review_rank = _REVIEW_STATUS_RANK.get(str(summary.get("review_status", "")).lower(), 0)
         return (not exact, -review_rank)
 

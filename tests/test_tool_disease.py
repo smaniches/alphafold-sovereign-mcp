@@ -1185,6 +1185,35 @@ async def test_fetch_clinvar_falls_back_to_gene(monkeypatch: pytest.MonkeyPatch)
     assert out == {"variation_id": "2"}
 
 
+async def test_fetch_clinvar_non_exact_top_hit_falls_back_to_gene(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression: BRCA1:c.182A>G does not exist in ClinVar; a real
+    gene-scoped esearch for it returns nearby variants instead (observed
+    live: c.314A>G Benign, c.566A>G Uncertain significance). The non-exact
+    top hit must not be reported as this variant's own classification —
+    _fetch_clinvar must fall back to the gene-level search exactly as it
+    would for an empty search_by_hgvs result."""
+    mock_cv = MagicMock()
+    mock_cv.search_by_hgvs = AsyncMock(
+        return_value=[
+            {
+                "variation_id": "1",
+                "classification": "Benign",
+                "exact_change_match": False,
+            }
+        ]
+    )
+    mock_cv.search_gene = AsyncMock(
+        return_value=[{"variation_id": "2", "classification": "Likely pathogenic"}]
+    )
+    _patch_client_class(monkeypatch, "alphafold_sovereign.tools.disease.ClinVarClient", mock_cv)
+
+    out = await _fetch_clinvar("BRCA1:c.182A>G", "BRCA1")
+    assert out == {"variation_id": "2", "classification": "Likely pathogenic"}
+    mock_cv.search_gene.assert_awaited_once_with("BRCA1", limit=1)
+
+
 async def test_fetch_clinvar_no_results(monkeypatch: pytest.MonkeyPatch) -> None:
     mock_cv = MagicMock()
     mock_cv.search_by_hgvs = AsyncMock(return_value=[])
