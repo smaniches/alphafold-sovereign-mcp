@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from alphafold_sovereign.domain.disease import DiseaseRecord
+from alphafold_sovereign.domain.disease import DiseaseRecord, PathogenicityClass
 from alphafold_sovereign.tools import precision_medicine as pm
 from alphafold_sovereign.tools.precision_medicine import (
     ACMGVariantInput,
@@ -567,6 +567,45 @@ async def test_generate_variant_report_full(monkeypatch: pytest.MonkeyPatch) -> 
     assert out["clinical_tier"] == "HIGH"
     assert out["gene_symbol"] == "BRCA1"
     assert "drug_context" in out
+
+
+async def test_generate_variant_report_ignores_non_exact_clinvar_hit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A non-exact top ClinVar hit must not be reported as the queried
+    variant's own classification (regression: previously any row[0] from
+    search_by_hgvs was trusted unconditionally, so a nearby but different
+    variant's Pathogenic call would leak into this variant's report)."""
+    mocks = _patch_clients(monkeypatch)
+    mocks["ensembl"].vep_hgvs = AsyncMock(return_value=[])
+    mocks["ensembl"].gene_lookup = AsyncMock(return_value={})
+    mocks["clinvar"].search_by_hgvs = AsyncMock(
+        return_value=[
+            {
+                "classification": "Pathogenic",
+                "review_status": "reviewed by expert panel",
+                "variation_id": "999999",
+                "conditions": ["Unrelated condition"],
+                "exact_change_match": False,
+            }
+        ]
+    )
+    mocks["gnomad"].variant_frequencies = AsyncMock(return_value={})
+    mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
+    mocks["disgenet"].gene_disease_associations = AsyncMock(return_value=[])
+
+    out = await generate_variant_clinical_report(
+        VariantClinicalReportInput(
+            hgvs="BRCA1:c.182A>G",
+            include_population_breakdown=False,
+            include_drug_context=False,
+        )
+    )
+    assert out["clinvar"]["found"] is False
+    assert out["clinvar"]["classification"] == PathogenicityClass.NOT_PROVIDED.value
+    assert out["clinvar"]["variation_id"] == ""
+    # The mismatched record's Pathogenic call must not drive the tier either.
+    assert out["clinical_tier"] == "UNKNOWN"
 
 
 async def test_generate_variant_report_minimal(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1500,6 +1539,29 @@ async def test_classify_variant_acmg_clinvar_pathogenic_only(
 
     out = await classify_variant_acmg(ACMGVariantInput(hgvs="BRCA1:c.18T>G"))
     assert "ClinVar-supported" in out["draft_classification"]
+
+
+async def test_classify_variant_acmg_ignores_non_exact_clinvar_hit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Same regression as generate_variant_clinical_report: a non-exact top
+    ClinVar hit must not drive the ACMG draft classification."""
+    mocks = _patch_clients(monkeypatch)
+    mocks["ensembl"].vep_hgvs = AsyncMock(return_value=[])
+    mocks["clinvar"].search_by_hgvs = AsyncMock(
+        return_value=[
+            {
+                "classification": "Pathogenic",
+                "review_status": "reviewed by expert panel",
+                "exact_change_match": False,
+            }
+        ]
+    )
+    mocks["gnomad"].variant_frequencies = AsyncMock(return_value={})
+    mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
+
+    out = await classify_variant_acmg(ACMGVariantInput(hgvs="BRCA1:c.182A>G"))
+    assert "ClinVar-supported" not in out["draft_classification"]
 
 
 async def test_classify_variant_acmg_clinvar_likely_pathogenic(

@@ -521,3 +521,81 @@ async def test_search_by_hgvs_ranks_canonical_expert_panel_first(
     assert [r["variation_id"] for r in rows] == ["17677", "3336480"]
     assert rows[0]["classification"] == PathogenicityClass.PATHOGENIC.value
     assert rows[0]["review_status"] == "reviewed by expert panel"
+
+
+# ---------------------------------------------------------------------------
+# _is_exact_match / exact_change_match stamping
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("change", "name", "expected"),
+    [
+        # Exact canonical match.
+        ("c.5266dupC", "NM_007294.4(BRCA1):c.5266dup (p.Gln1756fs)", True),
+        # A nearby, non-matching variant — the real-world failure mode: the
+        # gene-scoped search returns a candidate, but it is not the one asked
+        # about.
+        ("c.182A>G", "NM_007294.4(BRCA1):c.314A>G (p.Tyr105Cys)", False),
+        # The negative lookahead earning its keep: canonicalised "c.68_69del"
+        # is a literal substring of "c.68_69delinsAAAA", but a deletion query
+        # must not match an unrelated delins record at the same position. A
+        # bare substring check (without the lookahead) would wrongly match.
+        ("c.68_69delAG", "NM_007294.4(BRCA1):c.68_69delinsAAAA (p.Test)", False),
+        ("c.68_69delAG", "NM_007294.4(BRCA1):c.68_69del (p.Test)", True),
+        # No change token to verify (bare identifier query) — nothing to
+        # disprove, so esearch's own lookup is authoritative.
+        ("", "NM_007294.4(BRCA1):c.181T>G (p.Cys61Gly)", True),
+    ],
+)
+def test_is_exact_match(change: str, name: str, expected: bool) -> None:
+    assert ClinVarClient._is_exact_match(change, {"name": name}) is expected
+
+
+async def test_search_by_hgvs_stamps_exact_change_match(
+    respx_mock: respx.MockRouter,
+) -> None:
+    """Regression: a non-exact top hit must be identifiable by callers.
+
+    BRCA1:c.182A>G does not exist in ClinVar; a real gene-scoped esearch for
+    it returns nearby variants instead (observed live: c.314A>G, c.566A>G).
+    Every row in the result must be stamped so callers can tell "the best
+    candidate ClinVar returned" from "the variant that was actually queried"
+    instead of silently reporting a different variant's classification.
+    """
+    respx_mock.get(
+        "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi",
+    ).mock(
+        return_value=httpx.Response(200, json={"esearchresult": {"idlist": ["1", "2"]}}),
+    )
+    respx_mock.get(
+        "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi",
+    ).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "result": {
+                    "1": {
+                        "uid": "1",
+                        "title": "NM_007294.4(BRCA1):c.314A>G (p.Tyr105Cys)",
+                        "germline_classification": {
+                            "description": "Benign",
+                            "review_status": "reviewed by expert panel",
+                        },
+                    },
+                    "2": {
+                        "uid": "2",
+                        "title": "NM_007294.4(BRCA1):c.566A>G (p.Asp189Gly)",
+                        "germline_classification": {
+                            "description": "Uncertain significance",
+                            "review_status": "criteria provided, single submitter",
+                        },
+                    },
+                }
+            },
+        ),
+    )
+    async with ClinVarClient() as client:
+        rows = await client.search_by_hgvs("BRCA1:c.182A>G")
+    assert len(rows) == 2
+    assert all(row["exact_change_match"] is False for row in rows)

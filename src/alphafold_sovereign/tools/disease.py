@@ -1321,6 +1321,11 @@ def _parse_hgvs_gene(hgvs: str) -> tuple[str, str]:
 async def _fetch_clinvar(hgvs: str, gene_symbol: str) -> dict[str, Any]:
     async with ClinVarClient() as cv:
         results = await cv.search_by_hgvs(hgvs)
+        if results and not results[0].get("exact_change_match", True):
+            # Best candidate ClinVar returned isn't the queried variant; treat
+            # this as no HGVS-level match so the gene-level fallback below
+            # applies exactly as it would for an empty search_by_hgvs result.
+            results = []
         if not results and gene_symbol:
             results = await cv.search_gene(gene_symbol, limit=1)
         return results[0] if results else {}

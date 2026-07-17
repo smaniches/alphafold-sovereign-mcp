@@ -575,8 +575,12 @@ async def generate_variant_clinical_report(
         source_status["chembl"] = "skipped"
 
     # ── Step 7: Consolidate ClinVar ───────────────────────────────────────────
+    # A non-exact top hit (correct record absent from ClinVar, or a nearby
+    # variant returned instead) must not be reported as if it were the queried
+    # variant's own classification; exact_change_match defaults True so
+    # get_variant()/search_gene() results (which never set it) still apply.
     clinvar_record: dict[str, Any] | None = None
-    if clinvar_results:
+    if clinvar_results and clinvar_results[0].get("exact_change_match", True):
         clinvar_record = clinvar_results[0]
 
     clinvar_class = (clinvar_record or {}).get(
@@ -1327,7 +1331,13 @@ async def classify_variant_acmg(
         vep_results,
     )
     global_af: float | None = gnomad_data.get("global_af")
-    clinvar_record = clinvar_results[0] if clinvar_results else None
+    # See generate_variant_clinical_report: a non-exact top hit must not be
+    # reported as the queried variant's own ClinVar classification.
+    clinvar_record = (
+        clinvar_results[0]
+        if clinvar_results and clinvar_results[0].get("exact_change_match", True)
+        else None
+    )
     clinvar_class = (clinvar_record or {}).get(
         "classification", PathogenicityClass.NOT_PROVIDED.value
     )
