@@ -1438,8 +1438,12 @@ async def _resolve_ortholog_uniprot(ensembl: EnsemblClient, ensembl_gene_id: str
                 pid = xref.get("primary_id", "")
                 if pid:
                     return str(pid)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug(
+            "ensembl.xref_uniprot.empty",
+            exc=str(exc),
+            ensembl_gene_id=ensembl_gene_id,
+        )
     return ""
 
 

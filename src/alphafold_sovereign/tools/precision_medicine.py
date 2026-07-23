@@ -942,16 +942,24 @@ async def synthesize_protein_dossier(
         if target_id:
             try:
                 drugs = await _chembl().approved_drugs(target_id, include_clinical=True)
-            except Exception:
-                pass
+            except Exception as exc:
+                log.warning(
+                    "chembl.approved_drugs.failed",
+                    exc=str(exc),
+                    target_id=target_id,
+                )
 
     # Orthologs (comprehensive depth only)
     orthologs: list[dict[str, Any]] = []
     if params.depth == "comprehensive":
         try:
             orthologs = await _ensembl().orthologs(sym, limit=12)
-        except Exception:
-            pass
+        except Exception as exc:
+            log.warning(
+                "ensembl.orthologs.failed",
+                exc=str(exc),
+                gene=sym,
+            )
 
     # Build dossier
     ot_diseases = results.get("ot_diseases") or []
@@ -968,8 +976,12 @@ async def synthesize_protein_dossier(
         af_meta = await _alphafold().get_prediction(uid)
         if isinstance(af_meta, dict):
             dossier_plddt = af_meta.get("globalMetricValue")
-    except Exception:
-        pass
+    except Exception as exc:
+        log.warning(
+            "alphafold.plddt.failed",
+            exc=str(exc),
+            uniprot_id=uid,
+        )
 
     # Compute druggability
     tier, rationale, dossier_scoring = _druggability_tier(
@@ -1315,16 +1327,24 @@ async def classify_variant_acmg(
     if gnomad_id:
         try:
             gnomad_data = await _gnomad().variant_frequencies(gnomad_id)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning(
+                "gnomad.variant_frequencies.failed",
+                exc=str(exc),
+                gnomad_id=gnomad_id,
+            )
 
     # Gene constraint (for PVS1 context)
     gene_constraint: dict[str, Any] = {}
     if gene_symbol:
         try:
             gene_constraint = await _gnomad().gene_constraint(gene_symbol)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning(
+                "gnomad.gene_constraint.failed",
+                exc=str(exc),
+                gene=gene_symbol,
+            )
 
     am_score: float | None = await _alphamissense_for_variant(
         gene_symbol,
