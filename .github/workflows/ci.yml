@@ -330,6 +330,7 @@ jobs:
           if [[ "${{ needs.lint.result }}" != "success" ]] || \
              [[ "${{ needs.typecheck.result }}" != "success" ]] || \
              [[ "${{ needs.test.result }}" != "success" ]] || \
+             [[ "${{ needs.security.result }}" != "success" ]] || \
              [[ "${{ needs.mcp-validate.result }}" != "success" ]] || \
              [[ "${{ needs.version-coherence.result }}" != "success" ]] || \
              [[ "${{ needs.build.result }}" != "success" ]] || \
