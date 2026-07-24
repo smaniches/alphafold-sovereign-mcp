@@ -136,15 +136,8 @@ jobs:
         id: pip_audit
         continue-on-error: true
         run: |
-          # Temporary waiver — PYSEC-2026-597 / CVE-2026-12243 (nltk 3.9.4 path traversal in
-          # nltk.data.load/find):
-          #   - nltk is present only through the security-tooling dependency `safety`;
-          #   - nltk is not imported or used by the shipped application;
-          #   - the affected APIs (nltk.data.load/find) are not used by src/alphafold_sovereign;
-          #   - the reproduced audit currently reports no fixed release (fix_versions: []).
-          # Remove this waiver as soon as an upstream fixed version becomes available.
           status=0
-          uv run pip-audit --format json --ignore-vuln PYSEC-2026-597 \
+          uv run pip-audit --format json \
             > pip-audit-results.json || status=$?
           cat pip-audit-results.json
           exit "$status"
