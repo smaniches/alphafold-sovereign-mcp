@@ -3,6 +3,8 @@ name: Ruff migration diagnostic
 on:
   push:
     branches: ["fix/refresh-production-deps-174"]
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: read
