@@ -206,6 +206,9 @@ ignore = [
     "PLR2004", "S608", "PLW0603", "B905", "TC003", "E501",
     "ANN401", "PLC0415",
 ]
+# PLR0917: private executor adapters mirror fixed SQLite schema rows; the public
+# storage API is keyword-only, while these synchronous helpers are not user-facing.
+"src/alphafold_sovereign/storage/knowledge_graph.py" = ["PLR0917"]
 # Scientific docstrings and field descriptions use en-dash range notation.
 # AlphaMissense thresholds (0.564/0.340) are calibrated constants, not magic values.
 "src/alphafold_sovereign/domain/**" = ["RUF001", "RUF002", "PLR2004"]
