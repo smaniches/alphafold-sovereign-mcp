@@ -7,6 +7,13 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.4.3](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.4.2...v1.4.3) (2026-07-29)
+
+
+### Bug Fixes
+
+* **deps:** declare the FastMCP range the server actually supports ([#179](https://github.com/smaniches/alphafold-sovereign-mcp/issues/179)) ([1cf0477](https://github.com/smaniches/alphafold-sovereign-mcp/commit/1cf047737946ae1084be00adceed0c890ee157df))
+
 ## [1.4.2](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.4.1...v1.4.2) (2026-07-17)
 
 
