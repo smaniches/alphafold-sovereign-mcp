@@ -58,8 +58,16 @@ classifiers = [
 # ── Runtime dependencies ────────────────────────────────────────────────────────
 
 dependencies = [
-    # MCP framework
-    "fastmcp>=0.4.0",
+    # MCP framework. Floor is 3.0.0 because that is the lowest release the whole
+    # tool surface is verified against: every tool passes `annotations=` to
+    # `@mcp.tool`, which FastMCP <=2.0.0 rejects outright (`TypeError: unexpected
+    # keyword argument 'annotations'`), and the 2.x line is not contiguously
+    # usable either (2.11.2 cannot import `AnyFunction`, 2.14.0 ships without its
+    # `pydantic_settings` dependency). Every stable 3.x release serves the full
+    # 30-tool surface over stdio. Capped below 4 so a fresh install never
+    # auto-adopts an untested major: FastMCP has broken these exact APIs across
+    # majors before, and CI pins a single locked version.
+    "fastmcp>=3.0.0,<4",
     # HTTP — async, HTTP/2, keep-alive
     "httpx[http2]>=0.27.0",
     # Retry / rate-limiting
