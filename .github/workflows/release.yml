@@ -226,6 +226,14 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Pin to the requested tag explicitly. workflow_dispatch requires a
+          # `tag` input, but the run itself can be dispatched against a
+          # different ref (e.g. `main`) via the GitHub UI/API `ref` field —
+          # without this, checkout would silently read *that* ref's
+          # server.json instead of the one actually being published,
+          # publishing the wrong version (or one not yet on PyPI).
+          ref: ${{ inputs.tag || github.ref }}
       - name: Install mcp-publisher
         # Intentionally tracks ``latest`` rather than a SHA/version pin. The
         # MCP Registry is in preview and rotates its OIDC audience between
