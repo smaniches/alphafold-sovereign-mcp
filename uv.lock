@@ -111,7 +111,7 @@ requires-dist = [
     { name = "aiolimiter", specifier = ">=1.1.0" },
     { name = "bandit", extras = ["toml"], marker = "extra == 'security'", specifier = ">=1.7.8" },
     { name = "black", marker = "extra == 'dev'", specifier = ">=24.4.0" },
-    { name = "fastmcp", specifier = ">=0.4.0" },
+    { name = "fastmcp", specifier = ">=3.0.0,<4" },
     { name = "gudhi", marker = "extra == 'tda'", specifier = ">=3.9.0" },
     { name = "httpx", extras = ["http2"], specifier = ">=0.27.0" },
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.155.1" },
