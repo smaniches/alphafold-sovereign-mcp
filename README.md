@@ -38,13 +38,15 @@ respective owner and is used here only to describe the public data
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/smaniches/alphafold-sovereign-mcp/badge)](https://api.securityscorecards.dev/projects/github.com/smaniches/alphafold-sovereign-mcp)
 [![Release](https://img.shields.io/github/v/release/smaniches/alphafold-sovereign-mcp?sort=semver)](https://github.com/smaniches/alphafold-sovereign-mcp/releases)
 [![PyPI](https://img.shields.io/pypi/v/alphafold-sovereign-mcp?label=PyPI)](https://pypi.org/project/alphafold-sovereign-mcp/)
+[![PyPI downloads/30d](https://img.shields.io/pypi/dm/alphafold-sovereign-mcp?label=downloads%2F30d)](https://pypistats.org/packages/alphafold-sovereign-mcp)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](pyproject.toml)
 [![MCP Spec 2025-06-18](https://img.shields.io/badge/MCP-2025--06--18-purple)](https://modelcontextprotocol.io)
-[![Tests](https://img.shields.io/badge/tests-passing-success)](https://github.com/smaniches/alphafold-sovereign-mcp/actions/workflows/ci.yml)
 [![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)](https://github.com/smaniches/alphafold-sovereign-mcp/actions/workflows/ci.yml)
 [![ORCID](https://img.shields.io/badge/ORCID-0009--0005--6480--1987-A6CE39?logo=orcid&logoColor=white)](https://orcid.org/0009-0005-6480-1987)
 [![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.20134773-3C5A99?logo=zenodo&logoColor=white)](https://doi.org/10.5281/zenodo.20134773)
+[![Glama score](https://glama.ai/mcp/servers/smaniches/alphafold-sovereign-mcp/badges/score.svg)](https://glama.ai/mcp/servers/smaniches/alphafold-sovereign-mcp)
+[![Awesome MCP Servers](https://img.shields.io/badge/Awesome_MCP-Listed-blue?logo=github)](https://github.com/punkpeye/awesome-mcp-servers#bio)
 
 **Status:** Beta. Engineering-validated (100% line and branch
 coverage). Not yet scientifically validated by
