@@ -43,7 +43,12 @@ def _repo_with_tag_behind_head(tmp_path: Path) -> tuple[Path, str, str]:
     return repo, tagged_sha, head_sha
 
 
-def _verify_context(tag: str, resolved_sha: str, github_ref: str, github_sha: str) -> subprocess.CompletedProcess[str]:
+def _verify_context(
+    tag: str,
+    resolved_sha: str,
+    github_ref: str,
+    github_sha: str,
+) -> subprocess.CompletedProcess[str]:
     env = dict(os.environ)
     env.update(GITHUB_REF=github_ref, GITHUB_SHA=github_sha)
     return subprocess.run(
