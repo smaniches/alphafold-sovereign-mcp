@@ -11,12 +11,18 @@ on:
         description: "Tag to release (e.g. v1.1.0-rc1)"
         required: true
         type: string
+      dry_run:
+        description: "Resolve, build, and verify only — skip every privileged or externally mutating job (provenance, signing, GitHub release, PyPI, MCP Registry)"
+        required: false
+        type: boolean
+        default: false
 
 permissions: {}
 
 jobs:
   # Resolve the release tag once, before any build or privileged publication.
-  # Every source-reading job consumes the resulting immutable commit SHA.
+  # Every source-reading job consumes the resulting immutable commit SHA, and
+  # every privileged job consumes the single canonical dry_run output below.
   resolve_release:
     name: Resolve release identity
     runs-on: ubuntu-latest
@@ -25,10 +31,26 @@ jobs:
     outputs:
       tag: ${{ steps.resolve.outputs.tag }}
       sha: ${{ steps.resolve.outputs.sha }}
+      dry_run: ${{ steps.dry_run.outputs.dry_run }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+      # Canonical dry_run. On tag pushes the `inputs` context does not exist,
+      # so INPUT_DRY_RUN renders empty and the script resolves false — an
+      # ordinary tag release always publishes. Only an explicit
+      # workflow_dispatch dry_run=true resolves true. The event-name switch
+      # lives in scripts/resolve_dry_run.sh, never in ad-hoc YAML string
+      # comparisons, and fails closed on any state outside its truth table.
+      - name: Resolve canonical dry_run
+        id: dry_run
+        env:
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          dry_run="$(bash scripts/resolve_dry_run.sh "$GITHUB_EVENT_NAME" "$INPUT_DRY_RUN")"
+          echo "dry_run=$dry_run" >> "$GITHUB_OUTPUT"
+          echo "canonical dry_run: $dry_run (event: $GITHUB_EVENT_NAME)"
       - name: Resolve tag to immutable commit
         id: resolve
         shell: bash
@@ -74,19 +96,32 @@ jobs:
           fi
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
-          version: "latest"
-      - name: Set up Python
+          # Exact uv pin for the AF-03 release path — the version the
+          # GitHub-runner Release Path Proof executed with. Keep in lockstep
+          # with ci.yml release-path-proof and requirements/release-tools.in.
+          version: "0.12.3"
+      - name: Set up Python 3.12 (release-runner interpreter)
         run: uv python install 3.12
-      - name: Build sdist + wheel
-        run: uv build
+      # The exact hash-locked release-tool closure (requirements/release-tools.txt,
+      # resolved against Python 3.12) supplies the PEP 517 frontend and the
+      # hatchling backend; the build runs with isolation disabled so the backend
+      # version is the verified pin, not a float resolved at build time.
+      - name: Install hash-locked release tooling and verify tool versions
+        run: bash scripts/install_release_tooling.sh --python "$(uv python find 3.12)"
+      - name: Build sdist + wheel (no build isolation, exactly one wheel)
+        run: bash scripts/build_release_dist.sh
       - name: Show artefacts
         run: ls -la dist/
       - name: Generate SHA-256 hashes
         id: hash
         run: |
+          set -euo pipefail
           cd dist
-          # base64 of "<sha256>  <filename>" lines, per slsa-framework convention
-          echo "hashes=$(sha256sum *.tar.gz *.whl | base64 -w0)" >> "$GITHUB_OUTPUT"
+          # base64 of "<sha256>  <filename>" lines, per slsa-framework convention.
+          # Hash first, encode second: a sha256sum failure must fail this step
+          # rather than attest a silently partial subject list.
+          subjects="$(sha256sum *.tar.gz *.whl)"
+          echo "hashes=$(printf '%s\n' "$subjects" | base64 -w0)" >> "$GITHUB_OUTPUT"
       - name: Upload artefacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
@@ -95,8 +130,13 @@ jobs:
           retention-days: 7
 
   # SLSA L3 build provenance (in-toto attestation).
+  # Externally mutating: signs via keyless OIDC and records to the public
+  # Rekor transparency log, so it is gated on the canonical dry_run output.
+  # The `== 'false'` form fails closed — a missing or malformed output skips
+  # the job rather than running it.
   provenance:
-    needs: [build]
+    needs: [resolve_release, build]
+    if: needs.resolve_release.outputs.dry_run == 'false'
     permissions:
       actions: read
       id-token: write
@@ -113,8 +153,12 @@ jobs:
       provenance-name: "alphafold-sovereign-mcp.intoto.jsonl"
       upload-assets: false
 
-  # SBOM (CycloneDX + SPDX). This repository already installs the built wheel
-  # into the SBOM environment, so this job is intentionally not redesigned.
+  # SBOM (CycloneDX + SPDX). The CycloneDX document is generated from the
+  # exact built wheel installed into a dedicated Python 3.12 environment by
+  # the hash-locked cyclonedx-py, the wheel's SHA-256 is bound into the SBOM
+  # root component, and the binding is independently verified plus proven to
+  # fail closed under artifact substitution — the same scripts the
+  # unprivileged PR proof job (ci.yml release-path-proof) executes pre-merge.
   sbom:
     needs: [resolve_release, build]
     name: Generate SBOM (CycloneDX + SPDX)
@@ -131,20 +175,20 @@ jobs:
           path: dist/
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
-          version: "latest"
-      - name: Set up Python
+          # Exact uv pin for the AF-03 release path — the version the
+          # GitHub-runner Release Path Proof executed with. Keep in lockstep
+          # with ci.yml release-path-proof and requirements/release-tools.in.
+          version: "0.12.3"
+      - name: Set up Python 3.12 (release-runner interpreter)
         run: uv python install 3.12
-      - name: Create dedicated SBOM venv and install tooling + package
-        run: |
-          set -euo pipefail
-          uv venv .sbom-env --python 3.12
-          uv pip install --python .sbom-env/bin/python cyclonedx-bom
-          # Install the just-built wheel into the same venv so the
-          # CycloneDX "environment" command sees its real dependency tree.
-          uv pip install --python .sbom-env/bin/python dist/*.whl
-      - name: Generate CycloneDX JSON
-        run: |
-          .sbom-env/bin/cyclonedx-py environment -o sbom.cyclonedx.json
+      - name: Install hash-locked release tooling and verify tool versions
+        run: bash scripts/install_release_tooling.sh --python "$(uv python find 3.12)"
+      - name: Generate CycloneDX from the exact wheel environment and bind wheel SHA-256
+        run: bash scripts/generate_release_sbom.sh --python "$(uv python find 3.12)"
+      - name: Independently verify SBOM root vs wheel identity and digest
+        run: .release-tools/bin/python scripts/verify_sbom_binding.py sbom.cyclonedx.json dist/
+      - name: Negative SBOM/wheel substitution tests (must fail closed)
+        run: bash scripts/verify_sbom_negative.sh sbom.cyclonedx.json dist/ --python .release-tools/bin/python
       - name: Generate SPDX JSON
         uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
         with:
@@ -161,8 +205,11 @@ jobs:
           retention-days: 7
 
   # Publish to PyPI via Trusted Publishing (OIDC).
+  # Externally mutating: uploads immutable artifacts to the public index.
+  # Gated on canonical dry_run (fail-closed `== 'false'` form).
   publish-pypi:
-    needs: [build, provenance, sbom]
+    needs: [resolve_release, build, provenance, sbom]
+    if: needs.resolve_release.outputs.dry_run == 'false'
     name: Publish to PyPI (Trusted Publisher)
     runs-on: ubuntu-latest
     environment:
@@ -182,8 +229,12 @@ jobs:
           skip-existing: true
 
   # Sign artefacts with keyless Sigstore and publish the GitHub Release.
+  # Externally mutating: cosign records to the public Rekor transparency log
+  # and the job creates/updates a GitHub Release. Gated on canonical dry_run
+  # (fail-closed `== 'false'` form).
   publish-github:
     needs: [resolve_release, build, provenance, sbom, publish-pypi]
+    if: needs.resolve_release.outputs.dry_run == 'false'
     name: Sign and publish GitHub Release
     runs-on: ubuntu-latest
     permissions:
@@ -243,9 +294,12 @@ jobs:
           fi
 
   # Publish server.json to the official MCP Registry after PyPI is available.
+  # Externally mutating: writes to the public MCP Registry. Gated on
+  # canonical dry_run (fail-closed `== 'false'` form).
   publish-mcp-registry:
     name: Publish to MCP Registry
     needs: [resolve_release, publish-pypi]
+    if: needs.resolve_release.outputs.dry_run == 'false'
     runs-on: ubuntu-latest
     permissions:
       id-token: write

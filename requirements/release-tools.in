@@ -1,0 +1,39 @@
+# Release-toolchain intent file — the three top-level tools of the
+# deterministic build + SBOM release path, pinned exactly.
+#
+# The installable artifact is release-tools.txt, compiled from this file
+# with hashes for the complete transitive closure. Regenerate with exactly
+# uv 0.12.3 (the version pinned in the AF-03 setup-uv steps):
+#
+#   uv pip compile requirements/release-tools.in \
+#     -o requirements/release-tools.txt \
+#     --generate-hashes \
+#     --python-version 3.12 \
+#     --python-platform x86_64-unknown-linux-gnu \
+#     --no-build \
+#     --no-cache
+#
+# --no-build resolves wheel-only (no arbitrary sdist builds during
+# resolution) and --no-cache resolves from clean state; the install side
+# (scripts/install_release_tooling.sh) enforces the same with
+# pip --require-hashes --only-binary=:all:.
+#
+# Python 3.12 is the release-runner interpreter (release.yml installs 3.12
+# for the build/SBOM path), so the lock is resolved explicitly against 3.12
+# on the linux-x86_64 platform the GitHub-hosted runners provide. The lock
+# pins package versions and artifact hashes, never an interpreter patch
+# release, so any Python 3.12.x supplied by the runner satisfies it.
+#
+# scripts/install_release_tooling.sh installs release-tools.txt with
+# --require-hashes and then verifies the installed versions of these three
+# tools against the pins below.
+
+# PEP 517 build frontend (used with --no-isolation).
+build==1.5.0
+
+# Build backend; must satisfy pyproject.toml [build-system] requires
+# ("hatchling>=1.30.1") because --no-isolation imports it from this closure.
+hatchling==1.31.0
+
+# CycloneDX SBOM generator (cyclonedx-py CLI).
+cyclonedx-bom==7.3.1

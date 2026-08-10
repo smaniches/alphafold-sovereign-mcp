@@ -260,6 +260,43 @@ jobs:
           name: dist
           path: dist/
 
+  # ── Release-path proof (unprivileged) ───────────────────────────────────────────────
+  # Executes the complete deterministic artifact-production contract of
+  # release.yml on GitHub-hosted infrastructure BEFORE merge, using the
+  # candidate code and the exact repository scripts the release build/sbom
+  # jobs run: hash-locked tool closure install + version verification,
+  # no-isolation build with exactly-one-wheel identification, CycloneDX
+  # generated from the exact wheel environment, wheel SHA-256 bound into the
+  # SBOM root component, independent binding verification, and the negative
+  # substitution tests. Deliberately unprivileged — contents: read only; no
+  # id-token, no attestations, no write scopes of any kind. It publishes
+  # nothing, signs nothing, attests nothing, creates no release or tag, and
+  # mutates no external service.
+  release-path-proof:
+    name: Release Path Proof (unprivileged)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          # Exact uv pin for the AF-03 proof path — must match the release.yml
+          # build/sbom jobs and the version recorded in requirements/release-tools.in.
+          version: "0.12.3"
+      - name: Set up Python 3.12 (release-runner interpreter)
+        run: uv python install 3.12
+      - name: Install hash-locked release tooling and verify tool versions
+        run: bash scripts/install_release_tooling.sh --python "$(uv python find 3.12)"
+      - name: Build sdist + wheel (no build isolation, exactly one wheel)
+        run: bash scripts/build_release_dist.sh
+      - name: Generate CycloneDX from the exact wheel environment and bind wheel SHA-256
+        run: bash scripts/generate_release_sbom.sh --python "$(uv python find 3.12)"
+      - name: Independently verify SBOM root vs wheel identity and digest
+        run: .release-tools/bin/python scripts/verify_sbom_binding.py sbom.cyclonedx.json dist/
+      - name: Negative SBOM/wheel substitution tests (must fail closed)
+        run: bash scripts/verify_sbom_negative.sh sbom.cyclonedx.json dist/ --python .release-tools/bin/python
+
   # ── Version coherence ───────────────────────────────────────────────────────────────────
   version-coherence:
     name: Version Coherence
@@ -321,7 +358,18 @@ jobs:
   # ── All-green gate ─────────────────────────────────────────────────────────────────────
   all-checks:
     name: All Checks Pass
-    needs: [lint, typecheck, test, security, mcp-validate, build, version-coherence, dco]
+    needs:
+      [
+        lint,
+        typecheck,
+        test,
+        security,
+        mcp-validate,
+        build,
+        release-path-proof,
+        version-coherence,
+        dco,
+      ]
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -336,6 +384,7 @@ jobs:
              [[ "${{ needs.mcp-validate.result }}" != "success" ]] || \
              [[ "${{ needs.version-coherence.result }}" != "success" ]] || \
              [[ "${{ needs.build.result }}" != "success" ]] || \
+             [[ "${{ needs.release-path-proof.result }}" != "success" ]] || \
              [[ "${{ needs.dco.result }}" == "failure" ]]; then
             echo "One or more required checks failed."
             exit 1

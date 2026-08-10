@@ -79,6 +79,14 @@ insert_*.py
 .verify-env/
 coverage.xml
 
+# Release-path ephemeral environments and artefacts
+# (created by scripts/install_release_tooling.sh and
+#  scripts/generate_release_sbom.sh in CI and local validation)
+.release-tools/
+.sbom-env/
+sbom.cyclonedx.json
+sbom.spdx.json
+
 # mkdocs build output (deployed to gh-pages via CI)
 site/
 # mkdocs-material social-cards plugin cache (fonts + generated cards)
