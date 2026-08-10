@@ -50,8 +50,8 @@ keywords:
   - MONDO
   - drug-discovery
   - clinical-research
-version: "1.4.3"  # x-release-please-version
-date-released: "2026-06-16"
+version: "1.4.4"  # x-release-please-version
+date-released: "2026-08-10"
 references:
   - type: software
     title: "AlphaFold Protein Structure Database"
