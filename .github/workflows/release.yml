@@ -44,6 +44,7 @@ jobs:
           fi
           tag="${tag#refs/tags/}"
           sha="$(bash scripts/resolve_release_tag.sh "$tag")"
+          bash scripts/verify_release_context.sh "$tag" "$sha"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
           echo "release identity: refs/tags/$tag -> $sha"
