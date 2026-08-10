@@ -152,6 +152,6 @@ def test_release_workflow_uses_resolved_sha_and_no_mutable_publisher() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
     assert "ref: ${{ needs.resolve_release.outputs.sha }}" in workflow
-    assert "bash scripts/verify_release_context.sh \"$tag\" \"$sha\"" in workflow
+    assert 'bash scripts/verify_release_context.sh "$tag" "$sha"' in workflow
     assert "registry/releases/latest" not in workflow
     assert "bash scripts/install_mcp_publisher.sh" in workflow
