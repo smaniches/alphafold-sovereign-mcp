@@ -7,6 +7,13 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.4.4](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.4.3...v1.4.4) (2026-08-10)
+
+
+### Bug Fixes
+
+* **release:** bind publication to tag-resolved source identity ([#191](https://github.com/smaniches/alphafold-sovereign-mcp/issues/191)) ([6e88608](https://github.com/smaniches/alphafold-sovereign-mcp/commit/6e88608f8aa48d7f4b10a06d69dfc41d76f3051c))
+
 ## [1.4.3](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.4.2...v1.4.3) (2026-07-29)
 
 
