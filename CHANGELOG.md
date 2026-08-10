@@ -7,6 +7,13 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.4.5](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.4.4...v1.4.5) (2026-08-10)
+
+
+### Bug Fixes
+
+* **release:** make artifact toolchain deterministic and bind SBOM to wheel ([#194](https://github.com/smaniches/alphafold-sovereign-mcp/issues/194)) ([c4de63d](https://github.com/smaniches/alphafold-sovereign-mcp/commit/c4de63d5455a2e4f428fdcc88c8fe307250f0078))
+
 ## [1.4.4](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.4.3...v1.4.4) (2026-08-10)
 
 
