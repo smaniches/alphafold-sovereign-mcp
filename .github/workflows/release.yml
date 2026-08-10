@@ -15,9 +15,43 @@ on:
 permissions: {}
 
 jobs:
-  # ── Build wheel + sdist with a reproducible builder ──────────────────────
+  # Resolve the release tag once, before any build or privileged publication.
+  # Every source-reading job consumes the resulting immutable commit SHA.
+  resolve_release:
+    name: Resolve release identity
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      tag: ${{ steps.resolve.outputs.tag }}
+      sha: ${{ steps.resolve.outputs.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Resolve tag to immutable commit
+        id: resolve
+        shell: bash
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          git fetch --force --tags origin
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            tag="$INPUT_TAG"
+          else
+            tag="$GITHUB_REF_NAME"
+          fi
+          tag="${tag#refs/tags/}"
+          sha="$(bash scripts/resolve_release_tag.sh "$tag")"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "release identity: refs/tags/$tag -> $sha"
+
+  # Build wheel + sdist from the exact commit resolved above.
   build:
     name: Build distribution
+    needs: resolve_release
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -25,6 +59,18 @@ jobs:
       hashes: ${{ steps.hash.outputs.hashes }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.resolve_release.outputs.sha }}
+      - name: Verify build checkout identity
+        env:
+          EXPECTED_SHA: ${{ needs.resolve_release.outputs.sha }}
+        run: |
+          set -euo pipefail
+          actual_sha="$(git rev-parse HEAD)"
+          if [[ "$actual_sha" != "$EXPECTED_SHA" ]]; then
+            echo "::error::build checkout drift: expected $EXPECTED_SHA, got $actual_sha"
+            exit 1
+          fi
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           version: "latest"
@@ -47,7 +93,7 @@ jobs:
           path: dist/
           retention-days: 7
 
-  # ── SLSA L3 build provenance (in-toto attestation) ───────────────────────
+  # SLSA L3 build provenance (in-toto attestation).
   provenance:
     needs: [build]
     permissions:
@@ -58,26 +104,26 @@ jobs:
     # semantic-version TAG. It self-verifies its own ref as refs/tags/vX.Y.Z
     # and fails ("Invalid ref ... Expected ref of the form refs/tags/vX.Y.Z")
     # if pinned by commit SHA. Do NOT let an OpenSSF Scorecard "pin actions by
-    # hash" pass rewrite this to a SHA — that silently breaks every release.
-    # Tag v2.1.0 == commit f7dd8c54c2067bafc12ca7a55595d5ee9b75204a.
+    # hash" pass rewrite this to a SHA. Tag v2.1.0 == commit
+    # f7dd8c54c2067bafc12ca7a55595d5ee9b75204a.
     uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0
     with:
       base64-subjects: "${{ needs.build.outputs.hashes }}"
       provenance-name: "alphafold-sovereign-mcp.intoto.jsonl"
-      upload-assets: false   # we attach to the release in the next job
+      upload-assets: false
 
-  # ── SBOM (CycloneDX + SPDX) ──────────────────────────────────────────────
-  # Uses a uv-managed venv rather than ``--system`` because Ubuntu 24.04
-  # runners mark their system Python as PEP-668 EXTERNALLY-MANAGED, which
-  # blocks ``uv pip install --system``.
+  # SBOM (CycloneDX + SPDX). This repository already installs the built wheel
+  # into the SBOM environment, so this job is intentionally not redesigned.
   sbom:
-    needs: [build]
+    needs: [resolve_release, build]
     name: Generate SBOM (CycloneDX + SPDX)
     runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.resolve_release.outputs.sha }}
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: dist
@@ -93,14 +139,12 @@ jobs:
           uv venv .sbom-env --python 3.12
           uv pip install --python .sbom-env/bin/python cyclonedx-bom
           # Install the just-built wheel into the same venv so the
-          # CycloneDX "environment" command sees its real dep tree.
+          # CycloneDX "environment" command sees its real dependency tree.
           uv pip install --python .sbom-env/bin/python dist/*.whl
       - name: Generate CycloneDX JSON
         run: |
           .sbom-env/bin/cyclonedx-py environment -o sbom.cyclonedx.json
       - name: Generate SPDX JSON
-        # syft is a small static binary; install via the official action.
-        # It does not need the dedicated venv.
         uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
         with:
           path: dist/
@@ -115,12 +159,7 @@ jobs:
             sbom.spdx.json
           retention-days: 7
 
-  # ── Publish to PyPI via Trusted Publishing (OIDC) ────────────────────────
-  # No API token required.  PyPI is configured at
-  # https://pypi.org/manage/account/publishing/ to accept publishes from
-  # this repo's ``release.yml`` running in the ``pypi`` environment.  The
-  # ``id-token: write`` permission lets the action mint a short-lived OIDC
-  # token that PyPI exchanges for upload authorisation.
+  # Publish to PyPI via Trusted Publishing (OIDC).
   publish-pypi:
     needs: [build, provenance, sbom]
     name: Publish to PyPI (Trusted Publisher)
@@ -139,14 +178,11 @@ jobs:
         uses: pypa/gh-action-pypi-publish@ba38be9e461d3875417946c167d0b5f3d385a247 # release/v1
         with:
           packages-dir: dist/
-          skip-existing: true     # safe re-runs of the same tag
+          skip-existing: true
 
-  # ── Sign artefacts (Sigstore cosign, keyless via OIDC) + publish release ─
-  # Idempotent: works whether the GitHub Release already exists (e.g.
-  # because the user published it via the web UI before pushing the tag)
-  # or not (the workflow creates it from the tag push).
+  # Sign artefacts with keyless Sigstore and publish the GitHub Release.
   publish-github:
-    needs: [build, provenance, sbom, publish-pypi]
+    needs: [resolve_release, build, provenance, sbom, publish-pypi]
     name: Sign and publish GitHub Release
     runs-on: ubuntu-latest
     permissions:
@@ -154,6 +190,18 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.resolve_release.outputs.sha }}
+      - name: Verify release checkout identity
+        env:
+          EXPECTED_SHA: ${{ needs.resolve_release.outputs.sha }}
+        run: |
+          set -euo pipefail
+          actual_sha="$(git rev-parse HEAD)"
+          if [[ "$actual_sha" != "$EXPECTED_SHA" ]]; then
+            echo "::error::release checkout drift: expected $EXPECTED_SHA, got $actual_sha"
+            exit 1
+          fi
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: dist
@@ -168,81 +216,55 @@ jobs:
         run: |
           set -euo pipefail
           for f in dist/*.tar.gz dist/*.whl; do
-            # cosign v3 (installed by cosign-installer v4) writes a single
-            # self-contained Sigstore bundle that already includes the
-            # signature, certificate, and Rekor entry. The legacy
-            # --output-signature / --output-certificate flags are IGNORED under
-            # the new bundle format (they produce no files), which previously
-            # broke the release upload — so we attach the .sigstore bundle only.
             cosign sign-blob --yes "$f" --bundle "${f}.sigstore"
           done
-      - name: Determine tag
-        id: tag
-        run: |
-          if [[ -n "${{ inputs.tag }}" ]]; then
-            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
-          fi
       - name: Create or upload to GitHub release (idempotent)
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.resolve_release.outputs.tag }}
         run: |
           set -euo pipefail
-          TAG=${{ steps.tag.outputs.tag }}
           ASSETS=( dist/*.tar.gz dist/*.whl dist/*.sigstore sboms/sbom.cyclonedx.json sboms/sbom.spdx.json )
 
           if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Release $TAG already exists — uploading assets with --clobber."
+            echo "Release $TAG already exists; uploading assets with --clobber."
             gh release upload "$TAG" "${ASSETS[@]}" --clobber
           else
             echo "Creating release $TAG."
             PRERELEASE=""
             if [[ "$TAG" == *-* ]]; then PRERELEASE="--prerelease"; fi
             gh release create "$TAG" \
+              --verify-tag \
               --title "AlphaFold Sovereign MCP $TAG" \
               --notes-file CHANGELOG.md \
               $PRERELEASE \
               "${ASSETS[@]}"
           fi
 
-  # ── Publish server.json to the official MCP Registry ─────────────────────
-  # (registry.modelcontextprotocol.io) so the public listing tracks every
-  # release automatically, instead of drifting behind PyPI. Runs after
-  # publish-pypi because the registry's package-ownership check reads the
-  # just-published PyPI release. Ownership is proven two ways, no secret/PAT
-  # required:
-  #   - package: the ``mcp-name: io.github.smaniches/alphafold-sovereign-mcp``
-  #     marker in README.md (which is the PyPI long description).
-  #   - namespace ``io.github.smaniches``: GitHub OIDC (id-token below).
-  # server.json already carries the released version (release-please bumps
-  # it via extra-files), so no version rewrite step is needed.
+  # Publish server.json to the official MCP Registry after PyPI is available.
   publish-mcp-registry:
     name: Publish to MCP Registry
-    needs: publish-pypi
+    needs: [resolve_release, publish-pypi]
     runs-on: ubuntu-latest
     permissions:
-      id-token: write       # GitHub OIDC -> MCP Registry (io.github.* namespace)
+      id-token: write
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # Pin to the requested tag explicitly. workflow_dispatch requires a
-          # `tag` input, but the run itself can be dispatched against a
-          # different ref (e.g. `main`) via the GitHub UI/API `ref` field —
-          # without this, checkout would silently read *that* ref's
-          # server.json instead of the one actually being published,
-          # publishing the wrong version (or one not yet on PyPI).
-          ref: ${{ inputs.tag || github.ref }}
-      - name: Install mcp-publisher
-        # Intentionally tracks ``latest`` rather than a SHA/version pin. The
-        # MCP Registry is in preview and rotates its OIDC audience between
-        # deployments; an older binary fails with "invalid audience", and the
-        # official GitHub Actions guide instructs re-installing latest for
-        # exactly this reason. Fetched over HTTPS from the official
-        # modelcontextprotocol/registry releases.
+          ref: ${{ needs.resolve_release.outputs.sha }}
+      - name: Verify registry checkout identity
+        env:
+          EXPECTED_SHA: ${{ needs.resolve_release.outputs.sha }}
         run: |
-          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+          set -euo pipefail
+          actual_sha="$(git rev-parse HEAD)"
+          if [[ "$actual_sha" != "$EXPECTED_SHA" ]]; then
+            echo "::error::registry checkout drift: expected $EXPECTED_SHA, got $actual_sha"
+            exit 1
+          fi
+      - name: Install authenticated mcp-publisher
+        run: bash scripts/install_mcp_publisher.sh
       - name: Authenticate to MCP Registry (GitHub OIDC)
         run: ./mcp-publisher login github-oidc
       - name: Publish server.json to MCP Registry
