@@ -40,7 +40,7 @@ def test_release_please_retains_push_and_manual_retry_triggers() -> None:
 def test_pending_release_detection_is_singleton_and_fail_closed() -> None:
     run = _step("mode")["run"]
 
-    assert '--state merged' in run
+    assert "--state merged" in run
     assert '--label "autorelease: pending"' in run
     assert "pending_count > 1" in run
     assert "exit 1" in run
