@@ -7,6 +7,13 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.4.6](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.4.5...v1.4.6) (2026-08-20)
+
+
+### Bug Fixes
+
+* **security:** constrain upstream requests to configured origin ([8814557](https://github.com/smaniches/alphafold-sovereign-mcp/commit/881455735a7ba7fe0dce2bb9459ebbfa2c589fa6))
+
 ## [1.4.5](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.4.4...v1.4.5) (2026-08-10)
 
 
