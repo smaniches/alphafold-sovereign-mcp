@@ -137,10 +137,13 @@ OIDC Trusted Publishing and attached to a signed GitHub Release with
 Sigstore (`cosign`) signature bundles, a CycloneDX SBOM, and a Zenodo
 DOI mirror. SLSA L3 build provenance is generated in CI by
 `slsa-github-generator`; attaching the attestation to each release is a
-roadmap item. `scripts/replicate.sh` checks the published PyPI wheel hash
-and the presence of the release SBOM and provenance; verifying the
-`cosign` signature bundles with `cosign verify-blob` is not yet wired into
-the script (roadmap).
+roadmap item. `scripts/replicate.sh` downloads the exact published wheel
+and sdist, recomputes their PyPI SHA-256 digests, verifies the GitHub
+Release Sigstore bundles against those bytes and this repository's release
+workflow identity, and independently verifies that the released CycloneDX
+SBOM is bound to the downloaded wheel. If SLSA provenance is attached to a
+future release, the same script verifies it against the wheel when
+`slsa-verifier` is installed.
 
 ### From source
 
@@ -374,10 +377,13 @@ See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the full module map.
 - Lint: `ruff` (full ruleset). Type checking: `mypy --strict` on the
   full source tree.
 - Security: `bandit` plus CodeQL `security-extended`.
-- Supply chain: CycloneDX SBOM generated in CI from the installed
-  package; `scripts/replicate.sh` checks the PyPI wheel hash and the
-  presence of the release SBOM and provenance (`cosign verify-blob`
-  signature-bundle verification is a roadmap item, not yet in the script).
+- Supply chain: release CI builds and attests the distributions, generates a
+  wheel-bound CycloneDX SBOM from the installed runtime dependency closure,
+  and signs release artifacts with Sigstore. `scripts/replicate.sh`
+  independently downloads the published wheel and sdist, verifies their PyPI
+  hashes and Sigstore bundles, and checks the released CycloneDX binding.
+  SLSA provenance is generated in CI; attaching it to each GitHub Release
+  remains a roadmap item.
 
 The full CI matrix (Python 3.10, 3.11, 3.12, 3.13 × Ubuntu, macOS)
 runs on every push. The coverage percentage above is the number a

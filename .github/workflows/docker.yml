@@ -1,0 +1,47 @@
+name: Docker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Dockerfile"
+      - ".dockerignore"
+      - "pyproject.toml"
+      - "src/**"
+      - ".github/workflows/docker.yml"
+  pull_request:
+    paths:
+      - "Dockerfile"
+      - ".dockerignore"
+      - "pyproject.toml"
+      - "src/**"
+      - ".github/workflows/docker.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Build and runtime policy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build image
+        run: docker build --pull --tag alphafold-sovereign-mcp:test .
+
+      - name: Assert non-root writable runtime home
+        run: |
+          set -euo pipefail
+          docker run --rm --entrypoint sh alphafold-sovereign-mcp:test -c '
+            test "$(id -u)" -ne 0
+            test "$HOME" = /home/mcp
+            test -w "$HOME"
+            mkdir -p "$HOME/.local/share/alphafold-sovereign"
+            test -w "$HOME/.local/share/alphafold-sovereign"
+          '
+
+      - name: Run offline self-test
+        run: docker run --rm alphafold-sovereign-mcp:test --self-test

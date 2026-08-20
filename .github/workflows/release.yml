@@ -141,7 +141,7 @@ jobs:
       actions: read
       id-token: write
       contents: write
-    # IMPORTANT: the SLSA generator reusable workflow MUST be referenced by a
+    # IMPORTANT: the SLSA generic generator reusable workflow MUST be referenced by a
     # semantic-version TAG. It self-verifies its own ref as refs/tags/vX.Y.Z
     # and fails ("Invalid ref ... Expected ref of the form refs/tags/vX.Y.Z")
     # if pinned by commit SHA. Do NOT let an OpenSSF Scorecard "pin actions by
@@ -228,7 +228,7 @@ jobs:
           packages-dir: dist/
           skip-existing: true
 
-  # Sign artefacts with keyless Sigstore and publish the GitHub Release.
+  # Sign artefacts and SBOMs with keyless Sigstore and publish the GitHub Release.
   # Externally mutating: cosign records to the public Rekor transparency log
   # and the job creates/updates a GitHub Release. Gated on canonical dry_run
   # (fail-closed `== 'false'` form).
@@ -264,10 +264,10 @@ jobs:
           path: sboms/
       - name: Install cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
-      - name: Sign each artefact with cosign (keyless OIDC)
+      - name: Sign distributions and SBOMs with cosign (keyless OIDC)
         run: |
           set -euo pipefail
-          for f in dist/*.tar.gz dist/*.whl; do
+          for f in dist/*.tar.gz dist/*.whl sboms/sbom.cyclonedx.json sboms/sbom.spdx.json; do
             cosign sign-blob --yes "$f" --bundle "${f}.sigstore"
           done
       - name: Create or upload to GitHub release (idempotent)
@@ -276,7 +276,7 @@ jobs:
           TAG: ${{ needs.resolve_release.outputs.tag }}
         run: |
           set -euo pipefail
-          ASSETS=( dist/*.tar.gz dist/*.whl dist/*.sigstore sboms/sbom.cyclonedx.json sboms/sbom.spdx.json )
+          ASSETS=( dist/*.tar.gz dist/*.whl dist/*.sigstore sboms/sbom.cyclonedx.json sboms/sbom.spdx.json sboms/*.sigstore )
 
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Release $TAG already exists; uploading assets with --clobber."
