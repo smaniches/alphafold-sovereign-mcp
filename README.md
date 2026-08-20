@@ -236,7 +236,7 @@ input schema is a Pydantic model; results are JSON.
 | `synthesize_protein_dossier` | UniProt → multi-source briefing |
 | `map_disease_drug_landscape` | MONDO → approved drugs + pipeline + ChEMBL phase counts |
 | `classify_variant_acmg` | HGVS → ACMG/AMP criteria checklist (PVS1, PM2, PP3, BP4, BP7, BS1, PP5) |
-| `find_drug_repurposing_candidates` | MONDO → candidates ranked by OT evidence × ChEML phase |
+| `find_drug_repurposing_candidates` | MONDO → candidates ranked by OT evidence × ChEMBL phase |
 
 The ACMG/AMP criteria produced are a **draft**: they reflect the
 upstream evidence the server can fetch automatically, and they

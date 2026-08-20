@@ -29,9 +29,12 @@ def test_replicate_verifies_downloaded_release_bytes() -> None:
 
 def test_replicate_is_compatible_with_stock_macos_bash() -> None:
     text = SCRIPT.read_text(encoding="utf-8")
+    executable = "\n".join(
+        line for line in text.splitlines() if not line.lstrip().startswith("#")
+    )
 
-    assert "mapfile" not in text
-    assert 'DIST_ROWS+=("$row")' in text
+    assert "mapfile" not in executable
+    assert 'DIST_ROWS+=("$row")' in executable
 
 
 def test_replicate_resolves_the_actual_github_release_tag() -> None:
@@ -48,7 +51,10 @@ def test_replicate_verifies_sigstore_bundle_against_exact_artifact_and_tag() -> 
     assert 'release_asset_url "${filename}.sigstore"' in text
     assert "cosign verify-blob" in text
     assert '--certificate-oidc-issuer "https://token.actions.githubusercontent.com"' in text
-    assert 'TAG_IDENTITY="https://github.com/${REPO}/.github/workflows/release.yml@refs/tags/${TAG}"' in text
+    assert (
+        'TAG_IDENTITY="https://github.com/${REPO}/.github/workflows/release.yml@refs/tags/${TAG}"'
+        in text
+    )
     assert '"$artifact"' in text
     assert "refs/heads/main" not in text
 
