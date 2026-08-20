@@ -5,18 +5,24 @@
 # scripts/replicate.sh — cryptographic verifier for a published release
 #
 # Verifies the public release surface from independently downloaded artifacts:
-#   1. resolves the requested PyPI release (or the current release for `latest`);
+#   1. resolves the requested PyPI release (or the current release for `latest`)
+#      and its actual GitHub Release tag;
 #   2. downloads the wheel and sdist and recomputes their PyPI SHA-256 digests;
 #   3. downloads each GitHub Release Sigstore bundle and verifies the exact
-#      corresponding artifact with cosign against this repository's release
-#      workflow identity and GitHub Actions OIDC issuer;
-#   4. downloads the CycloneDX SBOM and independently verifies that its root
-#      component is bound to the exact downloaded wheel Name/Version/SHA-256;
-#   5. validates that the SPDX release asset is parseable SPDX JSON;
+#      corresponding artifact against the immutable release-tag workflow identity;
+#   4. downloads the CycloneDX SBOM, authenticates it when the release supports
+#      signed SBOM assets, and independently verifies its root against the exact
+#      downloaded wheel Name/Version/SHA-256;
+#   5. authenticates the SPDX SBOM when supported and validates its required
+#      SPDX document structure;
 #   6. verifies SLSA provenance against the exact wheel when a provenance asset
-#      is attached to the release (release attachment remains a separate
-#      roadmap item); and
+#      is attached to the release (release attachment remains a separate roadmap item);
 #   7. verifies the local git tag signature when the tag is present locally.
+#
+# Releases before 1.4.7 predate signed SBOM release assets. For those historical
+# releases the verifier reports the limitation explicitly and checks SBOM-to-wheel
+# binding/structure without claiming SBOM publisher authentication. Releases from
+# 1.4.7 onward fail closed if either SBOM signature bundle is absent or invalid.
 #
 # Usage:
 #   ./scripts/replicate.sh                  # verify latest PyPI release
@@ -28,9 +34,13 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
 PKG_NAME="alphafold-sovereign-mcp"
 REPO="smaniches/alphafold-sovereign-mcp"
 GHCR_IMAGE="ghcr.io/smaniches/alphafold-sovereign-mcp"
+SIGNED_SBOM_FIRST_RELEASE="1.4.7"
 VERSION="${VERSION:-latest}"
 VERIFY_IMAGE=false
 
@@ -71,6 +81,30 @@ sha256_file() {
   fi
 }
 
+# Return success only for releases whose x.y.z core predates the first release
+# that signs SBOM assets. Parse failures return nonzero and therefore fail closed.
+legacy_unsigned_sbom_allowed() {
+  python3 - "$1" "$SIGNED_SBOM_FIRST_RELEASE" <<'PY'
+import re
+import sys
+
+
+def core(value: str) -> tuple[int, int, int]:
+    match = re.match(r"^(\d+)\.(\d+)\.(\d+)", value)
+    if match is None:
+        raise ValueError(value)
+    return tuple(int(part) for part in match.groups())
+
+
+try:
+    current = core(sys.argv[1])
+    floor = core(sys.argv[2])
+except ValueError:
+    raise SystemExit(2)
+raise SystemExit(0 if current < floor else 1)
+PY
+}
+
 for cmd in curl jq python3 cosign; do
   require_cmd "$cmd"
 done
@@ -88,19 +122,55 @@ if [[ "$VERSION" == "latest" ]]; then
 else
   VERSION="${VERSION#v}"
 fi
-TAG="v${VERSION}"
 
-printf 'AlphaFold Sovereign MCP — Supply-Chain Verification\n'
-printf 'Package: %s v%s\n' "$PKG_NAME" "$VERSION"
-printf 'Repository: https://github.com/%s\n\n' "$REPO"
-
-# Fetch release-specific metadata so every downloaded artifact belongs to the
-# requested immutable PyPI release, not merely the current project state.
+# Fetch release-specific PyPI metadata so every downloaded distribution belongs
+# to the requested immutable release, not merely the current project state.
 RELEASE_META="$TMP_ROOT/pypi-release.json"
 curl -fsSL "https://pypi.org/pypi/${PKG_NAME}/${VERSION}/json" -o "$RELEASE_META" \
   || fail "PyPI release ${VERSION} was not found"
 
-mapfile -t DIST_ROWS < <(
+# Resolve the actual GitHub Release tag instead of assuming PyPI's normalized
+# version string is byte-identical to the tag. PEP 440 normalizes e.g.
+# 1.1.0-rc1 to 1.1.0rc1, while this repository's release tags retain the hyphen.
+GH_RELEASE_META="$TMP_ROOT/github-release.json"
+resolve_github_release() {
+  local candidate="v${VERSION}"
+  if curl -fsSL "https://api.github.com/repos/${REPO}/releases/tags/${candidate}" \
+      -o "$GH_RELEASE_META" 2>/dev/null; then
+    return 0
+  fi
+
+  if [[ "$VERSION" =~ ^([0-9]+\.[0-9]+\.[0-9]+)(a|b|rc)([0-9]+)$ ]]; then
+    candidate="v${BASH_REMATCH[1]}-${BASH_REMATCH[2]}${BASH_REMATCH[3]}"
+    if curl -fsSL "https://api.github.com/repos/${REPO}/releases/tags/${candidate}" \
+        -o "$GH_RELEASE_META" 2>/dev/null; then
+      return 0
+    fi
+  fi
+  return 1
+}
+resolve_github_release || fail "no GitHub Release corresponds to PyPI version ${VERSION}"
+TAG="$(jq -er '.tag_name | select(type == "string" and length > 0)' "$GH_RELEASE_META")" \
+  || fail "GitHub Release metadata did not contain a tag"
+
+release_asset_url() {
+  jq -er --arg name "$1" '
+    [.assets[] | select(.name == $name) | .browser_download_url]
+    | select(length == 1)
+    | .[0]
+  ' "$GH_RELEASE_META"
+}
+
+printf 'AlphaFold Sovereign MCP — Supply-Chain Verification\n'
+printf 'Package: %s v%s\n' "$PKG_NAME" "$VERSION"
+printf 'GitHub release: %s\n' "$TAG"
+printf 'Repository: https://github.com/%s\n\n' "$REPO"
+
+# Bash 3.2-compatible population; stock macOS Bash does not provide `mapfile`.
+DIST_ROWS=()
+while IFS= read -r row; do
+  [[ -n "$row" ]] && DIST_ROWS+=("$row")
+done < <(
   jq -r '.urls[]
     | select(.packagetype == "bdist_wheel" or .packagetype == "sdist")
     | [.filename, .url, .digests.sha256]
@@ -131,62 +201,105 @@ for row in "${DIST_ROWS[@]}"; do
 done
 [[ -n "$WHEEL_PATH" ]] || fail "release contains no wheel"
 
+TAG_IDENTITY="https://github.com/${REPO}/.github/workflows/release.yml@refs/tags/${TAG}"
+
 echo ""
 echo "Step 2: Sigstore release-bundle verification"
 for row in "${DIST_ROWS[@]}"; do
   IFS=$'\t' read -r filename _ _ <<< "$row"
   artifact="$TMP_ROOT/$filename"
   bundle="$TMP_ROOT/${filename}.sigstore"
-  bundle_url="https://github.com/${REPO}/releases/download/${TAG}/${filename}.sigstore"
-  curl -fsSL "$bundle_url" -o "$bundle" \
+  bundle_url="$(release_asset_url "${filename}.sigstore")" \
     || fail "Sigstore bundle missing from GitHub Release: ${filename}.sigstore"
+  curl -fsSL "$bundle_url" -o "$bundle" \
+    || fail "could not download Sigstore bundle: ${filename}.sigstore"
 
-  tag_identity="https://github.com/${REPO}/.github/workflows/release.yml@refs/tags/${TAG}"
-  main_identity="https://github.com/${REPO}/.github/workflows/release.yml@refs/heads/main"
-  if cosign verify-blob \
-      --bundle "$bundle" \
-      --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
-      --certificate-identity "$tag_identity" \
-      "$artifact" >/dev/null 2>&1; then
-    pass "$filename Sigstore bundle verified against tag-triggered release workflow"
-  elif cosign verify-blob \
-      --bundle "$bundle" \
-      --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
-      --certificate-identity "$main_identity" \
-      "$artifact" >/dev/null 2>&1; then
-    # workflow_dispatch releases run the same immutable-tag resolution path,
-    # but the Fulcio workflow identity is the branch from which dispatch ran.
-    pass "$filename Sigstore bundle verified against main release workflow"
-  else
-    fail "Sigstore verification failed for $filename"
-  fi
+  cosign verify-blob \
+    --bundle "$bundle" \
+    --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+    --certificate-identity "$TAG_IDENTITY" \
+    "$artifact" >/dev/null 2>&1 \
+    || fail "Sigstore verification failed for $filename"
+  pass "$filename Sigstore bundle verified against immutable release-tag workflow"
 done
 
+LEGACY_SBOM_AUTH=false
+
 echo ""
-echo "Step 3: CycloneDX SBOM binding"
+echo "Step 3: CycloneDX SBOM authenticity and wheel binding"
 CYCLONE="$TMP_ROOT/sbom.cyclonedx.json"
-curl -fsSL \
-  "https://github.com/${REPO}/releases/download/${TAG}/sbom.cyclonedx.json" \
-  -o "$CYCLONE" || fail "CycloneDX SBOM missing from GitHub Release ${TAG}"
-python3 scripts/verify_sbom_binding.py "$CYCLONE" "$WHEEL_PATH" >/dev/null \
+CYCLONE_URL="$(release_asset_url "sbom.cyclonedx.json")" \
+  || fail "CycloneDX SBOM missing from GitHub Release ${TAG}"
+curl -fsSL "$CYCLONE_URL" -o "$CYCLONE" \
+  || fail "could not download CycloneDX SBOM from GitHub Release ${TAG}"
+
+if CYCLONE_BUNDLE_URL="$(release_asset_url "sbom.cyclonedx.json.sigstore" 2>/dev/null)"; then
+  CYCLONE_BUNDLE="$TMP_ROOT/sbom.cyclonedx.json.sigstore"
+  curl -fsSL "$CYCLONE_BUNDLE_URL" -o "$CYCLONE_BUNDLE" \
+    || fail "could not download CycloneDX Sigstore bundle"
+  cosign verify-blob \
+    --bundle "$CYCLONE_BUNDLE" \
+    --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+    --certificate-identity "$TAG_IDENTITY" \
+    "$CYCLONE" >/dev/null 2>&1 \
+    || fail "CycloneDX SBOM Sigstore verification failed"
+  pass "CycloneDX SBOM authenticated to immutable release-tag workflow"
+elif legacy_unsigned_sbom_allowed "$VERSION"; then
+  LEGACY_SBOM_AUTH=true
+  warn "${TAG} predates signed SBOM assets; CycloneDX publisher authenticity is not established"
+else
+  fail "CycloneDX Sigstore bundle missing from release ${TAG}"
+fi
+
+python3 "$REPO_ROOT/scripts/verify_sbom_binding.py" "$CYCLONE" "$WHEEL_PATH" >/dev/null \
   || fail "CycloneDX SBOM is not bound to the downloaded wheel"
 pass "CycloneDX root identity and SHA-256 are bound to the exact wheel"
 
 echo ""
-echo "Step 4: SPDX release asset"
+echo "Step 4: SPDX release asset authenticity and structure"
 SPDX="$TMP_ROOT/sbom.spdx.json"
-curl -fsSL \
-  "https://github.com/${REPO}/releases/download/${TAG}/sbom.spdx.json" \
-  -o "$SPDX" || fail "SPDX SBOM missing from GitHub Release ${TAG}"
-jq -e '.spdxVersion | strings | startswith("SPDX-")' "$SPDX" >/dev/null \
-  || fail "SPDX release asset is not valid SPDX JSON"
-pass "SPDX SBOM is present and parseable"
+SPDX_URL="$(release_asset_url "sbom.spdx.json")" \
+  || fail "SPDX SBOM missing from GitHub Release ${TAG}"
+curl -fsSL "$SPDX_URL" -o "$SPDX" \
+  || fail "could not download SPDX SBOM from GitHub Release ${TAG}"
+
+if SPDX_BUNDLE_URL="$(release_asset_url "sbom.spdx.json.sigstore" 2>/dev/null)"; then
+  SPDX_BUNDLE="$TMP_ROOT/sbom.spdx.json.sigstore"
+  curl -fsSL "$SPDX_BUNDLE_URL" -o "$SPDX_BUNDLE" \
+    || fail "could not download SPDX Sigstore bundle"
+  cosign verify-blob \
+    --bundle "$SPDX_BUNDLE" \
+    --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+    --certificate-identity "$TAG_IDENTITY" \
+    "$SPDX" >/dev/null 2>&1 \
+    || fail "SPDX SBOM Sigstore verification failed"
+  pass "SPDX SBOM authenticated to immutable release-tag workflow"
+elif legacy_unsigned_sbom_allowed "$VERSION"; then
+  LEGACY_SBOM_AUTH=true
+  warn "${TAG} predates signed SBOM assets; SPDX publisher authenticity is not established"
+else
+  fail "SPDX Sigstore bundle missing from release ${TAG}"
+fi
+
+jq -e '
+  (.spdxVersion | type == "string" and test("^SPDX-2\\.[0-9]+$")) and
+  (.SPDXID == "SPDXRef-DOCUMENT") and
+  (.dataLicense == "CC0-1.0") and
+  (.name | type == "string" and length > 0) and
+  (.documentNamespace | type == "string" and length > 0) and
+  (.creationInfo | type == "object") and
+  (.creationInfo.created | type == "string" and length > 0) and
+  (.creationInfo.creators | type == "array" and length > 0) and
+  (.packages | type == "array" and length > 0)
+' "$SPDX" >/dev/null || fail "SPDX release asset is missing required SPDX document structure"
+pass "SPDX SBOM has the required SPDX document structure"
 
 echo ""
 echo "Step 5: SLSA provenance (when attached to the GitHub Release)"
 PROVENANCE="$TMP_ROOT/alphafold-sovereign-mcp.intoto.jsonl"
-PROVENANCE_URL="https://github.com/${REPO}/releases/download/${TAG}/alphafold-sovereign-mcp.intoto.jsonl"
-if curl -fsSL "$PROVENANCE_URL" -o "$PROVENANCE" 2>/dev/null; then
+if PROVENANCE_URL="$(release_asset_url "alphafold-sovereign-mcp.intoto.jsonl" 2>/dev/null)"; then
+  curl -fsSL "$PROVENANCE_URL" -o "$PROVENANCE" \
+    || fail "could not download attached SLSA provenance"
   if command -v slsa-verifier >/dev/null 2>&1; then
     if slsa-verifier verify-artifact \
         --provenance-path "$PROVENANCE" \
@@ -210,7 +323,7 @@ if [[ "$VERIFY_IMAGE" == "true" ]]; then
   image="${GHCR_IMAGE}:${VERSION}"
   if cosign verify \
       --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
-      --certificate-identity-regexp "^https://github.com/${REPO}/.github/workflows/release.yml@refs/(tags/${TAG}|heads/main)$" \
+      --certificate-identity "${TAG_IDENTITY}" \
       "$image" >/dev/null 2>&1; then
     pass "Container image signature verified: $image"
   else
@@ -220,8 +333,8 @@ fi
 
 echo ""
 echo "Step 7: Local git tag signature (when the tag is present)"
-if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null 2>&1; then
-  if git tag -v "$TAG" >/dev/null 2>&1; then
+if git -C "$REPO_ROOT" rev-parse -q --verify "refs/tags/${TAG}" >/dev/null 2>&1; then
+  if git -C "$REPO_ROOT" tag -v "$TAG" >/dev/null 2>&1; then
     pass "Git tag ${TAG} is locally GPG-verifiable"
   else
     warn "Git tag ${TAG} exists locally but its signature is not verifiable with the local keyring"
@@ -231,4 +344,8 @@ else
 fi
 
 echo ""
-echo "Supply-chain verification complete for ${PKG_NAME} ${VERSION}."
+if [[ "$LEGACY_SBOM_AUTH" == "true" ]]; then
+  warn "Supply-chain verification complete with documented legacy SBOM-authentication boundary for ${PKG_NAME} ${VERSION}."
+else
+  pass "Supply-chain verification complete for ${PKG_NAME} ${VERSION}."
+fi
