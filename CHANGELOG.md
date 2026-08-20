@@ -7,6 +7,17 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.4.7](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.4.6...v1.4.7) (2026-08-20)
+
+
+### Bug Fixes
+
+* **ci:** close exact-head gate failures ([6e1bf8b](https://github.com/smaniches/alphafold-sovereign-mcp/commit/6e1bf8b5189f6bd961a8b077c74e7bd546fc07ac))
+* **container:** run image as non-root ([a6c24c9](https://github.com/smaniches/alphafold-sovereign-mcp/commit/a6c24c97a00591cf4dded7c4590f0ffbca2072d2))
+* **release:** verify published artifact bytes and Sigstore bundles ([e8c1d8f](https://github.com/smaniches/alphafold-sovereign-mcp/commit/e8c1d8f0bb3dd887d98bd14c2a2d051192e69cce))
+* **security:** close published-release verifier trust gaps ([cb524d5](https://github.com/smaniches/alphafold-sovereign-mcp/commit/cb524d512a20bd4162a99389becceca14c5797cc))
+* **security:** harden container runtime and release verification ([ca5954c](https://github.com/smaniches/alphafold-sovereign-mcp/commit/ca5954c41beb95286e7a058125e36460c9311c6d))
+
 ## [1.4.6](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.4.5...v1.4.6) (2026-08-20)
 
 
