@@ -10,6 +10,9 @@ jobs:
   pr-fuzzing:
     name: Fuzz (PR, ${{ matrix.sanitizer }})
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     strategy:
       fail-fast: false
       matrix:
@@ -24,6 +27,7 @@ jobs:
         with:
           language: python
           sanitizer: ${{ matrix.sanitizer }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Run fuzzers
         id: run
         uses: google/clusterfuzzlite/actions/run_fuzzers@884713a6c30a92e5e8544c39945cd7cb630abcd1 # v1
@@ -32,3 +36,10 @@ jobs:
           fuzz-seconds: 300
           mode: code-change
           sanitizer: ${{ matrix.sanitizer }}
+          output-sarif: true
+      - name: Upload SARIF to GitHub Security tab
+        if: always() && steps.build.outcome == 'success'
+        uses: github/codeql-action/upload-sarif@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4
+        with:
+          sarif_file: cifuzz-sarif/results.sarif
+          checkout_path: cifuzz-sarif
