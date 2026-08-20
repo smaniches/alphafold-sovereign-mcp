@@ -37,6 +37,11 @@ def test_release_please_retains_push_and_manual_retry_triggers() -> None:
     assert "workflow_dispatch" in triggers
 
 
+def test_release_please_can_transition_lifecycle_labels() -> None:
+    permissions = WORKFLOW["jobs"]["release-please"]["permissions"]
+    assert permissions["issues"] == "write"
+
+
 def test_pending_release_detection_is_singleton_and_fail_closed() -> None:
     run = _step("mode")["run"]
 

@@ -14,6 +14,7 @@ jobs:
     permissions:
       contents: write          # release-please creates release commits/tags
       pull-requests: write      # release-please opens/updates the release PR
+      issues: write             # release-please transitions PR lifecycle labels
       # Needed so this workflow can dispatch release.yml after release-please
       # creates the GitHub Release. workflow_dispatch is the documented exception
       # that lets a GITHUB_TOKEN-driven workflow start a downstream workflow —
