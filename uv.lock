@@ -55,7 +55,7 @@ wheels = [
 
 [[package]]
 name = "alphafold-sovereign-mcp"
-version = "1.4.5"
+version = "1.4.6"
 source = { editable = "." }
 dependencies = [
     { name = "aiolimiter" },
