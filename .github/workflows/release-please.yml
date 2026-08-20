@@ -3,6 +3,7 @@ name: Release Please
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -21,6 +22,40 @@ jobs:
       #   docs: https://docs.github.com/en/actions/security-guides/automatic-token-authentication
       actions: write
     steps:
+      # A merged Release Please PR should transition from `autorelease: pending`
+      # to `autorelease: tagged`. If GitHub/API timing leaves it pending, a normal
+      # invocation must not open a second release PR against a nonexistent tag.
+      # Recovery mode lets release-please create only the outstanding release;
+      # it is also available through workflow_dispatch for an explicit retry.
+      - name: Detect merged pending release
+        id: mode
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          pending_json="$(
+            gh pr list \
+              --repo "$GITHUB_REPOSITORY" \
+              --state merged \
+              --label "autorelease: pending" \
+              --json number
+          )"
+          pending_count="$(jq 'length' <<<"$pending_json")"
+          if (( pending_count > 1 )); then
+            echo "::error::multiple merged release PRs remain autorelease: pending"
+            jq -r '.[].number' <<<"$pending_json" >&2
+            exit 1
+          fi
+          if (( pending_count == 1 )); then
+            pending_pr="$(jq -r '.[0].number' <<<"$pending_json")"
+            echo "recovery_only=true" >>"$GITHUB_OUTPUT"
+            echo "pending_pr=$pending_pr" >>"$GITHUB_OUTPUT"
+            echo "Recovering merged pending release PR #$pending_pr; new release-PR creation is disabled."
+          else
+            echo "recovery_only=false" >>"$GITHUB_OUTPUT"
+            echo "pending_pr=" >>"$GITHUB_OUTPUT"
+          fi
+
       # RELEASE_PLEASE_TOKEN remains optional for one narrow reason: events and
       # branch updates authored with the default GITHUB_TOKEN do not start normal
       # follow-up workflows. A fine-grained PAT or GitHub App token lets the
@@ -34,6 +69,15 @@ jobs:
           token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+          skip-github-pull-request: ${{ steps.mode.outputs.recovery_only }}
+
+      - name: Require pending-release recovery to create a release
+        if: ${{ steps.mode.outputs.recovery_only == 'true' && steps.release.outputs.release_created != 'true' }}
+        env:
+          PENDING_PR: ${{ steps.mode.outputs.pending_pr }}
+        run: |
+          echo "::error::Release Please did not create the release for pending PR #$PENDING_PR"
+          exit 1
 
       # release-please stamps the new version onto every surface EXCEPT uv.lock's
       # own editable self-package entry: uv.lock is machine-generated, not a
