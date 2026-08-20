@@ -15,8 +15,8 @@ def test_replicate_verifies_downloaded_release_bytes() -> None:
 
     # `latest` must resolve through the project endpoint; PyPI has no
     # /latest/json release route.
-    assert 'https://pypi.org/pypi/${PKG_NAME}/json' in text
-    assert '/${VERSION}/json' in text
+    assert "https://pypi.org/pypi/${PKG_NAME}/json" in text
+    assert "/${VERSION}/json" in text
 
     # A printed PyPI digest is not verification. The script must download the
     # artifact, recompute SHA-256 locally, and compare it to PyPI metadata.
@@ -28,7 +28,7 @@ def test_replicate_verifies_downloaded_release_bytes() -> None:
 def test_replicate_verifies_sigstore_bundle_against_exact_artifact() -> None:
     text = SCRIPT.read_text(encoding="utf-8")
 
-    assert 'releases/download/${TAG}/${filename}.sigstore' in text
+    assert "releases/download/${TAG}/${filename}.sigstore" in text
     assert "cosign verify-blob" in text
     assert '--certificate-oidc-issuer "https://token.actions.githubusercontent.com"' in text
     assert '"$artifact"' in text
