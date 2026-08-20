@@ -29,9 +29,7 @@ def test_replicate_verifies_downloaded_release_bytes() -> None:
 
 def test_replicate_is_compatible_with_stock_macos_bash() -> None:
     text = SCRIPT.read_text(encoding="utf-8")
-    executable = "\n".join(
-        line for line in text.splitlines() if not line.lstrip().startswith("#")
-    )
+    executable = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
 
     assert "mapfile" not in executable
     assert 'DIST_ROWS+=("$row")' in executable
