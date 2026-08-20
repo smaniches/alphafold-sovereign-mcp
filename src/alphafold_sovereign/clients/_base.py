@@ -14,6 +14,7 @@ wires together:
 - An outbound-host allow-list that blocks all egress when
   ``ALPHAFOLD_OFFLINE=1`` is set (raising ``AirGapError`` before a
   socket is opened)
+- A per-client origin guard that rejects cross-origin requests and redirects
 - A ``_sha256`` static helper available to callers for content hashing
   (not invoked automatically on responses)
 """
@@ -144,8 +145,24 @@ class AirGapError(Exception):
     """Raised when a network call is attempted in offline mode."""
 
 
+class UpstreamOriginError(Exception):
+    """Raised before dispatch when a request leaves its configured origin."""
+
+
 class CircuitOpenError(Exception):
     """Raised when the circuit breaker is OPEN for the target host."""
+
+
+def _origin(url: httpx.URL) -> tuple[str, str, int | None]:
+    """Return the normalized RFC origin components used by HTTPX URLs."""
+    return url.scheme.lower(), url.host.lower(), url.port
+
+
+def _origin_label(origin: tuple[str, str, int | None]) -> str:
+    """Render an origin without path/query data that could contain secrets."""
+    scheme, host, port = origin
+    port_suffix = f":{port}" if port is not None else ""
+    return f"{scheme}://{host}{port_suffix}"
 
 
 def _is_retryable(exc: BaseException) -> bool:
@@ -189,6 +206,7 @@ class BaseAsyncClient:
             AsyncLimiter(self.config.calls_per_second, 1.0) if AsyncLimiter is not None else None
         )
         self._client: httpx.AsyncClient | None = None
+        self._configured_origin = _origin(httpx.URL(self.config.base_url))
         self._log = logger.bind(
             upstream=self.upstream_name,
             request_id=request_id,
@@ -205,6 +223,7 @@ class BaseAsyncClient:
             verify=self.config.verify_ssl,
             http2=True,
             follow_redirects=True,
+            event_hooks={"request": [self._enforce_origin]},
             limits=httpx.Limits(
                 max_keepalive_connections=10,
                 max_connections=20,
@@ -221,6 +240,16 @@ class BaseAsyncClient:
     # ------------------------------------------------------------------
     # Core request helpers
     # ------------------------------------------------------------------
+
+    async def _enforce_origin(self, request: httpx.Request) -> None:
+        """Reject cross-origin requests and redirect hops before dispatch."""
+        actual_origin = _origin(request.url)
+        if actual_origin != self._configured_origin:
+            raise UpstreamOriginError(
+                f"{self.upstream_name} request escaped configured origin: "
+                f"{_origin_label(actual_origin)}; expected "
+                f"{_origin_label(self._configured_origin)}."
+            )
 
     def _check_air_gap(self, url: str) -> None:
         """Raise AirGapError if offline mode is active and host not allowed."""
@@ -248,13 +277,10 @@ class BaseAsyncClient:
             await self.__aenter__()
         assert self._client is not None  # narrow type for mypy after lazy init
 
-        # ``path`` may be a relative reference or an absolute URL: some
-        # upstreams (AlphaFold DB) advertise absolute file URLs on a host
-        # distinct from their JSON API base. ``httpx.URL.join`` resolves
-        # both cases by the same RFC 3986 rules httpx applies internally,
-        # so the air-gap pre-check inspects exactly the host the request
-        # will reach; an absolute, protocol-relative, or uppercase-scheme
-        # URL is resolved correctly rather than bypassed.
+        # ``path`` may be relative or an absolute URL on the configured origin.
+        # AlphaFold DB, for example, advertises absolute ``/files/`` URLs on
+        # the same origin as its JSON API. The request hook above re-checks the
+        # origin immediately before every network dispatch, including redirects.
         full_url = str(self._client.base_url.join(path))
         self._check_air_gap(full_url)
 
