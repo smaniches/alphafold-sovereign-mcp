@@ -29,7 +29,7 @@
 # tools against the pins below.
 
 # PEP 517 build frontend (used with --no-isolation).
-build==1.5.0
+build==1.6.0
 
 # Build backend; must satisfy pyproject.toml [build-system] requires
 # ("hatchling>=1.30.1") because --no-isolation imports it from this closure.
