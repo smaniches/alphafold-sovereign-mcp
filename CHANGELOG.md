@@ -7,6 +7,17 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.4.8](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.4.7...v1.4.8) (2026-09-03)
+
+
+### Dependencies
+
+* **security:** the optional `security` extra no longer pulls in the unused Safety scanner or its NLTK dependency; Bandit + pip-audit remain the dependency-advisory gates in CI and `nox -s security`. Packaging metadata only, no runtime code change ([#212](https://github.com/smaniches/alphafold-sovereign-mcp/pull/212))
+
+### Documentation
+
+* **status:** drop the stale Safety mention from the security tooling note ([9989544](https://github.com/smaniches/alphafold-sovereign-mcp/commit/99895445e3a35db9163c4e89b5e3bce9e53e8486))
+
 ## [1.4.7](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.4.6...v1.4.7) (2026-08-20)
 
 
