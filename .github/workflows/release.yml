@@ -324,3 +324,35 @@ jobs:
         run: ./mcp-publisher login github-oidc
       - name: Publish server.json to MCP Registry
         run: ./mcp-publisher publish
+
+  # Dispatch the post-publish read-back verifier with the released tag once
+  # PyPI and the GitHub Release both exist. verify-published-release.yml has
+  # no `release:` trigger of its own, and a GITHUB_TOKEN-authored release or
+  # tag never fans out to other workflows, so this explicit dispatch is the
+  # only in-pipeline path that starts it (its scheduled run covers a publish
+  # that never started). Externally mutating (starts another workflow run) and
+  # meaningless on a dry run, which publishes nothing to verify: gated on
+  # canonical dry_run (fail-closed `== 'false'` form). The dispatched file is
+  # the one at the released tag, so re-running this workflow for a tag whose
+  # verifier predates the `tag` input fails here with "Unexpected inputs";
+  # verify such a tag by dispatching verify-published-release.yml from main.
+  dispatch-verify:
+    name: Dispatch published-release verification
+    needs: [resolve_release, publish-pypi, publish-github]
+    if: needs.resolve_release.outputs.dry_run == 'false'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write        # gh workflow run (workflow_dispatch)
+    steps:
+      - name: Dispatch verify-published-release.yml
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # The single resolved tag from resolve_release: verify-published-
+          # release.yml runs at that ref and is told which release to read.
+          VERIFY_TAG: ${{ needs.resolve_release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh workflow run verify-published-release.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref "$VERIFY_TAG" \
+            --field tag="$VERIFY_TAG"

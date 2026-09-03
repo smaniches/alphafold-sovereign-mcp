@@ -31,6 +31,9 @@
 #
 # Required: curl, jq, python3, cosign, and sha256sum (or shasum).
 # Optional: slsa-verifier for a release that carries the SLSA provenance asset.
+# Optional: GH_TOKEN, sent as a bearer token on the api.github.com release
+#   lookup so it is not subject to the anonymous per-IP rate limit (GitHub
+#   Actions runners share egress IPs); release asset downloads need no token.
 
 set -euo pipefail
 
@@ -133,16 +136,24 @@ curl -fsSL "https://pypi.org/pypi/${PKG_NAME}/${VERSION}/json" -o "$RELEASE_META
 # version string is byte-identical to the tag. PEP 440 normalizes e.g.
 # 1.1.0-rc1 to 1.1.0rc1, while this repository's release tags retain the hyphen.
 GH_RELEASE_META="$TMP_ROOT/github-release.json"
+# Authenticated when GH_TOKEN is set (see the header); anonymous otherwise.
+github_api_curl() {
+  if [[ -n "${GH_TOKEN:-}" ]]; then
+    curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" "$@"
+  else
+    curl -fsSL "$@"
+  fi
+}
 resolve_github_release() {
   local candidate="v${VERSION}"
-  if curl -fsSL "https://api.github.com/repos/${REPO}/releases/tags/${candidate}" \
+  if github_api_curl "https://api.github.com/repos/${REPO}/releases/tags/${candidate}" \
       -o "$GH_RELEASE_META" 2>/dev/null; then
     return 0
   fi
 
   if [[ "$VERSION" =~ ^([0-9]+\.[0-9]+\.[0-9]+)(a|b|rc)([0-9]+)$ ]]; then
     candidate="v${BASH_REMATCH[1]}-${BASH_REMATCH[2]}${BASH_REMATCH[3]}"
-    if curl -fsSL "https://api.github.com/repos/${REPO}/releases/tags/${candidate}" \
+    if github_api_curl "https://api.github.com/repos/${REPO}/releases/tags/${candidate}" \
         -o "$GH_RELEASE_META" 2>/dev/null; then
       return 0
     fi

@@ -53,11 +53,13 @@ UV_PIN = "0.12.3"
 #   publish-pypi         — uploads immutable artifacts to the public index
 #   publish-github       — cosign (Rekor log) + creates the GitHub Release
 #   publish-mcp-registry — writes to the public MCP Registry
+#   dispatch-verify      — dispatches the post-publish verifier; meaningless on a dry run
 EXTERNALLY_MUTATING_JOBS = (
     "provenance",
     "publish-pypi",
     "publish-github",
     "publish-mcp-registry",
+    "dispatch-verify",
 )
 
 # Non-mutating jobs: read-only permissions, produce only ephemeral workflow
@@ -155,6 +157,18 @@ def test_non_mutating_pipeline_stays_executable_in_dry_run_mode() -> None:
 
 def test_gated_job_set_and_ungated_job_set_partition_the_workflow() -> None:
     assert set(RELEASE["jobs"]) == set(EXTERNALLY_MUTATING_JOBS) | set(NON_MUTATING_JOBS)
+
+
+def test_dispatch_verify_runs_the_published_release_verifier_after_publish() -> None:
+    # The verifier reads PyPI and the GitHub Release back, so it may only be
+    # dispatched after both publication jobs, and it needs nothing beyond the
+    # right to start a workflow run. Its dry_run gate is covered above via
+    # EXTERNALLY_MUTATING_JOBS.
+    job = RELEASE["jobs"]["dispatch-verify"]
+    assert "publish-pypi" in job["needs"]
+    assert "publish-github" in job["needs"]
+    assert job["permissions"] == {"actions": "write"}
+    assert "gh workflow run verify-published-release.yml" in _run_blob(job)
 
 
 # ── release.yml: deterministic build/SBOM path ─────────────────────────────
