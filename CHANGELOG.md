@@ -7,6 +7,13 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.4.9](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.4.8...v1.4.9) (2026-09-03)
+
+
+### chore
+
+* **registry:** add a human-readable title for registry display ([dd3d404](https://github.com/smaniches/alphafold-sovereign-mcp/commit/dd3d404df04c6b71fb3293012d9a86985f286e48))
+
 ## [1.4.8](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.4.7...v1.4.8) (2026-09-03)
 
 

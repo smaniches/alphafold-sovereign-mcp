@@ -3,7 +3,7 @@
   "name": "io.github.smaniches/alphafold-sovereign-mcp",
   "title": "AlphaFold Sovereign MCP",
   "description": "MCP server for AlphaFold and 8 other biomedical data sources with a local SQLite knowledge graph",
-  "version": "1.4.8",
+  "version": "1.4.9",
   "repository": {
     "url": "https://github.com/smaniches/alphafold-sovereign-mcp",
     "source": "github"
@@ -12,7 +12,7 @@
     {
       "registryType": "pypi",
       "identifier": "alphafold-sovereign-mcp",
-      "version": "1.4.8",
+      "version": "1.4.9",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"
