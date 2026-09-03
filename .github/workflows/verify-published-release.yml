@@ -1,5 +1,29 @@
 name: Verify Published Release
 
+# Reads a published release back from the public surface and asserts that
+# what PyPI serves is what release.yml built at the tag:
+#
+#   1. PyPI existence  — /pypi/<name>/<version>/json exists, reports that
+#                        version, and carries exactly one wheel and one
+#                        sdist (polled, because PyPI propagation is not
+#                        instant)
+#   2. Wheel identity  — scripts/replicate.sh downloads the wheel and sdist,
+#                        recomputes their PyPI SHA-256, and cosign-verifies
+#                        the GitHub-Release Sigstore bundles against the
+#                        immutable identity release.yml@refs/tags/<TAG>, so
+#                        a wheel rebuilt anywhere else (e.g. from a branch)
+#                        fails
+#
+# Triggers: release.yml's final dispatch-verify job (workflow_dispatch with
+# the released tag); a manual dispatch (empty tag = latest published
+# release); a 6-hourly schedule against the latest published, non-draft,
+# non-prerelease release, age-gated so it never races the in-pipeline run;
+# and pull requests touching the verifier itself (which only exercise it
+# against the latest release and never open an issue). There is deliberately
+# no `release:` trigger: release-please creates the GitHub Release before
+# release.yml has built or published anything, so verifying at that event
+# would only race the pipeline.
+
 on:
   pull_request:
     paths:
@@ -7,21 +31,153 @@ on:
       - "scripts/verify_sbom_binding.py"
       - ".github/workflows/verify-published-release.yml"
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to verify (e.g. v1.4.7); empty = latest published release"
+        required: false
+        type: string
+  schedule:
+    - cron: "53 */6 * * *"
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   verify:
     name: Verify latest public release
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write         # release-drift issue on failure
+    env:
+      PYPI_NAME: "alphafold-sovereign-mcp"
+      # A scheduled run skips a release younger than this: the in-pipeline
+      # dispatch from release.yml already covers it, and PyPI/GitHub
+      # propagation must not be misread as drift.
+      MIN_RELEASE_AGE_HOURS: "2"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
+      - name: Resolve target release
+        id: target
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TAG: ${{ inputs.tag || '' }}
+        run: |
+          set -euo pipefail
+          skip=false
+          if [[ "$EVENT_NAME" == "workflow_dispatch" && -n "$INPUT_TAG" ]]; then
+            tag="$INPUT_TAG"
+          else
+            # schedule, pull_request, or a dispatch without a tag: the latest
+            # published release. This endpoint excludes drafts and prereleases.
+            tag="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)"
+            if [[ "$EVENT_NAME" == "schedule" ]]; then
+              published_at="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .published_at)"
+              now="$(date -u +%s)"
+              published="$(date -u -d "$published_at" +%s)"
+              age_hours=$(( (now - published) / 3600 ))
+              if (( age_hours < MIN_RELEASE_AGE_HOURS )); then
+                echo "::notice::$tag was published ${age_hours}h ago (< ${MIN_RELEASE_AGE_HOURS}h); the in-pipeline verification covers it, skipping"
+                skip=true
+              fi
+            fi
+          fi
+          if [[ -z "$tag" ]]; then
+            echo "::error::could not resolve a release tag to verify (event: $EVENT_NAME)"
+            exit 1
+          fi
+          # PyPI serves the PEP 440 form: v1.1.0-rc1 -> 1.1.0rc1 (tags keep
+          # the hyphen; replicate.sh resolves the GitHub Release tag itself).
+          version="${tag#v}"
+          if [[ "$version" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-(a|b|rc)([0-9]+)$ ]]; then
+            version="${BASH_REMATCH[1]}${BASH_REMATCH[2]}${BASH_REMATCH[3]}"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "skip=$skip" >> "$GITHUB_OUTPUT"
+          echo "target: $tag -> PyPI $PYPI_NAME $version (event: $EVENT_NAME, skip: $skip)"
+
+      - name: Verify PyPI release exists with exactly one wheel and one sdist
+        if: steps.target.outputs.skip != 'true'
+        env:
+          VERSION: ${{ steps.target.outputs.version }}
+        run: |
+          set -euo pipefail
+          # Exact per-version endpoint (no substring match over a version
+          # list). Polled because PyPI propagation is not instant after a
+          # Trusted Publishing upload.
+          url="https://pypi.org/pypi/${PYPI_NAME}/${VERSION}/json"
+          meta="$(mktemp)"
+          for attempt in 1 2 3 4 5 6; do
+            if curl -fsS "$url" -o "$meta" \
+                && jq -e --arg v "$VERSION" '
+                     .info.version == $v
+                     and ([.urls[] | select(.packagetype == "bdist_wheel")] | length) == 1
+                     and ([.urls[] | select(.packagetype == "sdist")] | length) == 1
+                   ' "$meta" >/dev/null; then
+              echo "PyPI: $PYPI_NAME $VERSION present with exactly one wheel and one sdist"
+              exit 0
+            fi
+            echo "PyPI: $PYPI_NAME $VERSION not ready, attempt $attempt/6"
+            if (( attempt < 6 )); then sleep 30; fi
+          done
+          echo "::error::PyPI: $PYPI_NAME $VERSION not found with exactly one wheel and one sdist after 6 attempts"
+          exit 1
+
       - name: Install cosign
+        if: steps.target.outputs.skip != 'true'
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
 
-      - name: Verify published artifacts, signatures, and SBOM binding
-        run: bash scripts/replicate.sh
+      # replicate.sh is the identity check: it downloads the PyPI wheel and
+      # sdist, recomputes their SHA-256 against PyPI's digests, and verifies
+      # the GitHub-Release Sigstore bundles for those exact bytes against
+      # release.yml@refs/tags/<TAG>. A wheel published from any other ref
+      # (for example a manual recovery run from main) fails here.
+      - name: Verify PyPI wheel identity against the tag (provenance)
+        if: steps.target.outputs.skip != 'true'
+        env:
+          VERSION: ${{ steps.target.outputs.version }}
+          # replicate.sh sends this as a bearer token on its api.github.com
+          # release lookup; anonymous calls share the runner IP pool's
+          # 60/hour limit, and a rate-limit 403 must not read as drift.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          bash scripts/replicate.sh --version "$VERSION"
+
+      - name: Open release-drift issue on failure
+        # Only a resolved tag is reported as drift. A failure of the target
+        # step itself (a transient GitHub API error on a scheduled run) still
+        # fails the run visibly, but must not claim that a release is missing.
+        if: failure() && steps.target.outcome == 'success' && github.event_name != 'pull_request'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          TAG: ${{ steps.target.outputs.tag }}
+        with:
+          script: |
+            const tag = process.env.TAG || "unresolved";
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const title = `Release verification failed for ${tag}`;
+            const body = [
+              `Published-release verification (\`verify-published-release.yml\`) failed for tag \`${tag}\`.`,
+              ``,
+              `Run: ${runUrl}`,
+              ``,
+              `One or more of {PyPI release, PyPI artifact SHA-256, Sigstore bundle identity`,
+              `(release.yml@refs/tags/${tag}), SBOM binding} did not verify. Inspect the`,
+              `failing step and repair the release chain before the next tag.`,
+            ].join("\n");
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner, repo: context.repo.repo,
+              labels: "release-drift", state: "open",
+            });
+            const dup = existing.data.find(i => i.title === title);
+            if (!dup) {
+              await github.rest.issues.create({
+                owner: context.repo.owner, repo: context.repo.repo,
+                title, body, labels: ["release-drift"],
+              });
+            }
