@@ -18,7 +18,7 @@ expectation of what this project is and is not.
 | Line + branch coverage | 100% on shipped surface | `nox -s cov`; enforced by `--cov-fail-under=100` |
 | Static analysis | Clean | `ruff check`, `mypy --strict`, `bandit` on every PR |
 | Security scanning | Clean | CodeQL `security-extended` on every push; no open findings |
-| Release provenance | Sigstore signature bundles + CycloneDX SBOM attached; SLSA L3 generated in CI | `release.yml` (its final job dispatches `verify-published-release.yml` after publishing); `scripts/replicate.sh` checks the PyPI wheel hash and SBOM/provenance presence (`cosign verify-blob` of the bundles is a roadmap item) |
+| Release provenance | Sigstore signature bundles + CycloneDX SBOM attached; SLSA L3 generated in CI | `release.yml` (its final job dispatches `verify-published-release.yml` after publishing); `scripts/replicate.sh` recomputes the PyPI wheel and sdist SHA-256 digests and runs `cosign verify-blob` on their Sigstore bundles (and, from 1.4.7, the signed SBOM bundles) against the `release.yml@refs/tags/<tag>` workflow identity |
 | Integration tests (live APIs) | Not run in CI | Tests mock all upstreams via `respx`; no live-API CI job |
 | Scientific validation | Not performed | ACMG mapping and druggability tier are unreviewed by domain experts |
 | Clinical validation | Not performed | No clinical geneticist has signed off on any output |
