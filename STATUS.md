@@ -62,7 +62,7 @@ expectation of what this project is and is not.
   (which remains roadmap items 3–4 below).
 
 ### Security & supply chain
-- Bandit + pip-audit on every PR (Safety in the local ``nox -s security`` session).
+- Bandit + pip-audit on every PR and in the local ``nox -s security`` session.
 - CodeQL ``security-extended`` on every push (public repo).
 - CycloneDX SBOM generated from the installed package on every release
   tag (an SPDX document is also attached; populating it from the full
