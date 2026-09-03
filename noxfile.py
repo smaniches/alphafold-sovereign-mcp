@@ -117,8 +117,11 @@ def self_test(session: nox.Session) -> None:
 
 @nox.session(python="3.12")
 def security(session: nox.Session) -> None:
-    """Run bandit + safety + pip-audit on the shipped source tree."""
-    session.install("bandit[toml]>=1.7.7", "safety>=3.2.0", "pip-audit>=2.7.0")
+    """Run bandit + pip-audit, the same scanners the CI Security Scan job runs.
+
+    pip-audit is the supported dependency-advisory gate; it audits the
+    environment it runs in, so this session installs only the two scanners.
+    """
+    session.install("bandit[toml]>=1.7.7", "pip-audit>=2.7.0")
     session.run("bandit", "-c", "pyproject.toml", "-r", "src/alphafold_sovereign/")
-    session.run("safety", "check", "--full-report")
     session.run("pip-audit")

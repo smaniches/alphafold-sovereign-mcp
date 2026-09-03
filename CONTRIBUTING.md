@@ -112,7 +112,7 @@ uv run nox -s lint          # ruff check + format check
 uv run nox -s type          # mypy --strict
 uv run nox -s test          # full pytest suite (all supported Pythons)
 uv run nox -s cov           # pytest + coverage report (100% gate)
-uv run nox -s security      # bandit + safety + pip-audit
+uv run nox -s security      # bandit + pip-audit
 uv run nox -s docs          # mkdocs build
 uv run nox -s build         # sdist + wheel
 uv run nox -s mutate        # mutmut on the shipped surface
