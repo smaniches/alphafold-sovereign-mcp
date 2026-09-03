@@ -123,10 +123,13 @@ docs = [
     "mkdocstrings[python]>=0.25.0",
     "pymdown-extensions>=10.0",
 ]
-# Security scanning (CI)
+# Security scanning (CI). bandit is the SAST gate and pip-audit is the
+# dependency-advisory gate; nothing else belongs in this environment, because
+# pip-audit audits the environment it runs in and every extra tool here adds
+# its own dependency tree to that audit (safety was dropped for exactly that
+# reason: it hard-requires nltk, which carried an unpatched advisory).
 security = [
     "bandit[toml]>=1.7.8",
-    "safety>=3.2.0",
     "pip-audit>=2.7.0",
 ]
 

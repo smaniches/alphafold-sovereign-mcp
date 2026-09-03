@@ -52,7 +52,7 @@ uv run nox -s type      # mypy --strict
 ## 6. Run security scanning
 
 ```bash
-uv run nox -s security  # bandit + safety + pip-audit
+uv run nox -s security  # bandit + pip-audit
 ```
 
 ## 7. Inspect examples
