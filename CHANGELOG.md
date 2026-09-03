@@ -7,6 +7,13 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.4.9](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.4.8...v1.4.9) (2026-09-03)
+
+
+### chore
+
+* **registry:** `server.json` now sets `"title": "AlphaFold Sovereign MCP"`, the optional human-readable display name the MCP server schema defines for subregistries and clients. Without it the official MCP Registry record carried `title: null` and subregistries derived a name from the reverse-DNS `name` instead. Registry records are immutable per version, so the field reaches the registry only through a release. Registry-display metadata only: no functional runtime implementation or dependency change; package and release version metadata advance normally for the new release ([#216](https://github.com/smaniches/alphafold-sovereign-mcp/pull/216))
+
 ## [1.4.8](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.4.7...v1.4.8) (2026-09-03)
 
 
