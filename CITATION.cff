@@ -51,7 +51,7 @@ keywords:
   - drug-discovery
   - clinical-research
 version: "1.4.8"  # x-release-please-version
-date-released: "2026-08-20"
+date-released: "2026-09-03"
 references:
   - type: software
     title: "AlphaFold Protein Structure Database"
