@@ -7,6 +7,13 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.4.10](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.4.9...v1.4.10) (2026-09-19)
+
+
+### Bug Fixes
+
+* **docs:** deploy patched MkDocs dependency ([#221](https://github.com/smaniches/alphafold-sovereign-mcp/issues/221)) ([458e575](https://github.com/smaniches/alphafold-sovereign-mcp/commit/458e57529c26b9cd4e0db729503cfd41581ea444))
+
 ## [1.4.9](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.4.8...v1.4.9) (2026-09-03)
 
 
