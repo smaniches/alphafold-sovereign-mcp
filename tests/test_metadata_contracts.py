@@ -223,7 +223,12 @@ def test_runtime_security_floors_are_published() -> None:
     assert '"pyjwt[crypto]>=2.15.0"' in pyproject
     assert '"urllib3>=2.8.0"' in pyproject
     assert '{ name = "pyjwt", extras = ["crypto"], specifier = ">=2.15.0" }' in lock
-    assert '{ name = "urllib3", specifier = ">=2.8.0" }' in lock
+    assert (
+        '{ name = "urllib3", marker = "extra == \'security\'", specifier = ">=2.8.0" }'
+        in lock
+    )
+    root_deps = lock.split("[package.optional-dependencies]", 1)[0]
+    assert '{ name = "urllib3" }' not in root_deps
 
 
 @pytest.mark.unit
