@@ -216,6 +216,25 @@ def test_version_consistent_across_managed_surfaces() -> None:
 
 
 @pytest.mark.unit
+def test_citation_release_date_is_managed_and_matches_changelog() -> None:
+    """The citation date must advance with the release version."""
+    citation = _read("CITATION.cff")
+    date_match = re.search(
+        r'(?m)^date-released:\s*"(\d{4}-\d{2}-\d{2})"\s+# x-release-please-date$',
+        citation,
+    )
+    assert date_match, "CITATION.cff date-released must be release-please managed"
+
+    version = _pyproject_field("version")
+    heading_match = re.search(
+        rf"(?m)^## \[{re.escape(version)}\].*\((\d{{4}}-\d{{2}}-\d{{2}})\)$",
+        _read("CHANGELOG.md"),
+    )
+    assert heading_match, f"CHANGELOG.md has no dated heading for version {version}"
+    assert date_match.group(1) == heading_match.group(1)
+
+
+@pytest.mark.unit
 def test_runtime_security_floors_are_published() -> None:
     """Security-critical transitive floors must reach wheel metadata."""
     pyproject = _read("pyproject.toml")
