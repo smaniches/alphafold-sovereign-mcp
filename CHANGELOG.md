@@ -14,6 +14,10 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 * **docs:** deploy patched MkDocs dependency ([#221](https://github.com/smaniches/alphafold-sovereign-mcp/issues/221)) ([458e575](https://github.com/smaniches/alphafold-sovereign-mcp/commit/458e57529c26b9cd4e0db729503cfd41581ea444))
 
+### Security
+
+* **dependencies:** raise the published PyJWT floor to `>=2.15.0` and constrain `urllib3>=2.8.0` to the `docs` and `security` extras, closing the advisories caught by CI without adding urllib3 to the normal runtime dependency surface ([#226](https://github.com/smaniches/alphafold-sovereign-mcp/pull/226), [#228](https://github.com/smaniches/alphafold-sovereign-mcp/pull/228))
+
 ## [1.4.9](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.4.8...v1.4.9) (2026-09-03)
 
 
