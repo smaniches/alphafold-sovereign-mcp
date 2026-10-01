@@ -216,6 +216,20 @@ def test_version_consistent_across_managed_surfaces() -> None:
 
 
 @pytest.mark.unit
+def test_runtime_security_floors_are_published() -> None:
+    """Security-critical transitive floors must reach wheel metadata."""
+    pyproject = _read("pyproject.toml")
+    lock = _read("uv.lock")
+    assert '"pyjwt[crypto]>=2.15.0"' in pyproject
+    assert pyproject.count('"urllib3>=2.8.0"') == 2
+    assert '{ name = "pyjwt", extras = ["crypto"], specifier = ">=2.15.0" }' in lock
+    assert '{ name = "urllib3", marker = "extra == \'docs\'", specifier = ">=2.8.0" }' in lock
+    assert '{ name = "urllib3", marker = "extra == \'security\'", specifier = ">=2.8.0" }' in lock
+    root_deps = lock.split("[package.optional-dependencies]", 1)[0]
+    assert '{ name = "urllib3" }' not in root_deps
+
+
+@pytest.mark.unit
 def test_license_consistent_across_surfaces() -> None:
     pyproject_license = re.search(
         r'license\s*=\s*\{\s*text\s*=\s*"([^"]+)"\s*\}', _read("pyproject.toml")

@@ -81,17 +81,12 @@ dependencies = [
     "numpy>=1.26.0",
     # Platform paths (replaces hard-coded Windows paths)
     "platformdirs>=4.10.0",
-    # Security floor on a transitive of `mcp` (mcp pins `pyjwt[crypto]>=2.10.1`,
-    # which resolves to 2.12.1 carrying PYSEC-2026-175/177/178/179). This is a
-    # version floor on a package already in the tree, not a direct functional
-    # import — no code path uses jwt. Forces the patched 2.13.0 for every
-    # installer (the floor lands in the wheel's Requires-Dist).
-    "pyjwt[crypto]>=2.13.0",
-    # Security floor on the requests/http stack: urllib3 2.7.0 carries
-    # CVE-2026-97687/97688/97689; all are fixed in 2.8.0. Keep this as a
-    # published runtime floor so non-uv installers cannot resolve a vulnerable
-    # transitive version either.
-    "urllib3>=2.8.0",
+    # Security floor on a transitive of `mcp` (mcp itself permits older PyJWT
+    # releases). PyJWT 2.13.x is affected by the September 2026 advisory set;
+    # 2.15.0 is the first release that closes the full set currently reported by
+    # pip-audit. Keep the floor in published Requires-Dist so downstream
+    # resolvers cannot legally select a vulnerable transitive version.
+    "pyjwt[crypto]>=2.15.0",
 ]
 
 [project.optional-dependencies]
@@ -127,6 +122,9 @@ docs = [
     "mkdocs-material[imaging]>=9.7.7",
     "mkdocstrings[python]>=0.25.0",
     "pymdown-extensions>=10.0",
+    # mkdocs-material's dependency tree includes requests -> urllib3.
+    # Keep the patched floor scoped to docs rather than normal runtime.
+    "urllib3>=2.8.0",
 ]
 # Security scanning (CI). bandit is the SAST gate and pip-audit is the
 # dependency-advisory gate; nothing else belongs in this environment, because
@@ -136,6 +134,9 @@ docs = [
 security = [
     "bandit[toml]>=1.7.8",
     "pip-audit>=2.7.0",
+    # pip-audit depends on requests -> urllib3. Keep the advisory fix scoped
+    # to the audit environment rather than adding urllib3 to normal runtime.
+    "urllib3>=2.8.0",
 ]
 
 [project.urls]

@@ -66,7 +66,6 @@ dependencies = [
     { name = "platformdirs" },
     { name = "pydantic" },
     { name = "pyjwt", extra = ["crypto"] },
-    { name = "urllib3" },
     { name = "structlog" },
     { name = "tenacity" },
 ]
@@ -92,10 +91,12 @@ docs = [
     { name = "mkdocs-material", extra = ["imaging"] },
     { name = "mkdocstrings", extra = ["python"] },
     { name = "pymdown-extensions" },
+    { name = "urllib3" },
 ]
 security = [
     { name = "bandit", extra = ["toml"] },
     { name = "pip-audit" },
+    { name = "urllib3" },
 ]
 tda = [
     { name = "gudhi" },
@@ -125,8 +126,9 @@ requires-dist = [
     { name = "platformdirs", specifier = ">=4.10.0" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=3.7.0" },
     { name = "pydantic", specifier = ">=2.7.0" },
-    { name = "pyjwt", extras = ["crypto"], specifier = ">=2.13.0" },
-    { name = "urllib3", specifier = ">=2.8.0" },
+    { name = "pyjwt", extras = ["crypto"], specifier = ">=2.15.0" },
+    { name = "urllib3", marker = "extra == 'docs'", specifier = ">=2.8.0" },
+    { name = "urllib3", marker = "extra == 'security'", specifier = ">=2.8.0" },
     { name = "pymdown-extensions", marker = "extra == 'docs'", specifier = ">=10.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.2.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
