@@ -87,11 +87,6 @@ dependencies = [
     # pip-audit. Keep the floor in published Requires-Dist so downstream
     # resolvers cannot legally select a vulnerable transitive version.
     "pyjwt[crypto]>=2.15.0",
-    # Security floor on the requests/http stack: urllib3 2.7.0 carries
-    # CVE-2026-97687/97688/97689; all are fixed in 2.8.0. Keep this as a
-    # published runtime floor so non-uv installers cannot resolve a vulnerable
-    # transitive version either.
-    "urllib3>=2.8.0",
 ]
 
 [project.optional-dependencies]
@@ -136,6 +131,9 @@ docs = [
 security = [
     "bandit[toml]>=1.7.8",
     "pip-audit>=2.7.0",
+    # pip-audit depends on requests -> urllib3. Keep the advisory fix scoped
+    # to the audit environment rather than adding urllib3 to normal runtime.
+    "urllib3>=2.8.0",
 ]
 
 [project.urls]
