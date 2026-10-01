@@ -57,6 +57,7 @@
     { "type": "feat", "section": "Features", "hidden": false },
     { "type": "fix", "section": "Bug Fixes", "hidden": false },
     { "type": "perf", "section": "Performance", "hidden": false },
+    { "type": "security", "section": "Security", "hidden": false },
     { "type": "deps", "section": "Dependencies", "hidden": true },
     { "type": "docs", "section": "Documentation", "hidden": true },
     { "type": "ci", "section": "CI/CD", "hidden": true },
