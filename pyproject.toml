@@ -122,6 +122,9 @@ docs = [
     "mkdocs-material[imaging]>=9.7.7",
     "mkdocstrings[python]>=0.25.0",
     "pymdown-extensions>=10.0",
+    # mkdocs-material's dependency tree includes requests -> urllib3.
+    # Keep the patched floor scoped to docs rather than normal runtime.
+    "urllib3>=2.8.0",
 ]
 # Security scanning (CI). bandit is the SAST gate and pip-audit is the
 # dependency-advisory gate; nothing else belongs in this environment, because
