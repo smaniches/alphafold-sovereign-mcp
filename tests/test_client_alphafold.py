@@ -115,16 +115,35 @@ async def test_get_prediction_returns_raw_when_dict(respx_mock: respx.MockRouter
     assert meta["entryId"] == "AF-Q9Y6X8-F1"
 
 
-async def test_get_prediction_returns_raw_when_empty_list(
-    respx_mock: respx.MockRouter,
+@pytest.mark.parametrize("accession", ["P04637", "P04637-2"])
+async def test_get_prediction_returns_empty_dict_when_upstream_array_is_empty(
+    respx_mock: respx.MockRouter, accession: str
 ) -> None:
-    """Empty list ⇒ falls through to the raw cast path (returns the [] itself)."""
-    respx_mock.get("https://alphafold.ebi.ac.uk/api/prediction/EMPTY").mock(
+    """No REST API entries must preserve the metadata dict contract for either ID."""
+    respx_mock.get("https://alphafold.ebi.ac.uk/api/prediction/P04637").mock(
         return_value=httpx.Response(200, json=[]),
     )
     async with AlphaFoldClient() as client:
-        meta = await client.get_prediction("EMPTY")
-    assert meta == []  # type: ignore[comparison-overlap]
+        meta = await client.get_prediction(accession)
+    assert meta == {}
+    assert isinstance(meta, dict)
+    assert len(respx_mock.calls) == 1  # No unnecessary UniProtKB lookup for absent records
+
+
+async def test_empty_prediction_array_preserves_downstream_empty_contracts(
+    respx_mock: respx.MockRouter,
+) -> None:
+    """No-model metadata must not raise AttributeError or download missing assets."""
+    respx_mock.get("https://alphafold.ebi.ac.uk/api/prediction/P04637").mock(
+        return_value=httpx.Response(200, json=[]),
+    )
+    async with AlphaFoldClient() as client:
+        assert await client.get_pdb_bytes("P04637") == b""
+        assert await client.get_pae("P04637") == {}
+        assert await client.get_alphamissense("P04637") == {}
+        assert await client.alphamissense_score("P04637", "M1A") is None
+        assert await client.check_availability("P04637") is False
+    assert len(respx_mock.calls) == 5  # No PDB, PAE, AlphaMissense, or UniProt egress
 
 
 # ---------------------------------------------------------------------------
