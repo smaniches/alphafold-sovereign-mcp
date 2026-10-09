@@ -1,0 +1,17 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# Keep valuable source-code review while avoiding automated PR noise.
+# Required security, type, test and release gates are GitHub Actions checks.
+language: en-US
+reviews:
+  profile: chill
+  high_level_summary: false
+  review_status: false
+  poem: false
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - main
+    ignore_usernames:
+      - "dependabot[bot]"
+      - "github-actions[bot]"
