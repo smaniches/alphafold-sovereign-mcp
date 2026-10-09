@@ -46,6 +46,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from alphafold_sovereign import __version__
 from alphafold_sovereign.clients.alphafold import (
     AlphaFoldClient,
+    AlphaFoldPredictionSchemaError,
     _prediction_model_id,
     _prediction_sequence,
 )
@@ -163,7 +164,7 @@ async def _fetch_af_structure(uniprot_id: str) -> dict[str, Any] | None:
     """
     try:
         pdb_bytes = await _alphafold().get_pdb_bytes(uniprot_id)
-    except UniProtVerificationError:
+    except (UniProtVerificationError, AlphaFoldPredictionSchemaError):
         raise
     except Exception as exc:
         logger.warning("af.fetch.failed", uniprot_id=uniprot_id, exc=str(exc))
@@ -191,7 +192,7 @@ async def _fetch_af_plddt(uniprot_id: str) -> dict[str, Any] | None:
     client = _alphafold()
     try:
         meta = await client.get_prediction(uniprot_id)
-    except UniProtVerificationError:
+    except (UniProtVerificationError, AlphaFoldPredictionSchemaError):
         raise
     except Exception as exc:
         logger.warning("af.summary.failed", uniprot_id=uniprot_id, exc=str(exc))
@@ -1141,7 +1142,7 @@ async def get_protein_structure(
 
     try:
         meta = await _alphafold().get_prediction(uid)
-    except UniProtVerificationError:
+    except (UniProtVerificationError, AlphaFoldPredictionSchemaError):
         raise
     except Exception as exc:
         log.warning("prediction.failed", exc=str(exc))
