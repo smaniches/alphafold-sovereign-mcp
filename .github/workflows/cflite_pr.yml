@@ -6,6 +6,12 @@ on:
 
 permissions: read-all
 
+# Avoid several expensive fuzzer builds from queued superseded commits
+# when a contributor pushes multiple fixes to the same PR.
+concurrency:
+  group: cflite-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   pr-fuzzing:
     name: Fuzz (PR, ${{ matrix.sanitizer }})
