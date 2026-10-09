@@ -90,7 +90,7 @@ class AlphaFoldClient(BaseAsyncClient):
         elif isinstance(raw, dict):
             records = [raw]
         else:
-            return {}
+            records = []
 
         for model in records:
             if model.get("uniprotAccession") == uniprot_id:
