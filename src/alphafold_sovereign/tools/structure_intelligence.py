@@ -44,8 +44,10 @@ import structlog
 from pydantic import BaseModel, ConfigDict, Field
 
 from alphafold_sovereign import __version__
+from alphafold_sovereign.clients._isoform import UniProtVerificationError
 from alphafold_sovereign.clients.alphafold import (
     AlphaFoldClient,
+    AlphaFoldPredictionSchemaError,
     _prediction_model_id,
     _prediction_sequence,
 )
@@ -162,6 +164,8 @@ async def _fetch_af_structure(uniprot_id: str) -> dict[str, Any] | None:
     """
     try:
         pdb_bytes = await _alphafold().get_pdb_bytes(uniprot_id)
+    except (UniProtVerificationError, AlphaFoldPredictionSchemaError):
+        raise
     except Exception as exc:
         logger.warning("af.fetch.failed", uniprot_id=uniprot_id, exc=str(exc))
         return None
@@ -188,6 +192,8 @@ async def _fetch_af_plddt(uniprot_id: str) -> dict[str, Any] | None:
     client = _alphafold()
     try:
         meta = await client.get_prediction(uniprot_id)
+    except (UniProtVerificationError, AlphaFoldPredictionSchemaError):
+        raise
     except Exception as exc:
         logger.warning("af.summary.failed", uniprot_id=uniprot_id, exc=str(exc))
         return None
@@ -200,6 +206,8 @@ async def _fetch_af_plddt(uniprot_id: str) -> dict[str, Any] | None:
         "mean_plddt": meta.get("globalMetricValue"),
         "model_url": meta.get("pdbUrl", ""),
         "sequence_length": len(_prediction_sequence(meta)),
+        "model_uniprot_accession": meta.get("uniprotAccession"),
+        "verified_displayed_isoform": meta.get("_sovereign_verified_isoform"),
         "sequence_start": meta.get("sequenceStart", meta.get("uniprotStart")),
         "sequence_end": meta.get("sequenceEnd", meta.get("uniprotEnd")),
     }
@@ -543,6 +551,8 @@ async def analyze_structural_confidence(
         "confidence_tier_explanation": _plddt_tier_explanation(confidence_tier),
         "sequence_length": result.get("sequence_length"),
         "model_entity_id": result.get("model_entity_id"),
+        "model_uniprot_accession": result.get("model_uniprot_accession"),
+        "verified_displayed_isoform": result.get("verified_displayed_isoform"),
         "sequence_start": result.get("sequence_start"),
         "sequence_end": result.get("sequence_end"),
         "pae_summary": {
@@ -1060,6 +1070,8 @@ async def detect_intrinsically_disordered(
         "uniprot_id": uid,
         "sequence_length": total_residues,
         "model_entity_id": result.get("model_entity_id"),
+        "model_uniprot_accession": result.get("model_uniprot_accession"),
+        "verified_displayed_isoform": result.get("verified_displayed_isoform"),
         "sequence_start": result.get("sequence_start"),
         "sequence_end": result.get("sequence_end"),
         "coordinate_system": "model_C_alpha_order_1_based",
@@ -1130,6 +1142,8 @@ async def get_protein_structure(
 
     try:
         meta = await _alphafold().get_prediction(uid)
+    except (UniProtVerificationError, AlphaFoldPredictionSchemaError):
+        raise
     except Exception as exc:
         log.warning("prediction.failed", exc=str(exc))
         meta = {}
@@ -1143,6 +1157,8 @@ async def get_protein_structure(
         "uniprot_id": uid,
         "structure_available": True,
         "entry_id": _prediction_model_id(meta),
+        "model_uniprot_accession": meta.get("uniprotAccession"),
+        "verified_displayed_isoform": meta.get("_sovereign_verified_isoform"),
         "gene": meta.get("gene", ""),
         "organism": meta.get("organismScientificName", ""),
         "taxonomy_id": meta.get("taxId"),

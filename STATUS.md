@@ -31,11 +31,12 @@ expectation of what this project is and is not.
 
 ### Code architecture
 - Five subpackages with clear single responsibilities — ``clients/``
-  (9 upstream clients + 1 shared base), ``domain/`` (2 modules: disease
+  (10 specialized clients + 1 shared base), ``domain/`` (2 modules: disease
   types + the pure druggability heuristic), ``tools/`` (4
   MCP-tool modules), ``storage/`` (2 modules: SQLite KG + boot seed),
-  ``server/`` (2 transport modules). 20 substantive ``.py`` files on the
-  shipped surface.
+  ``server/`` (2 transport modules). The inventory now includes the
+  conditional UniProtKB isoform verifier; general UniProtKB annotations
+  and PDB/SIFTS coordinate mapping are not shipped.
 - The previous monolith (~6,000 lines) is archived under
   ``_archive/legacy/`` and excluded from coverage and lint.
 - No circular imports; client retry/circuit-breaker logic is a
@@ -144,7 +145,7 @@ expectation of what this project is and is not.
 
 | If you are …                  | You can use this project for …                             | You should NOT use this project for …                                                                            |
 |-------------------------------|------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------|
-| A researcher exploring a target | Pulling and joining data from 9 upstream sources via MCP | Making a final go/no-go decision on a drug programme                                                            |
+| A researcher exploring a target | Pulling and joining data from 9 core upstream sources via MCP, plus conditional UniProtKB isoform verification | Making a final go/no-go decision on a drug programme                                                            |
 | A clinical geneticist          | Quickly assembling a literature snapshot for a variant     | Issuing a clinical report; ACMG calls produced here are not validated and should be re-derived from raw sources |
 | A platform engineer            | Studying a tested example of an MCP server with retries    | Production deployment without your own validation, monitoring, and SLA work                                     |
 | A bioinformatician             | Prototyping a workflow that calls 9 sources behind one API| Reproducible publication-grade analyses (upstream APIs are not pinned by us)                                    |

@@ -42,18 +42,33 @@ numbered isoforms. Fragment identifiers such as `Q8WZ42-F2` are not
 UniProt accession suffixes, and the multi-source precision-medicine tools
 remain canonical-accession-only until isoform joins are independently verified.
 
-- If the entries have UniProt accession labels, the client selects the entry
-  with `uniprotAccession` exactly equal to the requested identifier (including
-  any isoform suffix). It does not silently substitute a different isoform.
-- If labelled entries exist but none matches, the client returns no prediction.
-- For historical responses without any accession labels, the client retains
-  the first-entry fallback needed by recorded regression fixtures.
+- An entry with `uniprotAccession` exactly equal to the requested
+  accession or isoform is selected without an additional UniProtKB request.
+- If an explicit isoform is not listed, the client may reuse a
+  **single** canonical-labelled model only if UniProtKB identifies the requested
+  isoform as its curated `Displayed` sequence and the entire AlphaFold model
+  sequence equals UniProtKB's canonical sequence. The returned metadata includes
+  `_sovereign_verified_isoform`; this proves sequence identity, **not**
+  independent prediction or experimental validation of that isoform.
+- Do not assume `-1` is universally canonical. A different numbered
+  isoform can be `Displayed`. For this fallback, UniProtKB access is required;
+  HTTP errors, upstream timeouts, and malformed identity metadata are
+  reported as verification errors, never biological absence.
+- If multiple canonical-labelled records exist, their identity is ambiguous;
+  no isoform alias is inferred.
+- Historical unlabelled prediction responses can retain the first-entry
+  fallback for **bare accessions only**, not unverified numbered isoforms.
 - When multiple **fragments** share the same UniProt accession, the current
   client still takes the first matching record. That is *not* verified
   full-length fragment selection. See `LIMITATIONS.md` L8.
 
 The existing `get_protein_structure` output keys (`entry_id`, `sequence`,
-`sequence_length`, `file_urls`) are preserved for MCP clients.
+`sequence_length`, `file_urls`) are preserved for MCP clients. Structure
+retrieval, confidence, and IDR summaries also carry
+`model_uniprot_accession` and `verified_displayed_isoform`: the latter
+is populated only after curated UniProtKB identity and complete sequence
+agreement. The verifier is owned by the shared AlphaFold client, so
+concurrent tool calls use the same rate limiter and circuit breaker.
 
 **Do not** equate PDB/fragment-local residue numbers with full-length UniProt
 positions without an explicit mapping. `pLDDT` measures prediction confidence,
@@ -63,7 +78,9 @@ not experimental validation.
 
 Regression tests cover modern-only metadata, mixed modern/legacy metadata,
 legacy fallback, exact-isoform selection, mismatched labels, and structure
-tool responses. The standard CI suite uses recorded/mocked upstream payloads.
+tool responses. Explicit isoform fallback tests additionally verify UniProtKB
+`Displayed` metadata, full-sequence equality, ambiguous responses, malformed
+upstream metadata and upstream failure propagation. The standard CI suite uses recorded/mocked upstream payloads.
 
 A successful offline test **does not prove** that the live API will retain
 the same schema, that every fragment is handled, or that a clinical

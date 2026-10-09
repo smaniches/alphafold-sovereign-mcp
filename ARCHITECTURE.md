@@ -61,12 +61,13 @@ src/alphafold_sovereign/
 │   │                             3-D variant triage, ICD-10 resolution  (12)
 │   └── knowledge_graph_tools.py  query and export the local graph        (5)
 │
-├── clients/             Async HTTP clients — one per upstream (9 + base)
+├── clients/             Async HTTP clients — 10 specialized clients + shared base
 │   ├── _base.py         BaseAsyncClient: httpx HTTP/2, tenacity retry with
 │   │                    jitter, aiolimiter per-host rate limiting, a circuit
 │   │                    breaker, and the offline allowlist (raises AirGapError);
 │   │                    a _sha256 helper is available to callers, not auto-applied
 │   ├── alphafold.py     AlphaFold DB (prediction metadata, PDB, PAE, AlphaMissense)
+│   ├── _isoform.py      UniProtKB curated displayed-isoform verification
 │   ├── opentargets.py   Open Targets Platform GraphQL
 │   ├── chembl.py        ChEMBL REST
 │   ├── ensembl.py       Ensembl REST (VEP, gene and variant lookup, orthologs)

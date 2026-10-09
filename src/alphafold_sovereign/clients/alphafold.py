@@ -23,6 +23,7 @@ from urllib.parse import urlsplit
 import structlog
 
 from alphafold_sovereign.clients._base import BaseAsyncClient, UpstreamConfig
+from alphafold_sovereign.clients._isoform import UniProtIsoformClient, UniProtVerificationError
 
 logger = structlog.get_logger(__name__)
 
@@ -53,11 +54,41 @@ def _prediction_sequence(metadata: dict[str, Any]) -> str:
     return value if isinstance(value, str) else ""
 
 
+class AlphaFoldPredictionSchemaError(ValueError):
+    """An AlphaFold DB prediction response is not a valid model record."""
+
+
+def _normalize_prediction_records(raw: Any) -> list[dict[str, Any]]:
+    """Reject malformed AFDB arrays in full; never silently discard records."""
+    if isinstance(raw, list):
+        if not all(isinstance(item, dict) for item in raw):
+            raise AlphaFoldPredictionSchemaError(
+                "AlphaFold DB returned malformed prediction model records"
+            )
+        return cast("list[dict[str, Any]]", raw)
+    if isinstance(raw, dict):
+        return [cast("dict[str, Any]", raw)]
+    raise AlphaFoldPredictionSchemaError("AlphaFold DB prediction response is not a record or list")
+
+
 class AlphaFoldClient(BaseAsyncClient):
     """Async client for the EBI AlphaFold DB REST API."""
 
     upstream_name = "AlphaFold DB"
     config = _AF_CONFIG
+
+    def __init__(self, *, request_id: str = "") -> None:
+        super().__init__(request_id=request_id)
+        # One verifier per AlphaFold client: the host-facing MCP keeps a
+        # process-wide AlphaFold instance, so its UniProt limiter and
+        # circuit breaker are shared across concurrent tool calls.
+        self._uniprot_isoform = UniProtIsoformClient(request_id=request_id)
+
+    async def __aexit__(self, *args: object) -> None:
+        try:
+            await self._uniprot_isoform.__aexit__(*args)
+        finally:
+            await super().__aexit__(*args)
 
     # ------------------------------------------------------------------
     # Metadata & structure
@@ -77,24 +108,45 @@ class AlphaFoldClient(BaseAsyncClient):
             the exact UniProt accession is selected; labelled responses
             without a match are not silently attributed to a different isoform.
         """
-        # AFDB's canonical-accession route includes available isoforms.
-        # An isoform-specific API route is not guaranteed to exist.
+        # AFDB lists isoforms under the bare accession.
         prefix, hyphen, suffix = uniprot_id.rpartition("-")
-        query_accession = prefix if hyphen and suffix.isdigit() else uniprot_id
-        raw: Any = await self._get(f"/prediction/{query_accession}")
-        if isinstance(raw, list) and raw:
-            # The endpoint can include multiple UniProt isoforms in an
-            # arbitrary order. Prefer the exact requested accession.
-            for model in raw:
-                if isinstance(model, dict) and model.get("uniprotAccession") == uniprot_id:
-                    return model
-            # If entries are explicitly labelled with other accessions,
-            # do not silently give the caller the wrong isoform.
-            if any(isinstance(model, dict) and model.get("uniprotAccession") for model in raw):
-                return {}
-            # Historical upstream fixtures did not always carry accession.
-            return cast("dict[str, Any]", raw[0])
-        return cast("dict[str, Any]", raw)
+        is_isoform = bool(hyphen and suffix.isdigit())
+        canonical = prefix if is_isoform else uniprot_id
+        raw: Any = await self._get(f"/prediction/{canonical}")
+        if isinstance(raw, list) and not raw:
+            return cast("dict[str, Any]", raw)
+        records = _normalize_prediction_records(raw)
+
+        for model in records:
+            if model.get("uniprotAccession") == uniprot_id:
+                return model
+
+        if is_isoform:
+            # The displayed isoform is not universally named "-1".
+            # Verify UniProtKB's curated Displayed status AND full sequence.
+            candidates = [model for model in records if model.get("uniprotAccession") == canonical]
+            if len(candidates) == 1:
+                sequence = _prediction_sequence(candidates[0])
+                if sequence:
+                    try:
+                        matched = await self._uniprot_isoform.is_displayed_isoform(
+                            canonical, uniprot_id, sequence
+                        )
+                    except Exception as exc:
+                        raise UniProtVerificationError(
+                            f"UniProtKB verification unavailable for isoform {uniprot_id}"
+                        ) from exc
+                    if matched:
+                        return {
+                            **candidates[0],
+                            "_sovereign_verified_isoform": uniprot_id,
+                        }
+            return {}
+
+        # Old unlabelled response fixtures remain supported for bare IDs only.
+        if any(model.get("uniprotAccession") for model in records):
+            return {}
+        return records[0] if records else {}
 
     async def get_pdb_bytes(self, uniprot_id: str) -> bytes:
         """Download the PDB-format structure file for a UniProt accession."""
@@ -177,6 +229,8 @@ class AlphaFoldClient(BaseAsyncClient):
         try:
             meta = await self.get_prediction(uniprot_id)
             return bool(_prediction_model_id(meta))
+        except (UniProtVerificationError, AlphaFoldPredictionSchemaError):
+            raise
         except Exception:
             return False
 
