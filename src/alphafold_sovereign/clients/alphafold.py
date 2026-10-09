@@ -73,10 +73,22 @@ class AlphaFoldClient(BaseAsyncClient):
             Dict with ``modelEntityId``, ``sequence``, ``pdbUrl``, ``cifUrl``,
             ``paeDocUrl``, ``amAnnotationsUrl``, and other AFDB fields.
             Legacy ``entryId`` and ``uniprotSequence`` may be present in
-            previously captured responses.
+            previously captured responses. For multiple model records,
+            the exact UniProt accession is selected; labelled responses
+            without a match are not silently attributed to a different isoform.
         """
         raw: Any = await self._get(f"/prediction/{uniprot_id}")
         if isinstance(raw, list) and raw:
+            # The endpoint can include multiple UniProt isoforms in an
+            # arbitrary order. Prefer the exact requested accession.
+            for model in raw:
+                if isinstance(model, dict) and model.get("uniprotAccession") == uniprot_id:
+                    return model
+            # If entries are explicitly labelled with other accessions,
+            # do not silently give the caller the wrong isoform.
+            if any(isinstance(model, dict) and model.get("uniprotAccession") for model in raw):
+                return {}
+            # Historical upstream fixtures did not always carry accession.
             return cast("dict[str, Any]", raw[0])
         return cast("dict[str, Any]", raw)
 

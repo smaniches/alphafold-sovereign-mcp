@@ -61,6 +61,51 @@ async def test_get_prediction_returns_first_when_list(respx_mock: respx.MockRout
     assert meta["entryId"] == "AF-P04637-F1"
 
 
+@pytest.mark.parametrize(
+    ("request_id", "expected_id"),
+    [("P04637", "AF-P04637-F1"), ("P04637-9", "AF-P04637-9-F1")],
+)
+async def test_get_prediction_selects_requested_isoform(
+    respx_mock: respx.MockRouter, request_id: str, expected_id: str
+) -> None:
+    respx_mock.get(f"https://alphafold.ebi.ac.uk/api/prediction/{request_id}").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {"uniprotAccession": "P04637-9", "modelEntityId": "AF-P04637-9-F1"},
+                {"uniprotAccession": "P04637", "modelEntityId": "AF-P04637-F1"},
+            ],
+        ),
+    )
+    async with AlphaFoldClient() as client:
+        meta = await client.get_prediction(request_id)
+    assert meta["modelEntityId"] == expected_id
+
+
+async def test_get_prediction_rejects_mismatched_labelled_isoform(
+    respx_mock: respx.MockRouter,
+) -> None:
+    respx_mock.get("https://alphafold.ebi.ac.uk/api/prediction/P04637").mock(
+        return_value=httpx.Response(
+            200, json=[{"uniprotAccession": "P04637-9", "modelEntityId": "AF-P04637-9-F1"}]
+        ),
+    )
+    async with AlphaFoldClient() as client:
+        assert await client.get_prediction("P04637") == {}
+
+
+async def test_get_prediction_unlabelled_legacy_list_uses_first(
+    respx_mock: respx.MockRouter,
+) -> None:
+    respx_mock.get("https://alphafold.ebi.ac.uk/api/prediction/P04637").mock(
+        return_value=httpx.Response(
+            200, json=[{"entryId": "AF-P04637-F1"}, {"entryId": "AF-OTHER-F1"}]
+        ),
+    )
+    async with AlphaFoldClient() as client:
+        assert (await client.get_prediction("P04637"))["entryId"] == "AF-P04637-F1"
+
+
 async def test_get_prediction_returns_raw_when_dict(respx_mock: respx.MockRouter) -> None:
     respx_mock.get("https://alphafold.ebi.ac.uk/api/prediction/Q9Y6X8").mock(
         return_value=httpx.Response(200, json={"entryId": "AF-Q9Y6X8-F1"}),
