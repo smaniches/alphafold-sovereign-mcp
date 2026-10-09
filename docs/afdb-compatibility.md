@@ -52,7 +52,8 @@ remain canonical-accession-only until isoform joins are independently verified.
   independent prediction or experimental validation of that isoform.
 - Do not assume `-1` is universally canonical. A different numbered
   isoform can be `Displayed`. For this fallback, UniProtKB access is required;
-  upstream failure is not evidence of absence and must not be guessed away.
+  HTTP errors, upstream timeouts, and malformed identity metadata are
+  reported as verification errors, never biological absence.
 - If multiple canonical-labelled records exist, their identity is ambiguous;
   no isoform alias is inferred.
 - Historical unlabelled prediction responses can retain the first-entry
@@ -62,7 +63,12 @@ remain canonical-accession-only until isoform joins are independently verified.
   full-length fragment selection. See `LIMITATIONS.md` L8.
 
 The existing `get_protein_structure` output keys (`entry_id`, `sequence`,
-`sequence_length`, `file_urls`) are preserved for MCP clients.
+`sequence_length`, `file_urls`) are preserved for MCP clients. Structure
+retrieval, confidence, and IDR summaries also carry
+`model_uniprot_accession` and `verified_displayed_isoform`: the latter
+is populated only after curated UniProtKB identity and complete sequence
+agreement. The verifier is owned by the shared AlphaFold client, so
+concurrent tool calls use the same rate limiter and circuit breaker.
 
 **Do not** equate PDB/fragment-local residue numbers with full-length UniProt
 positions without an explicit mapping. `pLDDT` measures prediction confidence,
