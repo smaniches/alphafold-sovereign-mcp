@@ -61,8 +61,6 @@ def _reset_singletons() -> Any:
     pm._CLIENTS.clear()
 
 
-
-
 @pytest.mark.parametrize("accession", ["P04637", "A0A023GPI8"])
 def test_precision_schemas_accept_canonical_uniprot(accession: str) -> None:
     assert DruggabilityInput(uniprot_id=accession).uniprot_id == accession
@@ -77,6 +75,7 @@ def test_precision_schemas_reject_unsupported_isoform(accession: str) -> None:
         DruggabilityInput(uniprot_id=accession)
     with pytest.raises(ValidationError):
         ProteinDossierInput(uniprot_id=accession, gene_symbol="TP53")
+
 
 # ---------------------------------------------------------------------------
 # Pure helpers

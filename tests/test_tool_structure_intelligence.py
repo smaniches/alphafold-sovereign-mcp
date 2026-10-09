@@ -70,8 +70,6 @@ def _make_pdb(n_residues: int = 20, plddt: float = 85.0) -> str:
     return "\n".join(lines)
 
 
-
-
 @pytest.mark.parametrize("model_type", [UniProtInput, BindingPocketInput, StructureRetrievalInput])
 @pytest.mark.parametrize("accession", ["P04637", "A0A023GPI8", "P04637-2", "A0A023GPI8-12"])
 def test_structural_schema_accepts_uniprot_accession(model_type: Any, accession: str) -> None:
@@ -79,12 +77,16 @@ def test_structural_schema_accepts_uniprot_accession(model_type: Any, accession:
 
 
 @pytest.mark.parametrize("model_type", [UniProtInput, BindingPocketInput, StructureRetrievalInput])
-@pytest.mark.parametrize("accession", ["P04637-F2", "P04637-0", "P04637-2/other", "A0A023GPI8-X", "A0A023GPI", "P0ABC"])
+@pytest.mark.parametrize(
+    "accession",
+    ["P04637-F2", "P04637-0", "P04637-2/other", "A0A023GPI8-X", "A0A023GPI", "P0ABC"],
+)
 def test_structural_schema_rejects_invalid_accession(model_type: Any, accession: str) -> None:
     from pydantic import ValidationError
 
     with pytest.raises(ValidationError):
         model_type(uniprot_id=accession)
+
 
 # ---------------------------------------------------------------------------
 # Pure helpers
