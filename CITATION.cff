@@ -11,7 +11,8 @@ abstract: >-
   An open-source Model Context Protocol (MCP) server that exposes
   AlphaFold DB and 8 other public biomedical data sources (Open
   Targets, ChEMBL, Ensembl VEP, ClinVar, gnomAD, MONDO, HPO,
-  DisGeNET)
+  DisGeNET), with conditional UniProtKB REST verification of
+  displayed isoforms against the full canonical amino-acid sequence,
   as tool calls a Claude (or other MCP-capable) client can invoke
   directly. Tool results can be persisted to a local SQLite knowledge graph
   via its storage API; the exposed MCP tools query and export that store

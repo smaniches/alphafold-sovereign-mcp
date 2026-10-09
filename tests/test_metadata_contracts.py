@@ -321,9 +321,12 @@ def test_data_sources_count_and_names() -> None:
     separator = re.compile(r"^\s*\|[\s:|-]+\|\s*$")
     content_rows = [r for r in table_rows if not separator.match(r)]
     data_rows = content_rows[1:]  # drop the header row
-    assert len(data_rows) == 9, (
-        f"expected AlphaFold + 8 = 9 data-source rows, found {len(data_rows)}"
+    # Nine core research upstreams plus a conditional UniProtKB identity
+    # verifier. Count both, while preserving the existing nine-source list.
+    assert len(data_rows) == len(_EXPECTED_SOURCES) + 1, (
+        f"expected nine core research sources plus UniProtKB, found {len(data_rows)}"
     )
+    assert sum("UniProtKB REST" in row for row in data_rows) == 1
 
     # The prose count must agree with the table on both citation surfaces.
     citation = _read("CITATION.cff")
@@ -338,6 +341,8 @@ def test_data_sources_count_and_names() -> None:
     table_text = _normalize("\n".join(data_rows))
     citation_text = _normalize(citation)
     zenodo_text = _normalize(_load_json(".zenodo.json")["description"])
+    assert "UniProt" in citation_text
+    assert "UniProtKB" in zenodo_text
     for source in _EXPECTED_SOURCES:
         assert source in table_text, f"{source} missing from README data-sources table"
         assert source in citation_text, f"{source} missing from CITATION abstract"
