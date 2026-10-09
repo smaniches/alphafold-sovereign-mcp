@@ -44,7 +44,11 @@ import structlog
 from pydantic import BaseModel, ConfigDict, Field
 
 from alphafold_sovereign import __version__
-from alphafold_sovereign.clients.alphafold import AlphaFoldClient
+from alphafold_sovereign.clients.alphafold import (
+    AlphaFoldClient,
+    _prediction_model_id,
+    _prediction_sequence,
+)
 from alphafold_sovereign.clients.ensembl import EnsemblClient
 from alphafold_sovereign.server.app import mcp
 
@@ -186,14 +190,14 @@ async def _fetch_af_plddt(uniprot_id: str) -> dict[str, Any] | None:
     except Exception as exc:
         logger.warning("af.summary.failed", uniprot_id=uniprot_id, exc=str(exc))
         return None
-    if not isinstance(meta, dict) or not meta.get("entryId"):
+    if not isinstance(meta, dict) or not _prediction_model_id(meta):
         return None
 
     result: dict[str, Any] = {
         "uniprot_id": uniprot_id,
         "mean_plddt": meta.get("globalMetricValue"),
         "model_url": meta.get("pdbUrl", ""),
-        "sequence_length": len(meta.get("uniprotSequence") or ""),
+        "sequence_length": len(_prediction_sequence(meta)),
     }
 
     try:
@@ -1044,8 +1048,8 @@ async def get_protein_structure(
     AlphaFold DB entry metadata — entry ID, model version and creation date,
     organism, gene, UniProt description, the amino-acid sequence and its length, and
     the model's mean pLDDT — plus stable download URLs for the PDB and mmCIF
-    coordinate files, the PAE matrix and image, and the AlphaMissense substitutions
-    CSV. Set ``include_coordinates`` to embed the full PDB coordinate text directly.
+    coordinate files, the PAE matrix, and the AlphaMissense substitutions
+    CSV. The PAE image URL is only present in legacy API responses. Set ``include_coordinates`` to embed the full PDB coordinate text directly.
 
     Use the sibling structure tools for *interpretation* rather than retrieval, so
     their scopes don't overlap: ``analyze_structural_confidence`` for a pLDDT/PAE
@@ -1072,15 +1076,15 @@ async def get_protein_structure(
         log.warning("prediction.failed", exc=str(exc))
         meta = {}
 
-    if not isinstance(meta, dict) or not meta.get("entryId"):
+    if not isinstance(meta, dict) or not _prediction_model_id(meta):
         return _no_structure_response(uid)
 
-    sequence = str(meta.get("uniprotSequence", "") or "")
+    sequence = _prediction_sequence(meta)
     global_metric = meta.get("globalMetricValue")
     result: dict[str, Any] = {
         "uniprot_id": uid,
         "structure_available": True,
-        "entry_id": meta.get("entryId", ""),
+        "entry_id": _prediction_model_id(meta),
         "gene": meta.get("gene", ""),
         "organism": meta.get("organismScientificName", ""),
         "taxonomy_id": meta.get("taxId"),

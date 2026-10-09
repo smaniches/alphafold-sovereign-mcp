@@ -655,6 +655,19 @@ async def test_fetch_af_plddt_success(monkeypatch: pytest.MonkeyPatch) -> None:
     assert out["pae_mean"] == 1.5
 
 
+async def test_fetch_af_plddt_current_schema(monkeypatch: pytest.MonkeyPatch) -> None:
+    af = _fake_af(monkeypatch)
+    af.get_prediction.return_value = {
+        "modelEntityId": "AF-P12345-F1",
+        "sequence": "MKTV",
+        "globalMetricValue": 85.0,
+    }
+    out = await _fetch_af_plddt("P12345")
+    assert out is not None
+    assert out["mean_plddt"] == 85.0
+    assert out["sequence_length"] == 4
+
+
 async def test_fetch_af_plddt_prediction_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     af = _fake_af(monkeypatch)
     af.get_prediction.side_effect = RuntimeError("network down")
@@ -1304,6 +1317,22 @@ async def test_get_protein_structure_metadata_only(monkeypatch: pytest.MonkeyPat
     assert out["file_urls"]["pdb"].endswith("model_v6.pdb")
     assert out["file_urls"]["cif"].endswith("model_v6.cif")
     assert "coordinates_pdb" not in out  # default: metadata only
+
+
+async def test_get_protein_structure_current_schema(monkeypatch: pytest.MonkeyPatch) -> None:
+    af = _fake_af(monkeypatch)
+    metadata = _full_af_meta()
+    metadata["modelEntityId"] = metadata.pop("entryId")
+    metadata["sequence"] = metadata.pop("uniprotSequence")
+    metadata.pop("paeImageUrl")
+    af.get_prediction.return_value = metadata
+
+    out = await get_protein_structure(StructureRetrievalInput(uniprot_id="P38398"))
+    assert out["structure_available"] is True
+    assert out["entry_id"] == "AF-P38398-F1"
+    assert out["sequence"] == metadata["sequence"]
+    assert out["sequence_length"] == len(metadata["sequence"])
+    assert out["file_urls"]["pae_image"] == ""
 
 
 async def test_get_protein_structure_with_coordinates(monkeypatch: pytest.MonkeyPatch) -> None:

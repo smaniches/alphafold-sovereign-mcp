@@ -39,6 +39,20 @@ _AF_CONFIG = UpstreamConfig(
 )
 
 
+def _prediction_model_id(metadata: dict[str, Any]) -> str:
+    """Read the current AFDB model identity, accepting old response fixtures."""
+    value = metadata.get("modelEntityId") or metadata.get("entryId")
+    return value if isinstance(value, str) else ""
+
+
+def _prediction_sequence(metadata: dict[str, Any]) -> str:
+    """Read the current AFDB sequence field, accepting old response fixtures."""
+    value = metadata.get("sequence")
+    if not isinstance(value, str):
+        value = metadata.get("uniprotSequence")
+    return value if isinstance(value, str) else ""
+
+
 class AlphaFoldClient(BaseAsyncClient):
     """Async client for the EBI AlphaFold DB REST API."""
 
@@ -56,9 +70,10 @@ class AlphaFoldClient(BaseAsyncClient):
             uniprot_id: UniProt accession (e.g. 'P04637').
 
         Returns:
-            Dict with ``uniprotAccession``, ``entryId``, ``pdbUrl``,
-            ``cifUrl``, ``paeImageUrl``, ``paeDocUrl``, ``amAnnotationsUrl``,
-            ``confidenceVersion`` and more.
+            Dict with ``modelEntityId``, ``sequence``, ``pdbUrl``, ``cifUrl``,
+            ``paeDocUrl``, ``amAnnotationsUrl``, and other AFDB fields.
+            Legacy ``entryId`` and ``uniprotSequence`` may be present in
+            previously captured responses.
         """
         raw: Any = await self._get(f"/prediction/{uniprot_id}")
         if isinstance(raw, list) and raw:
@@ -145,7 +160,7 @@ class AlphaFoldClient(BaseAsyncClient):
         """Return True if AlphaFold DB has a prediction for the given accession."""
         try:
             meta = await self.get_prediction(uniprot_id)
-            return bool(meta.get("entryId"))
+            return bool(_prediction_model_id(meta))
         except Exception:
             return False
 
