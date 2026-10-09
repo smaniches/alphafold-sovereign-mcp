@@ -34,6 +34,13 @@ For live schemas use the [AlphaFold DB API reference](https://alphafold.ebi.ac.u
 ## UniProt isoforms and long-protein fragments
 
 The `/prediction/<accession>` response can contain multiple entries.
+For numbered UniProt isoforms the client queries the canonical accession,
+then selects the exact requested isoform from the returned records; it does
+not assume the server accepts an isoform-specific API route.
+Structural tools accept six/ten-character UniProtKB accessions with optional
+numbered isoforms. Fragment identifiers such as `Q8WZ42-F2` are not
+UniProt accession suffixes, and the multi-source precision-medicine tools
+remain canonical-accession-only until isoform joins are independently verified.
 
 - If the entries have UniProt accession labels, the client selects the entry
   with `uniprotAccession` exactly equal to the requested identifier (including
@@ -85,3 +92,34 @@ Upstream background:
 
 The relevant upstream datasets have their own attribution requirements;
 this server is independent of EMBL-EBI and Google DeepMind.
+
+## PAE and residue interpretation safeguards
+
+The implementation accepts a PAE matrix only when it is a finite,
+nonnegative square numeric array. Where a selected model advertises a
+sequence, PAE dimensions must match its **model-local sequence length**.
+Invalid or missing PAE is reported with an explicit status rather than
+a fabricated mean error of zero. PAE positions and domain-candidate
+indices are local to the predicted model, not automatically UniProt or
+experimental PDB residue coordinates. The domain-boundary heuristic and
+the mean-pLDDT-based ordered-fraction proxy are not independently
+validated domain annotations or biophysical disorder measurements.
+
+An empty AFDB REST API response must not be interpreted as definitive
+absence of a predicted model: the >2700-aa human-protein fragments are
+provided by the FTP proteome archive, not the usual web API.
+
+## Modeled residues and intrinsic-disorder segments
+
+IDR outputs report legacy segment `start` and `end` in **1-based
+modeled C-alpha ordinal order**, not canonical UniProt numbering.
+The tool also exposes the corresponding PDB chain, author residue
+identifiers and insertion codes, and segments must never bridge PDB
+numbering gaps or chains. PDB author residue numbering is not a SIFTS
+mapping, and an N-/C-terminal label refers to the modeled fragment,
+not necessarily a full-length canonical protein terminus. Empty or
+invalid C-alpha records do not justify a claim of an ordered protein.
+
+Likewise the `get_protein_structure` metadata surfaces the upstream
+`sequenceStart` / `sequenceEnd` interval when supplied. It does not
+claim that those offsets independently validate a residue-to-PDB mapping.

@@ -77,7 +77,11 @@ class AlphaFoldClient(BaseAsyncClient):
             the exact UniProt accession is selected; labelled responses
             without a match are not silently attributed to a different isoform.
         """
-        raw: Any = await self._get(f"/prediction/{uniprot_id}")
+        # AFDB's canonical-accession route includes available isoforms.
+        # An isoform-specific API route is not guaranteed to exist.
+        prefix, hyphen, suffix = uniprot_id.rpartition("-")
+        query_accession = prefix if hyphen and suffix.isdigit() else uniprot_id
+        raw: Any = await self._get(f"/prediction/{query_accession}")
         if isinstance(raw, list) and raw:
             # The endpoint can include multiple UniProt isoforms in an
             # arbitrary order. Prefer the exact requested accession.

@@ -50,6 +50,7 @@ from alphafold_sovereign.clients.alphafold import (
     _prediction_sequence,
 )
 from alphafold_sovereign.clients.ensembl import EnsemblClient
+from alphafold_sovereign.domain.uniprot import UNIPROT_ISOFORM_PATTERN
 from alphafold_sovereign.server.app import mcp
 
 if TYPE_CHECKING:
@@ -71,8 +72,8 @@ class UniProtInput(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
     uniprot_id: str = Field(
         ...,
-        description="UniProt accession, e.g. 'P38398' (BRCA1).",
-        pattern=r"^[A-Z][0-9][A-Z0-9]{3}[0-9](?:[A-Z][0-9][A-Z0-9]{3}[0-9])?$",
+        description="UniProt accession (6/10 characters), optionally with isoform suffix (e.g. P04637-2).",
+        pattern=UNIPROT_ISOFORM_PATTERN,
     )
 
 
@@ -111,7 +112,7 @@ class BindingPocketInput(BaseModel):
     uniprot_id: str = Field(
         ...,
         description="UniProt accession for binding-pocket geometry analysis.",
-        pattern=r"^[A-Z][0-9][A-Z0-9]{3}[0-9](?:[A-Z][0-9][A-Z0-9]{3}[0-9])?$",
+        pattern=UNIPROT_ISOFORM_PATTERN,
     )
     min_pocket_residues: int = Field(
         default=4,
@@ -126,7 +127,7 @@ class StructureRetrievalInput(BaseModel):
     uniprot_id: str = Field(
         ...,
         description="UniProt accession whose AlphaFold model to retrieve, e.g. 'P38398' (BRCA1).",
-        pattern=r"^[A-Z][0-9][A-Z0-9]{3}[0-9](?:[A-Z][0-9][A-Z0-9]{3}[0-9])?$",
+        pattern=UNIPROT_ISOFORM_PATTERN,
     )
     include_coordinates: bool = Field(
         default=False,
@@ -195,26 +196,47 @@ async def _fetch_af_plddt(uniprot_id: str) -> dict[str, Any] | None:
 
     result: dict[str, Any] = {
         "uniprot_id": uniprot_id,
+        "model_entity_id": _prediction_model_id(meta),
         "mean_plddt": meta.get("globalMetricValue"),
         "model_url": meta.get("pdbUrl", ""),
         "sequence_length": len(_prediction_sequence(meta)),
+        "sequence_start": meta.get("sequenceStart", meta.get("uniprotStart")),
+        "sequence_end": meta.get("sequenceEnd", meta.get("uniprotEnd")),
     }
 
     try:
         pae_doc = await client.get_pae(uniprot_id)
     except Exception as exc:
         logger.warning("af.pae.failed", uniprot_id=uniprot_id, exc=str(exc))
+        result["pae_status"] = "unavailable"
         return result
 
-    pae_matrix = np.array(pae_doc.get("predicted_aligned_error", []))
-    if pae_matrix.size > 0:
-        result["pae_matrix_shape"] = list(pae_matrix.shape)
-        result["pae_mean"] = float(np.mean(pae_matrix))
-        result["pae_max"] = float(np.max(pae_matrix))
-        # Inter-domain: regions where PAE is high (>15 Å) between segments
-        result["high_pae_pairs"] = _find_high_pae_pairs(pae_matrix, threshold=15.0)
-        result["domain_boundaries"] = _detect_domain_boundaries(pae_matrix)
+    try:
+        pae_matrix = np.asarray(pae_doc.get("predicted_aligned_error", []), dtype=float)
+    except (TypeError, ValueError):
+        result["pae_status"] = "invalid_numeric_data"
+        return result
+    if pae_matrix.size == 0:
+        result["pae_status"] = "missing"
+        return result
+    if pae_matrix.ndim != 2 or pae_matrix.shape[0] != pae_matrix.shape[1]:
+        result["pae_status"] = "invalid_shape"
+        return result
+    if not bool(np.isfinite(pae_matrix).all()) or bool((pae_matrix < 0).any()):
+        result["pae_status"] = "invalid_values"
+        return result
+    sequence_length = result["sequence_length"]
+    if sequence_length and pae_matrix.shape[0] != sequence_length:
+        result["pae_status"] = "sequence_length_mismatch"
+        return result
 
+    result["pae_status"] = "available"
+    result["pae_matrix_shape"] = list(pae_matrix.shape)
+    result["pae_mean"] = float(np.mean(pae_matrix))
+    result["pae_max"] = float(np.max(pae_matrix))
+    # The PAE is directional and indexed in the selected model's local sequence.
+    result["high_pae_pairs"] = _find_high_pae_pairs(pae_matrix, threshold=15.0)
+    result["domain_boundaries"] = _detect_domain_boundaries(pae_matrix)
     return result
 
 
@@ -238,15 +260,15 @@ def _no_structure_response(uniprot_id: str) -> dict[str, Any]:
         "uniprot_id": uniprot_id,
         "structure_available": False,
         "error": (
-            "No AlphaFold model: AlphaFold DB returned no structure "
-            "prediction for this UniProt accession."
+            "No structure prediction returned by the AlphaFold DB REST API "
+            "for this UniProt accession."
         ),
         "note": (
-            "AlphaFold DB covers most of UniProtKB but not every "
-            "accession. Some fragments, non-reference isoforms, and "
-            "very recently added entries have no deposited model. This "
-            "is an expected data-coverage gap, not a server fault. "
-            "Confirm the accession at https://alphafold.ebi.ac.uk/."
+            "An empty API response does not prove that no prediction exists. "
+            "Human proteins longer than 2700 residues may have overlapping "
+            "fragment models available through the AlphaFold FTP archive only; "
+            "other identifiers may be absent or recently updated. "
+            "Check https://alphafold.ebi.ac.uk/ and its FTP documentation."
         ),
     }
 
@@ -275,10 +297,10 @@ def _detect_domain_boundaries(pae: np.ndarray, window: int = 10) -> list[int]:
     boundaries: list[int] = []
     if n < 2 * window:
         return boundaries
+    global_mean = float(np.mean(pae))
     scores = []
     for i in range(window, n - window):
         local = float(np.mean(pae[i - window : i + window, i - window : i + window]))
-        global_mean = float(np.mean(pae))
         scores.append((i, local - global_mean))
     # Peak detection: residues where local PAE >> global mean
     threshold = float(np.std([s for _, s in scores])) * 1.5
@@ -516,29 +538,41 @@ async def analyze_structural_confidence(
 
     return {
         "uniprot_id": uid,
-        "mean_plddt": round(plddt, 2) if plddt else None,
+        "mean_plddt": round(plddt, 2) if plddt is not None else None,
         "confidence_tier": confidence_tier,
         "confidence_tier_explanation": _plddt_tier_explanation(confidence_tier),
         "sequence_length": result.get("sequence_length"),
+        "model_entity_id": result.get("model_entity_id"),
+        "sequence_start": result.get("sequence_start"),
+        "sequence_end": result.get("sequence_end"),
         "pae_summary": {
-            "mean_pae_angstrom": round(result.get("pae_mean", 0.0), 2),
-            "max_pae_angstrom": round(result.get("pae_max", 0.0), 2),
+            "available": "pae_mean" in result,
+            "status": result.get(
+                "pae_status", "available" if "pae_mean" in result else "unavailable"
+            ),
+            "mean_pae_angstrom": (round(result["pae_mean"], 2) if "pae_mean" in result else None),
+            "max_pae_angstrom": (round(result["pae_max"], 2) if "pae_max" in result else None),
             "high_uncertainty_pairs": result.get("high_pae_pairs", [])[:5],
         },
         "domain_boundaries": {
             "candidate_positions": domain_boundaries,
-            "n_putative_domains": max(1, len(domain_boundaries)),
+            "n_putative_domains": (len(domain_boundaries) + 1 if "pae_mean" in result else None),
             "note": (
-                "Boundary positions are zero-indexed residue numbers where PAE rises sharply. "
-                "Validate with InterPro or UniProt feature annotations."
+                "Candidates are zero-based LOCAL model-array indices, not UniProt positions. "
+                "This PAE heuristic is not a validated domain assignment; compare to "
+                "InterPro or experimentally established domain annotations."
             ),
         },
         "druggability_pre_screen": {
             "ordered_fraction": _estimate_ordered_fraction(plddt),
+            "ordered_fraction_note": (
+                "Unvalidated proxy calculated from mean pLDDT; NOT the fraction "
+                "of residues actually classified as ordered."
+            ),
             "structural_suitability": (
-                "SUITABLE for structure-based drug design"
+                "HIGHER MODEL CONFIDENCE: validate pockets and ligand binding independently"
                 if (plddt or 0) >= 70
-                else "CAUTION: low confidence may indicate IDP or novel fold"
+                else "CAUTION: low confidence may indicate disorder or an uncertain prediction"
             ),
         },
         "model_url": result.get("model_url", ""),
@@ -968,24 +1002,22 @@ async def score_binding_pocket_geometry(
 async def detect_intrinsically_disordered(
     params: UniProtInput,
 ) -> dict[str, Any]:
-    """Map intrinsically disordered regions (IDRs) using pLDDT as proxy.
+    """Flag low-confidence modeled regions as intrinsic-disorder candidates.
 
-    IDRs with pLDDT < 50 are predicted to be disordered in isolation by AlphaFold.
-    This pLDDT-as-disorder-proxy approach is consistent with Ruff & Pappu (2021)
-    and scales to the full human proteome from precomputed AlphaFold confidence.
+    Reads per-residue AlphaFold pLDDT from PDB C-alpha records and groups
+    contiguous runs below 50. Low pLDDT may reflect intrinsic disorder,
+    missing binding partners, alternate conformations, or model uncertainty;
+    it is NOT independent evidence that a region is disordered.
 
-    IDR functional categories returned:
-    - **Linkers**: short (< 20 aa) disordered regions between domains
-    - **Tails**: N/C terminal IDRs
-    - **Long IDRs**: candidate intrinsically disordered protein (IDP) segments
+    Returns model-local residue indices, observed PDB chain/residue identifiers,
+    and heuristic linker/terminal/long-segment labels. A terminal label is
+    relative to the modeled chain or fragment, not necessarily the full protein.
+    PDB numbering is not mapped to full-length UniProt via SIFTS here.
 
-    Clinical relevance:
-    - IDRs are enriched for disease-causing mutations
-    - IDRs host post-translational modification sites (phosphorylation, ubiquitination)
-    - Long IDRs are emerging drug targets (targeted covalent inhibitors, phase separation modulators)
-
-    Reference:
-      Ruff KM & Pappu RV. J Mol Biol. 2021;433(20):167208.
+    This implementation is a reproducible screening heuristic, not a validated
+    disorder predictor, biomolecular mechanism classifier, or clinical result.
+    For background on intrinsic disorder, see Ruff & Pappu (2021),
+    J Mol Biol. 433:167208; that paper does not validate these cutoffs or code.
 
     Input fields:
         params.uniprot_id: UniProt accession.
@@ -1001,16 +1033,42 @@ async def detect_intrinsically_disordered(
     if not structure:
         return _no_structure_response(uid)
 
-    per_residue_plddt = _extract_plddt_from_pdb(structure["pdb_text"])
-    idr_segments = _detect_idr_segments(per_residue_plddt)
+    residue_records = _extract_plddt_residue_records(structure["pdb_text"])
+    per_residue_plddt = [record[3] for record in residue_records]
+    positions = [(record[0], record[1], record[2]) for record in residue_records]
+    idr_segments = _detect_idr_segments(per_residue_plddt, positions=positions)
+    for segment in idr_segments:
+        first = residue_records[segment["start"] - 1]
+        last = residue_records[segment["end"] - 1]
+        segment["pdb_chain"] = first[0]
+        segment["pdb_residue_start"] = first[1]
+        segment["pdb_residue_end"] = last[1]
+        segment["pdb_insertion_code_start"] = first[2]
+        segment["pdb_insertion_code_end"] = last[2]
 
     total_residues = len(per_residue_plddt)
+    if total_residues == 0:
+        return {
+            "uniprot_id": uid,
+            "sequence_length": 0,
+            "error": "No valid C-alpha residue confidence records in the selected model.",
+        }
     disordered_residues = sum(1 for p in per_residue_plddt if p < 50)
     idr_fraction = disordered_residues / total_residues if total_residues > 0 else 0.0
 
     return {
         "uniprot_id": uid,
         "sequence_length": total_residues,
+        "model_entity_id": result.get("model_entity_id"),
+        "sequence_start": result.get("sequence_start"),
+        "sequence_end": result.get("sequence_end"),
+        "coordinate_system": "model_C_alpha_order_1_based",
+        "residue_mapping_note": (
+            "Segment start/end are ordinal indices of observed C-alpha residues "
+            "in the selected model; PDB residue identifiers are reported separately. "
+            "Neither index is a verified UniProt or PDB/SIFTS residue mapping. "
+            "Terminal and whole-protein labels only describe the modeled segment."
+        ),
         "idr_fraction": round(idr_fraction, 4),
         "disordered_residue_count": disordered_residues,
         "is_idr_protein": idr_fraction > 0.3,
@@ -1096,6 +1154,13 @@ async def get_protein_structure(
         ),
         "model_version": meta.get("latestVersion"),
         "model_created": meta.get("modelCreatedDate", ""),
+        "model_chain_id": meta.get("chainId", ""),
+        "sequence_start": meta.get("sequenceStart", meta.get("uniprotStart")),
+        "sequence_end": meta.get("sequenceEnd", meta.get("uniprotEnd")),
+        "residue_mapping_status": (
+            "Model sequence interval from AlphaFold metadata; no experimentally "
+            "verified PDB/SIFTS residue mapping performed."
+        ),
         "file_urls": {
             "pdb": meta.get("pdbUrl", ""),
             "cif": meta.get("cifUrl", ""),
@@ -1132,17 +1197,18 @@ def _parse_pdb_full(
     for line in pdb_text.splitlines():
         if line.startswith("ATOM") and line[12:16].strip() == "CA":
             try:
-                coords.append([float(line[30:38]), float(line[38:46]), float(line[46:54])])
-                residues.append(
-                    {
-                        "chain": line[21].strip(),
-                        "resnum": int(line[22:26].strip()),
-                        "resname": line[17:20].strip(),
-                        "plddt": float(line[60:66].strip()),  # B-factor stores pLDDT in AF
-                    }
-                )
+                coordinate = [float(line[30:38]), float(line[38:46]), float(line[46:54])]
+                residue = {
+                    "chain": line[21].strip(),
+                    "resnum": int(line[22:26].strip()),
+                    "resname": line[17:20].strip(),
+                    "plddt": float(line[60:66].strip()),  # B-factor stores pLDDT in AF
+                }
             except (ValueError, IndexError):
                 continue
+            # Only append a complete coordinate/residue pair, never just one.
+            coords.append(coordinate)
+            residues.append(residue)
     return np.array(coords, dtype=float), residues
 
 
@@ -1288,36 +1354,69 @@ def _pocket_druggability_label(pdi: float) -> str:
     return "POOR"
 
 
-def _extract_plddt_from_pdb(pdb_text: str) -> list[float]:
-    """Extract per-residue pLDDT from PDB B-factor column (AF convention)."""
-    plddts: list[float] = []
-    seen: set[tuple[str, int]] = set()
+def _extract_plddt_residue_records(
+    pdb_text: str,
+) -> list[tuple[str, int, str, float]]:
+    """Extract chain, author residue number, insertion code and pLDDT.
+
+    No UniProt coordinate correspondence is inferred from PDB numbering.
+    Alternative conformers are collapsed to blank/A for deterministic output.
+    """
+    records: list[tuple[str, int, str, float]] = []
+    seen: set[tuple[str, int, str]] = set()
     for line in pdb_text.splitlines():
         if line.startswith("ATOM") and line[12:16].strip() == "CA":
+            if line[16].strip() not in ("", "A"):
+                continue
             try:
                 chain = line[21].strip()
                 resnum = int(line[22:26].strip())
-                key = (chain, resnum)
-                if key not in seen:
-                    seen.add(key)
-                    plddts.append(float(line[60:66].strip()))
+                insertion_code = line[26].strip()
+                confidence = float(line[60:66].strip())
             except (ValueError, IndexError):
                 continue
-    return plddts
+            if not math.isfinite(confidence) or not 0 <= confidence <= 100:
+                continue
+            key = (chain, resnum, insertion_code)
+            if key not in seen:
+                seen.add(key)
+                records.append((chain, resnum, insertion_code, confidence))
+    return records
+
+
+def _extract_plddt_from_pdb(pdb_text: str) -> list[float]:
+    """Project validated per-residue pLDDT values in model order."""
+    return [record[3] for record in _extract_plddt_residue_records(pdb_text)]
 
 
 def _detect_idr_segments(
     per_residue_plddt: list[float],
     cutoff: float = 50.0,
     min_length: int = 5,
+    positions: list[tuple[str, int, str]] | None = None,
 ) -> list[dict[str, Any]]:
-    """Find contiguous runs of residues with pLDDT < cutoff."""
+    """Find low-confidence runs without bridging missing PDB residues/chains.
+
+    Returned start/end indices remain 1-based positions in model C-alpha
+    order for backwards compatibility, not full-length UniProt positions.
+    """
     segments: list[dict[str, Any]] = []
     n = len(per_residue_plddt)
+    if positions is not None and len(positions) != n:
+        raise ValueError("Number of PDB positions must match pLDDT values")
     in_idr = False
     start = 0
 
     for i, p in enumerate(per_residue_plddt):
+        if positions is not None and i > 0:
+            prev, cur = positions[i - 1], positions[i]
+            gap = cur[0] != prev[0] or cur[1] != prev[1] + 1 or bool(prev[2]) or bool(cur[2])
+            if gap and in_idr:
+                length = i - start
+                if length >= min_length:
+                    mean_p = float(sum(per_residue_plddt[start:i]) / length)
+                    segments.append(_classify_idr_segment(start + 1, i, length, mean_p, n))
+                in_idr = False
         if p < cutoff and not in_idr:
             in_idr = True
             start = i
@@ -1333,7 +1432,6 @@ def _detect_idr_segments(
         if length >= min_length:
             mean_p = float(sum(per_residue_plddt[start:]) / length)
             segments.append(_classify_idr_segment(start + 1, n, length, mean_p, n))
-
     return segments
 
 

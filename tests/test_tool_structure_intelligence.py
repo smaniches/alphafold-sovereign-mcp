@@ -26,6 +26,7 @@ from alphafold_sovereign.tools.structure_intelligence import (
     _drift_interpretation,
     _estimate_ordered_fraction,
     _extract_plddt_from_pdb,
+    _extract_plddt_residue_records,
     _fallback_tda_fingerprint,
     _fetch_af_plddt,
     _fetch_af_structure,
@@ -68,6 +69,24 @@ def _make_pdb(n_residues: int = 20, plddt: float = 85.0) -> str:
         )
     lines.append("END")
     return "\n".join(lines)
+
+
+@pytest.mark.parametrize("model_type", [UniProtInput, BindingPocketInput, StructureRetrievalInput])
+@pytest.mark.parametrize("accession", ["P04637", "A0A023GPI8", "P04637-2", "A0A023GPI8-12"])
+def test_structural_schema_accepts_uniprot_accession(model_type: Any, accession: str) -> None:
+    assert model_type(uniprot_id=accession).uniprot_id == accession
+
+
+@pytest.mark.parametrize("model_type", [UniProtInput, BindingPocketInput, StructureRetrievalInput])
+@pytest.mark.parametrize(
+    "accession",
+    ["P04637-F2", "P04637-0", "P04637-2/other", "A0A023GPI8-X", "A0A023GPI", "P0ABC"],
+)
+def test_structural_schema_rejects_invalid_accession(model_type: Any, accession: str) -> None:
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        model_type(uniprot_id=accession)
 
 
 # ---------------------------------------------------------------------------
@@ -205,6 +224,53 @@ def test_parse_pdb_full_malformed() -> None:
     # empty list → numpy creates a 0-dim array
     assert coords.shape[0] == 0
     assert residues == []
+
+
+def test_parse_pdb_full_rejects_incomplete_residue_atomically() -> None:
+    lines = _make_pdb(3, plddt=70.0).splitlines()
+    lines[1] = lines[1][:60] + "******" + lines[1][66:]
+    coords, records = _parse_pdb_full("\n".join(lines))
+    assert coords.shape == (2, 3)
+    assert len(records) == 2
+    assert [r["resnum"] for r in records] == [1, 3]
+
+
+def test_extract_plddt_records_preserve_insertion_codes() -> None:
+    line = _make_pdb(1, plddt=75.0).splitlines()[0]
+    inserted = line[:26] + "A" + line[27:]
+    secondary = line[:16] + "B" + line[17:]
+    records = _extract_plddt_residue_records("\n".join([line, inserted, secondary, line]))
+    assert records == [("A", 1, "", 75.0), ("A", 1, "A", 75.0)]
+
+
+@pytest.mark.parametrize("invalid_bfactor", ["   nan", " -1.00", "101.00", "******"])
+def test_extract_plddt_records_discard_invalid_confidence(invalid_bfactor: str) -> None:
+    line = _make_pdb(1, plddt=75.0).splitlines()[0]
+    invalid = line[:60] + invalid_bfactor + line[66:]
+    assert _extract_plddt_residue_records(invalid) == []
+
+
+def test_detect_idr_respects_gaps_and_chains() -> None:
+    plddts = [30.0] * 12
+    positions = [("A", i, "") for i in range(201, 207)] + [("A", i, "") for i in range(220, 226)]
+    segments = _detect_idr_segments(plddts, positions=positions)
+    assert [(x["start"], x["end"]) for x in segments] == [(1, 6), (7, 12)]
+    segments_chain = _detect_idr_segments(
+        plddts, positions=[("A", i, "") for i in range(1, 7)] + [("B", i, "") for i in range(1, 7)]
+    )
+    assert len(segments_chain) == 2
+
+
+def test_detect_idr_rejects_misaligned_positions() -> None:
+    with pytest.raises(ValueError, match="must match"):
+        _detect_idr_segments([30.0], positions=[])
+
+
+def test_detect_idr_does_not_bridge_insertion_codes() -> None:
+    positions = [("A", i, "") for i in range(1, 7)]
+    positions += [("A", 7, "A")] + [("A", i, "") for i in range(8, 14)]
+    segments = _detect_idr_segments([30.0] * len(positions), positions=positions)
+    assert len(segments) == 2
 
 
 def test_extract_plddt_from_pdb_deduplicated() -> None:
@@ -647,12 +713,15 @@ async def test_fetch_af_structure_client_raises(monkeypatch: pytest.MonkeyPatch)
 async def test_fetch_af_plddt_success(monkeypatch: pytest.MonkeyPatch) -> None:
     af = _fake_af(monkeypatch)
     af.get_prediction.return_value = _af_meta()
-    af.get_pae.return_value = {"predicted_aligned_error": [[1.0, 2.0], [2.0, 1.0]]}
+    af.get_pae.return_value = {
+        "predicted_aligned_error": [[1.0 if i == j else 2.0 for j in range(4)] for i in range(4)]
+    }
     out = await _fetch_af_plddt("P12345")
     assert out is not None
     assert out["mean_plddt"] == 85.0
     assert out["sequence_length"] == 4
-    assert out["pae_mean"] == 1.5
+    assert out["pae_mean"] == 1.75
+    assert out["pae_status"] == "available"
 
 
 async def test_fetch_af_plddt_current_schema(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -708,6 +777,46 @@ async def test_fetch_af_plddt_pae_empty(monkeypatch: pytest.MonkeyPatch) -> None
     assert out is not None
     assert "pae_mean" not in out
     assert "pae_matrix_shape" not in out
+
+
+@pytest.mark.parametrize(
+    ("pae", "status"),
+    [
+        ({"predicted_aligned_error": [[1, 2], [3]]}, "invalid_numeric_data"),
+        ({"predicted_aligned_error": [1, 2]}, "invalid_shape"),
+        ({"predicted_aligned_error": [[1, 2, 3], [4, 5, 6]]}, "invalid_shape"),
+        ({"predicted_aligned_error": [[float("nan")]]}, "invalid_values"),
+        ({"predicted_aligned_error": [[-1.0]]}, "invalid_values"),
+        ({"predicted_aligned_error": [[1.0, 2.0], [2.0, 1.0]]}, "sequence_length_mismatch"),
+        ({}, "missing"),
+    ],
+)
+async def test_fetch_af_plddt_invalid_pae_is_not_summarized(
+    monkeypatch: pytest.MonkeyPatch, pae: dict[str, Any], status: str
+) -> None:
+    af = _fake_af(monkeypatch)
+    af.get_prediction.return_value = _af_meta()
+    af.get_pae.return_value = pae
+    out = await _fetch_af_plddt("P12345")
+    assert out is not None
+    assert out["pae_status"] == status
+    assert "pae_mean" not in out
+    assert "domain_boundaries" not in out
+
+
+async def test_analyze_structural_confidence_does_not_report_missing_pae_as_zero(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_fetch(uid: str) -> dict[str, Any]:
+        return {"uniprot_id": uid, "mean_plddt": 0.0, "pae_status": "missing"}
+
+    monkeypatch.setattr(si, "_fetch_af_plddt", fake_fetch)
+    out = await analyze_structural_confidence(UniProtInput(uniprot_id="P12345"))
+    assert out["mean_plddt"] == 0.0
+    assert out["pae_summary"]["available"] is False
+    assert out["pae_summary"]["mean_pae_angstrom"] is None
+    assert out["pae_summary"]["max_pae_angstrom"] is None
+    assert out["domain_boundaries"]["n_putative_domains"] is None
 
 
 # ---------------------------------------------------------------------------
@@ -1262,6 +1371,35 @@ async def test_detect_intrinsically_disordered_disordered(
     assert out["is_idr_protein"] is True
 
 
+async def test_detect_idr_returns_pdb_identifiers_without_claiming_uniprot_mapping(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_plddt(uid: str) -> dict[str, Any]:
+        return {"uniprot_id": uid, "model_entity_id": "AF-P12345-F2", "sequence_start": 201}
+
+    lines = _make_pdb(12, plddt=30.0).splitlines()
+    pdb = "\n".join(
+        line[:22] + f"{201 + i if i < 6 else 214 + i:4d}" + line[26:]
+        if line.startswith("ATOM")
+        else line
+        for i, line in enumerate(lines)
+    )
+
+    async def fake_struct(uid: str) -> dict[str, Any]:
+        return {"pdb_text": pdb, "uniprot_id": uid}
+
+    monkeypatch.setattr(si, "_fetch_af_plddt", fake_plddt)
+    monkeypatch.setattr(si, "_fetch_af_structure", fake_struct)
+    out = await detect_intrinsically_disordered(UniProtInput(uniprot_id="P12345"))
+    assert out["model_entity_id"] == "AF-P12345-F2"
+    assert out["coordinate_system"] == "model_C_alpha_order_1_based"
+    assert [(r["pdb_residue_start"], r["pdb_residue_end"]) for r in out["idr_segments"]] == [
+        (201, 206),
+        (220, 225),
+    ]
+    assert "Neither index is a verified UniProt" in out["residue_mapping_note"]
+
+
 async def test_detect_intrinsically_disordered_zero_length(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1277,6 +1415,7 @@ async def test_detect_intrinsically_disordered_zero_length(
     monkeypatch.setattr(si, "_fetch_af_structure", fake_struct)
     out = await detect_intrinsically_disordered(UniProtInput(uniprot_id="P12345"))
     assert out["sequence_length"] == 0
+    assert "error" in out
 
 
 # ---------------------------------------------------------------------------
@@ -1317,6 +1456,8 @@ async def test_get_protein_structure_metadata_only(monkeypatch: pytest.MonkeyPat
     assert out["file_urls"]["pdb"].endswith("model_v6.pdb")
     assert out["file_urls"]["cif"].endswith("model_v6.cif")
     assert "coordinates_pdb" not in out  # default: metadata only
+    assert out["sequence_start"] is None
+    assert out["residue_mapping_status"].startswith("Model sequence interval")
 
 
 async def test_get_protein_structure_current_schema(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1325,6 +1466,9 @@ async def test_get_protein_structure_current_schema(monkeypatch: pytest.MonkeyPa
     metadata["modelEntityId"] = metadata.pop("entryId")
     metadata["sequence"] = metadata.pop("uniprotSequence")
     metadata.pop("paeImageUrl")
+    metadata["sequenceStart"] = 201
+    metadata["sequenceEnd"] = 200 + len(metadata["sequence"])
+    metadata["chainId"] = "A"
     af.get_prediction.return_value = metadata
 
     out = await get_protein_structure(StructureRetrievalInput(uniprot_id="P38398"))
@@ -1333,6 +1477,9 @@ async def test_get_protein_structure_current_schema(monkeypatch: pytest.MonkeyPa
     assert out["sequence"] == metadata["sequence"]
     assert out["sequence_length"] == len(metadata["sequence"])
     assert out["file_urls"]["pae_image"] == ""
+    assert out["sequence_start"] == 201
+    assert out["sequence_end"] == 200 + len(metadata["sequence"])
+    assert out["model_chain_id"] == "A"
 
 
 async def test_get_protein_structure_with_coordinates(monkeypatch: pytest.MonkeyPatch) -> None:

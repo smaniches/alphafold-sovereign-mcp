@@ -54,6 +54,7 @@ from alphafold_sovereign.domain.druggability import (
     has_small_molecule_tractability,
     score_target_druggability,
 )
+from alphafold_sovereign.domain.uniprot import UNIPROT_ACCESSION_PATTERN
 from alphafold_sovereign.server.app import mcp
 
 if TYPE_CHECKING:
@@ -155,7 +156,7 @@ class DruggabilityInput(BaseModel):
     uniprot_id: str = Field(
         ...,
         description="UniProt accession, e.g. 'P38398' (BRCA1) or 'P04637' (TP53).",
-        pattern=r"^[A-Z][0-9][A-Z0-9]{3}[0-9](?:[A-Z][0-9][A-Z0-9]{3}[0-9])?$",
+        pattern=UNIPROT_ACCESSION_PATTERN,
     )
     include_clinical_stage: bool = Field(
         default=True,
@@ -169,7 +170,7 @@ class ProteinDossierInput(BaseModel):
     uniprot_id: str = Field(
         ...,
         description="UniProt accession for the target protein.",
-        pattern=r"^[A-Z][0-9][A-Z0-9]{3}[0-9](?:[A-Z][0-9][A-Z0-9]{3}[0-9])?$",
+        pattern=UNIPROT_ACCESSION_PATTERN,
     )
     gene_symbol: str = Field(
         ...,
@@ -241,12 +242,12 @@ class TargetSelectivityInput(BaseModel):
     uniprot_id_a: str = Field(
         ...,
         description="First target UniProt ID.",
-        pattern=r"^[A-Z][0-9][A-Z0-9]{3}[0-9](?:[A-Z][0-9][A-Z0-9]{3}[0-9])?$",
+        pattern=UNIPROT_ACCESSION_PATTERN,
     )
     uniprot_id_b: str = Field(
         ...,
         description="Second target UniProt ID (e.g. a related kinase for selectivity analysis).",
-        pattern=r"^[A-Z][0-9][A-Z0-9]{3}[0-9](?:[A-Z][0-9][A-Z0-9]{3}[0-9])?$",
+        pattern=UNIPROT_ACCESSION_PATTERN,
     )
 
 
