@@ -666,9 +666,7 @@ async def test_fetch_af_plddt_success(monkeypatch: pytest.MonkeyPatch) -> None:
     af = _fake_af(monkeypatch)
     af.get_prediction.return_value = _af_meta()
     af.get_pae.return_value = {
-        "predicted_aligned_error": [
-            [1.0 if i == j else 2.0 for j in range(4)] for i in range(4)
-        ]
+        "predicted_aligned_error": [[1.0 if i == j else 2.0 for j in range(4)] for i in range(4)]
     }
     out = await _fetch_af_plddt("P12345")
     assert out is not None
@@ -733,7 +731,6 @@ async def test_fetch_af_plddt_pae_empty(monkeypatch: pytest.MonkeyPatch) -> None
     assert "pae_matrix_shape" not in out
 
 
-
 @pytest.mark.parametrize(
     ("pae", "status"),
     [
@@ -764,6 +761,7 @@ async def test_analyze_structural_confidence_does_not_report_missing_pae_as_zero
 ) -> None:
     async def fake_fetch(uid: str) -> dict[str, Any]:
         return {"uniprot_id": uid, "mean_plddt": 0.0, "pae_status": "missing"}
+
     monkeypatch.setattr(si, "_fetch_af_plddt", fake_fetch)
     out = await analyze_structural_confidence(UniProtInput(uniprot_id="P12345"))
     assert out["mean_plddt"] == 0.0

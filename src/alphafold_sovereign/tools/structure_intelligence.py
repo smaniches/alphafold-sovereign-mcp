@@ -547,20 +547,16 @@ async def analyze_structural_confidence(
         "sequence_end": result.get("sequence_end"),
         "pae_summary": {
             "available": "pae_mean" in result,
-            "status": result.get("pae_status", "available" if "pae_mean" in result else "unavailable"),
-            "mean_pae_angstrom": (
-                round(result["pae_mean"], 2) if "pae_mean" in result else None
+            "status": result.get(
+                "pae_status", "available" if "pae_mean" in result else "unavailable"
             ),
-            "max_pae_angstrom": (
-                round(result["pae_max"], 2) if "pae_max" in result else None
-            ),
+            "mean_pae_angstrom": (round(result["pae_mean"], 2) if "pae_mean" in result else None),
+            "max_pae_angstrom": (round(result["pae_max"], 2) if "pae_max" in result else None),
             "high_uncertainty_pairs": result.get("high_pae_pairs", [])[:5],
         },
         "domain_boundaries": {
             "candidate_positions": domain_boundaries,
-            "n_putative_domains": (
-                len(domain_boundaries) + 1 if "pae_mean" in result else None
-            ),
+            "n_putative_domains": (len(domain_boundaries) + 1 if "pae_mean" in result else None),
             "note": (
                 "Candidates are zero-based LOCAL model-array indices, not UniProt positions. "
                 "This PAE heuristic is not a validated domain assignment; compare to "
