@@ -36,4 +36,4 @@ build==1.6.1
 hatchling==1.31.0
 
 # CycloneDX SBOM generator (cyclonedx-py CLI).
-cyclonedx-bom==7.4.0
+cyclonedx-bom==7.5.0
