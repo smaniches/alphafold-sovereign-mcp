@@ -84,6 +84,8 @@ class AlphaFoldClient(BaseAsyncClient):
         canonical = prefix if is_isoform else uniprot_id
         raw: Any = await self._get(f"/prediction/{canonical}")
         if isinstance(raw, list):
+            if not raw:
+                return cast("dict[str, Any]", raw)
             records = [item for item in raw if isinstance(item, dict)]
         elif isinstance(raw, dict):
             records = [raw]
@@ -97,9 +99,7 @@ class AlphaFoldClient(BaseAsyncClient):
         if is_isoform:
             # The displayed isoform is not universally named "-1".
             # Verify UniProtKB's curated Displayed status AND full sequence.
-            candidates = [
-                model for model in records if model.get("uniprotAccession") == canonical
-            ]
+            candidates = [model for model in records if model.get("uniprotAccession") == canonical]
             if len(candidates) == 1:
                 sequence = _prediction_sequence(candidates[0])
                 if sequence:
