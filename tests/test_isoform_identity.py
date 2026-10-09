@@ -174,3 +174,50 @@ async def test_dict_prediction_mismatched_isoform_not_reassigned(
     )
     async with AlphaFoldClient() as client:
         assert await client.get_prediction("P04637-1") == {}
+
+async def test_isoform_identity_empty_model_sequence(
+    respx_mock: respx.MockRouter,
+) -> None:
+    async with UniProtIsoformClient() as client:
+        assert not await client.is_displayed_isoform("P04637", "P04637-1", "")
+    assert len(respx_mock.calls) == 0
+
+
+async def test_isoform_verifier_skips_unrelated_and_malformed_comments(
+    respx_mock: respx.MockRouter,
+) -> None:
+    record = _uniprot_record()
+    record["comments"] = [
+        None,
+        {"commentType": "FUNCTION"},
+        {"commentType": "ALTERNATIVE PRODUCTS", "isoforms": [None]},
+        *record["comments"],
+    ]
+    respx_mock.get("https://rest.uniprot.org/uniprotkb/P04637.json").mock(
+        return_value=httpx.Response(200, json=record),
+    )
+    async with UniProtIsoformClient() as client:
+        assert await client.is_displayed_isoform("P04637", "P04637-1", "MKTV")
+
+
+async def test_unverified_canonical_model_sequence_is_not_reassigned(
+    respx_mock: respx.MockRouter,
+) -> None:
+    respx_mock.get("https://alphafold.ebi.ac.uk/api/prediction/P04637").mock(
+        return_value=httpx.Response(200, json=[_model_record()]),
+    )
+    respx_mock.get("https://rest.uniprot.org/uniprotkb/P04637.json").mock(
+        return_value=httpx.Response(200, json=_uniprot_record(sequence="MKTN")),
+    )
+    async with AlphaFoldClient() as client:
+        assert await client.get_prediction("P04637-1") == {}
+
+
+async def test_invalid_upstream_prediction_scalar_returns_no_model(
+    respx_mock: respx.MockRouter,
+) -> None:
+    respx_mock.get("https://alphafold.ebi.ac.uk/api/prediction/P04637").mock(
+        return_value=httpx.Response(200, json="unexpected scalar"),
+    )
+    async with AlphaFoldClient() as client:
+        assert await client.get_prediction("P04637") == {}
