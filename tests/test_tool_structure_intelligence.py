@@ -226,7 +226,6 @@ def test_parse_pdb_full_malformed() -> None:
     assert residues == []
 
 
-
 def test_parse_pdb_full_rejects_incomplete_residue_atomically() -> None:
     lines = _make_pdb(3, plddt=70.0).splitlines()
     lines[1] = lines[1][:60] + "******" + lines[1][66:]
@@ -253,15 +252,11 @@ def test_extract_plddt_records_discard_invalid_confidence(invalid_bfactor: str) 
 
 def test_detect_idr_respects_gaps_and_chains() -> None:
     plddts = [30.0] * 12
-    positions = (
-        [("A", i, "") for i in range(201, 207)]
-        + [("A", i, "") for i in range(220, 226)]
-    )
+    positions = [("A", i, "") for i in range(201, 207)] + [("A", i, "") for i in range(220, 226)]
     segments = _detect_idr_segments(plddts, positions=positions)
     assert [(x["start"], x["end"]) for x in segments] == [(1, 6), (7, 12)]
     segments_chain = _detect_idr_segments(
-        plddts, positions=[("A", i, "") for i in range(1, 7)]
-        + [("B", i, "") for i in range(1, 7)]
+        plddts, positions=[("A", i, "") for i in range(1, 7)] + [("B", i, "") for i in range(1, 7)]
     )
     assert len(segments_chain) == 2
 
@@ -1376,7 +1371,6 @@ async def test_detect_intrinsically_disordered_disordered(
     assert out["is_idr_protein"] is True
 
 
-
 async def test_detect_idr_returns_pdb_identifiers_without_claiming_uniprot_mapping(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1386,7 +1380,8 @@ async def test_detect_idr_returns_pdb_identifiers_without_claiming_uniprot_mappi
     lines = _make_pdb(12, plddt=30.0).splitlines()
     pdb = "\n".join(
         line[:22] + f"{201 + i if i < 6 else 214 + i:4d}" + line[26:]
-        if line.startswith("ATOM") else line
+        if line.startswith("ATOM")
+        else line
         for i, line in enumerate(lines)
     )
 
@@ -1399,9 +1394,10 @@ async def test_detect_idr_returns_pdb_identifiers_without_claiming_uniprot_mappi
     assert out["model_entity_id"] == "AF-P12345-F2"
     assert out["coordinate_system"] == "model_C_alpha_order_1_based"
     assert [(r["pdb_residue_start"], r["pdb_residue_end"]) for r in out["idr_segments"]] == [
-        (201, 206), (220, 225)
+        (201, 206),
+        (220, 225),
     ]
-    assert "not a verified UniProt" in out["residue_mapping_note"]
+    assert "Neither index is a verified UniProt" in out["residue_mapping_note"]
 
 
 async def test_detect_intrinsically_disordered_zero_length(

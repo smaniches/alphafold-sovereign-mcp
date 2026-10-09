@@ -1002,24 +1002,22 @@ async def score_binding_pocket_geometry(
 async def detect_intrinsically_disordered(
     params: UniProtInput,
 ) -> dict[str, Any]:
-    """Map intrinsically disordered regions (IDRs) using pLDDT as proxy.
+    """Flag low-confidence modeled regions as intrinsic-disorder candidates.
 
-    IDRs with pLDDT < 50 are predicted to be disordered in isolation by AlphaFold.
-    This pLDDT-as-disorder-proxy approach is consistent with Ruff & Pappu (2021)
-    and scales to the full human proteome from precomputed AlphaFold confidence.
+    Reads per-residue AlphaFold pLDDT from PDB C-alpha records and groups
+    contiguous runs below 50. Low pLDDT may reflect intrinsic disorder,
+    missing binding partners, alternate conformations, or model uncertainty;
+    it is NOT independent evidence that a region is disordered.
 
-    IDR functional categories returned:
-    - **Linkers**: short (< 20 aa) disordered regions between domains
-    - **Tails**: N/C terminal IDRs
-    - **Long IDRs**: candidate intrinsically disordered protein (IDP) segments
+    Returns model-local residue indices, observed PDB chain/residue identifiers,
+    and heuristic linker/terminal/long-segment labels. A terminal label is
+    relative to the modeled chain or fragment, not necessarily the full protein.
+    PDB numbering is not mapped to full-length UniProt via SIFTS here.
 
-    Clinical relevance:
-    - IDRs are enriched for disease-causing mutations
-    - IDRs host post-translational modification sites (phosphorylation, ubiquitination)
-    - Long IDRs are emerging drug targets (targeted covalent inhibitors, phase separation modulators)
-
-    Reference:
-      Ruff KM & Pappu RV. J Mol Biol. 2021;433(20):167208.
+    This implementation is a reproducible screening heuristic, not a validated
+    disorder predictor, biomolecular mechanism classifier, or clinical result.
+    For background on intrinsic disorder, see Ruff & Pappu (2021),
+    J Mol Biol. 433:167208; that paper does not validate these cutoffs or code.
 
     Input fields:
         params.uniprot_id: UniProt accession.
@@ -1412,12 +1410,7 @@ def _detect_idr_segments(
     for i, p in enumerate(per_residue_plddt):
         if positions is not None and i > 0:
             prev, cur = positions[i - 1], positions[i]
-            gap = (
-                cur[0] != prev[0]
-                or cur[1] != prev[1] + 1
-                or bool(prev[2])
-                or bool(cur[2])
-            )
+            gap = cur[0] != prev[0] or cur[1] != prev[1] + 1 or bool(prev[2]) or bool(cur[2])
             if gap and in_idr:
                 length = i - start
                 if length >= min_length:
