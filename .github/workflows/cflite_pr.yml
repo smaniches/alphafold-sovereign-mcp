@@ -14,7 +14,8 @@ concurrency:
 
 jobs:
   pr-fuzzing:
-    name: Fuzz (PR, ${{ matrix.sanitizer }})
+    # Match the protected-main required check while reporting actual fuzzing results.
+    name: ClusterFuzzLite
     runs-on: ubuntu-latest
     permissions:
       contents: read

@@ -107,14 +107,14 @@ class AlphaFoldClient(BaseAsyncClient):
             previously captured responses. For multiple model records,
             the exact UniProt accession is selected; labelled responses
             without a match are not silently attributed to a different isoform.
+            An empty prediction array returns an empty dict, not proof that no
+            model exists outside AlphaFold DB's REST API coverage.
         """
         # AFDB lists isoforms under the bare accession.
         prefix, hyphen, suffix = uniprot_id.rpartition("-")
         is_isoform = bool(hyphen and suffix.isdigit())
         canonical = prefix if is_isoform else uniprot_id
         raw: Any = await self._get(f"/prediction/{canonical}")
-        if isinstance(raw, list) and not raw:
-            return cast("dict[str, Any]", raw)
         records = _normalize_prediction_records(raw)
 
         for model in records:
