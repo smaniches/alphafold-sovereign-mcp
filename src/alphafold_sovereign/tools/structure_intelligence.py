@@ -44,13 +44,13 @@ import structlog
 from pydantic import BaseModel, ConfigDict, Field
 
 from alphafold_sovereign import __version__
+from alphafold_sovereign.clients._isoform import UniProtVerificationError
 from alphafold_sovereign.clients.alphafold import (
     AlphaFoldClient,
     AlphaFoldPredictionSchemaError,
     _prediction_model_id,
     _prediction_sequence,
 )
-from alphafold_sovereign.clients._isoform import UniProtVerificationError
 from alphafold_sovereign.clients.ensembl import EnsemblClient
 from alphafold_sovereign.domain.uniprot import UNIPROT_ISOFORM_PATTERN
 from alphafold_sovereign.server.app import mcp
