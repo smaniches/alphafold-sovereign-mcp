@@ -15,8 +15,34 @@ import respx
 from alphafold_sovereign.clients.alphafold import (
     AlphaFoldClient,
     _parse_alphamissense_csv,
+    _prediction_model_id,
+    _prediction_sequence,
     _validate_af_file_url,
 )
+
+# ---------------------------------------------------------------------------
+# Prediction metadata schema compatibility
+# ---------------------------------------------------------------------------
+
+
+def test_prediction_metadata_prefers_current_schema() -> None:
+    metadata = {
+        "modelEntityId": "AF-NEW-F1",
+        "entryId": "AF-OLD-F1",
+        "sequence": "MKTV",
+        "uniprotSequence": "OLD",
+    }
+    assert _prediction_model_id(metadata) == "AF-NEW-F1"
+    assert _prediction_sequence(metadata) == "MKTV"
+
+
+def test_prediction_metadata_legacy_fallback() -> None:
+    metadata = {"entryId": "AF-OLD-F1", "uniprotSequence": "MKTV"}
+    assert _prediction_model_id(metadata) == "AF-OLD-F1"
+    assert _prediction_sequence(metadata) == "MKTV"
+    assert _prediction_model_id({}) == ""
+    assert _prediction_sequence({}) == ""
+
 
 # ---------------------------------------------------------------------------
 # get_prediction
@@ -33,6 +59,51 @@ async def test_get_prediction_returns_first_when_list(respx_mock: respx.MockRout
     async with AlphaFoldClient() as client:
         meta = await client.get_prediction("P04637")
     assert meta["entryId"] == "AF-P04637-F1"
+
+
+@pytest.mark.parametrize(
+    ("request_id", "expected_id"),
+    [("P04637", "AF-P04637-F1"), ("P04637-9", "AF-P04637-9-F1")],
+)
+async def test_get_prediction_selects_requested_isoform(
+    respx_mock: respx.MockRouter, request_id: str, expected_id: str
+) -> None:
+    respx_mock.get(f"https://alphafold.ebi.ac.uk/api/prediction/{request_id}").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {"uniprotAccession": "P04637-9", "modelEntityId": "AF-P04637-9-F1"},
+                {"uniprotAccession": "P04637", "modelEntityId": "AF-P04637-F1"},
+            ],
+        ),
+    )
+    async with AlphaFoldClient() as client:
+        meta = await client.get_prediction(request_id)
+    assert meta["modelEntityId"] == expected_id
+
+
+async def test_get_prediction_rejects_mismatched_labelled_isoform(
+    respx_mock: respx.MockRouter,
+) -> None:
+    respx_mock.get("https://alphafold.ebi.ac.uk/api/prediction/P04637").mock(
+        return_value=httpx.Response(
+            200, json=[{"uniprotAccession": "P04637-9", "modelEntityId": "AF-P04637-9-F1"}]
+        ),
+    )
+    async with AlphaFoldClient() as client:
+        assert await client.get_prediction("P04637") == {}
+
+
+async def test_get_prediction_unlabelled_legacy_list_uses_first(
+    respx_mock: respx.MockRouter,
+) -> None:
+    respx_mock.get("https://alphafold.ebi.ac.uk/api/prediction/P04637").mock(
+        return_value=httpx.Response(
+            200, json=[{"entryId": "AF-P04637-F1"}, {"entryId": "AF-OTHER-F1"}]
+        ),
+    )
+    async with AlphaFoldClient() as client:
+        assert (await client.get_prediction("P04637"))["entryId"] == "AF-P04637-F1"
 
 
 async def test_get_prediction_returns_raw_when_dict(respx_mock: respx.MockRouter) -> None:
@@ -307,6 +378,14 @@ async def test_alphamissense_score_no_annotations(respx_mock: respx.MockRouter) 
 async def test_check_availability_true(respx_mock: respx.MockRouter) -> None:
     respx_mock.get("https://alphafold.ebi.ac.uk/api/prediction/P04637").mock(
         return_value=httpx.Response(200, json=[{"entryId": "AF-P04637-F1"}]),
+    )
+    async with AlphaFoldClient() as client:
+        assert await client.check_availability("P04637") is True
+
+
+async def test_check_availability_current_schema(respx_mock: respx.MockRouter) -> None:
+    respx_mock.get("https://alphafold.ebi.ac.uk/api/prediction/P04637").mock(
+        return_value=httpx.Response(200, json=[{"modelEntityId": "AF-P04637-F1"}]),
     )
     async with AlphaFoldClient() as client:
         assert await client.check_availability("P04637") is True

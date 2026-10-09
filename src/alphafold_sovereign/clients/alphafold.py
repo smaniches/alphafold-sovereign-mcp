@@ -39,6 +39,20 @@ _AF_CONFIG = UpstreamConfig(
 )
 
 
+def _prediction_model_id(metadata: dict[str, Any]) -> str:
+    """Read the current AFDB model identity, accepting old response fixtures."""
+    value = metadata.get("modelEntityId") or metadata.get("entryId")
+    return value if isinstance(value, str) else ""
+
+
+def _prediction_sequence(metadata: dict[str, Any]) -> str:
+    """Read the current AFDB sequence field, accepting old response fixtures."""
+    value = metadata.get("sequence")
+    if not isinstance(value, str):
+        value = metadata.get("uniprotSequence")
+    return value if isinstance(value, str) else ""
+
+
 class AlphaFoldClient(BaseAsyncClient):
     """Async client for the EBI AlphaFold DB REST API."""
 
@@ -56,12 +70,25 @@ class AlphaFoldClient(BaseAsyncClient):
             uniprot_id: UniProt accession (e.g. 'P04637').
 
         Returns:
-            Dict with ``uniprotAccession``, ``entryId``, ``pdbUrl``,
-            ``cifUrl``, ``paeImageUrl``, ``paeDocUrl``, ``amAnnotationsUrl``,
-            ``confidenceVersion`` and more.
+            Dict with ``modelEntityId``, ``sequence``, ``pdbUrl``, ``cifUrl``,
+            ``paeDocUrl``, ``amAnnotationsUrl``, and other AFDB fields.
+            Legacy ``entryId`` and ``uniprotSequence`` may be present in
+            previously captured responses. For multiple model records,
+            the exact UniProt accession is selected; labelled responses
+            without a match are not silently attributed to a different isoform.
         """
         raw: Any = await self._get(f"/prediction/{uniprot_id}")
         if isinstance(raw, list) and raw:
+            # The endpoint can include multiple UniProt isoforms in an
+            # arbitrary order. Prefer the exact requested accession.
+            for model in raw:
+                if isinstance(model, dict) and model.get("uniprotAccession") == uniprot_id:
+                    return model
+            # If entries are explicitly labelled with other accessions,
+            # do not silently give the caller the wrong isoform.
+            if any(isinstance(model, dict) and model.get("uniprotAccession") for model in raw):
+                return {}
+            # Historical upstream fixtures did not always carry accession.
             return cast("dict[str, Any]", raw[0])
         return cast("dict[str, Any]", raw)
 
@@ -145,7 +172,7 @@ class AlphaFoldClient(BaseAsyncClient):
         """Return True if AlphaFold DB has a prediction for the given accession."""
         try:
             meta = await self.get_prediction(uniprot_id)
-            return bool(meta.get("entryId"))
+            return bool(_prediction_model_id(meta))
         except Exception:
             return False
 

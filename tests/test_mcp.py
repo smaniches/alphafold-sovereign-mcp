@@ -40,3 +40,24 @@ def test_knowledge_graph_storage_import() -> None:
     from alphafold_sovereign.storage.knowledge_graph import KnowledgeGraph
 
     assert KnowledgeGraph is not None
+
+
+@pytest.mark.asyncio
+async def test_registered_tools_discoverable_over_mcp_protocol() -> None:
+    """Exercise a real client/server MCP exchange, not only Python imports."""
+    from fastmcp import Client
+
+    from alphafold_sovereign.server.stdio import _build_server
+
+    server = _build_server()
+    async with Client(server) as client:
+        tools = await client.list_tools()
+
+    names = [tool.name for tool in tools]
+    assert len(names) == 30
+    assert len(names) == len(set(names))
+    assert {
+        "get_protein_structure",
+        "analyze_structural_confidence",
+        "generate_variant_clinical_report",
+    }.issubset(names)

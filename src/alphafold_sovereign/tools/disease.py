@@ -729,7 +729,7 @@ async def get_common_disease_targets(params: CommonDiseaseInput) -> str:
     raised). Returns a JSON error object listing the valid values when the category
     — or a ``disease_name`` filter within it — is not recognised.
 
-    Args:
+    Input fields:
         params.category: Disease area to profile. One of: cardiovascular, oncology,
             neurodegeneration, metabolic, autoimmune, respiratory, infectious,
             psychiatric, rare.

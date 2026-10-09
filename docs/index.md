@@ -35,6 +35,8 @@ per-invocation persistence.
   tools do not write to the store on their own.
 
 See [Tool reference](tools/index.md) for the full inventory.
+For current AlphaFold DB prediction field names, isoform-selection behavior,
+and upstream literature annotations, see [AlphaFold DB API compatibility](afdb-compatibility.md).
 
 ## What it is **not**
 

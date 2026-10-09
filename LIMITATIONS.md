@@ -1,7 +1,7 @@
 # Known Limitations
 
 This document enumerates the specific, named limitations of the project
-as of v1.2.0. It complements ``STATUS.md`` (which gives the
+as maintained in the latest repository revision. It complements ``STATUS.md`` (which gives the
 high-level posture) by listing concrete, addressable items.
 
 If you find a limitation that is not listed here, please open an issue
@@ -79,9 +79,11 @@ serialisation may break.
 **Impact:** Reproducibility is limited. A run today may produce
 different results from a run a year from now.
 
-**Mitigation:** We pin our own response schemas as Pydantic models;
-schema drift becomes a deserialisation error rather than silent data
-corruption.
+**Mitigation:** Client-level parsing, selected Pydantic input models,
+recorded upstream fixtures, and regression tests limit some schema risks.
+These measures are not a full schema contract for every upstream and
+cannot rule out silent data drift. AlphaFold prediction-field renames are
+handled explicitly; see `docs/afdb-compatibility.md`.
 
 **Planned resolution:** Roadmap step 5 (schema pinning with refresh
 policy).
@@ -158,6 +160,33 @@ telemetry without explicit opt-in.
 **Planned resolution:** An opt-in, locally-stored "quality journal"
 that lets users mark each report as "matches expert / disagrees /
 unsure", aggregated only with explicit upload consent.
+
+---
+
+## L8 — AlphaFold fragment selection and residue numbering
+
+**Module:** `src/alphafold_sovereign/clients/alphafold.py` and
+`src/alphafold_sovereign/tools/structure_intelligence.py`.
+
+**Description:** AlphaFold DB may provide multiple predicted fragments for
+very long sequences. The client selects the exact requested UniProt
+accession over different isoforms, but where multiple fragments share that
+accession it currently uses the first returned match. The tool does not
+offer a fragment selector, a verified mapping from fragment indices to
+full-length UniProt residues, or an experimental PDB/SIFTS mapping.
+
+**Impact:** A model's reported sequence and confidence may cover only a
+fragment, so users must not interpret the fragment's residue positions or
+sequence length as an unambiguous full-length protein coordinate system.
+
+**Mitigation:** Resolve a specific model/fragment through the upstream
+AlphaFold DB record before interpreting residue positions; retain source
+model identifiers in downstream research records. The server currently
+does not project text-mined residue annotations onto model coordinates.
+
+**Planned resolution:** Document and test the precise fragment-selection
+and residue-coordinate contract against live AFDB examples before adding
+a fragment-specific tool parameter or any literature-annotation join.
 
 ---
 
