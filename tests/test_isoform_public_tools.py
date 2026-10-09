@@ -12,9 +12,11 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from alphafold_sovereign.clients._isoform import UniProtVerificationError
+from alphafold_sovereign.clients.alphafold import AlphaFoldPredictionSchemaError
 from alphafold_sovereign.tools import structure_intelligence as si
 
 
+@pytest.mark.parametrize("error_type", [UniProtVerificationError, AlphaFoldPredictionSchemaError])
 @pytest.mark.parametrize(
     ("method", "tool"),
     [
@@ -24,13 +26,13 @@ from alphafold_sovereign.tools import structure_intelligence as si
     ],
 )
 async def test_structural_tools_propagate_unavailable_isoform_verification(
-    monkeypatch: pytest.MonkeyPatch, method: str, tool: str
+    monkeypatch: pytest.MonkeyPatch, method: str, tool: str, error_type: type[Exception]
 ) -> None:
     client = MagicMock()
-    setattr(client, method, AsyncMock(side_effect=UniProtVerificationError("not verified")))
+    setattr(client, method, AsyncMock(side_effect=error_type("not verified")))
     monkeypatch.setattr(si, "_alphafold", lambda: client)
 
-    with pytest.raises(UniProtVerificationError, match="not verified"):
+    with pytest.raises(error_type, match="not verified"):
         if tool == "get_protein_structure":
             await si.get_protein_structure(
                 si.StructureRetrievalInput(uniprot_id="P04637-1")
