@@ -7,6 +7,18 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.4.11](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.4.10...v1.4.11) (2026-10-09)
+
+
+### Bug Fixes
+
+* **afdb:** support current prediction metadata fields ([#236](https://github.com/smaniches/alphafold-sovereign-mcp/issues/236)) ([8b1d7f7](https://github.com/smaniches/alphafold-sovereign-mcp/commit/8b1d7f70228ce603294569e6124c7efcd12e0273))
+* **afdb:** verify explicit isoform identity and preserve source errors ([#239](https://github.com/smaniches/alphafold-sovereign-mcp/issues/239)) ([e16b04e](https://github.com/smaniches/alphafold-sovereign-mcp/commit/e16b04eb485fb1a53f0339a2b9e925bdc8073daf))
+* **residues:** preserve PDB identity and avoid IDR gap conflation ([aa17dc5](https://github.com/smaniches/alphafold-sovereign-mcp/commit/aa17dc5680c867f1689607c14a39ca1ab448c8e4))
+* **structure:** validate PAE matrices and preserve model-local provenance ([5869668](https://github.com/smaniches/alphafold-sovereign-mcp/commit/5869668a4c32dba3c958d6aa61226ffb6010c388))
+* **test,docs:** align IDR regression assertion and source description ([af5df47](https://github.com/smaniches/alphafold-sovereign-mcp/commit/af5df4740fb88865aa3b7869d407a738251c4d99))
+* **uniprot:** validate canonical and isoform identifiers across MCP tools ([2241789](https://github.com/smaniches/alphafold-sovereign-mcp/commit/224178970c125b87adfd1bb455cf67de63fce60b))
+
 ## [1.4.10](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.4.9...v1.4.10) (2026-10-01)
 
 

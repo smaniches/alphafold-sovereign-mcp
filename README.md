@@ -172,7 +172,7 @@ uv pip install -e .
 <!-- x-release-please-start-version -->
 ```console
 $ alphafold-sovereign --version
-1.4.10
+1.4.11
 $ alphafold-sovereign --self-test
 SELF-TEST PASS - ACMG helpers behave as expected on the BRCA1 c.5266dupC fixture.
 ```
@@ -436,7 +436,7 @@ this file).
   author    = {Maniches, Santiago},
   title     = {AlphaFold Sovereign MCP},
   year      = {2026},
-  version   = {1.4.10},
+  version   = {1.4.11},
   url       = {https://github.com/smaniches/alphafold-sovereign-mcp},
   license   = {Apache-2.0},
   orcid     = {0009-0005-6480-1987},
