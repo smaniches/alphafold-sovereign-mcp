@@ -64,10 +64,9 @@ plugins:
           options:
             docstring_style: google
             docstring_options:
-              # Tools take a single Pydantic `params` model; docstrings
-              # describe its fields as `params.<field>`. That is intentional
-              # and readable, but griffe cannot map it onto a signature
-              # parameter, so the unknown-parameter warning is disabled.
+              # Tool functions accept a single typed Pydantic input model.
+              # Its individual fields are documented as "Input fields:"
+              # instead of synthetic function args, matching the signature.
               warn_unknown_params: false
             show_source: false
             show_root_heading: true

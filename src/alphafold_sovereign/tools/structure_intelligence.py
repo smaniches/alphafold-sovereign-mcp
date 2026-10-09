@@ -501,7 +501,7 @@ async def analyze_structural_confidence(
       50–70: Low confidence — may be IDP or novel fold
       < 50: Very low — disordered or no structure deposited
 
-    Args:
+    Input fields:
         params.uniprot_id: UniProt accession.
     """
     uid = params.uniprot_id
@@ -583,7 +583,7 @@ async def compute_topology_fingerprint(
     summary — not a substitute for sequence alignment, RMSD, or functional-homology
     assessment.
 
-    Args:
+    Input fields:
         params.uniprot_id: UniProt accession of the protein to fingerprint,
             e.g. 'P38398' (BRCA1).
     """
@@ -651,7 +651,7 @@ async def compare_proteins_topologically(
     None of these are direct functional or sequence-similarity
     measures.
 
-    Args:
+    Input fields:
         params.uniprot_ids: 2–10 UniProt accessions.
     """
     ids = params.uniprot_ids
@@ -752,7 +752,7 @@ async def find_evolutionary_structural_shifts(
     ``divergence_method`` field on each result tells you which method was
     used.
 
-    Args:
+    Input fields:
         params.gene_symbol: Human gene symbol.
         params.target_species: List of species to compare.
     """
@@ -897,7 +897,7 @@ async def score_binding_pocket_geometry(
     model, is fully reproducible from AlphaFold coordinates, and runs in
     air-gapped deployments.
 
-    Args:
+    Input fields:
         params.uniprot_id: UniProt accession.
         params.min_pocket_residues: Minimum pocket size (residues).
     """
@@ -987,7 +987,7 @@ async def detect_intrinsically_disordered(
     Reference:
       Ruff KM & Pappu RV. J Mol Biol. 2021;433(20):167208.
 
-    Args:
+    Input fields:
         params.uniprot_id: UniProt accession.
     """
     uid = params.uniprot_id
@@ -1061,7 +1061,7 @@ async def get_protein_structure(
     Returns ``structure_available: false`` with an explanatory note when AlphaFold DB
     has no model for the accession — an expected coverage gap, not a server fault.
 
-    Args:
+    Input fields:
         params.uniprot_id: UniProt accession to retrieve, e.g. 'P38398' (BRCA1).
         params.include_coordinates: Embed the full PDB coordinate text (large);
             default false returns metadata and download URLs only.

@@ -134,7 +134,7 @@ async def query_variant_database(
     knowledge-graph storage API (the analysis tools do not write to it on their
     own).
 
-    Args:
+    Input fields:
         params.gene: Gene symbol filter.
         params.tier: Clinical tier (HIGH/MEDIUM/LOW/UNKNOWN).
         params.clinvar_class: ClinVar classification string.
@@ -198,7 +198,7 @@ async def query_protein_database(
     filter returning few rows usually means the store is small, not that no such
     protein exists.
 
-    Args:
+    Input fields:
         params.druggability_tier: Keep only proteins whose stored tier equals this
             (HOT, WARM, COLD, or NOT_DRUGGABLE); omit for any tier.
         params.min_plddt: Keep only proteins whose stored mean AlphaFold pLDDT
@@ -279,7 +279,7 @@ async def export_research_dataset(
         df = pd.DataFrame(result["data"]["variants"])
         high_tier = df[df["clinical_tier"] == "HIGH"]
 
-    Args:
+    Input fields:
         params.tables: Tables to export (empty = all entity tables).
         params.limit_per_table: Maximum rows per table.
     """
@@ -322,7 +322,7 @@ async def find_drug_gene_network(
     resolves to drugs with an indication for it. The store is populated by the
     curated boot seed and by explicit writes through the storage API.
 
-    Args:
+    Input fields:
         params.seed: Starting entity identifier.
         params.max_hops: Graph traversal depth (1–3).
     """

@@ -460,7 +460,7 @@ async def generate_variant_clinical_report(
     The report includes a draft ACMG/AMP criteria checklist with evidence
     mapping, a structural impact summary, and an actionability statement.
 
-    Args:
+    Input fields:
         params.hgvs: HGVS expression (gene-relative preferred).
         params.include_population_breakdown: Include per-ancestry gnomAD data.
         params.include_drug_context: Include drugs acting on the gene product.
@@ -744,7 +744,7 @@ async def assess_target_druggability(
     It assembles existing public-database evidence into one tier; it does
     not add scientific judgement and is not a validated predictive model.
 
-    Args:
+    Input fields:
         params.uniprot_id: UniProt accession.
         params.include_clinical_stage: Include Phase I–III in drug count.
     """
@@ -900,7 +900,7 @@ async def synthesize_protein_dossier(
       - **ClinVar**: pathogenic variants in this gene
       - **Ensembl**: orthologs across 12 species
 
-    Args:
+    Input fields:
         params.uniprot_id: UniProt accession.
         params.gene_symbol: HGNC gene symbol.
         params.depth: 'brief' | 'standard' | 'comprehensive'.
@@ -1118,7 +1118,7 @@ async def map_disease_drug_landscape(
     used in business development, competitive intelligence, and
     R&D portfolio decisions.
 
-    Args:
+    Input fields:
         params.disease_mondo_id: MONDO disease ID.
     """
     mid = params.disease_mondo_id
@@ -1304,7 +1304,7 @@ async def classify_variant_acmg(
               (Supporting). Note: ClinGen's SVI recommends retiring
               PP5/BP6; it is surfaced here as supporting evidence only.
 
-    Args:
+    Input fields:
         params.hgvs: HGVS expression.
         params.inheritance_pattern: Expected inheritance mode.
     """
@@ -1490,7 +1490,7 @@ async def find_drug_repurposing_candidates(
     Open Targets associations. The composite score is a prioritisation aid, not an
     efficacy prediction — validate mechanistically before acting on it.
 
-    Args:
+    Input fields:
         params.disease_mondo_id: MONDO disease ID to repurpose against, e.g.
             'MONDO:0007254' (breast carcinoma).
         params.target_limit: How many top OT-evidence targets to screen (1–50).
