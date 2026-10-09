@@ -64,9 +64,9 @@ dependencies = [
     # keyword argument 'annotations'`), and the 2.x line is not contiguously
     # usable either (2.11.2 cannot import `AnyFunction`, 2.14.0 ships without its
     # `pydantic_settings` dependency). Every stable 3.x release serves the full
-    # 30-tool surface over stdio. Capped below 4 so a fresh install never
-    # auto-adopts an untested major: FastMCP has broken these exact APIs across
-    # majors before, and CI pins a single locked version.
+    # 30-tool surface over stdio. CI tests the lockfile's FastMCP 4.0.11
+    # across the supported Python matrix; 3.x remains within the published
+    # compatibility range. Capped below 5 to avoid an untested future major.
     "fastmcp>=3.0.0,<5",
     # HTTP — async, HTTP/2, keep-alive
     "httpx[http2]>=0.27.0",

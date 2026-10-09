@@ -15,6 +15,10 @@ Versioning: [Semantic Versioning](https://semver.org/).
 * **ci:** report exact ClusterFuzzLite required check name ([41490ad](https://github.com/smaniches/alphafold-sovereign-mcp/commit/41490ad95e0646a5b1e8720d2f360435db8b9be3))
 * preserve empty AFDB prediction contracts and align required fuzz check ([2cba944](https://github.com/smaniches/alphafold-sovereign-mcp/commit/2cba9443f24c5691c208a330014deaa8dd654719))
 
+### Dependencies
+
+* **FastMCP:** The supported dependency range now includes FastMCP 4.x (`>=3.0.0,<5`). The lockfile resolves 4.0.11, exercised by the repository's CI suite. This upgrade was merged in [#231](https://github.com/smaniches/alphafold-sovereign-mcp/pull/231); later 4.x releases are not automatically proven compatible.
+
 ## [1.4.11](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.4.10...v1.4.11) (2026-10-09)
 
 
