@@ -17,6 +17,30 @@ class UniProtVerificationError(RuntimeError):
     """Curated isoform identity cannot be established from trusted evidence."""
 
 
+def _has_displayed_isoform(comments: list[Any], isoform_id: str) -> bool:
+    """Validate curated isoform annotations before accepting an identity."""
+    for comment in comments:
+        if not isinstance(comment, dict):
+            raise UniProtVerificationError("UniProtKB has a malformed annotation")
+        if comment.get("commentType") != "ALTERNATIVE PRODUCTS":
+            continue
+        isoforms = comment.get("isoforms")
+        if not isinstance(isoforms, list):
+            raise UniProtVerificationError("UniProtKB has malformed isoform annotations")
+        for isoform in isoforms:
+            if not isinstance(isoform, dict):
+                raise UniProtVerificationError("UniProtKB has a malformed isoform entry")
+            ids = isoform.get("isoformIds")
+            if not isinstance(ids, list) or not all(isinstance(x, str) for x in ids):
+                raise UniProtVerificationError("UniProtKB has invalid isoform identifiers")
+            status = isoform.get("isoformSequenceStatus")
+            if not isinstance(status, str):
+                raise UniProtVerificationError("UniProtKB has no isoform sequence status")
+            if status == "Displayed" and isoform_id in ids:
+                return True
+    return False
+
+
 class UniProtIsoformClient(BaseAsyncClient):
     """Source-restricted read-only UniProtKB client; parent owns its lifespan."""
 
@@ -59,23 +83,4 @@ class UniProtIsoformClient(BaseAsyncClient):
         comments = payload.get("comments")
         if not isinstance(comments, list):
             raise UniProtVerificationError("UniProtKB entry has no valid annotation list")
-        for comment in comments:
-            if not isinstance(comment, dict):
-                raise UniProtVerificationError("UniProtKB has a malformed annotation")
-            if comment.get("commentType") != "ALTERNATIVE PRODUCTS":
-                continue
-            isoforms = comment.get("isoforms")
-            if not isinstance(isoforms, list):
-                raise UniProtVerificationError("UniProtKB has malformed isoform annotations")
-            for isoform in isoforms:
-                if not isinstance(isoform, dict):
-                    raise UniProtVerificationError("UniProtKB has a malformed isoform entry")
-                ids = isoform.get("isoformIds")
-                if not isinstance(ids, list) or not all(isinstance(x, str) for x in ids):
-                    raise UniProtVerificationError("UniProtKB has invalid isoform identifiers")
-                status = isoform.get("isoformSequenceStatus")
-                if not isinstance(status, str):
-                    raise UniProtVerificationError("UniProtKB has no isoform sequence status")
-                if status == "Displayed" and isoform_id in ids:
-                    return True
-        return False
+        return _has_displayed_isoform(comments, isoform_id)
