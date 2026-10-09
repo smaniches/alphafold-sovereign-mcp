@@ -46,9 +46,13 @@ included or redistributed):
   - DisGeNET (MedBioinformatics; free academic tier / commercial license)
   - ChEMBL (EMBL-EBI; CC BY-SA 3.0)
   - Ensembl (EMBL-EBI; data released with no restrictions, code Apache 2.0)
+  - UniProtKB (EMBL-EBI/SIB/PIR; CC BY 4.0; conditional displayed-isoform
+    identity checks using full canonical amino-acid sequences)
 
-UniProt accessions are used only as protein identifiers; the UniProt
-API is not queried as a data source. Gene Ontology, InterPro / Pfam, and
+UniProt accessions identify proteins throughout the tools. UniProtKB
+is queried only to validate explicit, otherwise-unmatched isoforms by
+curated Displayed status and full canonical sequence. General UniProtKB
+annotations are not imported. Gene Ontology, InterPro / Pfam, and
 the RCSB Protein Data Bank are not integrated in this release.
 
 This project is independent. It is not affiliated with, endorsed by, or

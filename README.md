@@ -19,8 +19,9 @@ that the server runs without a network.
 
 A Model Context Protocol server — an AlphaFold MCP server — that
 wraps AlphaFold DB and 8 other public biomedical data sources behind
-a set of MCP tool calls, backed by a local SQLite knowledge graph with
-query and export tools (results can be persisted through its API;
+a set of MCP tool calls, with a conditional UniProtKB request to verify
+explicitly requested displayed isoforms. It is backed by a local SQLite
+knowledge graph with query and export tools (results can be persisted through its API;
 automatic per-invocation persistence is not yet wired).
 
 This is an unfunded, independent open-source project. It is not a
@@ -60,7 +61,8 @@ independent domain experts; not yet deployed in production. See
 A Python MCP server that:
 
 - Wraps AlphaFold DB, MONDO, HPO, Open Targets, ClinVar, gnomAD,
-  DisGeNET, ChEMBL, and Ensembl behind MCP tool calls. Each call
+  DisGeNET, ChEMBL, and Ensembl behind MCP tool calls. Explicit numbered
+  isoforms may also trigger a UniProtKB sequence-and-identity check. Each call
   is a thin orchestration over those upstreams; the server does not
   add scientific judgement.
 - Composes upstreams into multi-source workflows: variant
@@ -328,6 +330,7 @@ distance from the human structure along with sequence identity.
 | Source | What we use | License |
 |---|---|---|
 | AlphaFold DB v6 (EBI/DeepMind) | Structures, pLDDT, PAE, AlphaMissense | CC BY 4.0 |
+| UniProtKB REST (EMBL-EBI/SIB/PIR) | Conditional displayed-isoform identity verification, not general annotation retrieval | CC BY 4.0 |
 | MONDO (OLS4) | Disease ontology, ICD cross-refs | CC BY 4.0 |
 | HPO (JAX) | Phenotype terms, gene-disease links | HPO license (free for all use) |
 | Open Targets | Disease–target evidence | CC0 1.0 (data) |
@@ -337,9 +340,13 @@ distance from the human structure along with sequence identity.
 | ChEMBL v37 (EMBL-EBI) | Drug bioactivity, MoA, ADMET | CC BY-SA 3.0 |
 | Ensembl (EMBL-EBI) | VEP, orthologs, gene lookup | No restrictions (data); Apache 2.0 (code) |
 
-UniProt accessions are used throughout as protein **identifiers** — they
-key AlphaFold structures and Open Targets cross-references — but the
-UniProt API itself is not queried as a data source. Domain (InterPro),
+UniProt accessions are used throughout as protein **identifiers**. The
+UniProtKB REST API is queried **only** for an explicit isoform not separately
+labeled in AlphaFold DB: its curated Displayed designation and full canonical
+sequence must agree with the model before reuse. This extra upstream
+request has its own rate limit and is blocked in offline mode. Failed
+verification raises an error rather than proving no model exists.
+Domain (InterPro),
 Gene Ontology, experimental-structure (RCSB PDB), and tissue-expression
 (Human Protein Atlas) lookups are **not** integrated in this release.
 
@@ -439,8 +446,9 @@ this file).
 <!-- x-release-please-end-version -->
 
 When citing results derived from this software, please also cite the
-upstream data sources (AlphaFold DB, Open Targets, ChEMBL, Ensembl,
-ClinVar, gnomAD, MONDO, HPO, DisGeNET) according to their own citation
+upstream data sources (AlphaFold DB, UniProtKB when verifying explicit
+isoforms, Open Targets, ChEMBL, Ensembl, ClinVar, gnomAD, MONDO,
+HPO, DisGeNET) according to their own citation
 requirements.
 
 ## License
