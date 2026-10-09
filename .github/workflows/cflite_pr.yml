@@ -20,10 +20,6 @@ jobs:
     permissions:
       contents: read
       security-events: write
-    strategy:
-      fail-fast: false
-      matrix:
-        sanitizer: [address]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -33,7 +29,7 @@ jobs:
         uses: google/clusterfuzzlite/actions/build_fuzzers@884713a6c30a92e5e8544c39945cd7cb630abcd1 # v1
         with:
           language: python
-          sanitizer: ${{ matrix.sanitizer }}
+          sanitizer: address
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Run fuzzers
         id: run
@@ -42,7 +38,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           fuzz-seconds: 300
           mode: code-change
-          sanitizer: ${{ matrix.sanitizer }}
+          sanitizer: address
           output-sarif: true
       - name: Upload SARIF to GitHub Security tab
         if: always() && steps.build.outcome == 'success'
