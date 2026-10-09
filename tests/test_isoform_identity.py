@@ -175,6 +175,7 @@ async def test_dict_prediction_mismatched_isoform_not_reassigned(
     async with AlphaFoldClient() as client:
         assert await client.get_prediction("P04637-1") == {}
 
+
 async def test_isoform_identity_empty_model_sequence(
     respx_mock: respx.MockRouter,
 ) -> None:
