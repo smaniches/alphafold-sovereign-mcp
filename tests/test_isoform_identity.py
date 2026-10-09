@@ -151,7 +151,7 @@ async def test_missing_isoform_verification_propagates_source_error(
 
     monkeypatch.setattr(UniProtIsoformClient, "is_displayed_isoform", unavailable)
     async with AlphaFoldClient() as client:
-        with pytest.raises(RuntimeError, match="UniProt service unavailable"):
+        with pytest.raises(UniProtVerificationError, match="verification unavailable"):
             await client.get_prediction("P04637-1")
 
 
