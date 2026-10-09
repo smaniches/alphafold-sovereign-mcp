@@ -34,9 +34,7 @@ async def test_structural_tools_propagate_unavailable_isoform_verification(
 
     with pytest.raises(error_type, match="not verified"):
         if tool == "get_protein_structure":
-            await si.get_protein_structure(
-                si.StructureRetrievalInput(uniprot_id="P04637-1")
-            )
+            await si.get_protein_structure(si.StructureRetrievalInput(uniprot_id="P04637-1"))
         elif tool == "_fetch_af_plddt":
             await si._fetch_af_plddt("P04637-1")
         else:
@@ -57,9 +55,7 @@ async def test_structure_retrieval_exposes_verified_isoform_origin(
     client.get_prediction = AsyncMock(return_value=metadata)
     monkeypatch.setattr(si, "_alphafold", lambda: client)
 
-    result = await si.get_protein_structure(
-        si.StructureRetrievalInput(uniprot_id="P04637-1")
-    )
+    result = await si.get_protein_structure(si.StructureRetrievalInput(uniprot_id="P04637-1"))
     assert result["structure_available"] is True
     assert result["model_uniprot_accession"] == "P04637"
     assert result["verified_displayed_isoform"] == "P04637-1"
@@ -105,11 +101,13 @@ async def test_idr_summary_propagates_verified_isoform(
     monkeypatch.setattr(
         si,
         "_fetch_af_plddt",
-        AsyncMock(return_value={
-            "model_entity_id": "AF-P04637-F1",
-            "model_uniprot_accession": "P04637",
-            "verified_displayed_isoform": "P04637-1",
-        }),
+        AsyncMock(
+            return_value={
+                "model_entity_id": "AF-P04637-F1",
+                "model_uniprot_accession": "P04637",
+                "verified_displayed_isoform": "P04637-1",
+            }
+        ),
     )
     monkeypatch.setattr(
         si,
@@ -117,9 +115,7 @@ async def test_idr_summary_propagates_verified_isoform(
         AsyncMock(return_value={"pdb_text": "\n".join(rows), "uniprot_id": "P04637-1"}),
     )
 
-    result = await si.detect_intrinsically_disordered(
-        si.UniProtInput(uniprot_id="P04637-1")
-    )
+    result = await si.detect_intrinsically_disordered(si.UniProtInput(uniprot_id="P04637-1"))
     assert result["model_uniprot_accession"] == "P04637"
     assert result["verified_displayed_isoform"] == "P04637-1"
     assert result["sequence_length"] == 6

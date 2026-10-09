@@ -209,6 +209,7 @@ async def test_invalid_upstream_prediction_scalar_returns_no_model(
         with pytest.raises(AlphaFoldPredictionSchemaError, match="not a record"):
             await client.get_prediction("P04637")
 
+
 def _uniprot_record_with_isoform(value: Any) -> dict[str, Any]:
     record = _uniprot_record()
     record["comments"][0]["isoforms"] = [value]
@@ -237,9 +238,7 @@ def _uniprot_record_with_isoform(value: Any) -> dict[str, Any]:
         },
         _uniprot_record_with_isoform(None),
         _uniprot_record_with_isoform({"isoformSequenceStatus": "Displayed"}),
-        _uniprot_record_with_isoform(
-            {"isoformIds": [None], "isoformSequenceStatus": "Displayed"}
-        ),
+        _uniprot_record_with_isoform({"isoformIds": [None], "isoformSequenceStatus": "Displayed"}),
         _uniprot_record_with_isoform({"isoformIds": ["P04637-1"]}),
     ],
 )
@@ -332,6 +331,7 @@ async def test_check_availability_propagates_verification_failure(
     async with AlphaFoldClient() as client:
         with pytest.raises(UniProtVerificationError):
             await client.check_availability("P04637-1")
+
 
 async def test_only_nondict_upstream_model_is_a_schema_error(
     respx_mock: respx.MockRouter,

@@ -68,9 +68,7 @@ def _normalize_prediction_records(raw: Any) -> list[dict[str, Any]]:
         return cast("list[dict[str, Any]]", raw)
     if isinstance(raw, dict):
         return [cast("dict[str, Any]", raw)]
-    raise AlphaFoldPredictionSchemaError(
-        "AlphaFold DB prediction response is not a record or list"
-    )
+    raise AlphaFoldPredictionSchemaError("AlphaFold DB prediction response is not a record or list")
 
 
 class AlphaFoldClient(BaseAsyncClient):
