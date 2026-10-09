@@ -108,3 +108,18 @@ validated domain annotations or biophysical disorder measurements.
 An empty AFDB REST API response must not be interpreted as definitive
 absence of a predicted model: the >2700-aa human-protein fragments are
 provided by the FTP proteome archive, not the usual web API.
+
+## Modeled residues and intrinsic-disorder segments
+
+IDR outputs report legacy segment `start` and `end` in **1-based
+modeled C-alpha ordinal order**, not canonical UniProt numbering.
+The tool also exposes the corresponding PDB chain, author residue
+identifiers and insertion codes, and segments must never bridge PDB
+numbering gaps or chains. PDB author residue numbering is not a SIFTS
+mapping, and an N-/C-terminal label refers to the modeled fragment,
+not necessarily a full-length canonical protein terminus. Empty or
+invalid C-alpha records do not justify a claim of an ordered protein.
+
+Likewise the `get_protein_structure` metadata surfaces the upstream
+`sequenceStart` / `sequenceEnd` interval when supplied. It does not
+claim that those offsets independently validate a residue-to-PDB mapping.

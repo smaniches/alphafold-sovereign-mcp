@@ -1035,16 +1035,42 @@ async def detect_intrinsically_disordered(
     if not structure:
         return _no_structure_response(uid)
 
-    per_residue_plddt = _extract_plddt_from_pdb(structure["pdb_text"])
-    idr_segments = _detect_idr_segments(per_residue_plddt)
+    residue_records = _extract_plddt_residue_records(structure["pdb_text"])
+    per_residue_plddt = [record[3] for record in residue_records]
+    positions = [(record[0], record[1], record[2]) for record in residue_records]
+    idr_segments = _detect_idr_segments(per_residue_plddt, positions=positions)
+    for segment in idr_segments:
+        first = residue_records[segment["start"] - 1]
+        last = residue_records[segment["end"] - 1]
+        segment["pdb_chain"] = first[0]
+        segment["pdb_residue_start"] = first[1]
+        segment["pdb_residue_end"] = last[1]
+        segment["pdb_insertion_code_start"] = first[2]
+        segment["pdb_insertion_code_end"] = last[2]
 
     total_residues = len(per_residue_plddt)
+    if total_residues == 0:
+        return {
+            "uniprot_id": uid,
+            "sequence_length": 0,
+            "error": "No valid C-alpha residue confidence records in the selected model.",
+        }
     disordered_residues = sum(1 for p in per_residue_plddt if p < 50)
     idr_fraction = disordered_residues / total_residues if total_residues > 0 else 0.0
 
     return {
         "uniprot_id": uid,
         "sequence_length": total_residues,
+        "model_entity_id": result.get("model_entity_id"),
+        "sequence_start": result.get("sequence_start"),
+        "sequence_end": result.get("sequence_end"),
+        "coordinate_system": "model_C_alpha_order_1_based",
+        "residue_mapping_note": (
+            "Segment start/end are ordinal indices of observed C-alpha residues "
+            "in the selected model; PDB residue identifiers are reported separately. "
+            "Neither index is a verified UniProt or PDB/SIFTS residue mapping. "
+            "Terminal and whole-protein labels only describe the modeled segment."
+        ),
         "idr_fraction": round(idr_fraction, 4),
         "disordered_residue_count": disordered_residues,
         "is_idr_protein": idr_fraction > 0.3,
@@ -1130,6 +1156,13 @@ async def get_protein_structure(
         ),
         "model_version": meta.get("latestVersion"),
         "model_created": meta.get("modelCreatedDate", ""),
+        "model_chain_id": meta.get("chainId", ""),
+        "sequence_start": meta.get("sequenceStart", meta.get("uniprotStart")),
+        "sequence_end": meta.get("sequenceEnd", meta.get("uniprotEnd")),
+        "residue_mapping_status": (
+            "Model sequence interval from AlphaFold metadata; no experimentally "
+            "verified PDB/SIFTS residue mapping performed."
+        ),
         "file_urls": {
             "pdb": meta.get("pdbUrl", ""),
             "cif": meta.get("cifUrl", ""),
@@ -1166,17 +1199,18 @@ def _parse_pdb_full(
     for line in pdb_text.splitlines():
         if line.startswith("ATOM") and line[12:16].strip() == "CA":
             try:
-                coords.append([float(line[30:38]), float(line[38:46]), float(line[46:54])])
-                residues.append(
-                    {
-                        "chain": line[21].strip(),
-                        "resnum": int(line[22:26].strip()),
-                        "resname": line[17:20].strip(),
-                        "plddt": float(line[60:66].strip()),  # B-factor stores pLDDT in AF
-                    }
-                )
+                coordinate = [float(line[30:38]), float(line[38:46]), float(line[46:54])]
+                residue = {
+                    "chain": line[21].strip(),
+                    "resnum": int(line[22:26].strip()),
+                    "resname": line[17:20].strip(),
+                    "plddt": float(line[60:66].strip()),  # B-factor stores pLDDT in AF
+                }
             except (ValueError, IndexError):
                 continue
+            # Only append a complete coordinate/residue pair, never just one.
+            coords.append(coordinate)
+            residues.append(residue)
     return np.array(coords, dtype=float), residues
 
 
@@ -1322,36 +1356,74 @@ def _pocket_druggability_label(pdi: float) -> str:
     return "POOR"
 
 
-def _extract_plddt_from_pdb(pdb_text: str) -> list[float]:
-    """Extract per-residue pLDDT from PDB B-factor column (AF convention)."""
-    plddts: list[float] = []
-    seen: set[tuple[str, int]] = set()
+def _extract_plddt_residue_records(
+    pdb_text: str,
+) -> list[tuple[str, int, str, float]]:
+    """Extract chain, author residue number, insertion code and pLDDT.
+
+    No UniProt coordinate correspondence is inferred from PDB numbering.
+    Alternative conformers are collapsed to blank/A for deterministic output.
+    """
+    records: list[tuple[str, int, str, float]] = []
+    seen: set[tuple[str, int, str]] = set()
     for line in pdb_text.splitlines():
         if line.startswith("ATOM") and line[12:16].strip() == "CA":
+            if line[16].strip() not in ("", "A"):
+                continue
             try:
                 chain = line[21].strip()
                 resnum = int(line[22:26].strip())
-                key = (chain, resnum)
-                if key not in seen:
-                    seen.add(key)
-                    plddts.append(float(line[60:66].strip()))
+                insertion_code = line[26].strip()
+                confidence = float(line[60:66].strip())
             except (ValueError, IndexError):
                 continue
-    return plddts
+            if not math.isfinite(confidence) or not 0 <= confidence <= 100:
+                continue
+            key = (chain, resnum, insertion_code)
+            if key not in seen:
+                seen.add(key)
+                records.append((chain, resnum, insertion_code, confidence))
+    return records
+
+
+def _extract_plddt_from_pdb(pdb_text: str) -> list[float]:
+    """Project validated per-residue pLDDT values in model order."""
+    return [record[3] for record in _extract_plddt_residue_records(pdb_text)]
 
 
 def _detect_idr_segments(
     per_residue_plddt: list[float],
     cutoff: float = 50.0,
     min_length: int = 5,
+    positions: list[tuple[str, int, str]] | None = None,
 ) -> list[dict[str, Any]]:
-    """Find contiguous runs of residues with pLDDT < cutoff."""
+    """Find low-confidence runs without bridging missing PDB residues/chains.
+
+    Returned start/end indices remain 1-based positions in model C-alpha
+    order for backwards compatibility, not full-length UniProt positions.
+    """
     segments: list[dict[str, Any]] = []
     n = len(per_residue_plddt)
+    if positions is not None and len(positions) != n:
+        raise ValueError("Number of PDB positions must match pLDDT values")
     in_idr = False
     start = 0
 
     for i, p in enumerate(per_residue_plddt):
+        if positions is not None and i > 0:
+            prev, cur = positions[i - 1], positions[i]
+            gap = (
+                cur[0] != prev[0]
+                or cur[1] != prev[1] + 1
+                or bool(prev[2])
+                or bool(cur[2])
+            )
+            if gap and in_idr:
+                length = i - start
+                if length >= min_length:
+                    mean_p = float(sum(per_residue_plddt[start:i]) / length)
+                    segments.append(_classify_idr_segment(start + 1, i, length, mean_p, n))
+                in_idr = False
         if p < cutoff and not in_idr:
             in_idr = True
             start = i
@@ -1367,7 +1439,6 @@ def _detect_idr_segments(
         if length >= min_length:
             mean_p = float(sum(per_residue_plddt[start:]) / length)
             segments.append(_classify_idr_segment(start + 1, n, length, mean_p, n))
-
     return segments
 
 
