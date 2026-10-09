@@ -35,14 +35,23 @@ class UniProtIsoformClient(BaseAsyncClient):
         sequence = payload.get("sequence")
         if not isinstance(sequence, dict) or sequence.get("value") != model_sequence:
             return False
-        for comment in payload.get("comments", []):
+        comments = payload.get("comments")
+        if not isinstance(comments, list):
+            return False
+        for comment in comments:
             if not isinstance(comment, dict) or comment.get("commentType") != "ALTERNATIVE PRODUCTS":
                 continue
-            for isoform in comment.get("isoforms", []):
+            isoforms = comment.get("isoforms")
+            if not isinstance(isoforms, list):
+                continue
+            for isoform in isoforms:
+                if not isinstance(isoform, dict):
+                    continue
+                ids = isoform.get("isoformIds")
                 if (
-                    isinstance(isoform, dict)
-                    and isoform.get("isoformSequenceStatus") == "Displayed"
-                    and isoform_id in isoform.get("isoformIds", [])
+                    isoform.get("isoformSequenceStatus") == "Displayed"
+                    and isinstance(ids, list)
+                    and isoform_id in ids
                 ):
                     return True
         return False
