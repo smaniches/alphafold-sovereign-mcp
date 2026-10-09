@@ -58,6 +58,21 @@ class AlphaFoldPredictionSchemaError(ValueError):
     """An AlphaFold DB prediction response is not a valid model record."""
 
 
+def _normalize_prediction_records(raw: Any) -> list[dict[str, Any]]:
+    """Reject malformed AFDB arrays in full; never silently discard records."""
+    if isinstance(raw, list):
+        if not all(isinstance(item, dict) for item in raw):
+            raise AlphaFoldPredictionSchemaError(
+                "AlphaFold DB returned malformed prediction model records"
+            )
+        return cast("list[dict[str, Any]]", raw)
+    if isinstance(raw, dict):
+        return [cast("dict[str, Any]", raw)]
+    raise AlphaFoldPredictionSchemaError(
+        "AlphaFold DB prediction response is not a record or list"
+    )
+
+
 class AlphaFoldClient(BaseAsyncClient):
     """Async client for the EBI AlphaFold DB REST API."""
 
@@ -100,23 +115,9 @@ class AlphaFoldClient(BaseAsyncClient):
         is_isoform = bool(hyphen and suffix.isdigit())
         canonical = prefix if is_isoform else uniprot_id
         raw: Any = await self._get(f"/prediction/{canonical}")
-        if isinstance(raw, list):
-            if not raw:
-                return cast("dict[str, Any]", raw)
-            # Reject the entire response if any item is malformed. Dropping
-            # invalid entries could turn an ambiguous response into a
-            # false-positive isoform match.
-            if not all(isinstance(item, dict) for item in raw):
-                raise AlphaFoldPredictionSchemaError(
-                    "AlphaFold DB returned malformed prediction model records"
-                )
-            records = raw
-        elif isinstance(raw, dict):
-            records = [raw]
-        else:
-            raise AlphaFoldPredictionSchemaError(
-                "AlphaFold DB prediction response is not a record or list"
-            )
+        if isinstance(raw, list) and not raw:
+            return cast("dict[str, Any]", raw)
+        records = _normalize_prediction_records(raw)
 
         for model in records:
             if model.get("uniprotAccession") == uniprot_id:
