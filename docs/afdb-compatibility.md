@@ -92,3 +92,19 @@ Upstream background:
 
 The relevant upstream datasets have their own attribution requirements;
 this server is independent of EMBL-EBI and Google DeepMind.
+
+## PAE and residue interpretation safeguards
+
+The implementation accepts a PAE matrix only when it is a finite,
+nonnegative square numeric array. Where a selected model advertises a
+sequence, PAE dimensions must match its **model-local sequence length**.
+Invalid or missing PAE is reported with an explicit status rather than
+a fabricated mean error of zero. PAE positions and domain-candidate
+indices are local to the predicted model, not automatically UniProt or
+experimental PDB residue coordinates. The domain-boundary heuristic and
+the mean-pLDDT-based ordered-fraction proxy are not independently
+validated domain annotations or biophysical disorder measurements.
+
+An empty AFDB REST API response must not be interpreted as definitive
+absence of a predicted model: the >2700-aa human-protein fragments are
+provided by the FTP proteome archive, not the usual web API.

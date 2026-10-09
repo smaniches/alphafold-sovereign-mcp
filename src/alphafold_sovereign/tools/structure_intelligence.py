@@ -196,26 +196,47 @@ async def _fetch_af_plddt(uniprot_id: str) -> dict[str, Any] | None:
 
     result: dict[str, Any] = {
         "uniprot_id": uniprot_id,
+        "model_entity_id": _prediction_model_id(meta),
         "mean_plddt": meta.get("globalMetricValue"),
         "model_url": meta.get("pdbUrl", ""),
         "sequence_length": len(_prediction_sequence(meta)),
+        "sequence_start": meta.get("sequenceStart", meta.get("uniprotStart")),
+        "sequence_end": meta.get("sequenceEnd", meta.get("uniprotEnd")),
     }
 
     try:
         pae_doc = await client.get_pae(uniprot_id)
     except Exception as exc:
         logger.warning("af.pae.failed", uniprot_id=uniprot_id, exc=str(exc))
+        result["pae_status"] = "unavailable"
         return result
 
-    pae_matrix = np.array(pae_doc.get("predicted_aligned_error", []))
-    if pae_matrix.size > 0:
-        result["pae_matrix_shape"] = list(pae_matrix.shape)
-        result["pae_mean"] = float(np.mean(pae_matrix))
-        result["pae_max"] = float(np.max(pae_matrix))
-        # Inter-domain: regions where PAE is high (>15 Å) between segments
-        result["high_pae_pairs"] = _find_high_pae_pairs(pae_matrix, threshold=15.0)
-        result["domain_boundaries"] = _detect_domain_boundaries(pae_matrix)
+    try:
+        pae_matrix = np.asarray(pae_doc.get("predicted_aligned_error", []), dtype=float)
+    except (TypeError, ValueError):
+        result["pae_status"] = "invalid_numeric_data"
+        return result
+    if pae_matrix.size == 0:
+        result["pae_status"] = "missing"
+        return result
+    if pae_matrix.ndim != 2 or pae_matrix.shape[0] != pae_matrix.shape[1]:
+        result["pae_status"] = "invalid_shape"
+        return result
+    if not bool(np.isfinite(pae_matrix).all()) or bool((pae_matrix < 0).any()):
+        result["pae_status"] = "invalid_values"
+        return result
+    sequence_length = result["sequence_length"]
+    if sequence_length and pae_matrix.shape[0] != sequence_length:
+        result["pae_status"] = "sequence_length_mismatch"
+        return result
 
+    result["pae_status"] = "available"
+    result["pae_matrix_shape"] = list(pae_matrix.shape)
+    result["pae_mean"] = float(np.mean(pae_matrix))
+    result["pae_max"] = float(np.max(pae_matrix))
+    # The PAE is directional and indexed in the selected model's local sequence.
+    result["high_pae_pairs"] = _find_high_pae_pairs(pae_matrix, threshold=15.0)
+    result["domain_boundaries"] = _detect_domain_boundaries(pae_matrix)
     return result
 
 
@@ -239,15 +260,15 @@ def _no_structure_response(uniprot_id: str) -> dict[str, Any]:
         "uniprot_id": uniprot_id,
         "structure_available": False,
         "error": (
-            "No AlphaFold model: AlphaFold DB returned no structure "
-            "prediction for this UniProt accession."
+            "No structure prediction returned by the AlphaFold DB REST API "
+            "for this UniProt accession."
         ),
         "note": (
-            "AlphaFold DB covers most of UniProtKB but not every "
-            "accession. Some fragments, non-reference isoforms, and "
-            "very recently added entries have no deposited model. This "
-            "is an expected data-coverage gap, not a server fault. "
-            "Confirm the accession at https://alphafold.ebi.ac.uk/."
+            "An empty API response does not prove that no prediction exists. "
+            "Human proteins longer than 2700 residues may have overlapping "
+            "fragment models available through the AlphaFold FTP archive only; "
+            "other identifiers may be absent or recently updated. "
+            "Check https://alphafold.ebi.ac.uk/ and its FTP documentation."
         ),
     }
 
@@ -276,10 +297,10 @@ def _detect_domain_boundaries(pae: np.ndarray, window: int = 10) -> list[int]:
     boundaries: list[int] = []
     if n < 2 * window:
         return boundaries
+    global_mean = float(np.mean(pae))
     scores = []
     for i in range(window, n - window):
         local = float(np.mean(pae[i - window : i + window, i - window : i + window]))
-        global_mean = float(np.mean(pae))
         scores.append((i, local - global_mean))
     # Peak detection: residues where local PAE >> global mean
     threshold = float(np.std([s for _, s in scores])) * 1.5
@@ -517,29 +538,45 @@ async def analyze_structural_confidence(
 
     return {
         "uniprot_id": uid,
-        "mean_plddt": round(plddt, 2) if plddt else None,
+        "mean_plddt": round(plddt, 2) if plddt is not None else None,
         "confidence_tier": confidence_tier,
         "confidence_tier_explanation": _plddt_tier_explanation(confidence_tier),
         "sequence_length": result.get("sequence_length"),
+        "model_entity_id": result.get("model_entity_id"),
+        "sequence_start": result.get("sequence_start"),
+        "sequence_end": result.get("sequence_end"),
         "pae_summary": {
-            "mean_pae_angstrom": round(result.get("pae_mean", 0.0), 2),
-            "max_pae_angstrom": round(result.get("pae_max", 0.0), 2),
+            "available": "pae_mean" in result,
+            "status": result.get("pae_status", "available" if "pae_mean" in result else "unavailable"),
+            "mean_pae_angstrom": (
+                round(result["pae_mean"], 2) if "pae_mean" in result else None
+            ),
+            "max_pae_angstrom": (
+                round(result["pae_max"], 2) if "pae_max" in result else None
+            ),
             "high_uncertainty_pairs": result.get("high_pae_pairs", [])[:5],
         },
         "domain_boundaries": {
             "candidate_positions": domain_boundaries,
-            "n_putative_domains": max(1, len(domain_boundaries)),
+            "n_putative_domains": (
+                len(domain_boundaries) + 1 if "pae_mean" in result else None
+            ),
             "note": (
-                "Boundary positions are zero-indexed residue numbers where PAE rises sharply. "
-                "Validate with InterPro or UniProt feature annotations."
+                "Candidates are zero-based LOCAL model-array indices, not UniProt positions. "
+                "This PAE heuristic is not a validated domain assignment; compare to "
+                "InterPro or experimentally established domain annotations."
             ),
         },
         "druggability_pre_screen": {
             "ordered_fraction": _estimate_ordered_fraction(plddt),
+            "ordered_fraction_note": (
+                "Unvalidated proxy calculated from mean pLDDT; NOT the fraction "
+                "of residues actually classified as ordered."
+            ),
             "structural_suitability": (
-                "SUITABLE for structure-based drug design"
+                "HIGHER MODEL CONFIDENCE: validate pockets and ligand binding independently"
                 if (plddt or 0) >= 70
-                else "CAUTION: low confidence may indicate IDP or novel fold"
+                else "CAUTION: low confidence may indicate disorder or an uncertain prediction"
             ),
         },
         "model_url": result.get("model_url", ""),

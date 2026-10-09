@@ -665,12 +665,17 @@ async def test_fetch_af_structure_client_raises(monkeypatch: pytest.MonkeyPatch)
 async def test_fetch_af_plddt_success(monkeypatch: pytest.MonkeyPatch) -> None:
     af = _fake_af(monkeypatch)
     af.get_prediction.return_value = _af_meta()
-    af.get_pae.return_value = {"predicted_aligned_error": [[1.0, 2.0], [2.0, 1.0]]}
+    af.get_pae.return_value = {
+        "predicted_aligned_error": [
+            [1.0 if i == j else 2.0 for j in range(4)] for i in range(4)
+        ]
+    }
     out = await _fetch_af_plddt("P12345")
     assert out is not None
     assert out["mean_plddt"] == 85.0
     assert out["sequence_length"] == 4
-    assert out["pae_mean"] == 1.5
+    assert out["pae_mean"] == 1.75
+    assert out["pae_status"] == "available"
 
 
 async def test_fetch_af_plddt_current_schema(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -726,6 +731,46 @@ async def test_fetch_af_plddt_pae_empty(monkeypatch: pytest.MonkeyPatch) -> None
     assert out is not None
     assert "pae_mean" not in out
     assert "pae_matrix_shape" not in out
+
+
+
+@pytest.mark.parametrize(
+    ("pae", "status"),
+    [
+        ({"predicted_aligned_error": [[1, 2], [3]]}, "invalid_numeric_data"),
+        ({"predicted_aligned_error": [1, 2]}, "invalid_shape"),
+        ({"predicted_aligned_error": [[1, 2, 3], [4, 5, 6]]}, "invalid_shape"),
+        ({"predicted_aligned_error": [[float("nan")]]}, "invalid_values"),
+        ({"predicted_aligned_error": [[-1.0]]}, "invalid_values"),
+        ({"predicted_aligned_error": [[1.0, 2.0], [2.0, 1.0]]}, "sequence_length_mismatch"),
+        ({}, "missing"),
+    ],
+)
+async def test_fetch_af_plddt_invalid_pae_is_not_summarized(
+    monkeypatch: pytest.MonkeyPatch, pae: dict[str, Any], status: str
+) -> None:
+    af = _fake_af(monkeypatch)
+    af.get_prediction.return_value = _af_meta()
+    af.get_pae.return_value = pae
+    out = await _fetch_af_plddt("P12345")
+    assert out is not None
+    assert out["pae_status"] == status
+    assert "pae_mean" not in out
+    assert "domain_boundaries" not in out
+
+
+async def test_analyze_structural_confidence_does_not_report_missing_pae_as_zero(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_fetch(uid: str) -> dict[str, Any]:
+        return {"uniprot_id": uid, "mean_plddt": 0.0, "pae_status": "missing"}
+    monkeypatch.setattr(si, "_fetch_af_plddt", fake_fetch)
+    out = await analyze_structural_confidence(UniProtInput(uniprot_id="P12345"))
+    assert out["mean_plddt"] == 0.0
+    assert out["pae_summary"]["available"] is False
+    assert out["pae_summary"]["mean_pae_angstrom"] is None
+    assert out["pae_summary"]["max_pae_angstrom"] is None
+    assert out["domain_boundaries"]["n_putative_domains"] is None
 
 
 # ---------------------------------------------------------------------------
