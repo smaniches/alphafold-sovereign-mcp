@@ -23,6 +23,7 @@ from urllib.parse import urlsplit
 import structlog
 
 from alphafold_sovereign.clients._base import BaseAsyncClient, UpstreamConfig
+from alphafold_sovereign.clients._isoform import UniProtIsoformClient
 
 logger = structlog.get_logger(__name__)
 
@@ -77,24 +78,46 @@ class AlphaFoldClient(BaseAsyncClient):
             the exact UniProt accession is selected; labelled responses
             without a match are not silently attributed to a different isoform.
         """
-        # AFDB's canonical-accession route includes available isoforms.
-        # An isoform-specific API route is not guaranteed to exist.
+        # AFDB lists isoforms under the bare accession.
         prefix, hyphen, suffix = uniprot_id.rpartition("-")
-        query_accession = prefix if hyphen and suffix.isdigit() else uniprot_id
-        raw: Any = await self._get(f"/prediction/{query_accession}")
-        if isinstance(raw, list) and raw:
-            # The endpoint can include multiple UniProt isoforms in an
-            # arbitrary order. Prefer the exact requested accession.
-            for model in raw:
-                if isinstance(model, dict) and model.get("uniprotAccession") == uniprot_id:
-                    return model
-            # If entries are explicitly labelled with other accessions,
-            # do not silently give the caller the wrong isoform.
-            if any(isinstance(model, dict) and model.get("uniprotAccession") for model in raw):
-                return {}
-            # Historical upstream fixtures did not always carry accession.
-            return cast("dict[str, Any]", raw[0])
-        return cast("dict[str, Any]", raw)
+        is_isoform = bool(hyphen and suffix.isdigit())
+        canonical = prefix if is_isoform else uniprot_id
+        raw: Any = await self._get(f"/prediction/{canonical}")
+        if isinstance(raw, list):
+            records = [item for item in raw if isinstance(item, dict)]
+        elif isinstance(raw, dict):
+            records = [raw]
+        else:
+            return {}
+
+        for model in records:
+            if model.get("uniprotAccession") == uniprot_id:
+                return model
+
+        if is_isoform:
+            # The displayed isoform is not universally named "-1".
+            # Verify UniProtKB's curated Displayed status AND full sequence.
+            candidates = [
+                model for model in records if model.get("uniprotAccession") == canonical
+            ]
+            if len(candidates) == 1:
+                sequence = _prediction_sequence(candidates[0])
+                if sequence:
+                    async with UniProtIsoformClient() as uniprot:
+                        matched = await uniprot.is_displayed_isoform(
+                            canonical, uniprot_id, sequence
+                        )
+                    if matched:
+                        return {
+                            **candidates[0],
+                            "_sovereign_verified_isoform": uniprot_id,
+                        }
+            return {}
+
+        # Old unlabelled response fixtures remain supported for bare IDs only.
+        if any(model.get("uniprotAccession") for model in records):
+            return {}
+        return records[0] if records else {}
 
     async def get_pdb_bytes(self, uniprot_id: str) -> bytes:
         """Download the PDB-format structure file for a UniProt accession."""
