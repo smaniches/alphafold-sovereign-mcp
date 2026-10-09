@@ -14,7 +14,7 @@ import pytest
 import respx
 
 from alphafold_sovereign.clients._isoform import UniProtIsoformClient, UniProtVerificationError
-from alphafold_sovereign.clients.alphafold import AlphaFoldClient
+from alphafold_sovereign.clients.alphafold import AlphaFoldClient, AlphaFoldPredictionSchemaError
 
 
 def _uniprot_record(
@@ -94,7 +94,6 @@ async def test_curated_isoform_identity_is_fail_closed(
         [_model_record(), _model_record()],
         [{"uniprotAccession": "P04637"}],
         [{"entryId": "AF-P04637-F1"}],
-        ["unexpected payload"],
     ],
 )
 async def test_explicit_isoform_rejects_unverified_prediction(
@@ -207,7 +206,8 @@ async def test_invalid_upstream_prediction_scalar_returns_no_model(
         return_value=httpx.Response(200, json="unexpected scalar"),
     )
     async with AlphaFoldClient() as client:
-        assert await client.get_prediction("P04637") == {}
+        with pytest.raises(AlphaFoldPredictionSchemaError, match="not a record"):
+            await client.get_prediction("P04637")
 
 def _uniprot_record_with_isoform(value: Any) -> dict[str, Any]:
     record = _uniprot_record()
@@ -315,7 +315,8 @@ async def test_malformed_mixed_model_array_never_confirms_isoform(
         return_value=httpx.Response(200, json=[_model_record(), "malformed"]),
     )
     async with AlphaFoldClient() as client:
-        assert await client.get_prediction("P04637-1") == {}
+        with pytest.raises(AlphaFoldPredictionSchemaError, match="malformed"):
+            await client.get_prediction("P04637-1")
     assert len(respx_mock.calls) == 1
 
 
@@ -331,3 +332,24 @@ async def test_check_availability_propagates_verification_failure(
     async with AlphaFoldClient() as client:
         with pytest.raises(UniProtVerificationError):
             await client.check_availability("P04637-1")
+
+async def test_only_nondict_upstream_model_is_a_schema_error(
+    respx_mock: respx.MockRouter,
+) -> None:
+    respx_mock.get("https://alphafold.ebi.ac.uk/api/prediction/P04637").mock(
+        return_value=httpx.Response(200, json=["not a record"]),
+    )
+    async with AlphaFoldClient() as client:
+        with pytest.raises(AlphaFoldPredictionSchemaError, match="malformed"):
+            await client.get_prediction("P04637")
+
+
+async def test_check_availability_rejects_afdb_schema_corruption(
+    respx_mock: respx.MockRouter,
+) -> None:
+    respx_mock.get("https://alphafold.ebi.ac.uk/api/prediction/P04637").mock(
+        return_value=httpx.Response(200, json=[_model_record(), 7]),
+    )
+    async with AlphaFoldClient() as client:
+        with pytest.raises(AlphaFoldPredictionSchemaError):
+            await client.check_availability("P04637")
