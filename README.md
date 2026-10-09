@@ -83,6 +83,15 @@ A Python MCP server that:
 
 It targets `mcp-spec 2025-06-18` and runs on Python 3.10–3.13.
 
+**AlphaFold DB compatibility:** the prediction API renamed model and
+sequence fields and retired the PAE image URL in June 2026. The client
+uses the current fields, retains legacy-response compatibility, and
+selects the exact requested UniProt accession when the API returns
+multiple isoforms. See the [API compatibility notes](docs/afdb-compatibility.md)
+for the migration contract, remaining fragment limitations, and the
+October 2026 literature-annotation feature that is not yet exposed
+through this server.
+
 ## What this is **not**
 
 - It is **not** a hosted service or a SaaS.

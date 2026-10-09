@@ -2,7 +2,7 @@ site_name: AlphaFold Sovereign MCP
 site_description: >-
   MCP server wrapping AlphaFold DB and 8 other biomedical data sources.
   Engineering-validated infrastructure; scientifically unvalidated by
-  independent domain experts. v1.4.9.
+  independent domain experts.
 site_url: https://smaniches.github.io/alphafold-sovereign-mcp/
 site_author: Santiago Maniches
 repo_url: https://github.com/smaniches/alphafold-sovereign-mcp
@@ -137,6 +137,7 @@ nav:
       - "Target characterisation (EGFR)": examples/02-target-characterization.md
       - "Drug discovery (Imatinib)": examples/03-drug-discovery.md
       - "Golden examples (CI-diffed)": examples/golden.md
+  - AlphaFold DB compatibility: afdb-compatibility.md
   - Architecture: architecture.md
   - Quality:
       - Status: status.md
