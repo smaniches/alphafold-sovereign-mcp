@@ -34,6 +34,13 @@ For live schemas use the [AlphaFold DB API reference](https://alphafold.ebi.ac.u
 ## UniProt isoforms and long-protein fragments
 
 The `/prediction/<accession>` response can contain multiple entries.
+For numbered UniProt isoforms the client queries the canonical accession,
+then selects the exact requested isoform from the returned records; it does
+not assume the server accepts an isoform-specific API route.
+Structural tools accept six/ten-character UniProtKB accessions with optional
+numbered isoforms. Fragment identifiers such as `Q8WZ42-F2` are not
+UniProt accession suffixes, and the multi-source precision-medicine tools
+remain canonical-accession-only until isoform joins are independently verified.
 
 - If the entries have UniProt accession labels, the client selects the entry
   with `uniprotAccession` exactly equal to the requested identifier (including

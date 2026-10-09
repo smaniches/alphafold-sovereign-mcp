@@ -50,6 +50,7 @@ from alphafold_sovereign.clients.alphafold import (
     _prediction_sequence,
 )
 from alphafold_sovereign.clients.ensembl import EnsemblClient
+from alphafold_sovereign.domain.uniprot import UNIPROT_ISOFORM_PATTERN
 from alphafold_sovereign.server.app import mcp
 
 if TYPE_CHECKING:
@@ -71,8 +72,8 @@ class UniProtInput(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
     uniprot_id: str = Field(
         ...,
-        description="UniProt accession, e.g. 'P38398' (BRCA1).",
-        pattern=r"^[A-Z][0-9][A-Z0-9]{3}[0-9](?:[A-Z][0-9][A-Z0-9]{3}[0-9])?$",
+        description="UniProt accession (6/10 characters), optionally with isoform suffix (e.g. P04637-2).",
+        pattern=UNIPROT_ISOFORM_PATTERN,
     )
 
 
@@ -111,7 +112,7 @@ class BindingPocketInput(BaseModel):
     uniprot_id: str = Field(
         ...,
         description="UniProt accession for binding-pocket geometry analysis.",
-        pattern=r"^[A-Z][0-9][A-Z0-9]{3}[0-9](?:[A-Z][0-9][A-Z0-9]{3}[0-9])?$",
+        pattern=UNIPROT_ISOFORM_PATTERN,
     )
     min_pocket_residues: int = Field(
         default=4,
@@ -126,7 +127,7 @@ class StructureRetrievalInput(BaseModel):
     uniprot_id: str = Field(
         ...,
         description="UniProt accession whose AlphaFold model to retrieve, e.g. 'P38398' (BRCA1).",
-        pattern=r"^[A-Z][0-9][A-Z0-9]{3}[0-9](?:[A-Z][0-9][A-Z0-9]{3}[0-9])?$",
+        pattern=UNIPROT_ISOFORM_PATTERN,
     )
     include_coordinates: bool = Field(
         default=False,

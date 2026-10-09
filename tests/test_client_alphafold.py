@@ -68,7 +68,7 @@ async def test_get_prediction_returns_first_when_list(respx_mock: respx.MockRout
 async def test_get_prediction_selects_requested_isoform(
     respx_mock: respx.MockRouter, request_id: str, expected_id: str
 ) -> None:
-    respx_mock.get(f"https://alphafold.ebi.ac.uk/api/prediction/{request_id}").mock(
+    respx_mock.get(f"https://alphafold.ebi.ac.uk/api/prediction/{request_id.split('-')[0]}").mock(
         return_value=httpx.Response(
             200,
             json=[
