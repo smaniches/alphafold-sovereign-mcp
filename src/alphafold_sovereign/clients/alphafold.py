@@ -23,7 +23,7 @@ from urllib.parse import urlsplit
 import structlog
 
 from alphafold_sovereign.clients._base import BaseAsyncClient, UpstreamConfig
-from alphafold_sovereign.clients._isoform import UniProtIsoformClient
+from alphafold_sovereign.clients._isoform import UniProtIsoformClient, UniProtVerificationError
 
 logger = structlog.get_logger(__name__)
 
@@ -60,6 +60,19 @@ class AlphaFoldClient(BaseAsyncClient):
     upstream_name = "AlphaFold DB"
     config = _AF_CONFIG
 
+    def __init__(self, *, request_id: str = "") -> None:
+        super().__init__(request_id=request_id)
+        # One verifier per AlphaFold client: the host-facing MCP keeps a
+        # process-wide AlphaFold instance, so its UniProt limiter and
+        # circuit breaker are shared across concurrent tool calls.
+        self._uniprot_isoform = UniProtIsoformClient(request_id=request_id)
+
+    async def __aexit__(self, *args: object) -> None:
+        try:
+            await self._uniprot_isoform.__aexit__(*args)
+        finally:
+            await super().__aexit__(*args)
+
     # ------------------------------------------------------------------
     # Metadata & structure
     # ------------------------------------------------------------------
@@ -86,7 +99,10 @@ class AlphaFoldClient(BaseAsyncClient):
         if isinstance(raw, list):
             if not raw:
                 return cast("dict[str, Any]", raw)
-            records = [item for item in raw if isinstance(item, dict)]
+            # Reject the entire response if any item is malformed. Dropping
+            # invalid entries could turn an ambiguous response into a
+            # false-positive isoform match.
+            records = raw if all(isinstance(item, dict) for item in raw) else []
         elif isinstance(raw, dict):
             records = [raw]
         else:
@@ -103,10 +119,14 @@ class AlphaFoldClient(BaseAsyncClient):
             if len(candidates) == 1:
                 sequence = _prediction_sequence(candidates[0])
                 if sequence:
-                    async with UniProtIsoformClient() as uniprot:
-                        matched = await uniprot.is_displayed_isoform(
+                    try:
+                        matched = await self._uniprot_isoform.is_displayed_isoform(
                             canonical, uniprot_id, sequence
                         )
+                    except Exception as exc:
+                        raise UniProtVerificationError(
+                            f"UniProtKB verification unavailable for isoform {uniprot_id}"
+                        ) from exc
                     if matched:
                         return {
                             **candidates[0],
@@ -200,6 +220,8 @@ class AlphaFoldClient(BaseAsyncClient):
         try:
             meta = await self.get_prediction(uniprot_id)
             return bool(_prediction_model_id(meta))
+        except UniProtVerificationError:
+            raise
         except Exception:
             return False
 
