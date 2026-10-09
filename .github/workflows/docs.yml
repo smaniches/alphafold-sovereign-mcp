@@ -80,8 +80,8 @@ jobs:
       - name: Install package + docs deps
         run: uv sync --extra docs
 
-      - name: Build (non-strict; warnings are OK while content stabilises)
-        run: uv run mkdocs build --clean
+      - name: Build documentation (strict; warnings fail the check)
+        run: uv run mkdocs build --clean --strict
 
       - name: Deploy to gh-pages
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
