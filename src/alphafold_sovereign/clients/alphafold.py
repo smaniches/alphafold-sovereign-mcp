@@ -54,6 +54,10 @@ def _prediction_sequence(metadata: dict[str, Any]) -> str:
     return value if isinstance(value, str) else ""
 
 
+class AlphaFoldPredictionSchemaError(ValueError):
+    """An AlphaFold DB prediction response is not a valid model record."""
+
+
 class AlphaFoldClient(BaseAsyncClient):
     """Async client for the EBI AlphaFold DB REST API."""
 
@@ -102,11 +106,17 @@ class AlphaFoldClient(BaseAsyncClient):
             # Reject the entire response if any item is malformed. Dropping
             # invalid entries could turn an ambiguous response into a
             # false-positive isoform match.
-            records = raw if all(isinstance(item, dict) for item in raw) else []
+            if not all(isinstance(item, dict) for item in raw):
+                raise AlphaFoldPredictionSchemaError(
+                    "AlphaFold DB returned malformed prediction model records"
+                )
+            records = raw
         elif isinstance(raw, dict):
             records = [raw]
         else:
-            records = []
+            raise AlphaFoldPredictionSchemaError(
+                "AlphaFold DB prediction response is not a record or list"
+            )
 
         for model in records:
             if model.get("uniprotAccession") == uniprot_id:
@@ -220,7 +230,7 @@ class AlphaFoldClient(BaseAsyncClient):
         try:
             meta = await self.get_prediction(uniprot_id)
             return bool(_prediction_model_id(meta))
-        except UniProtVerificationError:
+        except (UniProtVerificationError, AlphaFoldPredictionSchemaError):
             raise
         except Exception:
             return False
