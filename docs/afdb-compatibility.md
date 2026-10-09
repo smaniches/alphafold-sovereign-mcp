@@ -7,9 +7,13 @@ on a specific fix.
 
 ## Prediction API field migration
 
-EMBL-EBI announced the retirement of legacy AlphaFold DB prediction-response
-fields effective 25 June 2026. The local adapter reads the new fields first
-and accepts the old names in previously recorded responses.
+EMBL-EBI announced a **planned** 25 June 2026 sunset for legacy AlphaFold DB
+prediction-response fields. However, an observed response from
+[`/api/prediction/P04637`](https://alphafold.ebi.ac.uk/api/prediction/P04637)
+on **9 October 2026** still contained both modern and legacy aliases,
+including `paeImageUrl`. The announced cutoff is therefore not evidence
+that old fields have disappeared from every live response. The local
+adapter prefers the new fields and also accepts the old fields.
 
 | Older field | Current field | Handling |
 | --- | --- | --- |
@@ -19,7 +23,7 @@ and accepts the old names in previously recorded responses.
 | `uniprotEnd` | `sequenceEnd` | Not consumed for coordinate mapping |
 | `isReviewed` | `isUniProtReviewed` | Not consumed |
 | `isReferenceProteome` | `isUniProtReferenceProteome` | Not consumed |
-| `paeImageUrl` | *(removed)* | Existing MCP `file_urls.pae_image` is empty when absent |
+| `paeImageUrl` | *(no announced replacement)* | Legacy image URL is passed through when present; existing MCP `file_urls.pae_image` is empty when absent |
 
 The separate `paeDocUrl` JSON matrix remains a supported input when
 advertised by upstream. We do **not** infer an image URL from a PAE JSON URL.
