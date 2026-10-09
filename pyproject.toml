@@ -67,7 +67,7 @@ dependencies = [
     # 30-tool surface over stdio. Capped below 4 so a fresh install never
     # auto-adopts an untested major: FastMCP has broken these exact APIs across
     # majors before, and CI pins a single locked version.
-    "fastmcp>=3.0.0,<4",
+    "fastmcp>=3.0.0,<5",
     # HTTP — async, HTTP/2, keep-alive
     "httpx[http2]>=0.27.0",
     # Retry / rate-limiting
