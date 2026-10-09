@@ -1,6 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2024-2026 Santiago Maniches
-"""Verify an explicit UniProt isoform against UniProtKB curated identity."""
+"""Verify explicit UniProt isoforms against curated upstream sequence identity.
+
+A verification outage or malformed upstream payload is never biological
+evidence that an isoform or AlphaFold prediction does not exist.
+"""
 
 from __future__ import annotations
 
@@ -9,8 +13,12 @@ from typing import Any
 from alphafold_sovereign.clients._base import BaseAsyncClient, UpstreamConfig
 
 
+class UniProtVerificationError(RuntimeError):
+    """Curated isoform identity cannot be established from trusted evidence."""
+
+
 class UniProtIsoformClient(BaseAsyncClient):
-    """Source-restricted read-only lookup of UniProtKB canonical metadata."""
+    """Source-restricted read-only UniProtKB client; parent owns its lifespan."""
 
     upstream_name = "UniProtKB isoform verification"
     config = UpstreamConfig(
@@ -23,38 +31,51 @@ class UniProtIsoformClient(BaseAsyncClient):
     async def is_displayed_isoform(
         self, accession: str, isoform_id: str, model_sequence: str
     ) -> bool:
-        """Require a curated Displayed isoform and an identical full sequence.
+        """Require UniProtKB Displayed identity and identical full sequence.
 
-        An isoform suffix alone cannot establish canonical identity.
+        A valid, well-formed mismatch returns False. Network/HTTP failures,
+        invalid JSON, and missing required identity fields instead raise.
         """
         if not model_sequence:
             return False
-        payload: Any = await self._get(f"/uniprotkb/{accession}.json")
-        if not isinstance(payload, dict) or payload.get("primaryAccession") != accession:
+        response = await self._request("GET", f"/uniprotkb/{accession}.json")
+        response.raise_for_status()
+        try:
+            payload: Any = response.json()
+        except ValueError as exc:
+            raise UniProtVerificationError("UniProtKB returned invalid JSON") from exc
+
+        if not isinstance(payload, dict) or not isinstance(payload.get("primaryAccession"), str):
+            raise UniProtVerificationError("UniProtKB entry has no valid primary accession")
+        if payload["primaryAccession"] != accession:
             return False
+
         sequence = payload.get("sequence")
-        if not isinstance(sequence, dict) or sequence.get("value") != model_sequence:
+        if not isinstance(sequence, dict) or not isinstance(sequence.get("value"), str):
+            raise UniProtVerificationError("UniProtKB entry has no valid sequence")
+        if sequence["value"] != model_sequence:
             return False
+
         comments = payload.get("comments")
         if not isinstance(comments, list):
-            return False
+            raise UniProtVerificationError("UniProtKB entry has no valid annotation list")
         for comment in comments:
-            if (
-                not isinstance(comment, dict)
-                or comment.get("commentType") != "ALTERNATIVE PRODUCTS"
-            ):
+            if not isinstance(comment, dict):
+                raise UniProtVerificationError("UniProtKB has a malformed annotation")
+            if comment.get("commentType") != "ALTERNATIVE PRODUCTS":
                 continue
             isoforms = comment.get("isoforms")
             if not isinstance(isoforms, list):
-                continue
+                raise UniProtVerificationError("UniProtKB has malformed isoform annotations")
             for isoform in isoforms:
                 if not isinstance(isoform, dict):
-                    continue
+                    raise UniProtVerificationError("UniProtKB has a malformed isoform entry")
                 ids = isoform.get("isoformIds")
-                if (
-                    isoform.get("isoformSequenceStatus") == "Displayed"
-                    and isinstance(ids, list)
-                    and isoform_id in ids
-                ):
+                if not isinstance(ids, list) or not all(isinstance(x, str) for x in ids):
+                    raise UniProtVerificationError("UniProtKB has invalid isoform identifiers")
+                status = isoform.get("isoformSequenceStatus")
+                if not isinstance(status, str):
+                    raise UniProtVerificationError("UniProtKB has no isoform sequence status")
+                if status == "Displayed" and isoform_id in ids:
                     return True
         return False
