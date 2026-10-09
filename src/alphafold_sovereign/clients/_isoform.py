@@ -39,7 +39,10 @@ class UniProtIsoformClient(BaseAsyncClient):
         if not isinstance(comments, list):
             return False
         for comment in comments:
-            if not isinstance(comment, dict) or comment.get("commentType") != "ALTERNATIVE PRODUCTS":
+            if (
+                not isinstance(comment, dict)
+                or comment.get("commentType") != "ALTERNATIVE PRODUCTS"
+            ):
                 continue
             isoforms = comment.get("isoforms")
             if not isinstance(isoforms, list):
