@@ -1,10 +1,9 @@
 {
   "acmg_criteria_draft": {
     "criteria": {
-      "PP5": "ClinVar: Pathogenic (reviewed by expert panel). Reputable source with strong concordance.",
       "PVS1": "Null variant (stop-gain/frameshift/splice) in a gene where LoF is the established mechanism of disease."
     },
-    "note": "Draft ACMG/AMP criteria based on computational and population evidence. Professional review by a clinical geneticist is required before clinical reporting."
+    "note": "Draft ACMG/AMP criteria from computational and population evidence. ClinVar classification is reported separately and is not PP5/BP6 evidence. Expert review is required before clinical reporting."
   },
   "clinical_tier": "HIGH",
   "clinical_tier_explanation": "Strong evidence of clinical pathogenicity from a ClinVar pathogenic classification (see review_status for the supporting review level) and/or multiple concordant computational predictors.",
@@ -42,13 +41,13 @@
         "disease_name": "breast cancer",
         "drug_count": 0,
         "evidence_scores": {
-          "affected_pathway": 0.0,
-          "animal_model": 0.0,
+          "affected_pathway": 0,
+          "animal_model": 0,
           "genetic_association": 0.9802,
-          "known_drug": 0.0,
+          "known_drug": 0,
           "literature": 0.9985,
-          "rna_expression": 0.0,
-          "somatic_mutation": 0.0
+          "rna_expression": 0,
+          "somatic_mutation": 0
         },
         "overall_score": 0.839,
         "target_ensembl_id": "ENSG00000012048",
@@ -61,13 +60,13 @@
         "disease_name": "Hereditary breast and ovarian cancer syndrome",
         "drug_count": 0,
         "evidence_scores": {
-          "affected_pathway": 0.0,
+          "affected_pathway": 0,
           "animal_model": 0.4018,
           "genetic_association": 0.918,
-          "known_drug": 0.0,
+          "known_drug": 0,
           "literature": 0.3753,
-          "rna_expression": 0.0,
-          "somatic_mutation": 0.0
+          "rna_expression": 0,
+          "somatic_mutation": 0
         },
         "overall_score": 0.8278,
         "target_ensembl_id": "ENSG00000012048",
@@ -80,13 +79,13 @@
         "disease_name": "Fanconi anemia, complementation group S",
         "drug_count": 0,
         "evidence_scores": {
-          "affected_pathway": 0.0,
-          "animal_model": 0.0,
+          "affected_pathway": 0,
+          "animal_model": 0,
           "genetic_association": 0.9142,
-          "known_drug": 0.0,
+          "known_drug": 0,
           "literature": 0.0607,
-          "rna_expression": 0.0,
-          "somatic_mutation": 0.0
+          "rna_expression": 0,
+          "somatic_mutation": 0
         },
         "overall_score": 0.8174,
         "target_ensembl_id": "ENSG00000012048",
@@ -97,7 +96,7 @@
     ]
   },
   "drug_context": {
-    "note": "Drugs acting on the gene product \u2014 not necessarily on this variant.",
+    "note": "Drugs acting on the gene product — not necessarily on this variant.",
     "repurposing_candidates": []
   },
   "functional_consequence": {
@@ -129,5 +128,5 @@
     "homozygote_count": null,
     "populations": []
   },
-  "provenance": "\n\n---\n*AlphaFold Sovereign MCP v<VERSION> \u00b7 <TIMESTAMP> \u00b7 ensembl_vep=GRCh38, clinvar=current, gnomad=v4, alphamissense=2023*"
+  "provenance": "\n\n---\n*AlphaFold Sovereign MCP v<VERSION> · <TIMESTAMP> · ensembl_vep=GRCh38, clinvar=current, gnomad=v4, alphamissense=2023*"
 }
