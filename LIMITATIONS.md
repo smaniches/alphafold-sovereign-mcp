@@ -203,3 +203,24 @@ When you find a new limitation:
 ---
 
 Last updated: 2026-05-28.
+
+---
+
+## L9 — PDBe/IUCr literature evidence is source-reported, not independently mapped
+
+**Module:** `src/alphafold_sovereign/clients/pdbe_literature.py` and the optional
+`generate_variant_clinical_report` literature section.
+
+The client calls PDBe's documented UniProt residue API, checks the identity
+reported with each annotation, and returns the upstream PDB chain/residue,
+UniProt residue, article identifiers and AI-extracted sentence. It does not
+recompute SIFTS, verify that caller-provided coordinates match the HGVS
+variant's transcript/isoform, or retrieve experimental model-quality
+metrics. Text-mined mentions can describe wild-type function, unrelated
+substitutions, or false positives. Missing or inaccessible publications
+may produce no annotations. API errors are marked unavailable, not absent.
+
+**Mitigation:** Do not score or classify variants from this evidence. Verify
+exact residue mapping, the original publication, experimental source
+structures and variant context before scientific interpretation. The default
+report remains unchanged unless the literature option is explicitly set.

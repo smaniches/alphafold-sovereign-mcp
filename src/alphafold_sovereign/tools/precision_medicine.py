@@ -49,6 +49,7 @@ from alphafold_sovereign.clients.ensembl import EnsemblClient
 from alphafold_sovereign.clients.gnomad import GnomADClient
 from alphafold_sovereign.clients.mondo import MONDOClient
 from alphafold_sovereign.clients.opentargets import OpenTargetsClient
+from alphafold_sovereign.clients.pdbe_literature import PDBeLiteratureClient
 from alphafold_sovereign.domain.disease import PathogenicityClass
 from alphafold_sovereign.domain.druggability import (
     has_small_molecule_tractability,
@@ -116,6 +117,12 @@ def _alphafold() -> AlphaFoldClient:
     return cast("AlphaFoldClient", _CLIENTS["alphafold"])
 
 
+def _pdbe_literature() -> PDBeLiteratureClient:
+    if "pdbe_literature" not in _CLIENTS:
+        _CLIENTS["pdbe_literature"] = PDBeLiteratureClient()
+    return cast("PDBeLiteratureClient", _CLIENTS["pdbe_literature"])
+
+
 # ── Provenance footer ─────────────────────────────────────────────────────────
 
 
@@ -147,6 +154,20 @@ class VariantClinicalReportInput(BaseModel):
     include_drug_context: bool = Field(
         default=True,
         description="Include approved drugs acting on the variant's gene product.",
+    )
+    include_literature_evidence: bool = Field(
+        default=False,
+        description="Opt in to source-attributed PDBe/IUCr text-mined evidence at an explicit UniProt coordinate.",
+    )
+    literature_uniprot_id: str | None = Field(
+        default=None,
+        pattern=UNIPROT_ACCESSION_PATTERN,
+        description="UniProt accession of the explicit residue query; not inferred from HGVS.",
+    )
+    literature_uniprot_residue: int | None = Field(
+        default=None,
+        ge=1,
+        description="One-based UniProt reference residue; not a PDB or model-local index.",
     )
 
 
@@ -465,6 +486,9 @@ async def generate_variant_clinical_report(
         params.hgvs: HGVS expression (gene-relative preferred).
         params.include_population_breakdown: Include per-ancestry gnomAD data.
         params.include_drug_context: Include drugs acting on the gene product.
+        params.include_literature_evidence: Query PDBe at an explicitly supplied
+            UniProt accession and residue. The connection to the HGVS variant
+            is NOT independently verified by this operation.
     """
     hgvs = params.hgvs.strip()
     log = logger.bind(hgvs=hgvs, tool="generate_variant_clinical_report")
@@ -697,6 +721,35 @@ async def generate_variant_clinical_report(
             "note": "Drugs acting on the gene product — not necessarily on this variant.",
         }
 
+    # PDBe's publication annotations are a separate evidence family.
+    # Never feed them into ACMG scoring or clinical tiers. The caller must
+    # provide a UniProt coordinate; HGVS-to-UniProt joins are not assumed.
+    if params.include_literature_evidence:
+        accession = params.literature_uniprot_id
+        position = params.literature_uniprot_residue
+        if accession is None or position is None:
+            source_status["pdbe_iucr_literature"] = "missing_coordinates"
+            report["literature_residue_evidence"] = {
+                "status": "missing_coordinates",
+                "note": "Specify both literature_uniprot_id and literature_uniprot_residue.",
+            }
+        else:
+            try:
+                evidence = await _pdbe_literature().get_residue_annotations(accession, position)
+                report["literature_residue_evidence"] = {
+                    **evidence,
+                    "hgvs_to_uniprot_mapping": "Not independently verified; caller-supplied coordinate.",
+                    "mutation_specificity": "Residue mentions are not necessarily evidence about the requested substitution.",
+                }
+                source_status["pdbe_iucr_literature"] = evidence["status"]
+            except Exception as exc:
+                log.warning("pdbe_iucr_literature.failed", exc=str(exc))
+                report["literature_residue_evidence"] = {
+                    "status": "unavailable",
+                    "note": "Upstream failure or invalid mapping; no claim of biological absence.",
+                }
+                source_status["pdbe_iucr_literature"] = "failed"
+
     report["data_sources_status"] = source_status
     report["data_sources"] = {
         "ensembl_vep": "https://rest.ensembl.org",
@@ -707,11 +760,16 @@ async def generate_variant_clinical_report(
         "disgenet": "https://www.disgenet.com",
         "chembl": "https://www.ebi.ac.uk/chembl/",
     }
+    if params.include_literature_evidence:
+        report["data_sources"]["pdbe_iucr_literature"] = (
+            "https://www.ebi.ac.uk/pdbe/api/v2/uniprot/llm_annotations/summary/"
+        )
     report["provenance"] = _provenance(
         ensembl_vep="GRCh38",
         clinvar="current",
         gnomad="v4",
         alphamissense="2023",
+        pdbe_iucr_literature="source-reported" if params.include_literature_evidence else "",
     )
 
     log.info("complete", tier=tier)
