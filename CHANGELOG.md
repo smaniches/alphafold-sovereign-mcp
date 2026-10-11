@@ -7,6 +7,13 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.5.1](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.5.0...v1.5.1) (2026-10-11)
+
+
+### Bug Fixes
+
+* **deps:** update CairoSVG to 2.9.1 security release ([#234](https://github.com/smaniches/alphafold-sovereign-mcp/issues/234)) ([15a2a27](https://github.com/smaniches/alphafold-sovereign-mcp/commit/15a2a27652b5b3a7f065330eb110ddd0bdd078c3))
+
 ## [1.5.0](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.4.12...v1.5.0) (2026-10-11)
 
 
