@@ -479,8 +479,9 @@ async def generate_variant_clinical_report(
     6. **DisGeNET** — curated gene-disease association scores
     7. **ChEMBL** — approved drugs acting on the gene product
 
-    The report includes a draft ACMG/AMP criteria checklist with evidence
-    mapping, a structural impact summary, and an actionability statement.
+    The report includes a draft ACMG/AMP criteria checklist, computed
+    sequence consequences, and gene-level drug context. It does not compute
+    variant-specific three-dimensional structural impact.
 
     Input fields:
         params.hgvs: HGVS expression (gene-relative preferred).
@@ -626,15 +627,8 @@ async def generate_variant_clinical_report(
     if isinstance(vep_results, list):  # pragma: no branch
         acmg_criteria.update(_vep_to_acmg(vep_results))
 
-    # ClinVar evidence
-    if clinvar_class in {
-        PathogenicityClass.PATHOGENIC.value,
-        PathogenicityClass.LIKELY_PATHOGENIC.value,
-    }:
-        status = (clinvar_record or {}).get("review_status", "")
-        acmg_criteria["PP5"] = (
-            f"ClinVar: {clinvar_class} ({status}). Reputable source with strong concordance."
-        )
+    # ClinVar's independently issued classification is returned in the
+    # 'clinvar' section, not double-counted as PP5/BP6 ACMG evidence.
 
     # ── Step 10: Clinical tier ────────────────────────────────────────────────
     tier = _compute_clinical_tier(
@@ -696,8 +690,9 @@ async def generate_variant_clinical_report(
         "acmg_criteria_draft": {
             "criteria": acmg_criteria,
             "note": (
-                "Draft ACMG/AMP criteria based on computational and population evidence. "
-                "Professional review by a clinical geneticist is required before clinical reporting."
+                "Draft ACMG/AMP criteria from computational and population evidence. "
+                "ClinVar classification is reported separately and is not PP5/BP6 evidence. "
+                "Expert review is required before clinical reporting."
             ),
         },
         "disease_associations": {
@@ -1359,9 +1354,7 @@ async def classify_variant_acmg(
       BP4   — In-silico benign evidence (AlphaMissense ≤0.340)
       BP7   — Silent variant, no splicing impact
       BS1   — Allele frequency > 5% in gnomAD
-      PP5   — ClinVar reports the variant pathogenic / likely pathogenic
-              (Supporting). Note: ClinGen's SVI recommends retiring
-              PP5/BP6; it is surfaced here as supporting evidence only.
+      ClinVar is returned as independent source context, not as PP5/BP6 evidence.
 
     Input fields:
         params.hgvs: HGVS expression.
@@ -1440,16 +1433,8 @@ async def classify_variant_acmg(
     for k, v in gnomad_criteria.items():
         criteria[k] = {"met": True, "evidence": v, "strength": _acmg_strength(k)}
 
-    # ClinVar
-    if clinvar_class in {
-        PathogenicityClass.PATHOGENIC.value,
-        PathogenicityClass.LIKELY_PATHOGENIC.value,
-    }:
-        criteria["PP5"] = {
-            "met": True,
-            "evidence": f"ClinVar: {clinvar_class} — {(clinvar_record or {}).get('review_status', '')}",
-            "strength": "Supporting",
-        }
+    # ClinVar classification is an external assertion, not an ACMG
+    # criterion. Preserve it below with its review status and source ID.
 
     # LOEUF context for PVS1
     if "PVS1" in criteria and loeuf is not None:
@@ -1485,16 +1470,19 @@ async def classify_variant_acmg(
         >= 1
     ):
         final_class = "Likely Benign"
-    elif clinvar_class == PathogenicityClass.PATHOGENIC.value:
-        final_class = "Pathogenic (ClinVar-supported)"
-    elif clinvar_class == PathogenicityClass.LIKELY_PATHOGENIC.value:
-        final_class = "Likely Pathogenic (ClinVar-supported)"
 
     return {
         "hgvs": hgvs,
         "gene_symbol": gene_symbol,
         "inheritance_pattern": params.inheritance_pattern,
         "draft_classification": final_class,
+        "clinvar_reference": {
+            "found": clinvar_record is not None,
+            "classification": clinvar_class,
+            "review_status": (clinvar_record or {}).get("review_status", ""),
+            "variation_id": (clinvar_record or {}).get("variation_id", ""),
+            "interpretation": "External source classification; not counted as ACMG evidence.",
+        },
         "criteria_met": criteria,
         "criteria_not_met": _criteria_not_met(criteria),
         "summary": {
@@ -1509,7 +1497,8 @@ async def classify_variant_acmg(
             "This is a computational draft classification generated for clinical laboratory "
             "review assistance only.  It MUST be reviewed by a board-certified clinical "
             "molecular geneticist before use in any clinical or regulatory context.  "
-            "Per ACMG/AMP 2015 guidelines (Richards et al., Genet Med 2015;17:405–424)."
+            "ClinVar's external classification is not counted as PP5/BP6 evidence. "
+            "Per ACMG/AMP 2015 and ClinGen SVI recommendations."
         ),
         "provenance": _provenance(ensembl_vep="GRCh38", clinvar="current", gnomad="v4"),
     }
@@ -1787,7 +1776,6 @@ def _acmg_strength(code: str) -> str:
         "PP2": "Supporting",
         "PP3": "Supporting",
         "PP4": "Supporting",
-        "PP5": "Supporting",
         "BA1": "Stand-alone",
         "BS1": "Strong",
         "BS2": "Strong",
@@ -1798,7 +1786,6 @@ def _acmg_strength(code: str) -> str:
         "BP3": "Supporting",
         "BP4": "Supporting",
         "BP5": "Supporting",
-        "BP6": "Supporting",
         "BP7": "Supporting",
     }
     return strength_map.get(code, "Supporting")
@@ -1821,7 +1808,6 @@ def _criteria_not_met(criteria: dict[str, dict[str, Any]]) -> list[str]:
         "PP2",
         "PP3",
         "PP4",
-        "PP5",
         "BA1",
         "BS1",
         "BS2",
@@ -1832,7 +1818,6 @@ def _criteria_not_met(criteria: dict[str, dict[str, Any]]) -> list[str]:
         "BP3",
         "BP4",
         "BP5",
-        "BP6",
         "BP7",
     ]
     return [c for c in all_codes if c not in criteria]
