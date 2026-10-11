@@ -3,7 +3,7 @@
     "criteria": {
       "PP3": "Multiple computational evidence suggesting pathogenicity: SIFT=deleterious_low_confidence; PolyPhen=probably_damaging"
     },
-    "note": "Draft ACMG/AMP criteria based on computational and population evidence. Professional review by a clinical geneticist is required before clinical reporting."
+    "note": "Draft ACMG/AMP criteria from computational and population evidence. ClinVar classification is reported separately and is not PP5/BP6 evidence. Expert review is required before clinical reporting."
   },
   "clinical_tier": "MEDIUM",
   "clinical_tier_explanation": "Computational evidence suggests pathogenicity; lacks expert ClinVar curation. Further clinical and functional evidence recommended.",
@@ -42,11 +42,11 @@
         "drug_count": 0,
         "evidence_scores": {
           "affected_pathway": 0.821,
-          "animal_model": 0.0,
+          "animal_model": 0,
           "genetic_association": 0.7464,
-          "known_drug": 0.0,
+          "known_drug": 0,
           "literature": 0.9997,
-          "rna_expression": 0.0,
+          "rna_expression": 0,
           "somatic_mutation": 0.8316
         },
         "overall_score": 0.8526,
@@ -61,11 +61,11 @@
         "drug_count": 0,
         "evidence_scores": {
           "affected_pathway": 0.8275,
-          "animal_model": 0.0,
+          "animal_model": 0,
           "genetic_association": 0.7194,
-          "known_drug": 0.0,
+          "known_drug": 0,
           "literature": 0.9923,
-          "rna_expression": 0.0,
+          "rna_expression": 0,
           "somatic_mutation": 0.8671
         },
         "overall_score": 0.7744,
@@ -80,12 +80,12 @@
         "drug_count": 0,
         "evidence_scores": {
           "affected_pathway": 0.992,
-          "animal_model": 0.0,
-          "genetic_association": 0.0,
-          "known_drug": 0.0,
+          "animal_model": 0,
+          "genetic_association": 0,
+          "known_drug": 0,
           "literature": 0.9942,
-          "rna_expression": 0.0,
-          "somatic_mutation": 0.0
+          "rna_expression": 0,
+          "somatic_mutation": 0
         },
         "overall_score": 0.7369,
         "target_ensembl_id": "ENSG00000146648",
@@ -96,7 +96,7 @@
     ]
   },
   "drug_context": {
-    "note": "Drugs acting on the gene product \u2014 not necessarily on this variant.",
+    "note": "Drugs acting on the gene product — not necessarily on this variant.",
     "repurposing_candidates": []
   },
   "functional_consequence": {
@@ -128,5 +128,5 @@
     "homozygote_count": null,
     "populations": []
   },
-  "provenance": "\n\n---\n*AlphaFold Sovereign MCP v<VERSION> \u00b7 <TIMESTAMP> \u00b7 ensembl_vep=GRCh38, clinvar=current, gnomad=v4, alphamissense=2023*"
+  "provenance": "\n\n---\n*AlphaFold Sovereign MCP v<VERSION> · <TIMESTAMP> · ensembl_vep=GRCh38, clinvar=current, gnomad=v4, alphamissense=2023*"
 }

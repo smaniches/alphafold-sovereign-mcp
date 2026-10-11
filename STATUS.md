@@ -1,6 +1,6 @@
 # Project Status
 
-**Version:** v1.4.11 <!-- x-release-please-version -->
+**Version:** v1.5.1 <!-- x-release-please-version -->
 **Stage:** Beta. Engineering-validated infrastructure; scientifically
 unvalidated by independent domain experts.
 
@@ -31,12 +31,13 @@ expectation of what this project is and is not.
 
 ### Code architecture
 - Five subpackages with clear single responsibilities — ``clients/``
-  (10 specialized clients + 1 shared base), ``domain/`` (2 modules: disease
+  (11 specialized clients + 1 shared base), ``domain/`` (2 modules: disease
   types + the pure druggability heuristic), ``tools/`` (4
   MCP-tool modules), ``storage/`` (2 modules: SQLite KG + boot seed),
   ``server/`` (2 transport modules). The inventory now includes the
-  conditional UniProtKB isoform verifier; general UniProtKB annotations
-  and PDB/SIFTS coordinate mapping are not shipped.
+  conditional UniProtKB isoform verifier and optional PDBe/IUCr text-mined
+  residue annotations; general UniProtKB annotations and independently
+  verified PDB/SIFTS coordinate mapping are not shipped.
 - The previous monolith (~6,000 lines) is archived under
   ``_archive/legacy/`` and excluded from coverage and lint.
 - No circular imports; client retry/circuit-breaker logic is a
@@ -113,6 +114,11 @@ expectation of what this project is and is not.
   based on rough literature priors. They have not been calibrated
   against a benchmark of known druggable / non-druggable targets and
   are not citation-backed.
+- **No independent PDBe/SIFTS validation.** The optional literature
+  client verifies accession and residue identity from PDBe's returned data,
+  not SIFTS mapping or HGVS-to-UniProt numbering. Its deterministic tests
+  use the public PDBe notebook schema and mocked HTTP, not a new live
+  service-level contract or clinically adjudicated residue set.
 - **No end-to-end validation against real-world cases.** The test
   suite mocks every upstream API. The pipeline has not been run
   against a held-out set of variants/targets/diseases with known
@@ -135,7 +141,7 @@ expectation of what this project is and is not.
 - **Single maintainer.** No bus factor > 1.
 - **No external contributors yet.** Review process is documented in
   ``CONTRIBUTING.md`` but has not been exercised.
-- **No formal release cadence.** v1.4.11 is the current release; <!-- x-release-please-version -->
+- **No formal release cadence.** v1.5.1 is the current release; <!-- x-release-please-version -->
   later versions will be tagged as the validation milestones below
   are met.
 

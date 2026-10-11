@@ -92,8 +92,9 @@ The client uses the current fields, retains legacy-response compatibility, and
 selects the exact requested UniProt accession when the API returns
 multiple isoforms. See the [API compatibility notes](docs/afdb-compatibility.md)
 for the migration contract, remaining fragment limitations, and the
-October 2026 literature-annotation feature that is not yet exposed
-through this server.
+optional October 2026 PDBe/IUCr literature-annotation evidence client.
+Those annotations are upstream PDBe research, not an independent
+AlphaFold Sovereign scientific discovery.
 
 ## What this is **not**
 
@@ -172,7 +173,7 @@ uv pip install -e .
 <!-- x-release-please-start-version -->
 ```console
 $ alphafold-sovereign --version
-1.4.11
+1.5.1
 $ alphafold-sovereign --self-test
 SELF-TEST PASS - ACMG helpers behave as expected on the BRCA1 c.5266dupC fixture.
 ```
@@ -297,8 +298,37 @@ generate_variant_clinical_report(hgvs="BRCA1:c.181T>G")
 The server resolves the HGVS, fetches ClinVar, gnomAD, AlphaMissense
 (via AlphaFold DB), Open Targets disease evidence, ChEMBL drug data,
 and Ensembl VEP consequence annotations, and returns a single JSON
-record with the cross-referenced fields plus the ACMG/AMP criteria
-that the available evidence supports.
+record with the cross-referenced fields plus a research-only ACMG/AMP
+draft. The client does not automatically perform a variant-specific
+experimental-structure or SIFTS mapping.
+
+### Optional PDBe/IUCr literature evidence
+
+The clinical-report tool also supports an **opt-in, source-attributed**
+residue-annotation lookup, available only when both a canonical UniProt
+accession and its **one-based UniProt residue position** are provided:
+
+```python
+generate_variant_clinical_report(
+    hgvs="RBM39:p.Trp495Ala",
+    include_literature_evidence=True,
+    literature_uniprot_id="Q8VH51",
+    literature_uniprot_residue=495,
+)
+```
+
+The example demonstrates the request shape, not proof that this HGVS
+expression has been transcript-mapped or clinically interpreted.
+Returned `literature_residue_evidence` preserves PDBe/IUCr annotation
+provenance: publication identifiers, text-mined sentence and exact span,
+extraction confidence, experimental PDB chain/residue information,
+and source-reported UniProt correspondence. Source errors and ambiguous
+or missing residue mappings are explicitly distinguished.
+
+This evidence does **not** change ACMG criteria or pathogenicity tiers.
+Verify the exact HGVS-to-UniProt coordinate independently; the client does
+not independently validate SIFTS or experimental quality. See the
+[compatibility and mapping limitations](docs/afdb-compatibility.md).
 
 ### Drug repurposing
 
@@ -349,6 +379,12 @@ verification raises an error rather than proving no model exists.
 Domain (InterPro),
 Gene Ontology, experimental-structure (RCSB PDB), and tissue-expression
 (Human Protein Atlas) lookups are **not** integrated in this release.
+
+The optional PDBe/IUCr literature client is not a tenth default core
+source: it is called only when `include_literature_evidence=True` and an
+explicit UniProt coordinate is supplied. The data originates in PDBe's
+IUCr text-mining pipeline and requires its own upstream attribution.
+No experimental RCSB PDB structure retrieval is implied.
 
 See [`NOTICE`](NOTICE) for full attributions.
 
@@ -436,7 +472,7 @@ this file).
   author    = {Maniches, Santiago},
   title     = {AlphaFold Sovereign MCP},
   year      = {2026},
-  version   = {1.4.11},
+  version   = {1.5.1},
   url       = {https://github.com/smaniches/alphafold-sovereign-mcp},
   license   = {Apache-2.0},
   orcid     = {0009-0005-6480-1987},

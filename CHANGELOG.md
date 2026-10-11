@@ -7,6 +7,39 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.5.1](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.5.0...v1.5.1) (2026-10-11)
+
+
+### Bug Fixes
+
+* **deps:** update CairoSVG to 2.9.1 security release ([#234](https://github.com/smaniches/alphafold-sovereign-mcp/issues/234)) ([15a2a27](https://github.com/smaniches/alphafold-sovereign-mcp/commit/15a2a27652b5b3a7f065330eb110ddd0bdd078c3))
+
+## [1.5.0](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.4.12...v1.5.0) (2026-10-11)
+
+
+### Features
+
+* **pdbe:** add opt-in source-attributed residue-literature evidence ([dd56f14](https://github.com/smaniches/alphafold-sovereign-mcp/commit/dd56f1488876bb96c0cd15f90640f764aa58e9ee))
+* **pdbe:** opt-in literature-to-residue evidence with strict provenance ([aa6ff9a](https://github.com/smaniches/alphafold-sovereign-mcp/commit/aa6ff9a26d7fa433d80b43885adfc25233123093))
+
+
+### Bug Fixes
+
+* **clinical:** retire PP5/BP6 and separate ClinVar assertions from ACMG drafts ([5037b02](https://github.com/smaniches/alphafold-sovereign-mcp/commit/5037b022d09750f928bec9d15853f02b916eb66b))
+* **clinical:** separate ClinVar from draft ACMG evidence; retire PP5/BP6 ([2b5b530](https://github.com/smaniches/alphafold-sovereign-mcp/commit/2b5b530fcbad0dd9577c0e53552cf819f2cbf660))
+
+## [1.4.12](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.4.11...v1.4.12) (2026-10-09)
+
+
+### Bug Fixes
+
+* **ci:** report exact ClusterFuzzLite required check name ([41490ad](https://github.com/smaniches/alphafold-sovereign-mcp/commit/41490ad95e0646a5b1e8720d2f360435db8b9be3))
+* preserve empty AFDB prediction contracts and align required fuzz check ([2cba944](https://github.com/smaniches/alphafold-sovereign-mcp/commit/2cba9443f24c5691c208a330014deaa8dd654719))
+
+### Dependencies
+
+* **FastMCP:** The supported dependency range now includes FastMCP 4.x (`>=3.0.0,<5`). The lockfile resolves 4.0.11, exercised by the repository's CI suite. This upgrade was merged in [#231](https://github.com/smaniches/alphafold-sovereign-mcp/pull/231); later 4.x releases are not automatically proven compatible.
+
 ## [1.4.11](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.4.10...v1.4.11) (2026-10-09)
 
 

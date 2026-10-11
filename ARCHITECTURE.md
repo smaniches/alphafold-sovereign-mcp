@@ -61,13 +61,14 @@ src/alphafold_sovereign/
 │   │                             3-D variant triage, ICD-10 resolution  (12)
 │   └── knowledge_graph_tools.py  query and export the local graph        (5)
 │
-├── clients/             Async HTTP clients — 10 specialized clients + shared base
+├── clients/             Async HTTP clients — 11 specialized clients + shared base
 │   ├── _base.py         BaseAsyncClient: httpx HTTP/2, tenacity retry with
 │   │                    jitter, aiolimiter per-host rate limiting, a circuit
 │   │                    breaker, and the offline allowlist (raises AirGapError);
 │   │                    a _sha256 helper is available to callers, not auto-applied
 │   ├── alphafold.py     AlphaFold DB (prediction metadata, PDB, PAE, AlphaMissense)
 │   ├── _isoform.py      UniProtKB curated displayed-isoform verification
+│   ├── pdbe_literature.py  Optional PDBe/IUCr source-reported residue mentions
 │   ├── opentargets.py   Open Targets Platform GraphQL
 │   ├── chembl.py        ChEMBL REST
 │   ├── ensembl.py       Ensembl REST (VEP, gene and variant lookup, orthologs)
@@ -123,6 +124,18 @@ tools/disease.py::triage_variant_3d
                              footer and returned as JSON (no automatic
                              knowledge-graph persist)
 ```
+
+### Optional literature-residue evidence
+
+`generate_variant_clinical_report` can call
+`clients/pdbe_literature.py` only when explicitly opted in and given a
+canonical UniProt accession plus residue. It parses the documented PDBe/IUCr
+nested annotation response into source-attributed publication mentions.
+Mapping between the caller's HGVS variant and that UniProt coordinate,
+and PDBe's source-reported SIFTS correspondence, are **not independently
+verified**. These mentions remain distinct from clinical assertions,
+AlphaMissense, and ACMG criterion scoring. No additional public MCP tool
+or background query is introduced.
 
 Every upstream call passes through `clients/_base.py`, which applies a
 per-host rate limit (aiolimiter), retry with exponential back-off and jitter

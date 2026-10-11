@@ -82,6 +82,12 @@ def test_precision_schemas_reject_unsupported_isoform(accession: str) -> None:
 # ---------------------------------------------------------------------------
 
 
+def test_pdbe_literature_lazy_singleton() -> None:
+    first = pm._pdbe_literature()
+    assert first.upstream_name == "PDBe / IUCr literature"
+    assert pm._pdbe_literature() is first
+
+
 def test_provenance_contains_sources() -> None:
     p = _provenance(chembl="v36", gnomad="v4")
     assert "chembl=v36" in p
@@ -428,6 +434,8 @@ def test_criteria_not_met() -> None:
     assert "PVS1" not in out
     assert "PP3" not in out
     assert "PM2" in out
+    assert "PP5" not in out
+    assert "BP6" not in out
 
 
 @pytest.mark.parametrize(
@@ -515,6 +523,7 @@ def _patch_clients(monkeypatch: pytest.MonkeyPatch) -> dict[str, MagicMock]:
         "disgenet",
         "chembl",
         "alphafold",
+        "pdbe_literature",
     ):
         mock = MagicMock()
         mocks[name] = mock
@@ -582,7 +591,82 @@ async def test_generate_variant_report_full(monkeypatch: pytest.MonkeyPatch) -> 
     out = await generate_variant_clinical_report(VariantClinicalReportInput(hgvs="BRCA1:c.181T>G"))
     assert out["clinical_tier"] == "HIGH"
     assert out["gene_symbol"] == "BRCA1"
+    assert "PP5" not in out["acmg_criteria_draft"]["criteria"]
+    assert out["clinvar"]["classification"] == "Pathogenic"
     assert "drug_context" in out
+    assert "literature_residue_evidence" not in out
+
+
+async def test_generate_variant_report_pdbe_opt_in(monkeypatch: pytest.MonkeyPatch) -> None:
+    mocks = _patch_clients(monkeypatch)
+    mocks["ensembl"].vep_hgvs = AsyncMock(return_value=[])
+    mocks["ensembl"].gene_lookup = AsyncMock(return_value={})
+    mocks["clinvar"].search_by_hgvs = AsyncMock(return_value=[])
+    mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
+    mocks["disgenet"].gene_disease_associations = AsyncMock(return_value=[])
+    mocks["pdbe_literature"].get_residue_annotations = AsyncMock(
+        return_value={"status": "ok", "records": [{"doi": "10.1107/example"}]}
+    )
+
+    params = VariantClinicalReportInput(
+        hgvs="BRCA1:p.Cys61Gly",
+        include_drug_context=False,
+        include_literature_evidence=True,
+        literature_uniprot_id="P38398",
+        literature_uniprot_residue=61,
+    )
+    output = await generate_variant_clinical_report(params)
+    assert output["literature_residue_evidence"]["status"] == "ok"
+    assert output["data_sources_status"]["pdbe_iucr_literature"] == "ok"
+    assert output["clinical_tier"] == "UNKNOWN"
+    assert output["acmg_criteria_draft"]["criteria"] == {}
+    mocks["pdbe_literature"].get_residue_annotations.assert_awaited_once_with("P38398", 61)
+
+
+async def test_generate_variant_report_pdbe_missing_coordinates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_clients(monkeypatch)
+    mocks["ensembl"].vep_hgvs = AsyncMock(return_value=[])
+    mocks["ensembl"].gene_lookup = AsyncMock(return_value={})
+    mocks["clinvar"].search_by_hgvs = AsyncMock(return_value=[])
+    mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
+    mocks["disgenet"].gene_disease_associations = AsyncMock(return_value=[])
+    out = await generate_variant_clinical_report(
+        VariantClinicalReportInput(
+            hgvs="BRCA1:p.Cys61Gly",
+            include_drug_context=False,
+            include_literature_evidence=True,
+        )
+    )
+    assert out["literature_residue_evidence"]["status"] == "missing_coordinates"
+    mocks["pdbe_literature"].get_residue_annotations.assert_not_called()
+
+
+async def test_generate_variant_report_pdbe_failure_is_not_absence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_clients(monkeypatch)
+    mocks["ensembl"].vep_hgvs = AsyncMock(return_value=[])
+    mocks["ensembl"].gene_lookup = AsyncMock(return_value={})
+    mocks["clinvar"].search_by_hgvs = AsyncMock(return_value=[])
+    mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
+    mocks["disgenet"].gene_disease_associations = AsyncMock(return_value=[])
+    mocks["pdbe_literature"].get_residue_annotations = AsyncMock(
+        side_effect=RuntimeError("PDBe unavailable")
+    )
+    out = await generate_variant_clinical_report(
+        VariantClinicalReportInput(
+            hgvs="BRCA1:p.Cys61Gly",
+            include_drug_context=False,
+            include_literature_evidence=True,
+            literature_uniprot_id="P38398",
+            literature_uniprot_residue=61,
+        )
+    )
+    assert out["data_sources_status"]["pdbe_iucr_literature"] == "failed"
+    assert out["literature_residue_evidence"]["status"] == "unavailable"
+    assert out["clinical_tier"] == "UNKNOWN"
 
 
 async def test_generate_variant_report_ignores_non_exact_clinvar_hit(
@@ -1514,7 +1598,8 @@ async def test_classify_variant_acmg_pathogenic(monkeypatch: pytest.MonkeyPatch)
         ACMGVariantInput(hgvs="BRCA1:c.181T>G", inheritance_pattern="AD")
     )
     assert "PVS1" in out["criteria_met"]
-    assert "Pathogenic" in out["draft_classification"]
+    assert out["draft_classification"] == "Variant of Uncertain Significance"
+    assert out["clinvar_reference"]["classification"] == "Pathogenic"
 
 
 async def test_classify_variant_acmg_benign(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1544,7 +1629,7 @@ async def test_classify_variant_acmg_benign(monkeypatch: pytest.MonkeyPatch) -> 
 async def test_classify_variant_acmg_clinvar_pathogenic_only(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """No PVS1, but ClinVar Pathogenic → 'Pathogenic (ClinVar-supported)'."""
+    """External ClinVar assertions cannot independently produce ACMG classifications."""
     mocks = _patch_clients(monkeypatch)
     mocks["ensembl"].vep_hgvs = AsyncMock(return_value=[])
     mocks["clinvar"].search_by_hgvs = AsyncMock(
@@ -1554,7 +1639,10 @@ async def test_classify_variant_acmg_clinvar_pathogenic_only(
     mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
 
     out = await classify_variant_acmg(ACMGVariantInput(hgvs="BRCA1:c.18T>G"))
-    assert "ClinVar-supported" in out["draft_classification"]
+    assert out["draft_classification"] == "Variant of Uncertain Significance"
+    assert out["clinvar_reference"]["classification"] == "Pathogenic"
+    assert out["clinvar_reference"]["found"] is True
+    assert "PP5" not in out["criteria_met"]
 
 
 async def test_classify_variant_acmg_ignores_non_exact_clinvar_hit(
@@ -1577,7 +1665,8 @@ async def test_classify_variant_acmg_ignores_non_exact_clinvar_hit(
     mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
 
     out = await classify_variant_acmg(ACMGVariantInput(hgvs="BRCA1:c.182A>G"))
-    assert "ClinVar-supported" not in out["draft_classification"]
+    assert out["draft_classification"] == "Variant of Uncertain Significance"
+    assert out["clinvar_reference"]["found"] is False
 
 
 async def test_classify_variant_acmg_clinvar_likely_pathogenic(
@@ -1592,7 +1681,9 @@ async def test_classify_variant_acmg_clinvar_likely_pathogenic(
     mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
 
     out = await classify_variant_acmg(ACMGVariantInput(hgvs="BRCA1:c.18T>G"))
-    assert out["draft_classification"] == "Likely Pathogenic (ClinVar-supported)"
+    assert out["draft_classification"] == "Variant of Uncertain Significance"
+    assert out["clinvar_reference"]["classification"] == "Likely pathogenic"
+    assert "PP5" not in out["criteria_met"]
 
 
 async def test_classify_variant_acmg_pvs1_with_high_loeuf(
