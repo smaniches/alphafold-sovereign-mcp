@@ -13,6 +13,23 @@
     calibrated against a benchmark. See
     [Limitations L2](../limitations.md).
 
+## Optional PDBe/IUCr residue annotations
+
+Set `include_literature_evidence=True` on
+`generate_variant_clinical_report`, with both
+`literature_uniprot_id` (canonical UniProt accession) and
+`literature_uniprot_residue` (positive one-based reference coordinate).
+The default report makes no PDBe request. Missing coordinates produce an
+explicit status rather than a guessed mapping; upstream failures are not
+treated as biological absence.
+
+The section includes PMID/PMC/DOI, sentence/exact extracted phrase,
+PDB entry/chain/residue, UniProt coordinate, and the NER model score.
+These are text-mined mentions with source-reported correspondence, not
+experimental validation, automatic HGVS mapping, AlphaMissense evidence,
+or ACMG assertions. See [AFDB API compatibility](../afdb-compatibility.md)
+and [Limitations L9](../limitations.md).
+
 ::: alphafold_sovereign.tools.precision_medicine
     options:
       show_root_heading: true

@@ -91,17 +91,28 @@ executed live AlphaFold DB compatibility suite; see `STATUS.md`.
 
 EMBL-EBI's current AlphaFold DB website integrates residue- and mutation-level
 literature annotations derived using a transformer model and transferred from
-experimentally studied PDB structures through SIFTS. These annotations are
-**upstream functionality, not an existing tool in this MCP server**.
+experimentally studied PDB structures through SIFTS. These annotations originate upstream, not from this server's inference.
+The server's `generate_variant_clinical_report` now has an **opt-in**
+PDBe/IUCr literature evidence section using a caller-supplied *canonical*
+UniProt accession and one-based reference residue. It calls the published
+`/api/v2/uniprot/llm_annotations/summary/{accession}/{residue}` API,
+retaining DOI/PMID/PMC, sentence, exact mention, AI score, PDB entity/chain,
+PDB and author residue numbers, and source-reported UniProt correspondence.
 
-Before exposing them here, an implementation must establish:
-1. A stable, documented annotation retrieval API and its use conditions.
-2. UniProt accession and isoform identity, PDB structure and chain identity,
-   SIFTS residue correspondences, and model/fragment offsets.
-3. Distinct evidence states: text-mined mention, experimentally supported
-   source structure, transferred annotation, and predicted-model confidence.
-4. Primary-publication provenance, missing-data behavior, conflicting
-   mappings, reproducible fixtures, and no unsupported clinical claims.
+This is **not automatic HGVS-to-UniProt or predicted-model residue mapping**.
+The server checks returned accession/residue identity, rejects conflicting
+records, and marks the PDBe/SIFTS correspondence as source-reported rather
+than independently verified. Upstream errors remain distinct from biological
+absence. Text-mined mentions neither increase an ACMG score nor independently
+establish pathogenicity; scores reflect AI extraction, not clinical validity.
+The PDBe payload does not supply experimental validation metrics in this
+endpoint, so those remain explicitly unavailable.
+
+The recorded API schema is documented in the upstream
+[IUCr-annotation-pipeline notebook](https://github.com/PDBeurope/IUCr-annotation-pipeline/blob/main/pipeline/jupyter_notebooks/PDBe_API_for_text_mined_annotations.ipynb).
+Remaining work for a stronger scientific join includes independent SIFTS
+mapping validation, cross-isoform verification, fragment offsets, experimental
+structure-quality metrics, and manually reviewed clinical interpretation.
 
 Upstream background:
 [AlphaFold DB](https://alphafold.ebi.ac.uk/) and

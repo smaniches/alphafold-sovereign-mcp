@@ -56,10 +56,11 @@ when a code change modifies a published contract; avoid duplicated claims.
   not scientific or clinical correctness, production reliability or
   completeness of upstream data.
 - AlphaFold DB's 2026 literature-derived residue annotations are
-  upstream functionality; the server must not claim to expose or
-  independently validate those annotations until a documented API,
-  source evidence and SIFTS coordinate mapping have been implemented
-  and tested.
+  upstream PDBe/IUCr functionality. The optional residue-level literature
+  client retrieves the documented UniProt-position API and validates the
+  returned identity, but does not independently verify SIFTS,
+  variant-to-UniProt coordinates, or experimental structure quality.
+  Never treat these text-mined mentions as validated clinical evidence.
 - Document limitations and counterexamples before broadening claims.
 
 ## Writing and support

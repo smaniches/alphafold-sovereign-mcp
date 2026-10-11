@@ -82,6 +82,12 @@ def test_precision_schemas_reject_unsupported_isoform(accession: str) -> None:
 # ---------------------------------------------------------------------------
 
 
+def test_pdbe_literature_lazy_singleton() -> None:
+    first = pm._pdbe_literature()
+    assert first.upstream_name == "PDBe / IUCr literature"
+    assert pm._pdbe_literature() is first
+
+
 def test_provenance_contains_sources() -> None:
     p = _provenance(chembl="v36", gnomad="v4")
     assert "chembl=v36" in p
@@ -517,6 +523,7 @@ def _patch_clients(monkeypatch: pytest.MonkeyPatch) -> dict[str, MagicMock]:
         "disgenet",
         "chembl",
         "alphafold",
+        "pdbe_literature",
     ):
         mock = MagicMock()
         mocks[name] = mock
@@ -587,6 +594,79 @@ async def test_generate_variant_report_full(monkeypatch: pytest.MonkeyPatch) -> 
     assert "PP5" not in out["acmg_criteria_draft"]["criteria"]
     assert out["clinvar"]["classification"] == "Pathogenic"
     assert "drug_context" in out
+    assert "literature_residue_evidence" not in out
+
+
+async def test_generate_variant_report_pdbe_opt_in(monkeypatch: pytest.MonkeyPatch) -> None:
+    mocks = _patch_clients(monkeypatch)
+    mocks["ensembl"].vep_hgvs = AsyncMock(return_value=[])
+    mocks["ensembl"].gene_lookup = AsyncMock(return_value={})
+    mocks["clinvar"].search_by_hgvs = AsyncMock(return_value=[])
+    mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
+    mocks["disgenet"].gene_disease_associations = AsyncMock(return_value=[])
+    mocks["pdbe_literature"].get_residue_annotations = AsyncMock(
+        return_value={"status": "ok", "records": [{"doi": "10.1107/example"}]}
+    )
+
+    params = VariantClinicalReportInput(
+        hgvs="BRCA1:p.Cys61Gly",
+        include_drug_context=False,
+        include_literature_evidence=True,
+        literature_uniprot_id="P38398",
+        literature_uniprot_residue=61,
+    )
+    output = await generate_variant_clinical_report(params)
+    assert output["literature_residue_evidence"]["status"] == "ok"
+    assert output["data_sources_status"]["pdbe_iucr_literature"] == "ok"
+    assert output["clinical_tier"] == "UNKNOWN"
+    assert output["acmg_criteria_draft"]["criteria"] == {}
+    mocks["pdbe_literature"].get_residue_annotations.assert_awaited_once_with("P38398", 61)
+
+
+async def test_generate_variant_report_pdbe_missing_coordinates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_clients(monkeypatch)
+    mocks["ensembl"].vep_hgvs = AsyncMock(return_value=[])
+    mocks["ensembl"].gene_lookup = AsyncMock(return_value={})
+    mocks["clinvar"].search_by_hgvs = AsyncMock(return_value=[])
+    mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
+    mocks["disgenet"].gene_disease_associations = AsyncMock(return_value=[])
+    out = await generate_variant_clinical_report(
+        VariantClinicalReportInput(
+            hgvs="BRCA1:p.Cys61Gly",
+            include_drug_context=False,
+            include_literature_evidence=True,
+        )
+    )
+    assert out["literature_residue_evidence"]["status"] == "missing_coordinates"
+    mocks["pdbe_literature"].get_residue_annotations.assert_not_called()
+
+
+async def test_generate_variant_report_pdbe_failure_is_not_absence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_clients(monkeypatch)
+    mocks["ensembl"].vep_hgvs = AsyncMock(return_value=[])
+    mocks["ensembl"].gene_lookup = AsyncMock(return_value={})
+    mocks["clinvar"].search_by_hgvs = AsyncMock(return_value=[])
+    mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
+    mocks["disgenet"].gene_disease_associations = AsyncMock(return_value=[])
+    mocks["pdbe_literature"].get_residue_annotations = AsyncMock(
+        side_effect=RuntimeError("PDBe unavailable")
+    )
+    out = await generate_variant_clinical_report(
+        VariantClinicalReportInput(
+            hgvs="BRCA1:p.Cys61Gly",
+            include_drug_context=False,
+            include_literature_evidence=True,
+            literature_uniprot_id="P38398",
+            literature_uniprot_residue=61,
+        )
+    )
+    assert out["data_sources_status"]["pdbe_iucr_literature"] == "failed"
+    assert out["literature_residue_evidence"]["status"] == "unavailable"
+    assert out["clinical_tier"] == "UNKNOWN"
 
 
 async def test_generate_variant_report_ignores_non_exact_clinvar_hit(
