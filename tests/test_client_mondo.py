@@ -2,7 +2,7 @@
 # Copyright 2024-2026 Santiago Maniches and TOPOLOGICA LLC
 """Full-coverage tests for ``alphafold_sovereign.clients.mondo``.
 
-Mocks OLS4 and Monarch endpoints. Exercises both list-of-string and
+Mocks OLS4 endpoints. Exercises both list-of-string and
 list-of-dict synonym shapes, plus every cross-reference regex branch.
 """
 

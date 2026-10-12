@@ -427,8 +427,8 @@ See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the full module map.
 - Coverage on the shipped surface (`src/alphafold_sovereign/clients`,
   `domain`, `storage`, `server`, `tools`): **100% line + branch**,
   every shipped module at 100%.
-- Lint: `ruff` (full ruleset). Type checking: `mypy --strict` on the
-  full source tree.
+- Lint: `ruff` (19 rule families, see `[tool.ruff.lint]` in
+  `pyproject.toml`). Type checking: `mypy --strict` on the full source tree.
 - Security: `bandit` plus CodeQL `security-extended`.
 - Supply chain: release CI builds and attests the distributions, generates a
   wheel-bound CycloneDX SBOM from the installed runtime dependency closure,

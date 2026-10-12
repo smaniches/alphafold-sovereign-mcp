@@ -2,9 +2,9 @@
 # Copyright 2024-2026 Santiago Maniches
 """MONDO Disease Ontology async client.
 
-Data sources:
-- OLS4 REST API  (EMBL-EBI Ontology Lookup Service v4)  — primary
-- Monarch Initiative API                                 — cross-refs + genes
+Data source:
+- OLS4 REST API (EMBL-EBI Ontology Lookup Service v4) — lookup, search,
+  hierarchy traversal, and cross-reference resolution
 
 MONDO (Mondo Disease Ontology) is the canonical unified disease ontology
 covering OMIM, Orphanet, DOID, ICD-10, ICD-11, MeSH, and more in a single
@@ -38,16 +38,6 @@ _OLS4_CONFIG = UpstreamConfig(
     timeout=20.0,
 )
 
-# ── Monarch ────────────────────────────────────────────────────────────────
-_MONARCH_BASE = "https://api.monarchinitiative.org/v3"
-_MONARCH_CONFIG = UpstreamConfig(
-    base_url=_MONARCH_BASE,
-    calls_per_second=5.0,
-    max_retries=3,
-    timeout=20.0,
-)
-
-_MONDO_CURIE_RE = re.compile(r"^MONDO:\d{7}$", re.IGNORECASE)
 _ICD10_RE = re.compile(r"^ICD10(?:CM)?:([A-Z]\d+(?:\.\d+)?)$", re.IGNORECASE)
 _ICD11_RE = re.compile(r"^ICD11:(.+)$", re.IGNORECASE)
 _OMIM_RE = re.compile(r"^OMIM:(\d+)$")
@@ -120,8 +110,7 @@ class MONDOClient(BaseAsyncClient):
     - Exact MONDO ID lookup → ``DiseaseRecord``
     - Full-text search → list of ``MONDOSearchResult``
     - Ancestor / descendant traversal
-    - Cross-reference resolution (ICD-10/11, OMIM, Orphanet → MONDO ID)
-    - Gene-disease associations via Monarch
+    - Cross-reference resolution (ICD-10, OMIM, Orphanet → MONDO ID)
     """
 
     upstream_name = "mondo_ols4"

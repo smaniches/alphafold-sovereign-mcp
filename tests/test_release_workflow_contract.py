@@ -21,8 +21,8 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from packaging.specifiers import SpecifierSet
 from packaging.requirements import Requirement
+from packaging.specifiers import SpecifierSet
 
 try:
     import tomllib

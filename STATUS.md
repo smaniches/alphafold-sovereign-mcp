@@ -31,10 +31,11 @@ expectation of what this project is and is not.
 
 ### Code architecture
 - Five subpackages with clear single responsibilities — ``clients/``
-  (11 specialized clients + 1 shared base), ``domain/`` (2 modules: disease
-  types + the pure druggability heuristic), ``tools/`` (4
-  MCP-tool modules), ``storage/`` (2 modules: SQLite KG + boot seed),
-  ``server/`` (2 transport modules). The inventory now includes the
+  (11 specialized clients + 1 shared base), ``domain/`` (3 modules: disease
+  types, the pure druggability heuristic, and UniProt accession syntax),
+  ``tools/`` (4 MCP-tool modules), ``storage/`` (2 modules: SQLite KG + boot
+  seed), ``server/`` (2 modules: the FastMCP application + the stdio
+  transport). The inventory now includes the
   conditional UniProtKB isoform verifier and optional PDBe/IUCr text-mined
   residue annotations; general UniProtKB annotations and independently
   verified PDB/SIFTS coordinate mapping are not shipped.
@@ -47,9 +48,8 @@ expectation of what this project is and is not.
 - **Comprehensive offline unit-test suite** (including parametrised expansions) across the shipped surface.
 - **100% line + branch coverage** on the shipped surface
   (``src/alphafold_sovereign/``, excluding the archived monolith).
-- Tests use ``respx`` to mock HTTP semantics (not just return values),
-  ``hypothesis`` for property tests on parsers, and ``pytest-asyncio``
-  for async client tests.
+- Tests use ``respx`` to mock HTTP semantics (not just return values)
+  and ``pytest-asyncio`` for async client tests.
 - The ACMG mapping, druggability tier scoring, and KG queries all have
   parametrised tests covering known input/output pairs from the
   implementation.

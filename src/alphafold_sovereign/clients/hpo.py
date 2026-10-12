@@ -2,9 +2,9 @@
 # Copyright 2024-2026 Santiago Maniches
 """Human Phenotype Ontology (HPO) async client.
 
-Data sources:
-- HPO REST API (ontology.jax.org)  — phenotype terms, disease-phenotype links
-- OLS4 REST API                    — hierarchy traversal fallback
+Data source:
+- HPO REST API (ontology.jax.org) — phenotype terms, hierarchy, and
+  disease-phenotype links
 
 HPO provides a standardised vocabulary for describing human disease
 phenotypes.  It is the canonical ontology for rare-disease phenotyping,
@@ -35,16 +35,6 @@ _HPO_CONFIG = UpstreamConfig(
     max_retries=3,
     timeout=20.0,
 )
-
-_OLS4_BASE = "https://www.ebi.ac.uk/ols4/api"
-_OLS4_HPO_CONFIG = UpstreamConfig(
-    base_url=_OLS4_BASE,
-    calls_per_second=3.0,
-    max_retries=3,
-    timeout=20.0,
-)
-
-_HPO_CURIE_RE = re.compile(r"^HP:\d{7}$", re.IGNORECASE)
 
 
 def _normalise_hpo_id(raw: str) -> str:

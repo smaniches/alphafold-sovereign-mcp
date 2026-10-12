@@ -13,6 +13,7 @@ import httpx
 import pytest
 import respx
 
+from alphafold_sovereign.clients._base import UpstreamError
 from alphafold_sovereign.clients._isoform import UniProtIsoformClient, UniProtVerificationError
 from alphafold_sovereign.clients.alphafold import AlphaFoldClient, AlphaFoldPredictionSchemaError
 
@@ -261,8 +262,9 @@ async def test_uniprot_http_errors_are_not_biological_absence(
         return_value=httpx.Response(status, json={"messages": ["not available"]}),
     )
     async with UniProtIsoformClient() as client:
-        with pytest.raises(httpx.HTTPStatusError):
+        with pytest.raises(UpstreamError) as ei:
             await client.is_displayed_isoform("P04637", "P04637-1", "MKTV")
+    assert ei.value.status == status
 
 
 async def test_uniprot_malformed_json_is_source_failure(respx_mock: respx.MockRouter) -> None:

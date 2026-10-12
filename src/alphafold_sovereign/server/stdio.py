@@ -2,17 +2,16 @@
 # Copyright 2024-2026 Santiago Maniches
 """Stdio MCP transport entry-point.
 
-Aggregates every FastMCP instance from the ``tools/`` subpackages into a
-single server and runs it over stdio.  This is the transport used by
-Claude Desktop and other stdio-only MCP clients; Streamable HTTP +
-OAuth land in Wave 3 (``server/http.py``).
+Imports every ``tools/`` module so their ``@mcp.tool()`` decorators register
+on the single shared FastMCP application, then runs it over stdio. This is
+the transport used by Claude Desktop and other stdio-only MCP clients; a
+Streamable HTTP transport is a roadmap item (see ``ARCHITECTURE.md``).
 """
 
 from __future__ import annotations
 
 import os
 import sys
-from typing import TYPE_CHECKING
 
 import structlog
 
@@ -93,6 +92,4 @@ def _seed_kg_at_startup() -> None:
         logger.warning("alphafold_sovereign.kg.seed_startup_failed", exc=str(exc))
 
 
-if TYPE_CHECKING:
-    # Re-export for `from alphafold_sovereign.server.stdio import run_stdio`
-    __all__ = ["run_stdio"]
+__all__ = ["run_stdio"]

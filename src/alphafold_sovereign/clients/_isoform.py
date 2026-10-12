@@ -62,8 +62,8 @@ class UniProtIsoformClient(BaseAsyncClient):
         """
         if not model_sequence:
             return False
+        # ``_request`` raises ``UpstreamError`` for every HTTP error status.
         response = await self._request("GET", f"/uniprotkb/{accession}.json")
-        response.raise_for_status()
         try:
             payload: Any = response.json()
         except ValueError as exc:

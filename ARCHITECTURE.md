@@ -74,19 +74,22 @@ src/alphafold_sovereign/
 │   ├── ensembl.py       Ensembl REST (VEP, gene and variant lookup, orthologs)
 │   ├── clinvar.py       ClinVar via NCBI E-utilities
 │   ├── gnomad.py        gnomAD GraphQL
-│   ├── mondo.py         MONDO via OLS4 and the Monarch API
-│   ├── hpo.py           HPO via the HPO API and OLS4
+│   ├── mondo.py         MONDO via OLS4
+│   ├── hpo.py           HPO via the HPO API (ontology.jax.org)
 │   └── disgenet.py      DisGeNET REST
 │
 ├── domain/              Pure-Python types; no I/O, no network, no MCP SDK
-│   └── disease.py       PathogenicityClass, EvidenceType, OntologyTerm,
-│                        DiseaseRecord, PhenotypeAssociation,
-│                        TargetEvidenceScore, PopulationFrequency, VariantReport
+│   ├── disease.py       PathogenicityClass, EvidenceType, OntologyTerm,
+│   │                    DiseaseRecord, PhenotypeAssociation,
+│   │                    TargetEvidenceScore, PopulationFrequency, VariantReport
+│   ├── druggability.py  Deterministic HOT/WARM/COLD/NOT_DRUGGABLE tier heuristic
+│   └── uniprot.py       UniProtKB accession / isoform syntax patterns
 │
 └── storage/             Persistence and provenance
-    └── knowledge_graph.py   SQLite knowledge graph (WAL mode); six entity,
-                             four relationship, and two provenance tables;
-                             per-row SHA-256 fingerprint columns (not keys)
+    ├── knowledge_graph.py   SQLite knowledge graph (WAL mode); six entity,
+    │                        four relationship, and two provenance tables;
+    │                        per-row SHA-256 fingerprint columns (not keys)
+    └── seed.py              Curated seed dataset loaded when the graph is empty
 ```
 
 The package also contains six reserved namespace packages — `compliance/`,
