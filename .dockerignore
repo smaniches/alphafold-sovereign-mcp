@@ -15,6 +15,5 @@ _archive/
 .mypy_cache
 .ruff_cache
 .pytest_cache
-uv.lock
 node_modules/
 *.log
