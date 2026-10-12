@@ -40,11 +40,6 @@ _DISGENET_CONFIG = UpstreamConfig(
     headers={"Content-Type": "application/json"},
 )
 
-# GDA score sources DisGeNET uses
-_SCORE_SOURCES = frozenset(
-    ["CURATED", "INFERRED", "ANIMAL_MODELS", "LITERATURE", "GWASCAT", "PREDICTED"]
-)
-
 
 class DisGeNETClient(BaseAsyncClient):
     """

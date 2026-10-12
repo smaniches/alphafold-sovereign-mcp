@@ -13,7 +13,8 @@ Exercises:
 
 from __future__ import annotations
 
-import importlib
+import importlib.util as _util
+from typing import Any
 
 import httpx
 import pytest
@@ -34,6 +35,21 @@ from alphafold_sovereign.clients._base import (
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+def _exec_fresh_base_module() -> object:
+    """Execute ``_base`` into a *fresh* module object (never ``importlib.reload``).
+
+    Reloading the canonical module would rebind ``UpstreamError`` and friends,
+    so exceptions raised later by ``_base`` would no longer match the classes
+    other test modules imported at collection time.
+    """
+    spec = _util.find_spec("alphafold_sovereign.clients._base")
+    assert spec is not None
+    assert spec.loader is not None
+    fresh = _util.module_from_spec(spec)
+    spec.loader.exec_module(fresh)
+    return fresh
 
 
 class _DemoClient(BaseAsyncClient):
@@ -160,6 +176,40 @@ async def test_air_gap_allows_allow_listed_host(monkeypatch: pytest.MonkeyPatch)
     client = _DemoClient()
     async with client:
         client._check_air_gap("https://vault.local/path")  # no raise
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://VAULT.LOCAL/path",  # hostnames are case-insensitive
+        "https://vault.local:8200/path",  # explicit port must be stripped
+        "https://user:pw@vault.local/path",  # userinfo must be ignored
+    ],
+)
+async def test_air_gap_matches_normalised_hostname(
+    monkeypatch: pytest.MonkeyPatch, url: str
+) -> None:
+    monkeypatch.setattr(_base, "_OFFLINE_MODE", True)
+    monkeypatch.setattr(_base, "_ALWAYS_ALLOWED", frozenset({"vault.local"}))
+    _DemoClient()._check_air_gap(url)  # no raise
+
+
+async def test_air_gap_handles_ipv6_literal(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Regression: ``netloc.split(':')`` mangled bracketed IPv6 hosts."""
+    monkeypatch.setattr(_base, "_OFFLINE_MODE", True)
+    monkeypatch.setattr(_base, "_ALWAYS_ALLOWED", frozenset({"::1"}))
+    client = _DemoClient()
+    client._check_air_gap("http://[::1]:8080/path")  # no raise
+    with pytest.raises(AirGapError, match="'::2'"):
+        client._check_air_gap("http://[::2]/path")
+
+
+def test_allow_hosts_env_is_normalised(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``ALPHAFOLD_ALLOW_HOSTS`` entries are stripped and lower-cased."""
+    monkeypatch.setenv("ALPHAFOLD_ALLOW_HOSTS", " Vault.Local , ,LOCALHOST")
+    fresh: Any = _exec_fresh_base_module()
+    expected = frozenset({"vault.local", "localhost"})
+    assert expected == fresh._ALWAYS_ALLOWED
 
 
 async def test_air_gap_disabled_passes_through(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -297,6 +347,78 @@ async def test_non_retryable_4xx_raises_upstream(respx_mock: respx.MockRouter) -
     assert ei.value.status == 403
 
 
+@pytest.mark.parametrize("status", [400, 401, 404, 410, 422])
+async def test_4xx_json_error_body_is_not_returned_as_data(
+    respx_mock: respx.MockRouter, status: int
+) -> None:
+    """Regression: a JSON error body on a 4xx must not be parsed as a payload."""
+    respx_mock.get("https://demo.test/missing").mock(
+        return_value=httpx.Response(status, json={"error": "not found"}),
+    )
+    async with _DemoClient() as client:
+        with pytest.raises(UpstreamError) as ei:
+            await client._get("/missing")
+        # A healthy upstream answering 4xx must not trip the breaker.
+        assert client._circuit._failures == 0
+    assert ei.value.status == status
+    assert "not found" in str(ei.value)
+
+
+async def test_4xx_bytes_error_body_is_not_returned_as_content(
+    respx_mock: respx.MockRouter,
+) -> None:
+    """Regression: ``_get_bytes`` must not hand back an HTML/JSON error page."""
+    respx_mock.get("https://demo.test/model.pdb").mock(
+        return_value=httpx.Response(404, json={"detail": "no model"}),
+    )
+    async with _DemoClient() as client:
+        with pytest.raises(UpstreamError) as ei:
+            await client._get_bytes("/model.pdb")
+    assert ei.value.status == 404
+
+
+async def test_post_4xx_json_error_body_raises(respx_mock: respx.MockRouter) -> None:
+    respx_mock.post("https://demo.test/graphql").mock(
+        return_value=httpx.Response(400, json={"errors": [{"message": "bad query"}]}),
+    )
+    async with _DemoClient() as client:
+        with pytest.raises(UpstreamError) as ei:
+            await client._post("/graphql", json={"query": "{}"})
+    assert ei.value.status == 400
+
+
+@pytest.mark.usefixtures("_fast_retry", "_disable_rate_limit")
+async def test_transport_error_exhaustion_trips_circuit(respx_mock: respx.MockRouter) -> None:
+    """Regression: exhausted connection failures must count as circuit failures."""
+    respx_mock.get("https://demo.test/down").mock(side_effect=httpx.ConnectError("refused"))
+    async with _DemoClient() as client:
+        with pytest.raises(httpx.ConnectError):
+            await client._get("/down")
+        assert client._circuit._failures == 1
+
+
+async def test_aenter_reentry_reuses_open_client() -> None:
+    """Regression: re-entering an open client must not orphan its connection pool."""
+    client = _DemoClient()
+    async with client:
+        first = client._client
+        assert first is not None
+        async with client:
+            assert client._client is first
+        # Inner exit closes the shared pool; outer exit is then a no-op.
+        assert client._client is None
+
+
+async def test_user_agent_carries_package_version() -> None:
+    from alphafold_sovereign import __version__
+
+    async with _DemoClient() as client:
+        assert client._client is not None
+        assert client._client.headers["User-Agent"].startswith(
+            f"alphafold-sovereign-mcp/{__version__} "
+        )
+
+
 async def test_circuit_breaker_blocks_after_open(respx_mock: respx.MockRouter) -> None:
     respx_mock.get("https://demo.test/p").mock(return_value=httpx.Response(503))
 
@@ -387,7 +509,7 @@ def test_sha256_static_helper() -> None:
 
 
 def test_module_imports_cleanly() -> None:
-    mod = importlib.reload(_base)
+    mod = _exec_fresh_base_module()
     assert hasattr(mod, "BaseAsyncClient")
     assert hasattr(mod, "UpstreamConfig")
 
@@ -399,10 +521,9 @@ def test_offline_mode_env_parsing(monkeypatch: pytest.MonkeyPatch) -> None:
     parsed sentinel without polluting other tests' view of the canonical
     `_base` module.
     """
-    import importlib.util as _util
-
     spec = _util.find_spec("alphafold_sovereign.clients._base")
-    assert spec is not None and spec.loader is not None
+    assert spec is not None
+    assert spec.loader is not None
 
     def _parse(value: str) -> bool:
         return value.lower() in {"1", "true", "yes"}

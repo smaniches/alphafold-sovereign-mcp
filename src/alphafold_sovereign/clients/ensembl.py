@@ -39,11 +39,6 @@ _HGVS_GENE_RE = re.compile(
     re.IGNORECASE,
 )
 
-_REFSEQ_RE = re.compile(
-    r"^(?P<acc>NM_\d+(?:\.\d+)?|NP_\d+(?:\.\d+)?|NC_\d+(?:\.\d+)?)"
-    r"(?::(?P<hgvs>.+))?$"
-)
-
 
 def _first_uniprot(value: Any) -> str:
     """Normalise a VEP ``swissprot`` cross-reference to one accession.

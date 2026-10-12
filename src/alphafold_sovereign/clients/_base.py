@@ -30,6 +30,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, TypeVar
+from urllib.parse import urlsplit
 
 import httpx
 import structlog
@@ -39,6 +40,8 @@ from tenacity import (
     stop_after_attempt,
     wait_exponential_jitter,
 )
+
+from alphafold_sovereign import __version__
 
 try:
     from aiolimiter import AsyncLimiter
@@ -62,10 +65,15 @@ _OFFLINE_MODE: bool = os.environ.get("ALPHAFOLD_OFFLINE", "").lower() in {
     "yes",
 }
 
-# Domains always allowed even in offline mode (e.g. localhost, Vault)
+# Domains always allowed even in offline mode (e.g. localhost, Vault).
+# Hostnames are case-insensitive, so normalise the allow-list once at import.
 _ALWAYS_ALLOWED: frozenset[str] = frozenset(
-    os.environ.get("ALPHAFOLD_ALLOW_HOSTS", "").split(",")
+    h.strip().lower() for h in os.environ.get("ALPHAFOLD_ALLOW_HOSTS", "").split(",")
 ) - {""}
+
+_USER_AGENT = (
+    f"alphafold-sovereign-mcp/{__version__} (+https://github.com/smaniches/alphafold-sovereign-mcp)"
+)
 
 
 class CircuitState(Enum):
@@ -213,10 +221,13 @@ class BaseAsyncClient:
         )
 
     async def __aenter__(self: _T) -> _T:
+        if self._client is not None:
+            # Re-entering an open client must not orphan the existing pool.
+            return self
         self._client = httpx.AsyncClient(
             base_url=self.config.base_url,
             headers={
-                "User-Agent": "alphafold-sovereign-mcp/1.0 (+https://github.com/smaniches/alphafold-sovereign-mcp)",
+                "User-Agent": _USER_AGENT,
                 **self.config.headers,
             },
             timeout=self.config.timeout,
@@ -255,9 +266,8 @@ class BaseAsyncClient:
         """Raise AirGapError if offline mode is active and host not allowed."""
         if not _OFFLINE_MODE:
             return
-        import urllib.parse
-
-        host = urllib.parse.urlparse(url).netloc.split(":")[0]
+        # ``hostname`` strips the port and IPv6 brackets and lower-cases.
+        host = urlsplit(url).hostname or ""
         if host not in _ALWAYS_ALLOWED:
             raise AirGapError(
                 f"Air-gap mode active: outbound request to '{host}' blocked. "
@@ -331,6 +341,23 @@ class BaseAsyncClient:
                 exc.response.status_code,
                 exc.response.text[:200],
             ) from exc
+        except httpx.TransportError:
+            # Exhausted timeouts / connection failures must also trip the
+            # breaker; the raw httpx exception is preserved for callers.
+            await self._circuit.record_failure()
+            raise
+
+        if response.status_code >= 400:
+            # Non-transient client errors (400/401/403/404/...) are upstream
+            # failures, not data: never let an error body masquerade as a
+            # successful JSON/bytes payload. The upstream is healthy, so the
+            # breaker is not tripped.
+            await self._circuit.record_success()
+            raise UpstreamError(
+                self.upstream_name,
+                response.status_code,
+                response.text[:200],
+            )
 
         await self._circuit.record_success()
         self._log.debug(

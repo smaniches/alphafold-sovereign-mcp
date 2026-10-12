@@ -133,7 +133,7 @@ class KnowledgeGraph:
         await self.close()
 
     async def connect(self) -> None:
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         self._conn = await loop.run_in_executor(None, self._open_db)
         logger.info("kg.connected", path=str(self._db_path))
 
@@ -171,7 +171,7 @@ class KnowledgeGraph:
             )
 
         async with self._lock:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             existing = await loop.run_in_executor(None, _count_entities)
         if existing > 0:
             return False
@@ -520,7 +520,11 @@ class KnowledgeGraph:
         tda_fingerprint: list[float] | None = None,
         extra: dict[str, Any] | None = None,
     ) -> str:
-        """Upsert a protein record. Returns the uniprot_id."""
+        """Upsert a protein record. Returns the uniprot_id.
+
+        ``extra`` is accepted for signature stability but is not persisted:
+        the ``proteins`` table has no free-form column for it.
+        """
         now = datetime.datetime.now(datetime.timezone.utc).isoformat()
         canonical: dict[str, Any] = {
             "uniprot_id": uniprot_id,
@@ -531,7 +535,7 @@ class KnowledgeGraph:
         data_hash = _sha256(canonical)
 
         async with self._lock:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             await loop.run_in_executor(
                 None,
                 self._upsert_protein,
@@ -636,7 +640,7 @@ class KnowledgeGraph:
         acmg_json = json.dumps(acmg_criteria) if acmg_criteria else None
 
         async with self._lock:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             await loop.run_in_executor(
                 None,
                 self._upsert_variant,
@@ -759,7 +763,7 @@ class KnowledgeGraph:
         """Upsert a disease record. Returns the mondo_id."""
         now = datetime.datetime.now(datetime.timezone.utc).isoformat()
         async with self._lock:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             await loop.run_in_executor(
                 None,
                 self._upsert_disease,
@@ -838,7 +842,7 @@ class KnowledgeGraph:
         """Upsert a drug record. Returns the chembl_id."""
         now = datetime.datetime.now(datetime.timezone.utc).isoformat()
         async with self._lock:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             await loop.run_in_executor(
                 None,
                 self._upsert_drug,
@@ -991,7 +995,7 @@ class KnowledgeGraph:
             self._conn.commit()
 
         async with self._lock:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             await loop.run_in_executor(None, _exec)
 
     async def log_tool_invocation(
@@ -1016,7 +1020,7 @@ class KnowledgeGraph:
             result_json = json.dumps(result, default=str)
 
         async with self._lock:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             row_id = await loop.run_in_executor(
                 None,
                 self._insert_invocation,
@@ -1118,11 +1122,12 @@ class KnowledgeGraph:
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         # LIMIT is parameterised to avoid SQL injection even though the value
         # comes from the typed Python signature (int) — defence in depth.
-        sql = f"SELECT * FROM variant_summary {where} ORDER BY alphamissense_score DESC LIMIT ?"  # nosec B608 - column identifiers are static; values are parameterised
+        # B608: column identifiers are static; values are parameterised
+        sql = f"SELECT * FROM variant_summary {where} ORDER BY alphamissense_score DESC LIMIT ?"  # nosec B608
         values.append(int(limit))
 
         async with self._lock:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             return await loop.run_in_executor(None, self._fetchall, sql, values)
 
     async def query_proteins(
@@ -1143,10 +1148,11 @@ class KnowledgeGraph:
             clauses.append("mean_plddt >= ?")
             values.append(min_plddt)
         where = f"WHERE {' AND '.join(clauses)}"
-        sql = f"SELECT * FROM proteins {where} ORDER BY mean_plddt DESC LIMIT ?"  # nosec B608 - column identifiers static; values parameterised
+        # B608: column identifiers static; values parameterised
+        sql = f"SELECT * FROM proteins {where} ORDER BY mean_plddt DESC LIMIT ?"  # nosec B608
         values.append(int(limit))
         async with self._lock:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             return await loop.run_in_executor(None, self._fetchall, sql, values)
 
     async def query_drug_landscape(
@@ -1163,16 +1169,17 @@ class KnowledgeGraph:
             clauses.append("mondo_id = ?")
             values.append(mondo_id)
         where = f"WHERE {' AND '.join(clauses)}"
-        sql = f"SELECT * FROM drug_landscape {where} ORDER BY max_phase DESC LIMIT ?"  # nosec B608 - column identifiers static; values parameterised
+        # B608: column identifiers static; values parameterised
+        sql = f"SELECT * FROM drug_landscape {where} ORDER BY max_phase DESC LIMIT ?"  # nosec B608
         values.append(int(limit))
         async with self._lock:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             return await loop.run_in_executor(None, self._fetchall, sql, values)
 
     async def get_statistics(self) -> dict[str, Any]:
         """Return database statistics — size, entity counts, last activity."""
         async with self._lock:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             return await loop.run_in_executor(None, self._gather_stats)
 
     def _gather_stats(self) -> dict[str, Any]:
@@ -1183,7 +1190,8 @@ class KnowledgeGraph:
             # but we validate-by-membership before interpolation as defence in depth.
             if t not in _ALLOWED_TABLES:  # pragma: no cover  # invariant guard
                 continue
-            row = self._conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()  # nosec B608 - validated allow-list (_ALLOWED_TABLES)
+            # B608: validated allow-list (_ALLOWED_TABLES)
+            row = self._conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()  # nosec B608
             counts[t] = row[0] if row else 0
 
         last_inv = self._conn.execute(
@@ -1232,11 +1240,12 @@ class KnowledgeGraph:
             if t not in _ALLOWED_TABLES:
                 raise ValueError(f"Unknown table {t!r}. Allowed: {sorted(_ALLOWED_TABLES)}")
             async with self._lock:
-                loop = asyncio.get_event_loop()
+                loop = asyncio.get_running_loop()
                 result[t] = await loop.run_in_executor(
                     None,
                     self._fetchall,
-                    f"SELECT * FROM {t} LIMIT ?",  # nosec B608 - table validated; LIMIT parameterised
+                    # B608: table validated; LIMIT parameterised
+                    f"SELECT * FROM {t} LIMIT ?",  # nosec B608
                     [int(limit)],
                 )
         return result
@@ -1250,7 +1259,7 @@ class KnowledgeGraph:
         event-loop thread, which would race the connection state.
         """
         async with self._lock:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             return await loop.run_in_executor(None, self._fetchall, sql, params)
 
     def _fetchall(self, sql: str, params: list[Any]) -> list[dict[str, Any]]:

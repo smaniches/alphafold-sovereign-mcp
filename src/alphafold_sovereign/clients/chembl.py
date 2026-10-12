@@ -34,17 +34,6 @@ _CHEMBL_CONFIG = UpstreamConfig(
     headers={"Accept": "application/json"},
 )
 
-# Activity type → human-readable label
-_ACT_TYPE_LABELS: dict[str, str] = {
-    "IC50": "IC₅₀ (half-maximal inhibitory concentration)",
-    "Ki": "Kᵢ (inhibition constant)",
-    "EC50": "EC₅₀ (half-maximal effective concentration)",
-    "Kd": "Kd (dissociation constant)",
-    "GI50": "GI₅₀ (50% growth inhibition)",
-    "CC50": "CC₅₀ (50% cytotoxicity)",
-    "MIC": "MIC (minimum inhibitory concentration)",
-}
-
 # Max phase → development stage
 _MAX_PHASE: dict[int, str] = {
     4: "Approved",
@@ -428,13 +417,15 @@ class ChEMBLClient(BaseAsyncClient):
         """Find approved or clinical-stage drugs active on a target.
 
         This is the drug repurposing entry point:
-        Given a UniProt accession, find all Phase ≥ max_phase drugs with
-        nanomolar activity against that target.
+        Given a UniProt accession, find all Phase ≥ max_phase drugs whose
+        ChEMBL mechanism-of-action record names that target.
 
         Args:
             uniprot_id: UniProt accession, e.g. ``'P38398'``.
             max_phase: Minimum development phase (4=Approved, 3=Phase III, …).
-            activity_threshold_nm: Only include compounds with IC50/Ki ≤ this value.
+            activity_threshold_nm: Accepted for API stability but **not
+                applied**: candidates come from mechanism records, which carry
+                no potency value. Use :meth:`bioactivities` for IC50/Ki filtering.
             limit: Maximum drugs to return.
 
         Returns:
@@ -459,7 +450,8 @@ class ChEMBLClient(BaseAsyncClient):
                 f"{self._API_ROOT}/molecule/{chembl_id}.json",
                 params={"format": "json"},
             )
-        except Exception:
+        except Exception as exc:
+            logger.warning("chembl.molecule.failed", chembl_id=chembl_id, exc=str(exc))
             return None
         props = data.get("molecule_properties") or {}
         phase = _coerce_phase(data.get("max_phase"))

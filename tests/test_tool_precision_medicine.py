@@ -1768,7 +1768,6 @@ async def test_classify_variant_acmg_pathogenic_strong_strong(
     import alphafold_sovereign.tools.precision_medicine as pm_mod
 
     original_strength = pm_mod._acmg_strength
-    original_gnomad_to_acmg = pm_mod._gnomad_to_acmg
 
     def fake_strength(code: str) -> str:
         if code == "PM2":
