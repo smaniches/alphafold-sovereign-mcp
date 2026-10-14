@@ -29,6 +29,8 @@ service, not certified for any regulated use, and its outputs are
 research aids that should be reviewed by qualified humans before any
 clinical or regulatory use.
 
+**Research authorship:** Santiago Maniches (ORCID [0009-0005-6480-1987](https://orcid.org/0009-0005-6480-1987)) independently directs and maintains this server and is the sole scientific author of its original research contributions. AI-assisted tools have supported coding, testing, and internal review. They are not scientific coauthors, clinical validators, or a substitute for independent evaluation. The public databases, prediction models, and existing algorithms remain credited to their sources.
+
 This project is not affiliated with, endorsed by, or sponsored by
 Google DeepMind or EMBL-EBI. "AlphaFold" is a trademark of its
 respective owner and is used here only to describe the public data
