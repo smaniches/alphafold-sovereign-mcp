@@ -7,6 +7,13 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.5.3](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.5.2...v1.5.3) (2026-10-15)
+
+
+### Bug Fixes
+
+* **clinvar:** verify variant identity before attributing a ClinVar record ([adb97b4](https://github.com/smaniches/alphafold-sovereign-mcp/commit/adb97b4f49286ed955c81c6500f25be1210a6713))
+
 ## [1.5.2](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.5.1...v1.5.2) (2026-10-12)
 
 
