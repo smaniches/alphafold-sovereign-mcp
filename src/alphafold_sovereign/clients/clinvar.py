@@ -74,6 +74,34 @@ def _canonical_change(change: str) -> str:
     return re.sub(r"(dup|del)[acgt]+$", r"\1", change.strip().lower())
 
 
+# Nucleotide transcript accessions whose numbering defines a c./n. change. A
+# ClinVar title names its reference transcript (``NM_007294.4(BRCA1):…``), so a
+# queried transcript of these kinds can be checked against it; other accession
+# kinds (NP_, NC_, NG_, …) are not carried by the title and stay unverified here.
+_TRANSCRIPT_ACCESSION_PREFIXES = ("nm_", "nr_", "xm_", "xr_")
+
+
+def _query_reference(prefix: str) -> tuple[str, str] | None:
+    """Split an HGVS reference prefix into a lower-cased ``(accession, gene)``.
+
+    ``BRCA1`` yields only a gene, ``NM_007294.3`` only an accession and
+    ``NM_007294.4(BRCA1)`` both. The accession is returned without its version
+    so a pinned ``.3`` still names ClinVar's current ``.4`` transcript. ``None``
+    means the prefix could not be parsed, so no record can be verified against it.
+    """
+    prefix = prefix.strip().lower()
+    if not prefix:
+        return None
+    # Same accession test as _build_search_term: RefSeq accessions carry an
+    # underscore; gene symbols do not.
+    if not re.match(r"[a-z]{2}_\d", prefix):
+        return ("", prefix)
+    ref = re.fullmatch(r"([a-z]{2}_\d+)(?:\.\d+)?(?:\(([^()\s]+)\))?", prefix)
+    if ref is None:
+        return None
+    return (ref.group(1), ref.group(2) or "")
+
+
 class ClinVarClient(BaseAsyncClient):
     """
     Async client for ClinVar variant interpretation data.
@@ -132,15 +160,14 @@ class ClinVarClient(BaseAsyncClient):
         # and ties are broken by review-status quality so an expert-panel record
         # wins over a single-submitter one. Without this, a legacy dup/del
         # spelling matched nothing and row[0] fell back to an arbitrary hit.
-        change = hgvs.partition(":")[2]
-        summaries.sort(key=lambda s: self._match_rank_key(change, s))
-        # Stamp whether each row actually matches the queried change, so a
-        # caller taking row[0] can tell "the best candidate ClinVar returned"
-        # from "the variant that was actually asked about" — without this, a
-        # query with no true match silently reports a nearby variant's
-        # classification as if it were the queried one.
+        summaries.sort(key=lambda s: self._match_rank_key(hgvs, s))
+        # Stamp whether each row actually is the queried variant (same change on
+        # the same gene / transcript), so a caller taking row[0] can tell "the
+        # best candidate ClinVar returned" from "the variant that was actually
+        # asked about" — without this, a query with no true match silently
+        # reports a nearby or other-gene variant's classification as its own.
         for row in summaries:
-            row["exact_change_match"] = self._is_exact_match(change, row)
+            row["exact_change_match"] = self._is_exact_match(hgvs, row)
         return summaries
 
     async def get_variant(self, variation_id: str) -> dict[str, Any]:
@@ -215,31 +242,52 @@ class ClinVarClient(BaseAsyncClient):
         return f"{prefix}[gene] AND {change}"
 
     @staticmethod
-    def _is_exact_match(change: str, summary: dict[str, Any]) -> bool:
-        """Whether ``summary``'s record name contains the exact queried change.
+    def _is_exact_match(hgvs: str, summary: dict[str, Any]) -> bool:
+        """Whether ``summary`` is the variant ``hgvs`` names, judged by its title.
 
-        When ``change`` is empty — a bare identifier or free-text query with no
-        HGVS change token to compare, e.g. an rsID passed straight through by
-        ``_build_search_term`` — there is nothing to verify against the record
-        name, so esearch's own lookup is treated as authoritative and this
+        ClinVar titles bind a change to its reference, e.g.
+        ``NM_007294.4(BRCA1):c.181T>G (p.Cys61Gly)``. A record matches only when
+        the title contains the canonical change token as a whole token, and the
+        query's gene symbol (``(BRCA1):``) and transcript accession (any version)
+        where given. A shared change token alone is not identity: ``c.182A>G``
+        exists in many genes, and esearch's gene filter is not re-verified by it.
+
+        A query with no ``:`` — a bare identifier such as an rsID, passed
+        straight through by ``_build_search_term`` — carries no change token to
+        compare, so esearch's own lookup is treated as authoritative and this
         returns ``True``.
         """
-        canon = _canonical_change(change)
-        if not canon:
+        prefix, sep, change = hgvs.partition(":")
+        if not sep:
             return True
+        canon = _canonical_change(change)
+        reference = _query_reference(prefix)
+        if not canon or reference is None:
+            return False
+        accession, gene = reference
         name = str(summary.get("name", "")).lower()
-        return re.search(re.escape(canon) + r"(?![0-9a-z])", name) is not None
+        if gene and f"({gene}):" not in name:
+            return False
+        if accession.startswith(_TRANSCRIPT_ACCESSION_PREFIXES) and not re.search(
+            r"(?<![a-z0-9_])" + re.escape(accession) + r"(?:\.\d+)?[(:]", name
+        ):
+            return False
+        # Whole-token match: c.182A>G must not match inside c.5182A>G (left) or
+        # c.68_69del inside c.68_69delinsAAAA (right).
+        return (
+            re.search(r"(?<![0-9a-z.+*_-])" + re.escape(canon) + r"(?![0-9a-z])", name) is not None
+        )
 
     @classmethod
-    def _match_rank_key(cls, change: str, summary: dict[str, Any]) -> tuple[bool, int]:
+    def _match_rank_key(cls, hgvs: str, summary: dict[str, Any]) -> tuple[bool, int]:
         """Rank a candidate summary for ``search_by_hgvs`` ordering.
 
-        Sorts an exact change match ahead of nearby variants, then prefers the
+        Sorts an exact variant match ahead of nearby variants, then prefers the
         better-reviewed record. The key is ``(not exact, -review_rank)`` so that
         Python's ascending, stable sort puts exact matches first, the highest
         review status next, and preserves the upstream order for genuine ties.
         """
-        exact = cls._is_exact_match(change, summary)
+        exact = cls._is_exact_match(hgvs, summary)
         review_rank = _REVIEW_STATUS_RANK.get(str(summary.get("review_status", "")).lower(), 0)
         return (not exact, -review_rank)
 

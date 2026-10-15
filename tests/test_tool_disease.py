@@ -1167,41 +1167,42 @@ async def test_resolve_icd10_error(monkeypatch: pytest.MonkeyPatch) -> None:
 
 async def test_fetch_clinvar_uses_hgvs_results(monkeypatch: pytest.MonkeyPatch) -> None:
     mock_cv = MagicMock()
-    mock_cv.search_by_hgvs = AsyncMock(return_value=[{"variation_id": "1"}])
+    mock_cv.search_by_hgvs = AsyncMock(
+        return_value=[{"variation_id": "1", "exact_change_match": True}]
+    )
     mock_cv.search_gene = AsyncMock(return_value=[])
     _patch_client_class(monkeypatch, "alphafold_sovereign.tools.disease.ClinVarClient", mock_cv)
 
     out = await _fetch_clinvar("BRCA1:c.181T>G", "BRCA1")
-    assert out == {"variation_id": "1"}
+    assert out == {"variation_id": "1", "exact_change_match": True}
 
 
-async def test_fetch_clinvar_falls_back_to_gene(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_fetch_clinvar_no_match_does_not_fall_back_to_gene(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """AF-01: an empty HGVS search must not be filled with some other
+    pathogenic record from the same gene."""
     mock_cv = MagicMock()
     mock_cv.search_by_hgvs = AsyncMock(return_value=[])
     mock_cv.search_gene = AsyncMock(return_value=[{"variation_id": "2"}])
     _patch_client_class(monkeypatch, "alphafold_sovereign.tools.disease.ClinVarClient", mock_cv)
 
     out = await _fetch_clinvar("BRCA1:c.181T>G", "BRCA1")
-    assert out == {"variation_id": "2"}
+    assert out == {}
+    mock_cv.search_gene.assert_not_awaited()
 
 
-async def test_fetch_clinvar_non_exact_top_hit_falls_back_to_gene(
+async def test_fetch_clinvar_non_exact_hit_does_not_use_gene_record(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Regression: BRCA1:c.182A>G does not exist in ClinVar; a real
-    gene-scoped esearch for it returns nearby variants instead (observed
-    live: c.314A>G Benign, c.566A>G Uncertain significance). The non-exact
-    top hit must not be reported as this variant's own classification —
-    _fetch_clinvar must fall back to the gene-level search exactly as it
-    would for an empty search_by_hgvs result."""
+    """AF-01: BRCA1:c.182A>G does not exist in ClinVar; a real gene-scoped
+    esearch for it returns nearby variants instead (observed live: c.314A>G
+    Benign, c.566A>G Uncertain significance). Neither the nearby top hit nor
+    a gene-level record is this variant, so nothing is attributed."""
     mock_cv = MagicMock()
     mock_cv.search_by_hgvs = AsyncMock(
         return_value=[
-            {
-                "variation_id": "1",
-                "classification": "Benign",
-                "exact_change_match": False,
-            }
+            {"variation_id": "1", "classification": "Benign", "exact_change_match": False}
         ]
     )
     mock_cv.search_gene = AsyncMock(
@@ -1210,8 +1211,19 @@ async def test_fetch_clinvar_non_exact_top_hit_falls_back_to_gene(
     _patch_client_class(monkeypatch, "alphafold_sovereign.tools.disease.ClinVarClient", mock_cv)
 
     out = await _fetch_clinvar("BRCA1:c.182A>G", "BRCA1")
-    assert out == {"variation_id": "2", "classification": "Likely pathogenic"}
-    mock_cv.search_gene.assert_awaited_once_with("BRCA1", limit=1)
+    assert out == {}
+    mock_cv.search_gene.assert_not_awaited()
+
+
+async def test_fetch_clinvar_requires_match_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An unstamped row cannot establish variant identity (fail closed)."""
+    mock_cv = MagicMock()
+    mock_cv.search_by_hgvs = AsyncMock(return_value=[{"variation_id": "1"}])
+    mock_cv.search_gene = AsyncMock(return_value=[{"variation_id": "2"}])
+    _patch_client_class(monkeypatch, "alphafold_sovereign.tools.disease.ClinVarClient", mock_cv)
+
+    assert await _fetch_clinvar("BRCA1:c.181T>G", "BRCA1") == {}
+    mock_cv.search_gene.assert_not_awaited()
 
 
 async def test_fetch_clinvar_no_results(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1225,7 +1237,7 @@ async def test_fetch_clinvar_no_results(monkeypatch: pytest.MonkeyPatch) -> None
 
 
 async def test_fetch_clinvar_no_gene_branch(monkeypatch: pytest.MonkeyPatch) -> None:
-    """When gene_symbol is empty, fallback to search_gene is skipped."""
+    """With an empty gene_symbol and no HGVS hit, search_gene is never used."""
     mock_cv = MagicMock()
     mock_cv.search_by_hgvs = AsyncMock(return_value=[])
     mock_cv.search_gene = AsyncMock(return_value=[{"a": 1}])  # would be wrong path

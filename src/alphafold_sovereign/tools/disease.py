@@ -1319,16 +1319,21 @@ def _parse_hgvs_gene(hgvs: str) -> tuple[str, str]:
 
 
 async def _fetch_clinvar(hgvs: str, gene_symbol: str) -> dict[str, Any]:
+    """Return the ClinVar record for exactly ``hgvs``, or ``{}`` when none is verified.
+
+    ``search_by_hgvs`` ranks verified matches first and stamps each row's
+    ``exact_change_match`` (same canonical change on the queried gene /
+    transcript). Anything else — no hit, a nearby variant, the same change in
+    another gene, or an unstamped row — is not this variant, so nothing is
+    attributed. There is deliberately no gene-level fallback: another variant's
+    classification is not evidence about the queried one. ``gene_symbol`` is
+    kept for the caller's signature; the client derives the gene from ``hgvs``.
+    """
     async with ClinVarClient() as cv:
         results = await cv.search_by_hgvs(hgvs)
-        if results and not results[0].get("exact_change_match", True):
-            # Best candidate ClinVar returned isn't the queried variant; treat
-            # this as no HGVS-level match so the gene-level fallback below
-            # applies exactly as it would for an empty search_by_hgvs result.
-            results = []
-        if not results and gene_symbol:
-            results = await cv.search_gene(gene_symbol, limit=1)
-        return results[0] if results else {}
+    if not results or results[0].get("exact_change_match") is not True:
+        return {}
+    return results[0]
 
 
 async def _fetch_gnomad(hgvs: str, gene_symbol: str) -> dict[str, Any]:
