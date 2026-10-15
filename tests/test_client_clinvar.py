@@ -447,8 +447,8 @@ def test_match_rank_key_exact_beats_review() -> None:
         "name": "NM_007294.4(BRCA1):c.211A>G (p.Arg71Gly)",
         "review_status": "reviewed by expert panel",
     }
-    key_exact = ClinVarClient._match_rank_key("c.5266dupC", exact_single)
-    key_nonmatch = ClinVarClient._match_rank_key("c.5266dupC", nonmatch_expert)
+    key_exact = ClinVarClient._match_rank_key("BRCA1:c.5266dupC", exact_single)
+    key_nonmatch = ClinVarClient._match_rank_key("BRCA1:c.5266dupC", nonmatch_expert)
     # (not exact, -review): the exact match sorts first even though its review
     # status is weaker than the non-matching expert-panel record.
     assert key_exact < key_nonmatch
@@ -458,13 +458,32 @@ def test_match_rank_key_exact_beats_review() -> None:
 
 def test_match_rank_key_review_breaks_ties_among_exact() -> None:
     """Among equally-exact matches, the better-reviewed record wins."""
-    expert = {"name": "x:c.524G>A", "review_status": "reviewed by expert panel"}
-    single = {"name": "y:c.524G>A", "review_status": "criteria provided, single submitter"}
-    unknown = {"name": "z:c.524G>A", "review_status": "brand new status"}
-    assert ClinVarClient._match_rank_key("c.524G>A", expert) == (False, -3)
-    assert ClinVarClient._match_rank_key("c.524G>A", single) == (False, -1)
+    name = "NM_000546.6(TP53):c.524G>A (p.Arg175His)"
+    expert = {"name": name, "review_status": "reviewed by expert panel"}
+    single = {"name": name, "review_status": "criteria provided, single submitter"}
+    unknown = {"name": name, "review_status": "brand new status"}
+    assert ClinVarClient._match_rank_key("TP53:c.524G>A", expert) == (False, -3)
+    assert ClinVarClient._match_rank_key("TP53:c.524G>A", single) == (False, -1)
     # Unrecognised review status ranks lowest (0).
-    assert ClinVarClient._match_rank_key("c.524G>A", unknown) == (False, 0)
+    assert ClinVarClient._match_rank_key("TP53:c.524G>A", unknown) == (False, 0)
+
+
+def test_match_rank_key_other_gene_ranks_as_non_match() -> None:
+    """AF-01: the same change token in another gene is not an exact match, so
+    a better-reviewed other-gene record cannot outrank the queried variant."""
+    queried = {
+        "name": "NM_007294.4(BRCA1):c.182A>G (synthetic)",
+        "review_status": "criteria provided, single submitter",
+    }
+    other_gene = {
+        "name": "NM_000546.6(TP53):c.182A>G (p.Asp61Gly)",
+        "review_status": "reviewed by expert panel",
+    }
+    key_queried = ClinVarClient._match_rank_key("BRCA1:c.182A>G", queried)
+    key_other = ClinVarClient._match_rank_key("BRCA1:c.182A>G", other_gene)
+    assert key_queried == (False, -1)
+    assert key_other == (True, -3)
+    assert key_queried < key_other
 
 
 async def test_search_by_hgvs_ranks_canonical_expert_panel_first(
@@ -528,28 +547,122 @@ async def test_search_by_hgvs_ranks_canonical_expert_panel_first(
 # ---------------------------------------------------------------------------
 
 
+_BRCA1_C181 = "NM_007294.4(BRCA1):c.181T>G (p.Cys61Gly)"
+
+
 @pytest.mark.parametrize(
-    ("change", "name", "expected"),
+    ("hgvs", "name", "expected"),
     [
         # Exact canonical match.
-        ("c.5266dupC", "NM_007294.4(BRCA1):c.5266dup (p.Gln1756fs)", True),
+        ("BRCA1:c.5266dupC", "NM_007294.4(BRCA1):c.5266dup (p.Gln1756fs)", True),
         # A nearby, non-matching variant — the real-world failure mode: the
         # gene-scoped search returns a candidate, but it is not the one asked
         # about.
-        ("c.182A>G", "NM_007294.4(BRCA1):c.314A>G (p.Tyr105Cys)", False),
+        ("BRCA1:c.182A>G", "NM_007294.4(BRCA1):c.314A>G (p.Tyr105Cys)", False),
         # The negative lookahead earning its keep: canonicalised "c.68_69del"
         # is a literal substring of "c.68_69delinsAAAA", but a deletion query
         # must not match an unrelated delins record at the same position. A
         # bare substring check (without the lookahead) would wrongly match.
-        ("c.68_69delAG", "NM_007294.4(BRCA1):c.68_69delinsAAAA (p.Test)", False),
-        ("c.68_69delAG", "NM_007294.4(BRCA1):c.68_69del (p.Test)", True),
-        # No change token to verify (bare identifier query) — nothing to
-        # disprove, so esearch's own lookup is authoritative.
-        ("", "NM_007294.4(BRCA1):c.181T>G (p.Cys61Gly)", True),
+        ("BRCA1:c.68_69delAG", "NM_007294.4(BRCA1):c.68_69delinsAAAA (p.Test)", False),
+        ("BRCA1:c.68_69delAG", "NM_007294.4(BRCA1):c.68_69del (p.Test)", True),
+        # No ':' (bare identifier such as an rsID) — no change token to
+        # compare, so esearch's own lookup is authoritative.
+        ("rs28897672", _BRCA1_C181, True),
+        # --- AF-01: gene identity -------------------------------------------
+        # Same change token, different gene: not the queried variant. The
+        # titles are ClinVar's observed spelling for these records (live
+        # free-text esearch for "c.182A>G", 2026-10-15).
+        ("BRCA1:c.182A>G", "NM_000546.6(TP53):c.182A>G (p.Asp61Gly)", False),
+        ("BRCA1:c.182A>G", "NM_002451.4(MTAP):c.182A>G (p.His61Arg)", False),
+        ("TP53:c.182A>G", "NM_000546.6(TP53):c.182A>G (p.Asp61Gly)", True),
+        # Gene comparison is case-insensitive.
+        ("brca1:c.181t>g", _BRCA1_C181, True),
+        # A shorter symbol must not match inside a longer one, either side.
+        ("BRCA:c.181T>G", _BRCA1_C181, False),
+        ("RCA1:c.181T>G", _BRCA1_C181, False),
+        # Protein change on the queried gene matches; the same protein change
+        # in another gene does not (both titles observed live).
+        ("BRCA1:p.Cys61Gly", _BRCA1_C181, True),
+        ("TP53:p.Asp61Gly", "NM_003470.3(USP7):c.182A>G (p.Asp61Gly)", False),
+        # A title that does not bind the change to the queried gene cannot
+        # establish gene identity.
+        ("BRCA1:c.181T>G", "NM_007294.4:c.181T>G (p.Cys61Gly)", False),
+        # --- AF-01: transcript context --------------------------------------
+        # RefSeq version drift (.3 queried, ClinVar on .4) is the same
+        # transcript, with or without a parenthesised gene.
+        ("NM_007294.3:c.181T>G", _BRCA1_C181, True),
+        ("NM_007294.3(BRCA1):c.181T>G", _BRCA1_C181, True),
+        ("NM_007294.4(BRCA1):c.181T>G", _BRCA1_C181, True),
+        # Another transcript numbers c. positions differently: not verified.
+        ("NM_007300.4(BRCA1):c.181T>G", _BRCA1_C181, False),
+        ("NM_000546.6:c.182A>G", "NM_003470.3(USP7):c.182A>G (p.Asp61Gly)", False),
+        # An accession must not match as a prefix of a longer one.
+        ("NM_00729.4:c.181T>G", _BRCA1_C181, False),
+        # Gene and transcript must both agree when both are given.
+        ("NM_007294.4(TP53):c.181T>G", _BRCA1_C181, False),
+        # A protein accession is not carried by ClinVar titles, so only the
+        # change token is checked for it (pre-existing behaviour, unchanged).
+        ("NP_009225.1:p.Cys61Gly", _BRCA1_C181, True),
+        # --- AF-01: token boundaries ----------------------------------------
+        # A token without its coordinate type must not match inside "c.181…".
+        ("BRCA1:181T>G", _BRCA1_C181, False),
+        ("BRCA1:81T>G", _BRCA1_C181, False),
+        # --- fail closed: nothing verifiable --------------------------------
+        ("BRCA1:", _BRCA1_C181, False),
+        (":c.181T>G", _BRCA1_C181, False),
+        ("NM_007294.4(BRCA1)x:c.181T>G", _BRCA1_C181, False),
     ],
 )
-def test_is_exact_match(change: str, name: str, expected: bool) -> None:
-    assert ClinVarClient._is_exact_match(change, {"name": name}) is expected
+def test_is_exact_match(hgvs: str, name: str, expected: bool) -> None:
+    assert ClinVarClient._is_exact_match(hgvs, {"name": name}) is expected
+
+
+async def test_search_by_hgvs_other_gene_same_change_is_not_exact(
+    respx_mock: respx.MockRouter,
+) -> None:
+    """AF-01: a record carrying the queried change token in another gene must
+    be stamped non-exact and ranked behind the queried gene's record, even
+    when it arrives first and is better reviewed. Synthetic fixture."""
+    respx_mock.get(
+        "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi",
+    ).mock(
+        return_value=httpx.Response(200, json={"esearchresult": {"idlist": ["1", "2"]}}),
+    )
+    respx_mock.get(
+        "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi",
+    ).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "result": {
+                    "1": {
+                        "uid": "1",
+                        "title": "NM_000546.6(TP53):c.182A>G (p.Asp61Gly)",
+                        "gene_sort": "TP53",
+                        "germline_classification": {
+                            "description": "Pathogenic",
+                            "review_status": "reviewed by expert panel",
+                        },
+                    },
+                    "2": {
+                        "uid": "2",
+                        "title": "NM_007294.4(BRCA1):c.182A>G (synthetic)",
+                        "gene_sort": "BRCA1",
+                        "germline_classification": {
+                            "description": "Benign",
+                            "review_status": "criteria provided, single submitter",
+                        },
+                    },
+                }
+            },
+        ),
+    )
+    async with ClinVarClient() as client:
+        rows = await client.search_by_hgvs("BRCA1:c.182A>G")
+    assert [(r["variation_id"], r["exact_change_match"]) for r in rows] == [
+        ("2", True),
+        ("1", False),
+    ]
 
 
 async def test_search_by_hgvs_stamps_exact_change_match(
