@@ -100,6 +100,10 @@ jobs:
       - name: Set up uv
         if: ${{ steps.release.outputs.pr }}
         uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          # Keep the release PR lock refresh on the same verified resolver as
+          # release.yml and the PR release-path proof (avoid format drift).
+          version: "0.12.3"
 
       - name: Sync uv.lock self-version on the release PR
         if: ${{ steps.release.outputs.pr }}
