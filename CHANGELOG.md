@@ -7,6 +7,13 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.5.4](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.5.3...v1.5.4) (2026-10-19)
+
+
+### Bug Fixes
+
+* **docs:** constrain incompatible PyMdown highlighting dependency ([#261](https://github.com/smaniches/alphafold-sovereign-mcp/issues/261)) ([648d7ba](https://github.com/smaniches/alphafold-sovereign-mcp/commit/648d7baaae0fd89eebd569d4eb4802688d2bde30))
+
 ## [1.5.3](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.5.2...v1.5.3) (2026-10-15)
 
 
