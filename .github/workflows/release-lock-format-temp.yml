@@ -1,0 +1,54 @@
+# Temporary release candidate lock verification, removed before promotion.
+name: Release lock format check (temporary)
+on:
+  push:
+    branches: [release-please--branches--main--components--alphafold-sovereign-mcp]
+    paths:
+      - ".github/workflows/release-lock-format-temp.yml"
+permissions:
+  contents: read
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "0.12.3"
+      - name: Regenerate and prove lock consistency
+        run: |
+          set -euo pipefail
+          cp uv.lock /tmp/previous-uv.lock
+          uv lock
+          uv lock --check
+          python - <<'PY'
+          import difflib, pathlib, tomllib
+          old = pathlib.Path('/tmp/previous-uv.lock').read_text()
+          new = pathlib.Path('uv.lock').read_text()
+          before, after = tomllib.loads(old), tomllib.loads(new)
+          assert before['package'] == after['package'], 'Package closure drifted'
+          assert before['requires-python'] == after['requires-python']
+          differences = [line for line in difflib.unified_diff(old.splitlines(), new.splitlines()) if line.startswith(('+','-')) and not line.startswith(('+++','---'))]
+          assert all(line[1:].startswith('revision = ') for line in differences), differences[:20]
+          print('Revision-only delta:', differences if differences else 'none')
+          PY
+          test -z "$(git diff --name-only | grep -v '^uv.lock$')"
+      - name: Commit canonical lock if revision changed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/release-please--branches--main--components--alphafold-sovereign-mcp"
+          if git diff --quiet -- uv.lock; then
+            echo 'Canonical locked resolution already identical; nothing to commit.'
+            exit 0
+          fi
+          git add -- uv.lock
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "build(release): normalize lock format with pinned uv 0.12.3"
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" push origin HEAD:refs/heads/release-please--branches--main--components--alphafold-sovereign-mcp
