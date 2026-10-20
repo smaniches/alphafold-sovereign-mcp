@@ -53,9 +53,7 @@ def inventory(cdx: dict) -> tuple[dict[str, dict], str, set[tuple[str, str]]]:
     return refs, root["bom-ref"], identities
 
 
-def dependency_edges(
-    cdx: dict, refs: dict[str, dict], root_ref: str
-) -> set[tuple[str, str]]:
+def dependency_edges(cdx: dict, refs: dict[str, dict], root_ref: str) -> set[tuple[str, str]]:
     nodes = cdx.get("dependencies")
     require(isinstance(nodes, list) and bool(nodes), "missing dependency graph")
     seen: set[str] = set()
@@ -82,20 +80,18 @@ def wheel_identity(target: Path) -> tuple[tuple[str, str], str]:
     wheel = wheels[0]
     with zipfile.ZipFile(wheel) as archive:
         members = [
-            name for name in archive.namelist()
+            name
+            for name in archive.namelist()
             if name.endswith(".dist-info/METADATA") and name.count("/") == 1
         ]
         require(len(members) == 1, "invalid wheel METADATA")
-        metadata = email.parser.Parser().parsestr(
-            archive.read(members[0]).decode("utf-8")
-        )
+        metadata = email.parser.Parser().parsestr(archive.read(members[0]).decode("utf-8"))
     require(metadata.get("Name") and metadata.get("Version"), "invalid wheel identity")
     name_version = normalized(metadata["Name"]), metadata["Version"]
     parts = wheel.name.split("-")
     require(len(parts) >= 5, "invalid wheel filename")
     require(
-        normalized(parts[0]) == name_version[0]
-        and parts[1] == name_version[1].replace("-", "_"),
+        normalized(parts[0]) == name_version[0] and parts[1] == name_version[1].replace("-", "_"),
         "wheel filename / metadata mismatch",
     )
     digest = hashlib.sha256()
@@ -113,9 +109,7 @@ def installed_packages(environment: Path) -> set[tuple[str, str]]:
         "print(json.dumps([(d.metadata['Name'],d.version) "
         "for d in m.distributions()]))"
     )
-    run = subprocess.run(
-        [str(python), "-c", code], check=True, capture_output=True, text=True
-    )
+    run = subprocess.run([str(python), "-c", code], check=True, capture_output=True, text=True)
     pairs = json.loads(run.stdout)
     records = {(normalized(name), version) for name, version in pairs}
     require(len(records) == len(pairs), "duplicate installed distributions")
@@ -123,15 +117,11 @@ def installed_packages(environment: Path) -> set[tuple[str, str]]:
 
 
 def root_digest(root: dict) -> str:
-    matches = [
-        h.get("content") for h in root.get("hashes", [])
-        if h.get("alg") == "SHA-256"
-    ]
+    matches = [h.get("content") for h in root.get("hashes", []) if h.get("alg") == "SHA-256"]
     require(len(matches) == 1, "root needs exactly one SHA-256")
     digest = matches[0]
     require(
-        isinstance(digest, str) and re.fullmatch(r"[a-fA-F0-9]{64}", digest)
-        is not None,
+        isinstance(digest, str) and re.fullmatch(r"[a-fA-F0-9]{64}", digest) is not None,
         "invalid wheel SHA-256",
     )
     return digest.lower()
@@ -157,29 +147,37 @@ def spdx_document(cdx: dict) -> dict:
             "copyrightText": "NOASSERTION",
         }
         if c.get("purl"):
-            pkg["externalRefs"] = [{
-                "referenceCategory": "PACKAGE-MANAGER",
-                "referenceType": "purl",
-                "referenceLocator": c["purl"],
-            }]
+            pkg["externalRefs"] = [
+                {
+                    "referenceCategory": "PACKAGE-MANAGER",
+                    "referenceType": "purl",
+                    "referenceLocator": c["purl"],
+                }
+            ]
         if ref == root_ref:
-            pkg["checksums"] = [{
-                "algorithm": "SHA256", "checksumValue": digest,
-            }]
+            pkg["checksums"] = [
+                {
+                    "algorithm": "SHA256",
+                    "checksumValue": digest,
+                }
+            ]
         packages.append(pkg)
-    relations = [{
-        "spdxElementId": "SPDXRef-DOCUMENT",
-        "relationshipType": "DESCRIBES",
-        "relatedSpdxElement": ids[root_ref],
-    }]
-    relations.extend({
-        "spdxElementId": ids[parent],
-        "relationshipType": "DEPENDS_ON",
-        "relatedSpdxElement": ids[child],
-    } for parent, child in sorted(edges))
-    timestamp = cdx.get("metadata", {}).get(
-        "timestamp", "1970-01-01T00:00:00Z"
+    relations = [
+        {
+            "spdxElementId": "SPDXRef-DOCUMENT",
+            "relationshipType": "DESCRIBES",
+            "relatedSpdxElement": ids[root_ref],
+        }
+    ]
+    relations.extend(
+        {
+            "spdxElementId": ids[parent],
+            "relationshipType": "DEPENDS_ON",
+            "relatedSpdxElement": ids[child],
+        }
+        for parent, child in sorted(edges)
     )
+    timestamp = cdx.get("metadata", {}).get("timestamp", "1970-01-01T00:00:00Z")
     require(isinstance(timestamp, str) and bool(timestamp), "invalid timestamp")
     return {
         "spdxVersion": "SPDX-2.3",
@@ -187,11 +185,11 @@ def spdx_document(cdx: dict) -> dict:
         "SPDXID": "SPDXRef-DOCUMENT",
         "name": f"{root['name']} {root['version']} installed-wheel SBOM",
         "documentNamespace": (
-            "https://github.com/smaniches/alphafold-sovereign-mcp/spdx/"
-            f"{root['version']}/{digest}"
+            f"https://github.com/smaniches/alphafold-sovereign-mcp/spdx/{root['version']}/{digest}"
         ),
         "creationInfo": {
-            "created": timestamp, "creators": ["Tool: release_spdx.py"],
+            "created": timestamp,
+            "creators": ["Tool: release_spdx.py"],
         },
         "documentDescribes": [ids[root_ref]],
         "packages": packages,
@@ -199,9 +197,7 @@ def spdx_document(cdx: dict) -> dict:
     }
 
 
-def verify(
-    cdx: dict, spdx: dict, wheel: Path, environment: Path | None = None
-) -> None:
+def verify(cdx: dict, spdx: dict, wheel: Path, environment: Path | None = None) -> None:
     refs, root_ref, identities = inventory(cdx)
     edges = dependency_edges(cdx, refs, root_ref)
     wheel_package, sha = wheel_identity(wheel)
@@ -219,8 +215,7 @@ def verify(
         "missing SPDX creator",
     )
     require(
-        isinstance(spdx.get("documentNamespace"), str)
-        and bool(spdx["documentNamespace"]),
+        isinstance(spdx.get("documentNamespace"), str) and bool(spdx["documentNamespace"]),
         "missing SPDX namespace",
     )
     packages = spdx.get("packages")
@@ -236,13 +231,15 @@ def verify(
             and identifier not in by_id,
             "duplicate/invalid SPDX ID",
         )
-        key = identity({
-            "name": pkg.get("name"), "version": pkg.get("versionInfo"),
-        })
+        key = identity(
+            {
+                "name": pkg.get("name"),
+                "version": pkg.get("versionInfo"),
+            }
+        )
         require(key not in by_identity, "duplicate SPDX package")
         require(
-            pkg.get("filesAnalyzed") is False
-            and pkg.get("downloadLocation") == "NOASSERTION",
+            pkg.get("filesAnalyzed") is False and pkg.get("downloadLocation") == "NOASSERTION",
             "invalid SPDX package properties",
         )
         by_id[identifier] = key
@@ -255,9 +252,13 @@ def verify(
     root_id = root["SPDXID"]
     require(spdx.get("documentDescribes") == [root_id], "wrong SPDX root")
     require(
-        root.get("checksums") == [{
-            "algorithm": "SHA256", "checksumValue": sha,
-        }],
+        root.get("checksums")
+        == [
+            {
+                "algorithm": "SHA256",
+                "checksumValue": sha,
+            }
+        ],
         "SPDX root wheel hash mismatch",
     )
     relations = spdx.get("relationships")
@@ -276,8 +277,7 @@ def verify(
             descriptions += 1
         else:
             require(
-                kind == "DEPENDS_ON"
-                and source in by_id and target in by_id,
+                kind == "DEPENDS_ON" and source in by_id and target in by_id,
                 "invalid SPDX dependency relationship",
             )
             edge = by_id[source], by_id[target]
@@ -313,8 +313,13 @@ def main() -> int:
         spdx = json.loads(args.spdx.read_text(encoding="utf-8"))
         verify(cdx, spdx, args.wheel, args.environment)
     except (
-        ValueError, OSError, subprocess.SubprocessError, KeyError,
-        TypeError, json.JSONDecodeError, zipfile.BadZipFile,
+        ValueError,
+        OSError,
+        subprocess.SubprocessError,
+        KeyError,
+        TypeError,
+        json.JSONDecodeError,
+        zipfile.BadZipFile,
     ) as error:
         print(f"SPDX release verification FAILED: {error}", file=sys.stderr)
         return 1
