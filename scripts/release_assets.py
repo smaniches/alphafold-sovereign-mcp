@@ -39,9 +39,7 @@ def distributions(dist: Path) -> dict[str, Path]:
 
 
 def package_version(tag: str) -> str:
-    match = re.fullmatch(
-        r"v?(\d+\.\d+\.\d+)(?:-(a|b|rc)(\d+))?", tag
-    )
+    match = re.fullmatch(r"v?(\d+\.\d+\.\d+)(?:-(a|b|rc)(\d+))?", tag)
     require(match is not None, f"unsupported release tag {tag!r}")
     return match.group(1) + (match.group(2) or "") + (match.group(3) or "")
 
@@ -63,9 +61,7 @@ def request_json(url: str, token: str | None = None) -> dict | None:
         raise ValueError(f"publication lookup HTTP {error.code}: {url}") from error
 
 
-def check_pypi(
-    dist: Path, tag: str, metadata: dict | None, require_present: bool
-) -> bool:
+def check_pypi(dist: Path, tag: str, metadata: dict | None, require_present: bool) -> bool:
     files = distributions(dist)
     (name, version), _ = wheel_identity(dist)
     expected_version = package_version(tag)
@@ -77,9 +73,7 @@ def check_pypi(
     stem = sdist.removesuffix(".tar.gz")
     distribution, separator, published_version = stem.rpartition("-")
     require(
-        bool(separator)
-        and normalized(distribution) == name
-        and published_version == version,
+        bool(separator) and normalized(distribution) == name and published_version == version,
         "sdist filename does not match wheel identity",
     )
     if metadata is None:
@@ -88,8 +82,7 @@ def check_pypi(
     require(isinstance(metadata, dict), "invalid PyPI response")
     info = metadata.get("info", {})
     require(
-        normalized(info.get("name", "")) == name
-        and info.get("version") == version,
+        normalized(info.get("name", "")) == name and info.get("version") == version,
         "wrong PyPI project/version",
     )
     urls = metadata.get("urls")
@@ -103,8 +96,7 @@ def check_pypi(
         require(isinstance(item, dict), "invalid PyPI artifact")
         filename, category = item.get("filename"), item.get("packagetype")
         require(
-            isinstance(filename, str)
-            and category in ("bdist_wheel", "sdist"),
+            isinstance(filename, str) and category in ("bdist_wheel", "sdist"),
             "unexpected PyPI artifact",
         )
         require(filename not in remote, "duplicate PyPI artifact")
@@ -148,24 +140,20 @@ def download_asset(url: str, destination: Path) -> None:
             output.write(chunk)
 
 
-def verify_signature(
-    bundle: Path, artifact: Path, repo: str, tag: str
-) -> None:
-    identity = (
-        f"https://github.com/{repo}/.github/workflows/release.yml"
-        f"@refs/tags/{tag}"
-    )
+def verify_signature(bundle: Path, artifact: Path, repo: str, tag: str) -> None:
+    identity = f"https://github.com/{repo}/.github/workflows/release.yml@refs/tags/{tag}"
     command = [
-        "cosign", "verify-blob",
-        "--bundle", str(bundle),
+        "cosign",
+        "verify-blob",
+        "--bundle",
+        str(bundle),
         "--certificate-oidc-issuer",
         "https://token.actions.githubusercontent.com",
-        "--certificate-identity", identity,
+        "--certificate-identity",
+        identity,
         str(artifact),
     ]
-    result = subprocess.run(
-        command, check=False, capture_output=True, text=True
-    )
+    result = subprocess.run(command, check=False, capture_output=True, text=True)
     require(
         result.returncode == 0,
         f"existing Sigstore bundle fails verification: {artifact.name}",
@@ -187,9 +175,7 @@ def check_github_assets(
         "invalid repository",
     )
     require(
-        re.fullmatch(
-            r"v\d+\.\d+\.\d+(?:-(?:a|b|rc)\d+)?", tag
-        ) is not None,
+        re.fullmatch(r"v\d+\.\d+\.\d+(?:-(?:a|b|rc)\d+)?", tag) is not None,
         "invalid release tag",
     )
     require(isinstance(assets, list), "invalid release asset list")
@@ -206,14 +192,11 @@ def check_github_assets(
         name = asset.get("name")
         url = asset.get("browser_download_url")
         require(
-            isinstance(name, str)
-            and name in expected
-            and name not in seen,
+            isinstance(name, str) and name in expected and name not in seen,
             f"unknown/duplicate GitHub Release asset: {name!r}",
         )
         require(
-            isinstance(url, str)
-            and url == url_prefix + name,
+            isinstance(url, str) and url == url_prefix + name,
             f"wrong release asset location: {name!r}",
         )
         seen.add(name)
@@ -243,8 +226,7 @@ def plan_github(dist: Path, sboms: Path, tag: str, repo: str) -> dict:
     exists = response is not None
     if exists:
         require(
-            isinstance(response, dict)
-            and response.get("tag_name") == tag,
+            isinstance(response, dict) and response.get("tag_name") == tag,
             "wrong GitHub Release tag",
         )
         assets = response.get("assets")
@@ -252,7 +234,10 @@ def plan_github(dist: Path, sboms: Path, tag: str, repo: str) -> dict:
         assets = []
     missing = check_github_assets(files, assets, repo, tag)
     return {
-        "exists": exists, "missing": missing, "tag": tag, "repo": repo,
+        "exists": exists,
+        "missing": missing,
+        "tag": tag,
+        "repo": repo,
     }
 
 
@@ -300,10 +285,7 @@ def main() -> int:
     try:
         if args.action == "pypi":
             version = package_version(args.tag)
-            url = (
-                "https://pypi.org/pypi/alphafold-sovereign-mcp/"
-                f"{version}/json"
-            )
+            url = f"https://pypi.org/pypi/alphafold-sovereign-mcp/{version}/json"
             # An already-published release must match immediately.
             # Only post-upload 404 propagation is retried.
             for attempt in range(12 if args.require_present else 1):
@@ -312,17 +294,13 @@ def main() -> int:
                     break
                 if attempt < 11:
                     time.sleep(10)
-            present = check_pypi(
-                args.dist, args.tag, metadata, args.require_present
-            )
+            present = check_pypi(args.dist, args.tag, metadata, args.require_present)
             if args.github_output is not None:
                 with args.github_output.open("a", encoding="utf-8") as output:
                     output.write(f"present={str(present).lower()}\n")
             print(f"PyPI reconciliation PASS: {version}, present={present}")
         elif args.action == "github":
-            plan = plan_github(
-                args.dist, args.sboms, args.tag, args.repo
-            )
+            plan = plan_github(args.dist, args.sboms, args.tag, args.repo)
             args.plan.write_text(
                 json.dumps(plan, sort_keys=True) + "\n",
                 encoding="utf-8",
@@ -343,14 +321,22 @@ def main() -> int:
                     base = Path(str(path).removesuffix(".sigstore"))
                     subprocess.run(
                         [
-                            "cosign", "sign-blob", "--yes", str(base),
-                            "--bundle", str(path),
+                            "cosign",
+                            "sign-blob",
+                            "--yes",
+                            str(base),
+                            "--bundle",
+                            str(path),
                         ],
                         check=True,
                     )
                 print("Only missing Sigstore bundles signed")
     except (
-        ValueError, OSError, KeyError, TypeError, urllib.error.URLError,
+        ValueError,
+        OSError,
+        KeyError,
+        TypeError,
+        urllib.error.URLError,
         subprocess.SubprocessError,
     ) as error:
         print(
