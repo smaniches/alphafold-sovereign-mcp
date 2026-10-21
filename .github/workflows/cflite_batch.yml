@@ -1,6 +1,8 @@
 name: ClusterFuzzLite batch fuzzing
 
 on:
+  push:
+    branches: [main]
   schedule:
     - cron: "0 3 * * 1"   # Mondays at 03:00 UTC
   workflow_dispatch:
@@ -11,6 +13,9 @@ jobs:
   batch-fuzzing:
     name: Fuzz (batch, ${{ matrix.sanitizer }})
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     strategy:
       fail-fast: false
       matrix:
@@ -28,6 +33,13 @@ jobs:
         uses: google/clusterfuzzlite/actions/run_fuzzers@884713a6c30a92e5e8544c39945cd7cb630abcd1 # v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          fuzz-seconds: 1800
+          fuzz-seconds: ${{ github.event_name == 'push' && 300 || 1800 }}
           mode: batch
           sanitizer: ${{ matrix.sanitizer }}
+          output-sarif: true
+      - name: Upload SARIF to GitHub Security tab
+        if: always() && steps.build.outcome == 'success'
+        uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4
+        with:
+          sarif_file: cifuzz-sarif/results.sarif
+          checkout_path: cifuzz-sarif
