@@ -1,0 +1,55 @@
+name: One-time certifi lock resolution
+
+on:
+  push:
+    branches: [fix/certifi-ghsa-20261020]
+
+permissions:
+  contents: read
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "latest"
+      - name: Resolve certifi only
+        run: |
+          set -euo pipefail
+          uv --version
+          uv lock --upgrade-package certifi
+          uv lock --check
+          python3 - <<'PY'
+          import tomllib
+          with open("uv.lock", "rb") as stream:
+              data = tomllib.load(stream)
+          versions = [p["version"] for p in data["package"] if p["name"] == "certifi"]
+          assert len(versions) == 1, versions
+          print("RESOLVED_CERTIFI_VERSION=" + versions[0])
+          assert versions[0] != "2026.4.22", "vulnerable lock unchanged"
+          PY
+      - name: Audit regenerated lock
+        run: |
+          set -euo pipefail
+          uv sync --locked --extra security
+          set +e
+          uv run --locked pip-audit --format json > audit.json
+          audit_code=$?
+          set -e
+          printf '%s\n' "$audit_code" > audit-exit.txt
+          if (( audit_code != 0 )); then
+            echo "::error::pip-audit still flags the resolved dependency closure"
+            exit "$audit_code"
+          fi
+      - name: Export unmodified uv-generated lock and security evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: certifi-resolved-evidence
+          path: |
+            uv.lock
+            audit.json
+            audit-exit.txt
+          if-no-files-found: error
