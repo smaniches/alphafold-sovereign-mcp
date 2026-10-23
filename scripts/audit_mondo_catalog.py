@@ -130,6 +130,7 @@ def main() -> None:
     parser.add_argument("--obo", required=True, type=Path)
     parser.add_argument("--expected-hash", required=True)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--require-all-resolved", action="store_true")
     args = parser.parse_args()
     if sha256(args.obo) != args.expected_hash.lower():
         parser.error("Frozen MONDO ontology SHA256 mismatch")
@@ -141,6 +142,8 @@ def main() -> None:
         print(row["status"], row["mondo_id"], row["requested_name"], row["preferred_label"])
         if row["exact_label_alternatives"]:
             print("  EXACT_LABEL_CANDIDATES", row["exact_label_alternatives"])
+    if args.require_all_resolved and result["requires_review"]:
+        raise SystemExit("Unresolved MONDO IDs or disease scope in the curated catalog")
 
 
 if __name__ == "__main__":

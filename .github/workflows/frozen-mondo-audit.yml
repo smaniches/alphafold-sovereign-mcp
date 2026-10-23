@@ -32,7 +32,8 @@ jobs:
             --source src/alphafold_sovereign/tools/disease.py \
             --obo "$RUNNER_TEMP/mondo.obo" \
             --expected-hash 2631e8e165d41def1a46749adb1ce0a336c8aba7f6bc0978729592cee8fed60b \
-            --output /tmp/mondo-audit-report.json
+            --output /tmp/mondo-audit-report.json \
+            --require-all-resolved
       - name: Publish audit evidence
         uses: actions/upload-artifact@v4
         if: always()
