@@ -5,8 +5,8 @@
     },
     "note": "Unreviewed computational signals only; no ACMG/AMP criteria are established by this report. ClinVar classification is independent source context, not PP5/BP6 evidence. Gene-disease mechanism and variant-specific clinical criteria require qualified expert assessment."
   },
-  "clinical_tier": "HIGH",
-  "clinical_tier_explanation": "Strong evidence of clinical pathogenicity from a ClinVar pathogenic classification (see review_status for the supporting review level) and/or multiple concordant computational predictors.",
+  "clinical_tier": "NOT_ASSESSED",
+  "clinical_tier_explanation": "No clinical tier assessed by Topologica. Source-reported ClinVar classifications and computational observations remain separate; clinical interpretation requires disease-specific evidence and review.",
   "clinvar": {
     "acmg_code": "P",
     "classification": "Pathogenic",
@@ -28,7 +28,7 @@
     "alphamissense": "ok",
     "chembl": "no_data",
     "clinvar": "ok",
-    "disgenet": "ok",
+    "disgenet": "failed",
     "ensembl_vep": "ok",
     "gnomad": "skipped",
     "open_targets": "ok"

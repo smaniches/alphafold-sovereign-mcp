@@ -468,11 +468,9 @@ async def generate_variant_clinical_report(
     """Generate a multi-source variant interpretation report.
 
     Cross-references evidence from up to seven upstream databases for a
-    single HGVS variant into one structured report. The report is a
-    *research aid*: it surfaces the upstream evidence and the
-    ACMG/AMP criteria that the available evidence supports, but it is
-    not a clinical interpretation and must not be used as a diagnostic
-    without independent review by a qualified clinical laboratory.
+    single HGVS variant into one structured research report. It preserves
+    source classifications and computational observations separately; it
+    does not assign an independent clinical tier or establish ACMG criteria.
 
     1. **Ensembl VEP** — functional consequence, SIFT/PolyPhen/CADD predictions
     2. **ClinVar** — clinical pathogenicity classifications and review status
@@ -482,7 +480,7 @@ async def generate_variant_clinical_report(
     6. **DisGeNET** — curated gene-disease association scores
     7. **ChEMBL** — approved drugs acting on the gene product
 
-    The report includes a draft ACMG/AMP criteria checklist, computed
+    The report includes unassessed ACMG-related computational signals,
     sequence consequences, and gene-level drug context. It does not compute
     variant-specific three-dimensional structural impact.
 
@@ -633,13 +631,9 @@ async def generate_variant_clinical_report(
     # ClinVar's independently issued classification is returned in the
     # 'clinvar' section, not double-counted as PP5/BP6 ACMG evidence.
 
-    # ── Step 10: Clinical tier ────────────────────────────────────────────────
-    tier = _compute_clinical_tier(
-        clinvar_class=clinvar_class,
-        am_score=am_score,
-        global_af=gnomad_data.get("global_af"),
-        acmg_criteria=acmg_criteria,
-    )
+    # No validated variant-specific clinical tier is assigned by this MCP.
+    # ClinVar's own classification is preserved with source attribution.
+    tier = "NOT_ASSESSED"
 
     # ── Step 11: Canonical consequence ───────────────────────────────────────
     canonical_tc: dict[str, Any] = {}
@@ -721,7 +715,7 @@ async def generate_variant_clinical_report(
         }
 
     # PDBe's publication annotations are a separate evidence family.
-    # Never feed them into ACMG scoring or clinical tiers. The caller must
+    # Never feed them into ACMG classification. The caller must
     # provide a UniProt coordinate; HGVS-to-UniProt joins are not assumed.
     if params.include_literature_evidence:
         accession = params.literature_uniprot_id
@@ -1659,49 +1653,17 @@ def _compute_clinical_tier(
     global_af: float | None,
     acmg_criteria: dict[str, str],
 ) -> str:
-    """HIGH / MEDIUM / LOW / UNKNOWN based on combined evidence."""
-    if clinvar_class == PathogenicityClass.PATHOGENIC.value:
-        return "HIGH"
-    if clinvar_class == PathogenicityClass.LIKELY_PATHOGENIC.value:
-        if am_score is not None and am_score >= 0.564:
-            return "HIGH"
-        return "MEDIUM"
-    if clinvar_class in {PathogenicityClass.BENIGN.value, PathogenicityClass.LIKELY_BENIGN.value}:
-        return "LOW"
-    # No ClinVar — rely on computational evidence
-    p_count = sum(1 for k in acmg_criteria if k.startswith("P"))
-    b_count = sum(1 for k in acmg_criteria if k.startswith("B"))
-    if p_count >= 2:
-        return "MEDIUM"
-    if b_count >= 2:
-        return "LOW"
-    if am_score is not None and am_score >= 0.564:
-        return "MEDIUM"
-    if am_score is not None and am_score <= 0.340:
-        return "LOW"
-    return "UNKNOWN"
+    """Legacy compatibility helper: clinical severity is never inferred here."""
+    return "NOT_ASSESSED"
 
 
 def _tier_explanation(tier: str) -> str:
-    return {
-        "HIGH": (
-            "Strong evidence of clinical pathogenicity from a ClinVar pathogenic "
-            "classification (see review_status for the supporting review level) "
-            "and/or multiple concordant computational predictors."
-        ),
-        "MEDIUM": (
-            "Computational evidence suggests pathogenicity; lacks expert ClinVar curation. "
-            "Further clinical and functional evidence recommended."
-        ),
-        "LOW": (
-            "Evidence suggests benign classification: population frequency is high "
-            "and/or in-silico predictors indicate benign effect."
-        ),
-        "UNKNOWN": (
-            "Insufficient evidence from any source to assign a pathogenicity tier. "
-            "Classify as Variant of Uncertain Significance pending further evidence."
-        ),
-    }.get(tier, "Unknown tier.")
+    """Describe the boundary between retrieved data and clinical judgment."""
+    return (
+        "No clinical tier assessed by Topologica. Source-reported ClinVar "
+        "classifications and computational observations remain separate; "
+        "clinical interpretation requires disease-specific evidence and review."
+    )
 
 
 def _druggability_actionability(tier: str, drug_count: int, tractability_labels: list[str]) -> str:

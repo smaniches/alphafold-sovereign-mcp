@@ -484,9 +484,15 @@ async def test_resolve_disease_efo_rejects_nonexact_search_hit(
     respx_mock.post(_GQL_URL).mock(
         return_value=httpx.Response(
             200,
-            json={"data": {"search": {"hits": [
-                {"id": "EFO_0000305", "entity": "disease", "name": "breast carcinoma"},
-            ]}}},
+            json={
+                "data": {
+                    "search": {
+                        "hits": [
+                            {"id": "EFO_0000305", "entity": "disease", "name": "breast carcinoma"},
+                        ]
+                    }
+                }
+            },
         )
     )
     async with OpenTargetsClient() as client:
@@ -499,10 +505,16 @@ async def test_resolve_disease_efo_rejects_ambiguous_identity(
     respx_mock.post(_GQL_URL).mock(
         return_value=httpx.Response(
             200,
-            json={"data": {"search": {"hits": [
-                {"id": "EFO_0000305", "entity": "disease", "name": "breast cancer"},
-                {"id": "EFO_1000001", "entity": "disease", "name": "breast cancer"},
-            ]}}},
+            json={
+                "data": {
+                    "search": {
+                        "hits": [
+                            {"id": "EFO_0000305", "entity": "disease", "name": "breast cancer"},
+                            {"id": "EFO_1000001", "entity": "disease", "name": "breast cancer"},
+                        ]
+                    }
+                }
+            },
         )
     )
     async with OpenTargetsClient() as client:

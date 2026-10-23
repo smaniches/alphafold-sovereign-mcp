@@ -266,7 +266,8 @@ async def test_ncbi_gene_id_gene_not_found(respx_mock: respx.MockRouter) -> None
         return_value=httpx.Response(500),
     )
     async with EnsemblClient() as client:
-        assert await client.ncbi_gene_id("BAD") == ""
+        with pytest.raises(UpstreamError):
+            await client.ncbi_gene_id("BAD")
 
 
 async def test_ncbi_gene_id_xrefs_error(respx_mock: respx.MockRouter) -> None:
@@ -528,8 +529,8 @@ async def test_orthologs_gene_lookup_fails(respx_mock: respx.MockRouter) -> None
         "https://rest.ensembl.org/lookup/symbol/human/UNKNOWN",
     ).mock(return_value=httpx.Response(404))
     async with EnsemblClient() as client:
-        rows = await client.orthologs("UNKNOWN")
-    assert rows == []
+        with pytest.raises(UpstreamError):
+            await client.orthologs("UNKNOWN")
 
 
 async def test_orthologs_homology_error(respx_mock: respx.MockRouter) -> None:

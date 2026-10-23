@@ -347,14 +347,14 @@ def test_compute_clinical_tier(
             global_af=global_af,
             acmg_criteria=criteria,
         )
-        == expected
+        == "NOT_ASSESSED"
     )
 
 
 @pytest.mark.parametrize("tier", ["HIGH", "MEDIUM", "LOW", "UNKNOWN", "OTHER"])
 def test_tier_explanation(tier: str) -> None:
     out = _tier_explanation(tier)
-    assert isinstance(out, str)
+    assert "No clinical tier assessed" in out
 
 
 @pytest.mark.parametrize(
@@ -589,7 +589,7 @@ async def test_generate_variant_report_full(monkeypatch: pytest.MonkeyPatch) -> 
     )
 
     out = await generate_variant_clinical_report(VariantClinicalReportInput(hgvs="BRCA1:c.181T>G"))
-    assert out["clinical_tier"] == "HIGH"
+    assert out["clinical_tier"] == "NOT_ASSESSED"
     assert out["gene_symbol"] == "BRCA1"
     assert "PP5" not in out["acmg_criteria_draft"]["criteria"]
     assert out["clinvar"]["classification"] == "Pathogenic"
@@ -666,7 +666,7 @@ async def test_generate_variant_report_pdbe_failure_is_not_absence(
     )
     assert out["data_sources_status"]["pdbe_iucr_literature"] == "failed"
     assert out["literature_residue_evidence"]["status"] == "unavailable"
-    assert out["clinical_tier"] == "UNKNOWN"
+    assert out["clinical_tier"] == "NOT_ASSESSED"
 
 
 async def test_generate_variant_report_ignores_non_exact_clinvar_hit(
@@ -705,7 +705,7 @@ async def test_generate_variant_report_ignores_non_exact_clinvar_hit(
     assert out["clinvar"]["classification"] == PathogenicityClass.NOT_PROVIDED.value
     assert out["clinvar"]["variation_id"] == ""
     # The mismatched record's Pathogenic call must not drive the tier either.
-    assert out["clinical_tier"] == "UNKNOWN"
+    assert out["clinical_tier"] == "NOT_ASSESSED"
 
 
 async def test_generate_variant_report_minimal(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -724,7 +724,7 @@ async def test_generate_variant_report_minimal(monkeypatch: pytest.MonkeyPatch) 
             include_drug_context=False,
         )
     )
-    assert out["clinical_tier"] == "UNKNOWN"
+    assert out["clinical_tier"] == "NOT_ASSESSED"
     assert "drug_context" not in out
     assert out["population_genetics"]["populations"] == []
 
@@ -743,7 +743,7 @@ async def test_generate_variant_report_with_exceptions(
     out = await generate_variant_clinical_report(
         VariantClinicalReportInput(hgvs="BRCA1:c.181T>G", include_drug_context=False)
     )
-    assert out["clinical_tier"] == "UNKNOWN"
+    assert out["clinical_tier"] == "NOT_ASSESSED"
 
 
 async def test_generate_variant_report_drug_context_failure(
