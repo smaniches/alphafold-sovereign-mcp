@@ -797,7 +797,7 @@ async def get_common_disease_targets(params: CommonDiseaseInput) -> str:
     }
 )
 async def triage_variant_3d(params: VariantTriageInput) -> str:
-    """Comprehensive clinical triage for a missense variant.
+    """Retrieve source-reported variant evidence for research.
 
     Fuses the upstream signals this tool currently wires into a single
     prioritised report:
@@ -820,6 +820,8 @@ async def triage_variant_3d(params: VariantTriageInput) -> str:
 
     Returns a ``pathogenicity_tier``: HIGH / MEDIUM / LOW / UNKNOWN
     (derived from ClinVar; the AlphaMissense input is always absent here).
+    This legacy display label is not a calibrated risk estimate, an ACMG
+    classification, or an independently validated clinical assessment.
 
     Example: ``triage_variant_3d(hgvs='BRCA1:c.181T>G')``
     """
