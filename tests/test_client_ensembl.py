@@ -593,3 +593,13 @@ async def test_transcript_protein_error(respx_mock: respx.MockRouter) -> None:
     async with EnsemblClient() as client:
         with pytest.raises(UpstreamError):
             await client.transcript_protein("BAD")
+
+
+async def test_ncbi_gene_id_returns_empty_for_authoritative_missing_gene(
+    respx_mock: respx.MockRouter,
+) -> None:
+    respx_mock.get("https://rest.ensembl.org/lookup/symbol/human/MISSING").mock(
+        return_value=httpx.Response(404)
+    )
+    async with EnsemblClient() as client:
+        assert await client.ncbi_gene_id("MISSING") == ""
