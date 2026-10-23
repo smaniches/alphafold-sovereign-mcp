@@ -1614,8 +1614,9 @@ async def test_evolutionary_with_gudhi_reports_tda_only(
 
     monkeypatch.setattr(si, "_fetch_af_structure", fake_fetch)
     monkeypatch.setattr(
-        si, "_compute_tda_fingerprint",
-        lambda ca: {"fingerprint_vector": [1.0, 2.0], "gudhi_available": True}
+        si,
+        "_compute_tda_fingerprint",
+        lambda ca: {"fingerprint_vector": [1.0, 2.0], "gudhi_available": True},
     )
     out = await find_evolutionary_structural_shifts(EvolutionaryInput(gene_symbol="BRCA1"))
     profile = out["evolutionary_profile"][0]
