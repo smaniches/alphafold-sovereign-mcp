@@ -21,7 +21,7 @@ from typing import Any
 
 import structlog
 
-from alphafold_sovereign.clients._base import BaseAsyncClient, UpstreamConfig
+from alphafold_sovereign.clients._base import BaseAsyncClient, UpstreamConfig, UpstreamError
 
 logger = structlog.get_logger(__name__)
 
@@ -137,7 +137,9 @@ class EnsemblClient(BaseAsyncClient):
                 f"/lookup/symbol/{self.species}/{gene_symbol}",
                 params={"expand": 1, "xrefs": 1},
             )
-        except Exception as exc:
+        except UpstreamError as exc:
+            if exc.status == 404:
+                return {"gene_symbol": gene_symbol, "found": False}
             logger.warning("ensembl.gene_lookup.error", gene=gene_symbol, exc=str(exc))
             raise
 

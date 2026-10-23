@@ -529,8 +529,7 @@ async def test_orthologs_gene_lookup_fails(respx_mock: respx.MockRouter) -> None
         "https://rest.ensembl.org/lookup/symbol/human/UNKNOWN",
     ).mock(return_value=httpx.Response(404))
     async with EnsemblClient() as client:
-        with pytest.raises(UpstreamError):
-            await client.orthologs("UNKNOWN")
+        assert await client.orthologs("UNKNOWN") == []
 
 
 async def test_orthologs_homology_error(respx_mock: respx.MockRouter) -> None:

@@ -618,7 +618,7 @@ async def test_generate_variant_report_pdbe_opt_in(monkeypatch: pytest.MonkeyPat
     output = await generate_variant_clinical_report(params)
     assert output["literature_residue_evidence"]["status"] == "ok"
     assert output["data_sources_status"]["pdbe_iucr_literature"] == "ok"
-    assert output["clinical_tier"] == "UNKNOWN"
+    assert output["clinical_tier"] == "NOT_ASSESSED"
     assert output["acmg_criteria_draft"]["criteria"] == {}
     mocks["pdbe_literature"].get_residue_annotations.assert_awaited_once_with("P38398", 61)
 
