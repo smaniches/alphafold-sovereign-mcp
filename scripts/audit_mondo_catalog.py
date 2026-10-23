@@ -66,6 +66,26 @@ def normalize(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", value.casefold().replace("_", " ")).strip()
 
 
+def exact_label_suggestions(
+    name: str, records: dict[str, dict[str, object]]
+) -> list[dict[str, str]]:
+    """Find candidate current ontology IDs; never auto-select a disease."""
+    requested = normalize(name)
+    matched: list[dict[str, str]] = []
+    for identifier, term in records.items():
+        if term["obsolete"]:
+            continue
+        label = str(term.get("name", ""))
+        aliases = {
+            normalize(str(synonym))
+            for synonym, kind in term["synonyms"]
+            if kind == "EXACT"
+        }
+        if requested == normalize(label) or requested in aliases:
+            matched.append({"mondo_id": identifier, "preferred_label": label})
+    return sorted(matched, key=lambda row: row["mondo_id"])[:12]
+
+
 def inspect(source: Path, obo: Path) -> dict[str, object]:
     records = ontology(obo)
     rows = []
@@ -88,6 +108,11 @@ def inspect(source: Path, obo: Path) -> dict[str, object]:
                 "mondo_id": identifier,
                 "preferred_label": term.get("name") if term else None,
                 "status": status,
+                "exact_label_alternatives": (
+                    exact_label_suggestions(name, records)
+                    if status not in {"PREFERRED_LABEL", "EXACT_SYNONYM"}
+                    else []
+                ),
             })
     requires_review = sum(
         row["status"] not in {"PREFERRED_LABEL", "EXACT_SYNONYM"} for row in rows
@@ -115,6 +140,8 @@ def main() -> None:
     print("Requires scientific review:", result["requires_review"])
     for row in result["entries"]:
         print(row["status"], row["mondo_id"], row["requested_name"], row["preferred_label"])
+        if row["exact_label_alternatives"]:
+            print("  EXACT_LABEL_CANDIDATES", row["exact_label_alternatives"])
 
 
 if __name__ == "__main__":
