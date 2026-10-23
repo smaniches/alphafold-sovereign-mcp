@@ -12,7 +12,7 @@ def test_catalog_read_does_not_execute_source(tmp_path: Path) -> None:
     source = tmp_path / "disease.py"
     source.write_text(
         'raise RuntimeError("must not execute")\n'
-        'COMMON_DISEASE_ROOTS: dict[str, dict[str, str]] = '
+        "COMMON_DISEASE_ROOTS: dict[str, dict[str, str]] = "
         '{"rare": {"gaucher_disease": "MONDO:0010159"}}\n'
     )
     assert catalog(source)["rare"]["gaucher_disease"] == "MONDO:0010159"
@@ -21,7 +21,7 @@ def test_catalog_read_does_not_execute_source(tmp_path: Path) -> None:
 def test_wrong_disease_identity_is_reported(tmp_path: Path) -> None:
     source = tmp_path / "disease.py"
     source.write_text(
-        'COMMON_DISEASE_ROOTS: dict[str, dict[str, str]] = '
+        "COMMON_DISEASE_ROOTS: dict[str, dict[str, str]] = "
         '{"rare": {"gaucher_disease": "MONDO:0010159"}}\n'
     )
     obo = tmp_path / "mondo.obo"
@@ -41,7 +41,7 @@ def test_wrong_disease_identity_is_reported(tmp_path: Path) -> None:
 def test_lexical_match_not_claimed_as_biological_validation(tmp_path: Path) -> None:
     source = tmp_path / "disease.py"
     source.write_text(
-        'COMMON_DISEASE_ROOTS: dict[str, dict[str, str]] = '
+        "COMMON_DISEASE_ROOTS: dict[str, dict[str, str]] = "
         '{"rare": {"gaucher_disease_type_1": "MONDO:0009265"}}\n'
     )
     obo = tmp_path / "mondo.obo"

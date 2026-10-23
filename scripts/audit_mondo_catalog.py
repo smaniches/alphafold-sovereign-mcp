@@ -73,14 +73,10 @@ def exact_label_suggestions(
     requested = normalize(name)
     matched: list[dict[str, str]] = []
     for identifier, term in records.items():
-        if term["obsolete"]:
+        if term["obsolete"] or not identifier.startswith("MONDO:"):
             continue
         label = str(term.get("name", ""))
-        aliases = {
-            normalize(str(synonym))
-            for synonym, kind in term["synonyms"]
-            if kind == "EXACT"
-        }
+        aliases = {normalize(str(synonym)) for synonym, kind in term["synonyms"] if kind == "EXACT"}
         if requested == normalize(label) or requested in aliases:
             matched.append({"mondo_id": identifier, "preferred_label": label})
     return sorted(matched, key=lambda row: row["mondo_id"])[:12]
@@ -103,23 +99,26 @@ def inspect(source: Path, obo: Path) -> dict[str, object]:
                     status = "EXACT_SYNONYM"
                 else:
                     status = "REVIEW_IDENTITY_OR_SCOPE"
-            rows.append({
-                "category": category, "requested_name": name,
-                "mondo_id": identifier,
-                "preferred_label": term.get("name") if term else None,
-                "status": status,
-                "exact_label_alternatives": (
-                    exact_label_suggestions(name, records)
-                    if status not in {"PREFERRED_LABEL", "EXACT_SYNONYM"}
-                    else []
-                ),
-            })
-    requires_review = sum(
-        row["status"] not in {"PREFERRED_LABEL", "EXACT_SYNONYM"} for row in rows
-    )
+            rows.append(
+                {
+                    "category": category,
+                    "requested_name": name,
+                    "mondo_id": identifier,
+                    "preferred_label": term.get("name") if term else None,
+                    "status": status,
+                    "exact_label_alternatives": (
+                        exact_label_suggestions(name, records)
+                        if status not in {"PREFERRED_LABEL", "EXACT_SYNONYM"}
+                        else []
+                    ),
+                }
+            )
+    requires_review = sum(row["status"] not in {"PREFERRED_LABEL", "EXACT_SYNONYM"} for row in rows)
     return {
-        "source_sha256": sha256(source), "ontology_sha256": sha256(obo),
-        "records_checked": len(rows), "requires_review": requires_review,
+        "source_sha256": sha256(source),
+        "ontology_sha256": sha256(obo),
+        "records_checked": len(rows),
+        "requires_review": requires_review,
         "note": "Lexical comparison is not independent biological validation.",
         "entries": rows,
     }
