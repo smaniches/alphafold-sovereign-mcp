@@ -7,6 +7,18 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.5.5](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.5.4...v1.5.5) (2026-10-23)
+
+
+### Bug Fixes
+
+* **science:** validate public AlphaFold MCP source integrity and evidence boundaries ([cbf92ef](https://github.com/smaniches/alphafold-sovereign-mcp/commit/cbf92effbdd6384f00252f4c2c809b0cd7bebb82))
+  * Correct disease identifiers in the 47-entry frozen-MONDO catalog and require exact cross-references before disease joins.
+  * Return explicit partial/error results rather than silently suppressing failed biomedical sources.
+  * Correct Vietoris–Rips and graph component calculations; mark uncomputed topology as unavailable.
+  * Remove unsupported evolutionary risk rankings, automated ACMG classifications, and heuristic clinical tiers.
+  * Update provenance boundaries, security dependencies, source docs, and regression tests.
+
 ## [1.5.4](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.5.3...v1.5.4) (2026-10-19)
 
 
