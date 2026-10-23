@@ -59,7 +59,7 @@ def test_cli_blocks_known_wrong_identity_and_writes_report(
 ) -> None:
     source = tmp_path / "disease.py"
     source.write_text(
-        'COMMON_DISEASE_ROOTS: dict[str, dict[str, str]] = '
+        "COMMON_DISEASE_ROOTS: dict[str, dict[str, str]] = "
         '{"rare": {"gaucher_disease": "MONDO:0010159"}}'
     )
     obo = tmp_path / "mondo.obo"
