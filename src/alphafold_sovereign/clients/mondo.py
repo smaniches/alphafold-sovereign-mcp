@@ -41,7 +41,7 @@ _OLS4_CONFIG = UpstreamConfig(
 _ICD10_RE = re.compile(r"^ICD10(?:CM)?:([A-Z]\d+(?:\.\d+)?)$", re.IGNORECASE)
 _ICD11_RE = re.compile(r"^ICD11:(.+)$", re.IGNORECASE)
 _OMIM_RE = re.compile(r"^OMIM:(\d+)$")
-_ORPHANET_RE = re.compile(r"^Orphanet:(\d+)$", re.IGNORECASE)
+_ORPHANET_RE = re.compile(r"^(?:Orphanet|ORPHA):(\d+)$", re.IGNORECASE)
 _MESH_RE = re.compile(r"^MeSH:(.+)$", re.IGNORECASE)
 _DOID_RE = re.compile(r"^DOID:(\d+)$", re.IGNORECASE)
 _EFO_RE = re.compile(r"^EFO:(\d+)$", re.IGNORECASE)
@@ -250,17 +250,46 @@ class MONDOClient(BaseAsyncClient):
     # Cross-reference resolution
     # ------------------------------------------------------------------
 
+    async def _verified_cross_references(
+        self, query: str, identifier: str, attribute: str
+    ) -> list[MONDOSearchResult]:
+        """Return only ontology terms that explicitly carry the requested xref.
+
+        OLS full-text relevance is discovery, never an identity assertion.
+        When the required cross-reference cannot be independently read from
+        the MONDO term, the candidate is rejected rather than guessed.
+        """
+        candidates = await self.search(query, limit=50)
+        verified: list[MONDOSearchResult] = []
+        for candidate in candidates:
+            record = await self.lookup(candidate.mondo_id)
+            if (
+                record.mondo_id == candidate.mondo_id
+                and identifier in getattr(record, attribute)
+            ):
+                verified.append(candidate)
+        return verified
+
     async def from_icd10(self, icd10_code: str) -> list[MONDOSearchResult]:
-        """Find MONDO terms that cross-reference the given ICD-10 code."""
-        return await self.search(f"ICD10CM:{icd10_code}", limit=5)
+        """Resolve only explicitly cross-referenced ICD-10-CM terms."""
+        code = icd10_code.strip().upper()
+        return await self._verified_cross_references(
+            f"ICD10CM:{code}", code, "icd10_codes"
+        )
 
     async def from_omim(self, omim_id: str) -> list[MONDOSearchResult]:
-        """Find MONDO terms that cross-reference the given OMIM ID."""
-        return await self.search(f"OMIM:{omim_id}", limit=5)
+        """Resolve only explicitly cross-referenced OMIM terms."""
+        identifier = omim_id.strip()
+        return await self._verified_cross_references(
+            f"OMIM:{identifier}", identifier, "omim_ids"
+        )
 
     async def from_orphanet(self, orphanet_id: str) -> list[MONDOSearchResult]:
-        """Find MONDO terms for an Orphanet disease ID."""
-        return await self.search(f"Orphanet:{orphanet_id}", limit=5)
+        """Resolve only MONDO terms with the exact requested Orphanet xref."""
+        identifier = orphanet_id.strip()
+        return await self._verified_cross_references(
+            f"Orphanet:{identifier}", identifier, "orphanet_ids"
+        )
 
     # ------------------------------------------------------------------
     # Internal parsers

@@ -1073,6 +1073,18 @@ async def get_orphan_disease_atlas(params: OrphanDiseaseInput) -> str:
                 }
             )
 
+        # A single verified identity is required before joining biological data.
+        # Multiple exact cross-references may describe differing disease scope.
+        if len(search_results) != 1:
+            return json.dumps(
+                {
+                    "status": "ambiguous",
+                    "orphanet_id": params.orphanet_id,
+                    "mondo_candidates": [hit.mondo_id for hit in search_results],
+                    "message": "Multiple MONDO terms cross-reference this Orphanet ID; review manually.",
+                }
+            )
+
         mondo_id = search_results[0].mondo_id
 
         # Parallel: MONDO record + HPO diseases + OT targets
@@ -1084,10 +1096,29 @@ async def get_orphan_disease_atlas(params: OrphanDiseaseInput) -> str:
                 return_exceptions=True,
             )
 
+        upstream_results = {
+            "mondo": record,
+            "hpo": hpo_diseases,
+            "open_targets": ot_targets,
+        }
+        source_errors = {
+            name: type(value).__name__
+            for name, value in upstream_results.items()
+            if isinstance(value, BaseException)
+        }
         result: dict[str, Any] = {
-            "status": "success",
+            "status": (
+                "error"
+                if len(source_errors) == len(upstream_results)
+                else "partial" if source_errors else "success"
+            ),
             "orphanet_id": params.orphanet_id,
             "mondo_id": mondo_id,
+            "source_status": {
+                name: "failed" if name in source_errors else "success"
+                for name in upstream_results
+            },
+            "source_errors": source_errors,
         }
 
         if not isinstance(record, BaseException):
@@ -1358,13 +1389,20 @@ async def _identity(value: str) -> str:
 
 
 async def _omim_to_mondo(disease_id: str) -> str | None:
-    """Convert an OMIM/Orphanet disease ID to a MONDO ID via OLS4 search."""
-    if not disease_id:
+    """Resolve a disease xref only when it has one verified MONDO identity."""
+    namespace, sep, identifier = disease_id.strip().partition(":")
+    if not sep or not identifier.isdecimal():
+        return None
+    kind = namespace.upper()
+    if kind not in {"OMIM", "ORPHA", "ORPHANET"}:
         return None
     try:
         async with MONDOClient() as mc:
-            results = await mc.search(disease_id, limit=1)
-            return results[0].mondo_id if results else None
+            if kind == "OMIM":
+                results = await mc.from_omim(identifier)
+            else:
+                results = await mc.from_orphanet(identifier)
+            return results[0].mondo_id if len(results) == 1 else None
     except Exception:
         return None
 
