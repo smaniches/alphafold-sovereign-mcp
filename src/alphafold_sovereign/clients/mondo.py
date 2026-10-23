@@ -263,26 +263,19 @@ class MONDOClient(BaseAsyncClient):
         verified: list[MONDOSearchResult] = []
         for candidate in candidates:
             record = await self.lookup(candidate.mondo_id)
-            if (
-                record.mondo_id == candidate.mondo_id
-                and identifier in getattr(record, attribute)
-            ):
+            if record.mondo_id == candidate.mondo_id and identifier in getattr(record, attribute):
                 verified.append(candidate)
         return verified
 
     async def from_icd10(self, icd10_code: str) -> list[MONDOSearchResult]:
         """Resolve only explicitly cross-referenced ICD-10-CM terms."""
         code = icd10_code.strip().upper()
-        return await self._verified_cross_references(
-            f"ICD10CM:{code}", code, "icd10_codes"
-        )
+        return await self._verified_cross_references(f"ICD10CM:{code}", code, "icd10_codes")
 
     async def from_omim(self, omim_id: str) -> list[MONDOSearchResult]:
         """Resolve only explicitly cross-referenced OMIM terms."""
         identifier = omim_id.strip()
-        return await self._verified_cross_references(
-            f"OMIM:{identifier}", identifier, "omim_ids"
-        )
+        return await self._verified_cross_references(f"OMIM:{identifier}", identifier, "omim_ids")
 
     async def from_orphanet(self, orphanet_id: str) -> list[MONDOSearchResult]:
         """Resolve only MONDO terms with the exact requested Orphanet xref."""

@@ -1371,7 +1371,7 @@ async def test_orphan_atlas_ambiguous_verified_mapping(
     parsed = json.loads(out)
     assert parsed["status"] == "ambiguous"
     assert len(parsed["mondo_candidates"]) == 2
-    mondo_client.lookup.assert_not_awaited()
+    mondo_client.lookup.assert_not_called()
 
 
 async def test_orphan_atlas_reports_partial_failures(
@@ -1386,7 +1386,9 @@ async def test_orphan_atlas_reports_partial_failures(
     _patch_client_class(monkeypatch, "alphafold_sovereign.tools.disease.HPOClient", hpo_client)
     ot_client = MagicMock()
     ot_client.associated_targets = AsyncMock(return_value=[])
-    _patch_client_class(monkeypatch, "alphafold_sovereign.tools.disease.OpenTargetsClient", ot_client)
+    _patch_client_class(
+        monkeypatch, "alphafold_sovereign.tools.disease.OpenTargetsClient", ot_client
+    )
     out = await get_orphan_disease_atlas(OrphanDiseaseInput(orphanet_id="79318"))
     parsed = json.loads(out.split("---")[0])
     assert parsed["status"] == "partial"

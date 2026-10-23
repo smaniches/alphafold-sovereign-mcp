@@ -1110,13 +1110,14 @@ async def get_orphan_disease_atlas(params: OrphanDiseaseInput) -> str:
             "status": (
                 "error"
                 if len(source_errors) == len(upstream_results)
-                else "partial" if source_errors else "success"
+                else "partial"
+                if source_errors
+                else "success"
             ),
             "orphanet_id": params.orphanet_id,
             "mondo_id": mondo_id,
             "source_status": {
-                name: "failed" if name in source_errors else "success"
-                for name in upstream_results
+                name: "failed" if name in source_errors else "success" for name in upstream_results
             },
             "source_errors": source_errors,
         }
