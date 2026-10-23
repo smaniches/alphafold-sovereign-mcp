@@ -45,7 +45,8 @@ logger = structlog.get_logger(__name__)
 _SERVER_VERSION = __version__
 
 # ---------------------------------------------------------------------------
-# Common disease MONDO IDs — curated, validated against MONDO 2025-01 release
+# Common disease MONDO IDs — representative retrieval examples, not an ontology snapshot
+# Every correction below is independently referenced in the scientific safety tests.
 # ---------------------------------------------------------------------------
 COMMON_DISEASE_ROOTS: dict[str, dict[str, str]] = {
     "cardiovascular": {
@@ -54,14 +55,14 @@ COMMON_DISEASE_ROOTS: dict[str, dict[str, str]] = {
         "atrial_fibrillation": "MONDO:0004981",
         "stroke": "MONDO:0005098",
         "hypertension": "MONDO:0001134",
-        "peripheral_artery_disease": "MONDO:0006652",
+        "peripheral_artery_disease": "MONDO:0005386",
     },
     "oncology": {
         "breast_carcinoma": "MONDO:0007254",
         "lung_carcinoma": "MONDO:0008903",
         "colorectal_carcinoma": "MONDO:0005575",
         "prostate_carcinoma": "MONDO:0006256",
-        "pancreatic_carcinoma": "MONDO:0006265",
+        "pancreatic_carcinoma": "MONDO:0005192",
         "ovarian_carcinoma": "MONDO:0006046",
         "leukemia": "MONDO:0005059",
         "lymphoma": "MONDO:0005570",
@@ -79,7 +80,8 @@ COMMON_DISEASE_ROOTS: dict[str, dict[str, str]] = {
         "type_2_diabetes": "MONDO:0005148",
         "type_1_diabetes": "MONDO:0005147",
         "obesity": "MONDO:0011122",
-        "nonalcoholic_fatty_liver": "MONDO:0007035",
+        # The legacy NAFLD label is withheld pending expert review of its
+        # mapping to the newer MASLD diagnostic category (MONDO:0013209).
         "metabolic_syndrome": "MONDO:0007255",
     },
     "autoimmune": {
@@ -100,21 +102,21 @@ COMMON_DISEASE_ROOTS: dict[str, dict[str, str]] = {
         "hiv_infection": "MONDO:0005109",
         "malaria": "MONDO:0005136",
         "covid_19": "MONDO:0100096",
-        "hepatitis_b": "MONDO:0009842",
+        "hepatitis_b": "MONDO:0005344",
         "hepatitis_c": "MONDO:0005234",
     },
     "psychiatric": {
         "major_depressive_disorder": "MONDO:0002050",
         "schizophrenia": "MONDO:0005090",
         "bipolar_disorder": "MONDO:0004985",
-        "anxiety_disorder": "MONDO:0005246",
+        "anxiety_disorder": "MONDO:0005618",
     },
     "rare": {
         "cystic_fibrosis": "MONDO:0009061",
         "huntington_disease": "MONDO:0007739",
         "sickle_cell_disease": "MONDO:0011382",
         "phenylketonuria": "MONDO:0009861",
-        "gaucher_disease": "MONDO:0010159",
+        "gaucher_disease": "MONDO:0018150",
     },
 }
 
@@ -309,7 +311,7 @@ class OrphanDiseaseInput(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
     orphanet_id: str = Field(
         ...,
-        description="Orphanet disease ID, e.g. '79318' (Gaucher disease).",
+        description="Orphanet disease ID, e.g. '79318' (PMM2-CDG).",
         min_length=1,
         max_length=15,
     )
@@ -644,7 +646,7 @@ async def get_disease_targets(params: DiseaseTargetsInput) -> str:
                 "targets": [t.to_dict() for t in filtered],
             },
             indent=2,
-        ) + _provenance(open_targets="OT-platform-24.06")
+        ) + _provenance(open_targets="OT-platform-live-release-unverified")
 
     except Exception as exc:
         logger.error("get_disease_targets_failed", disease=params.disease_id, error=str(exc))
@@ -693,7 +695,7 @@ async def get_target_diseases(params: TargetDiseaseInput) -> str:
                 "diseases": [s.to_dict() for s in disease_scores],
             },
             indent=2,
-        ) + _provenance(open_targets="OT-platform-24.06")
+        ) + _provenance(open_targets="OT-platform-live-release-unverified")
 
     except Exception as exc:
         logger.error("get_target_diseases_failed", uniprot=params.uniprot_id, error=str(exc))
@@ -790,7 +792,7 @@ async def get_common_disease_targets(params: CommonDiseaseInput) -> str:
             "profile": profile,
         },
         indent=2,
-    ) + _provenance(open_targets="OT-platform-24.06")
+    ) + _provenance(open_targets="OT-platform-live-release-unverified")
 
 
 # ---------------------------------------------------------------------------
@@ -1020,7 +1022,7 @@ async def phenotype_to_structures(params: PhenotypeToStructureInput) -> str:
                 ),
             },
             indent=2,
-        ) + _provenance(hpo="JAX-HPO", open_targets="OT-24.06")
+        ) + _provenance(hpo="JAX-HPO", open_targets="OT-platform-live-release-unverified")
 
     except Exception as exc:
         logger.error("phenotype_to_structures_failed", hpo_id=params.hpo_id, error=str(exc))
@@ -1055,7 +1057,7 @@ async def get_orphan_disease_atlas(params: OrphanDiseaseInput) -> str:
     - UniProt IDs for AlphaFold structural retrieval
 
     Example: ``get_orphan_disease_atlas(orphanet_id='79318')``
-    returns the Gaucher disease atlas.
+    returns a PMM2-related congenital disorder of glycosylation (PMM2-CDG) atlas.
     """
     try:
         # Resolve Orphanet → MONDO
@@ -1096,7 +1098,7 @@ async def get_orphan_disease_atlas(params: OrphanDiseaseInput) -> str:
             result["protein_targets"] = [t.to_dict() for t in ot_targets]
 
         return json.dumps(result, indent=2) + _provenance(
-            mondo="OLS4", hpo="JAX-HPO", open_targets="OT-24.06"
+            mondo="OLS4", hpo="JAX-HPO", open_targets="OT-platform-live-release-unverified"
         )
 
     except Exception as exc:
@@ -1205,7 +1207,7 @@ async def compare_disease_target_overlap(params: DiseaseSimilarityInput) -> str:
                 ),
             },
             indent=2,
-        ) + _provenance(open_targets="OT-24.06")
+        ) + _provenance(open_targets="OT-platform-live-release-unverified")
 
     except Exception as exc:
         logger.error("compare_diseases_failed", error=str(exc))
