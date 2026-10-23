@@ -7,6 +7,13 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.5.7](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.5.6...v1.5.7) (2026-10-23)
+
+
+### Bug Fixes
+
+* **security:** patch framework dependencies and clarify research-only tool surface ([990ec1a](https://github.com/smaniches/alphafold-sovereign-mcp/commit/990ec1a4e03d0d5257d699b6c4a21a1936f4f897))
+
 ## [1.5.6](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.5.5...v1.5.6) (2026-10-23)
 
 
