@@ -590,9 +590,7 @@ def test_fallback_tda_fingerprint_empty() -> None:
 
 def test_fallback_connected_components_not_isolated_vertex_count() -> None:
     one_chain = np.array([[0.0, 0.0, 0.0], [3.0, 0.0, 0.0], [6.0, 0.0, 0.0]])
-    two_pairs = np.array(
-        [[0.0, 0.0, 0.0], [3.0, 0.0, 0.0], [20.0, 0.0, 0.0], [23.0, 0.0, 0.0]]
-    )
+    two_pairs = np.array([[0.0, 0.0, 0.0], [3.0, 0.0, 0.0], [20.0, 0.0, 0.0], [23.0, 0.0, 0.0]])
     assert _fallback_tda_fingerprint(one_chain)["betti_numbers"] == [1, None, None]
     assert _fallback_tda_fingerprint(two_pairs)["betti_numbers"] == [2, None, None]
 

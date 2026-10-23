@@ -373,9 +373,7 @@ def _compute_tda_fingerprint(
     fingerprint: list[float] = []
 
     for dim in range(max_dimension + 1):
-        intervals = [
-            (b, d) for (k, (b, d)) in diagram if k == dim and d < float("inf")
-        ]
+        intervals = [(b, d) for (k, (b, d)) in diagram if k == dim and d < float("inf")]
         betti_numbers.append(
             None
             if dim == max_dimension
