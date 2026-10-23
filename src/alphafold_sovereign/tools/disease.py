@@ -45,27 +45,28 @@ logger = structlog.get_logger(__name__)
 _SERVER_VERSION = __version__
 
 # ---------------------------------------------------------------------------
-# Common disease MONDO IDs — representative retrieval examples, not an ontology snapshot
-# Every correction below is independently referenced in the scientific safety tests.
+# Curated examples reviewed against frozen MONDO v2026-10-06 (SHA-256 in
+# .github/workflows/frozen-mondo-audit.yml). These convenience keys do not
+# substitute for ontology lookup; unresolved identity/scope is withheld.
 # ---------------------------------------------------------------------------
 COMMON_DISEASE_ROOTS: dict[str, dict[str, str]] = {
     "cardiovascular": {
-        "coronary_artery_disease": "MONDO:0004995",
-        "heart_failure": "MONDO:0005009",
+        "coronary_artery_disease": "MONDO:0005010",
+        "heart_failure": "MONDO:0005252",
         "atrial_fibrillation": "MONDO:0004981",
         "stroke": "MONDO:0005098",
-        "hypertension": "MONDO:0001134",
-        "peripheral_artery_disease": "MONDO:0005386",
+        "essential_hypertension": "MONDO:0001134",
+        "peripheral_arterial_disease": "MONDO:0005386",
     },
     "oncology": {
-        "breast_carcinoma": "MONDO:0007254",
-        "lung_carcinoma": "MONDO:0008903",
-        "colorectal_carcinoma": "MONDO:0005575",
-        "prostate_carcinoma": "MONDO:0006256",
-        "pancreatic_carcinoma": "MONDO:0005192",
-        "ovarian_carcinoma": "MONDO:0006046",
+        "breast_carcinoma": "MONDO:0004989",
+        "lung_carcinoma": "MONDO:0005138",
+        "colorectal_carcinoma": "MONDO:0024331",
+        "prostate_carcinoma": "MONDO:0005159",
+        "exocrine_pancreatic_carcinoma": "MONDO:0005192",
+        "ovarian_carcinoma": "MONDO:0005140",
         "leukemia": "MONDO:0005059",
-        "lymphoma": "MONDO:0005570",
+        "lymphoma": "MONDO:0005062",
         "hepatocellular_carcinoma": "MONDO:0007256",
         "melanoma": "MONDO:0005105",
     },
@@ -81,12 +82,11 @@ COMMON_DISEASE_ROOTS: dict[str, dict[str, str]] = {
         "type_1_diabetes": "MONDO:0005147",
         "obesity": "MONDO:0011122",
         # The legacy NAFLD label is withheld pending expert review of its
-        # mapping to the newer MASLD diagnostic category (MONDO:0013209).
-        "metabolic_syndrome": "MONDO:0007255",
+        # mapping to the newer MASLD diagnostic category.
     },
     "autoimmune": {
         "rheumatoid_arthritis": "MONDO:0008383",
-        "systemic_lupus_erythematosus": "MONDO:0007263",
+        "systemic_lupus_erythematosus": "MONDO:0007915",
         "inflammatory_bowel_disease": "MONDO:0005265",
         "multiple_sclerosis": "MONDO:0005301",
         "psoriasis": "MONDO:0005083",
@@ -94,7 +94,7 @@ COMMON_DISEASE_ROOTS: dict[str, dict[str, str]] = {
     "respiratory": {
         "chronic_obstructive_pulmonary_disease": "MONDO:0005002",
         "asthma": "MONDO:0004979",
-        "idiopathic_pulmonary_fibrosis": "MONDO:0008345",
+        "idiopathic_pulmonary_fibrosis": "MONDO:0800504",
         "cystic_fibrosis": "MONDO:0009061",
     },
     "infectious": {
@@ -103,10 +103,9 @@ COMMON_DISEASE_ROOTS: dict[str, dict[str, str]] = {
         "malaria": "MONDO:0005136",
         "covid_19": "MONDO:0100096",
         "hepatitis_b": "MONDO:0005344",
-        "hepatitis_c": "MONDO:0005234",
     },
     "psychiatric": {
-        "major_depressive_disorder": "MONDO:0002050",
+        "major_depressive_disorder": "MONDO:0002009",
         "schizophrenia": "MONDO:0005090",
         "bipolar_disorder": "MONDO:0004985",
         "anxiety_disorder": "MONDO:0005618",
@@ -130,7 +129,7 @@ class MONDOLookupInput(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
     mondo_id: str = Field(
         ...,
-        description="MONDO disease identifier, e.g. 'MONDO:0004995'.",
+        description="MONDO disease identifier, e.g. 'MONDO:0005010'.",
         min_length=1,
         max_length=20,
     )
@@ -382,7 +381,7 @@ async def lookup_disease(params: MONDOLookupInput) -> str:
     - OMIM, Orphanet, MeSH, DOID cross-references
     - Immediate parent and child terms in the MONDO hierarchy
 
-    Example: ``lookup_disease(mondo_id='MONDO:0004995')``
+    Example: ``lookup_disease(mondo_id='MONDO:0005010')``
     returns the record for coronary artery disease.
     """
     try:
