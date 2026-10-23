@@ -693,9 +693,10 @@ async def generate_variant_clinical_report(
         "acmg_criteria_draft": {
             "criteria": acmg_criteria,
             "note": (
-                "Draft ACMG/AMP criteria from computational and population evidence. "
-                "ClinVar classification is reported separately and is not PP5/BP6 evidence. "
-                "Expert review is required before clinical reporting."
+                "Unreviewed computational signals only; no ACMG/AMP criteria are established "
+                "by this report. ClinVar classification is independent source context, not "
+                "PP5/BP6 evidence. Gene-disease mechanism and variant-specific clinical "
+                "criteria require qualified expert assessment."
             ),
         },
         "disease_associations": {

@@ -1,9 +1,9 @@
 {
   "acmg_criteria_draft": {
     "criteria": {
-      "PVS1": "Null variant (stop-gain/frameshift/splice) in a gene where LoF is the established mechanism of disease."
+      "PVS1": "Predicted loss-of-function consequence. Disease-specific LoF mechanism, relevant transcript, NMD, and variant-specific PVS1 rules are NOT validated."
     },
-    "note": "Draft ACMG/AMP criteria from computational and population evidence. ClinVar classification is reported separately and is not PP5/BP6 evidence. Expert review is required before clinical reporting."
+    "note": "Unreviewed computational signals only; no ACMG/AMP criteria are established by this report. ClinVar classification is independent source context, not PP5/BP6 evidence. Gene-disease mechanism and variant-specific clinical criteria require qualified expert assessment."
   },
   "clinical_tier": "HIGH",
   "clinical_tier_explanation": "Strong evidence of clinical pathogenicity from a ClinVar pathogenic classification (see review_status for the supporting review level) and/or multiple concordant computational predictors.",
