@@ -8,6 +8,7 @@ import httpx
 import pytest
 import respx
 
+from alphafold_sovereign.clients._base import UpstreamError
 from alphafold_sovereign.clients.disgenet import DisGeNETClient
 
 # ---------------------------------------------------------------------------
@@ -120,8 +121,8 @@ async def test_gda_handles_error_returns_empty(
         return_value=httpx.Response(500),
     )
     async with DisGeNETClient(api_key="k") as client:
-        rows = await client.gene_disease_associations("BRCA1")
-    assert rows == []
+        with pytest.raises(UpstreamError):
+            await client.gene_disease_associations("BRCA1")
 
 
 async def test_gda_empty_payload(respx_mock: respx.MockRouter) -> None:
@@ -186,7 +187,8 @@ async def test_disease_gene_associations_error(respx_mock: respx.MockRouter) -> 
         return_value=httpx.Response(500),
     )
     async with DisGeNETClient(api_key="k") as client:
-        assert await client.disease_gene_associations("C1") == []
+        with pytest.raises(UpstreamError):
+            await client.disease_gene_associations("C1")
 
 
 # ---------------------------------------------------------------------------
@@ -239,7 +241,8 @@ async def test_vda_error(respx_mock: respx.MockRouter) -> None:
         return_value=httpx.Response(500),
     )
     async with DisGeNETClient(api_key="k") as client:
-        assert await client.variant_disease_associations("rs1") == []
+        with pytest.raises(UpstreamError):
+            await client.variant_disease_associations("rs1")
 
 
 # ---------------------------------------------------------------------------
@@ -299,7 +302,8 @@ async def test_enrichment_error(respx_mock: respx.MockRouter) -> None:
         return_value=httpx.Response(500),
     )
     async with DisGeNETClient(api_key="k") as client:
-        assert await client.enrichment(["BRCA1"]) == []
+        with pytest.raises(UpstreamError):
+            await client.enrichment(["BRCA1"])
 
 
 async def test_enrichment_caps_at_100_inputs(respx_mock: respx.MockRouter) -> None:

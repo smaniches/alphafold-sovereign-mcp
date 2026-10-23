@@ -45,26 +45,28 @@ logger = structlog.get_logger(__name__)
 _SERVER_VERSION = __version__
 
 # ---------------------------------------------------------------------------
-# Common disease MONDO IDs — curated, validated against MONDO 2025-01 release
+# Curated examples reviewed against frozen MONDO v2026-10-06 (SHA-256 in
+# .github/workflows/frozen-mondo-audit.yml). These convenience keys do not
+# substitute for ontology lookup; unresolved identity/scope is withheld.
 # ---------------------------------------------------------------------------
 COMMON_DISEASE_ROOTS: dict[str, dict[str, str]] = {
     "cardiovascular": {
-        "coronary_artery_disease": "MONDO:0004995",
-        "heart_failure": "MONDO:0005009",
+        "coronary_artery_disease": "MONDO:0005010",
+        "heart_failure": "MONDO:0005252",
         "atrial_fibrillation": "MONDO:0004981",
         "stroke": "MONDO:0005098",
-        "hypertension": "MONDO:0001134",
-        "peripheral_artery_disease": "MONDO:0006652",
+        "essential_hypertension": "MONDO:0001134",
+        "peripheral_arterial_disease": "MONDO:0005386",
     },
     "oncology": {
-        "breast_carcinoma": "MONDO:0007254",
-        "lung_carcinoma": "MONDO:0008903",
-        "colorectal_carcinoma": "MONDO:0005575",
-        "prostate_carcinoma": "MONDO:0006256",
-        "pancreatic_carcinoma": "MONDO:0006265",
-        "ovarian_carcinoma": "MONDO:0006046",
+        "breast_carcinoma": "MONDO:0004989",
+        "lung_carcinoma": "MONDO:0005138",
+        "colorectal_carcinoma": "MONDO:0024331",
+        "prostate_carcinoma": "MONDO:0005159",
+        "exocrine_pancreatic_carcinoma": "MONDO:0005192",
+        "ovarian_carcinoma": "MONDO:0005140",
         "leukemia": "MONDO:0005059",
-        "lymphoma": "MONDO:0005570",
+        "lymphoma": "MONDO:0005062",
         "hepatocellular_carcinoma": "MONDO:0007256",
         "melanoma": "MONDO:0005105",
     },
@@ -79,12 +81,12 @@ COMMON_DISEASE_ROOTS: dict[str, dict[str, str]] = {
         "type_2_diabetes": "MONDO:0005148",
         "type_1_diabetes": "MONDO:0005147",
         "obesity": "MONDO:0011122",
-        "nonalcoholic_fatty_liver": "MONDO:0007035",
-        "metabolic_syndrome": "MONDO:0007255",
+        # The legacy NAFLD label is withheld pending expert review of its
+        # mapping to the newer MASLD diagnostic category.
     },
     "autoimmune": {
         "rheumatoid_arthritis": "MONDO:0008383",
-        "systemic_lupus_erythematosus": "MONDO:0007263",
+        "systemic_lupus_erythematosus": "MONDO:0007915",
         "inflammatory_bowel_disease": "MONDO:0005265",
         "multiple_sclerosis": "MONDO:0005301",
         "psoriasis": "MONDO:0005083",
@@ -92,7 +94,7 @@ COMMON_DISEASE_ROOTS: dict[str, dict[str, str]] = {
     "respiratory": {
         "chronic_obstructive_pulmonary_disease": "MONDO:0005002",
         "asthma": "MONDO:0004979",
-        "idiopathic_pulmonary_fibrosis": "MONDO:0008345",
+        "idiopathic_pulmonary_fibrosis": "MONDO:0800504",
         "cystic_fibrosis": "MONDO:0009061",
     },
     "infectious": {
@@ -100,21 +102,20 @@ COMMON_DISEASE_ROOTS: dict[str, dict[str, str]] = {
         "hiv_infection": "MONDO:0005109",
         "malaria": "MONDO:0005136",
         "covid_19": "MONDO:0100096",
-        "hepatitis_b": "MONDO:0009842",
-        "hepatitis_c": "MONDO:0005234",
+        "hepatitis_b": "MONDO:0005344",
     },
     "psychiatric": {
-        "major_depressive_disorder": "MONDO:0002050",
+        "major_depressive_disorder": "MONDO:0002009",
         "schizophrenia": "MONDO:0005090",
         "bipolar_disorder": "MONDO:0004985",
-        "anxiety_disorder": "MONDO:0005246",
+        "anxiety_disorder": "MONDO:0005618",
     },
     "rare": {
         "cystic_fibrosis": "MONDO:0009061",
         "huntington_disease": "MONDO:0007739",
         "sickle_cell_disease": "MONDO:0011382",
         "phenylketonuria": "MONDO:0009861",
-        "gaucher_disease": "MONDO:0010159",
+        "gaucher_disease": "MONDO:0018150",
     },
 }
 
@@ -128,7 +129,7 @@ class MONDOLookupInput(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
     mondo_id: str = Field(
         ...,
-        description="MONDO disease identifier, e.g. 'MONDO:0004995'.",
+        description="MONDO disease identifier, e.g. 'MONDO:0005010'.",
         min_length=1,
         max_length=20,
     )
@@ -309,7 +310,7 @@ class OrphanDiseaseInput(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
     orphanet_id: str = Field(
         ...,
-        description="Orphanet disease ID, e.g. '79318' (Gaucher disease).",
+        description="Orphanet disease ID, e.g. '79318' (PMM2-CDG).",
         min_length=1,
         max_length=15,
     )
@@ -380,7 +381,7 @@ async def lookup_disease(params: MONDOLookupInput) -> str:
     - OMIM, Orphanet, MeSH, DOID cross-references
     - Immediate parent and child terms in the MONDO hierarchy
 
-    Example: ``lookup_disease(mondo_id='MONDO:0004995')``
+    Example: ``lookup_disease(mondo_id='MONDO:0005010')``
     returns the record for coronary artery disease.
     """
     try:
@@ -644,7 +645,7 @@ async def get_disease_targets(params: DiseaseTargetsInput) -> str:
                 "targets": [t.to_dict() for t in filtered],
             },
             indent=2,
-        ) + _provenance(open_targets="OT-platform-24.06")
+        ) + _provenance(open_targets="OT-platform-live-release-unverified")
 
     except Exception as exc:
         logger.error("get_disease_targets_failed", disease=params.disease_id, error=str(exc))
@@ -693,7 +694,7 @@ async def get_target_diseases(params: TargetDiseaseInput) -> str:
                 "diseases": [s.to_dict() for s in disease_scores],
             },
             indent=2,
-        ) + _provenance(open_targets="OT-platform-24.06")
+        ) + _provenance(open_targets="OT-platform-live-release-unverified")
 
     except Exception as exc:
         logger.error("get_target_diseases_failed", uniprot=params.uniprot_id, error=str(exc))
@@ -790,7 +791,7 @@ async def get_common_disease_targets(params: CommonDiseaseInput) -> str:
             "profile": profile,
         },
         indent=2,
-    ) + _provenance(open_targets="OT-platform-24.06")
+    ) + _provenance(open_targets="OT-platform-live-release-unverified")
 
 
 # ---------------------------------------------------------------------------
@@ -1020,7 +1021,7 @@ async def phenotype_to_structures(params: PhenotypeToStructureInput) -> str:
                 ),
             },
             indent=2,
-        ) + _provenance(hpo="JAX-HPO", open_targets="OT-24.06")
+        ) + _provenance(hpo="JAX-HPO", open_targets="OT-platform-live-release-unverified")
 
     except Exception as exc:
         logger.error("phenotype_to_structures_failed", hpo_id=params.hpo_id, error=str(exc))
@@ -1055,7 +1056,7 @@ async def get_orphan_disease_atlas(params: OrphanDiseaseInput) -> str:
     - UniProt IDs for AlphaFold structural retrieval
 
     Example: ``get_orphan_disease_atlas(orphanet_id='79318')``
-    returns the Gaucher disease atlas.
+    returns a PMM2-related congenital disorder of glycosylation (PMM2-CDG) atlas.
     """
     try:
         # Resolve Orphanet → MONDO
@@ -1071,6 +1072,18 @@ async def get_orphan_disease_atlas(params: OrphanDiseaseInput) -> str:
                 }
             )
 
+        # A single verified identity is required before joining biological data.
+        # Multiple exact cross-references may describe differing disease scope.
+        if len(search_results) != 1:
+            return json.dumps(
+                {
+                    "status": "ambiguous",
+                    "orphanet_id": params.orphanet_id,
+                    "mondo_candidates": [hit.mondo_id for hit in search_results],
+                    "message": "Multiple MONDO terms cross-reference this Orphanet ID; review manually.",
+                }
+            )
+
         mondo_id = search_results[0].mondo_id
 
         # Parallel: MONDO record + HPO diseases + OT targets
@@ -1082,10 +1095,30 @@ async def get_orphan_disease_atlas(params: OrphanDiseaseInput) -> str:
                 return_exceptions=True,
             )
 
+        upstream_results = {
+            "mondo": record,
+            "hpo": hpo_diseases,
+            "open_targets": ot_targets,
+        }
+        source_errors = {
+            name: type(value).__name__
+            for name, value in upstream_results.items()
+            if isinstance(value, BaseException)
+        }
         result: dict[str, Any] = {
-            "status": "success",
+            "status": (
+                "error"
+                if len(source_errors) == len(upstream_results)
+                else "partial"
+                if source_errors
+                else "success"
+            ),
             "orphanet_id": params.orphanet_id,
             "mondo_id": mondo_id,
+            "source_status": {
+                name: "failed" if name in source_errors else "success" for name in upstream_results
+            },
+            "source_errors": source_errors,
         }
 
         if not isinstance(record, BaseException):
@@ -1096,7 +1129,7 @@ async def get_orphan_disease_atlas(params: OrphanDiseaseInput) -> str:
             result["protein_targets"] = [t.to_dict() for t in ot_targets]
 
         return json.dumps(result, indent=2) + _provenance(
-            mondo="OLS4", hpo="JAX-HPO", open_targets="OT-24.06"
+            mondo="OLS4", hpo="JAX-HPO", open_targets="OT-platform-live-release-unverified"
         )
 
     except Exception as exc:
@@ -1205,7 +1238,7 @@ async def compare_disease_target_overlap(params: DiseaseSimilarityInput) -> str:
                 ),
             },
             indent=2,
-        ) + _provenance(open_targets="OT-24.06")
+        ) + _provenance(open_targets="OT-platform-live-release-unverified")
 
     except Exception as exc:
         logger.error("compare_diseases_failed", error=str(exc))
@@ -1356,13 +1389,20 @@ async def _identity(value: str) -> str:
 
 
 async def _omim_to_mondo(disease_id: str) -> str | None:
-    """Convert an OMIM/Orphanet disease ID to a MONDO ID via OLS4 search."""
-    if not disease_id:
+    """Resolve a disease xref only when it has one verified MONDO identity."""
+    namespace, sep, identifier = disease_id.strip().partition(":")
+    if not sep or not identifier.isdecimal():
+        return None
+    kind = namespace.upper()
+    if kind not in {"OMIM", "ORPHA", "ORPHANET"}:
         return None
     try:
         async with MONDOClient() as mc:
-            results = await mc.search(disease_id, limit=1)
-            return results[0].mondo_id if results else None
+            if kind == "OMIM":
+                results = await mc.from_omim(identifier)
+            else:
+                results = await mc.from_orphanet(identifier)
+            return results[0].mondo_id if len(results) == 1 else None
     except Exception:
         return None
 

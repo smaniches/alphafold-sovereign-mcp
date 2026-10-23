@@ -65,8 +65,9 @@ A Python MCP server that:
 - Wraps AlphaFold DB, MONDO, HPO, Open Targets, ClinVar, gnomAD,
   DisGeNET, ChEMBL, and Ensembl behind MCP tool calls. Explicit numbered
   isoforms may also trigger a UniProtKB sequence-and-identity check. Each call
-  is a thin orchestration over those upstreams; the server does not
-  add scientific judgement.
+  preserves upstream records and their provenance. Retrieval is not
+  a new biological observation; derived workflows are explicitly identified
+  as Topologica calculations rather than source-reported findings.
 - Composes upstreams into multi-source workflows: variant
   cross-reference reports, disease–target landscape summaries,
   heuristic target-druggability scoring, drug-repurposing candidate
@@ -78,12 +79,12 @@ A Python MCP server that:
   extended by writing through the knowledge-graph API. There is no
   automatic per-invocation persistence: the analysis tools do not write
   to the store on their own.
-- Includes a topological-data-analysis (TDA) module that computes
-  persistent-homology fingerprints (Betti numbers β₀, β₁, β₂) over
-  Vietoris-Rips filtrations of Cα coordinates, and an
-  L2-distance comparator between those fingerprint vectors. The full
-  persistent-homology features require the optional `[tda]` extra
-  (`gudhi`).
+- Includes an exploratory Cα-derived feature-vector module. With the
+  optional `[tda]` extra (`gudhi`), it reports H₀/H₁ terminal-filtration
+  Betti numbers; H₂ is not computed. The fallback reports a 4-Å contact
+  graph component count and geometric features, not persistent homology.
+  L2 distance between those feature vectors is not a calibrated measure
+  of protein homology or biological function.
 
 It targets `mcp-spec 2025-06-18` and runs on Python 3.10–3.13.
 
@@ -98,6 +99,20 @@ optional October 2026 PDBe/IUCr literature-annotation evidence client.
 Those annotations are upstream PDBe research, not an independent
 AlphaFold Sovereign scientific discovery.
 
+## Evidence responsibility
+
+AlphaFold Sovereign MCP does not develop or validate AlphaFold's underlying
+structure predictions, MONDO ontology assertions, UniProt annotations, or
+ClinVar submissions. Those belong to the cited source and retain their
+source-reported confidence and limitations.
+
+Topologica **is responsible** for reliable retrieval, accession identity,
+cross-source joins, reproducible local calculations, provenance attribution,
+and honest failure/uncertainty reporting. An inference made from a predicted
+structure remains conditional on that prediction; it does not become an
+experimental observation because it is joined to another database. Derived
+heuristics are research aids, not source-validated clinical conclusions.
+
 ## What this is **not**
 
 - It is **not** a hosted service or a SaaS.
@@ -107,19 +122,18 @@ AlphaFold Sovereign scientific discovery.
   such audit has been performed.
 - It does **not** train, fine-tune, or publish AlphaFold models — it
   consumes AlphaFold DB's public REST API.
-- The "ACMG/AMP criteria" that `generate_variant_clinical_report`
-  produces are a **draft surface** of the upstream evidence the
-  server can fetch automatically. They are not a substitute for
-  clinical-laboratory variant review.
+- Variant-report evidence is a **provisional computational signal** for
+  expert review, not established ACMG/AMP criteria. The
+  `classify_variant_acmg` tool does not assign a clinical class when
+  gene–disease mechanism and criterion-specific evidence are unverified.
 - The "druggability tier" that `assess_target_druggability` returns is
   a **heuristic** built from drug-precedent counts, Open Targets
   tractability labels, pLDDT, and gnomAD constraint. It is not a
   validated prediction.
-- "Structural distance" between proteins is an L2 distance on
-  length-normalised TDA fingerprint vectors. It measures *topological*
-  similarity of the Cα point cloud. It is not a sequence similarity,
-  RMSD, optimal-transport Wasserstein distance, or
-  functional-equivalence measure.
+- "Structural distance" is an L2 distance on derived Cα feature vectors.
+  It is not sequence identity, RMSD, persistence-diagram Wasserstein
+  distance, validated homology, or functional equivalence. Methods are
+  reported separately rather than sorted on incompatible scales.
 - The AlphaFold structures consumed here are *predicted* models with
   per-residue pLDDT confidence, not experimental structures. Low-pLDDT
   regions are unreliable; some proteins (BRCA1 among them) are largely
@@ -246,25 +260,25 @@ input schema is a Pydantic model; results are JSON.
 
 | Tool | What it does |
 |---|---|
-| `generate_variant_clinical_report` | HGVS → multi-source report + draft ACMG/AMP criteria |
+| `generate_variant_clinical_report` | HGVS → sourced multi-database report + unreviewed computational signals |
 | `assess_target_druggability` | UniProt → HOT/WARM/COLD/NOT_DRUGGABLE tier |
 | `synthesize_protein_dossier` | UniProt → multi-source briefing |
 | `map_disease_drug_landscape` | MONDO → approved drugs + pipeline + ChEMBL phase counts |
-| `classify_variant_acmg` | HGVS → ACMG/AMP criteria checklist (PVS1, PM2, PP3, BP4, BP7, BS1, PP5) |
+| `classify_variant_acmg` | HGVS → source evidence + unassessed candidate signals; no automatic clinical class |
 | `find_drug_repurposing_candidates` | MONDO → candidates ranked by OT evidence × ChEMBL phase |
 
-The ACMG/AMP criteria produced are a **draft**: they reflect the
-upstream evidence the server can fetch automatically, and they
-are not a substitute for clinical-laboratory review.
+Computational candidate signals are not assessed clinical ACMG/AMP
+criteria. Source classifications (for example, ClinVar) retain their
+original attribution; clinical interpretation requires independent review.
 
 ### Structure intelligence (`tools/structure_intelligence.py`)
 
 | Tool | What it does |
 |---|---|
 | `analyze_structural_confidence` | mean pLDDT + confidence tier + PAE-derived domain boundaries |
-| `compute_topology_fingerprint` | 64-dim TDA fingerprint (Betti numbers β₀ β₁ β₂) |
+| `compute_topology_fingerprint` | 64-component exploratory vector; GUDHI computes H₀/H₁ at filtration endpoint; H₂ unavailable |
 | `compare_proteins_topologically` | Pairwise L2 fingerprint-distance matrix for 2–10 proteins |
-| `find_evolutionary_structural_shifts` | Cross-species structural divergence (TDA + Ensembl orthologs) |
+| `find_evolutionary_structural_shifts` | Ensembl sequence identity + method-labeled structural feature distances; no mixed-scale risk ranking |
 | `score_binding_pocket_geometry` | Geometric pocket detection + heuristic druggability index |
 | `detect_intrinsically_disordered` | IDR map (linkers, tails, long IDRs) |
 | `get_protein_structure` | Retrieve an AlphaFold model: metadata, download URLs, optional coordinates |

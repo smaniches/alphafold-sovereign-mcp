@@ -6,11 +6,10 @@ These tools take raw AlphaFold structures (PDB text and PAE arrays from
 AlphaFold DB) and derive a small set of summaries from them:
 
 * pLDDT / PAE confidence-and-domain maps,
-* a 64-dimensional topological-data-analysis (TDA) fingerprint
-  (Betti numbers β₀, β₁, β₂ from a Vietoris-Rips filtration of Cα
-  coordinates, computed with `gudhi` when the optional `[tda]` extra
-  is installed; a coarse fallback without persistent homology
-  otherwise — see ``_compute_lightweight_tda``),
+* a 64-component exploratory Cα feature vector. Optional GUDHI computes
+  H₀/H₁ at the final 15-Å Vietoris-Rips filtration step; H₂ is not
+  computed. Without GUDHI, the fallback reports 4-Å graph components
+  and geometry, not persistent homology,
 * a pairwise distance matrix between TDA fingerprints (the
   implementation is an L2 distance on length-normalised fingerprint
   vectors — it is **not** an optimal-transport Wasserstein distance;
@@ -24,7 +23,7 @@ structure cache.
 
 Tool inventory:
   1. analyze_structural_confidence       — pLDDT + PAE domain map
-  2. compute_topology_fingerprint        — TDA Betti numbers (β₀, β₁, β₂)
+  2. compute_topology_fingerprint        — Exploratory Cα features; H₀/H₁ if GUDHI
   3. compare_proteins_topologically      — Pairwise fingerprint-distance matrix
   4. find_evolutionary_structural_shifts — Cross-species TDA fingerprint compare
   5. score_binding_pocket_geometry       — Heuristic pocket detection + score
@@ -331,11 +330,11 @@ def _compute_tda_fingerprint(
 ) -> dict[str, Any]:
     """Compute a topological fingerprint from Cα coordinates.
 
-    Builds a Vietoris-Rips complex over the Cα point cloud with a
-    Euclidean metric and reads off the persistent-homology Betti
-    numbers (β₀, β₁, β₂) using `gudhi`. If `gudhi` is not installed,
-    falls back to a coarse heuristic (see ``_fallback_tda_fingerprint``)
-    that does not compute persistent homology.
+    Builds a Vietoris-Rips 2-skeleton over the Cα point cloud.
+    GUDHI provides H0/H1 persistence at a finite 15-Å filtration scale.
+    H2 is not established from this truncated complex and is reported as
+    unavailable, never as zero. Without GUDHI the distance-statistics
+    fallback computes only the exact 4-Å graph component count.
 
     Args:
         ca_coords: (N, 3) array of Cα coordinates.
@@ -363,17 +362,22 @@ def _compute_tda_fingerprint(
     simplex_tree = rips.create_simplex_tree(max_dimension=max_dimension)
     simplex_tree.compute_persistence()
 
-    # Extract persistence diagrams per dimension
-    betti_numbers: list[int] = []
+    # The number of finite persistence bars is NOT a Betti number.
+    # At the terminal filtration value, infinite bars represent surviving
+    # homology classes. GUDHI excludes the maximum simplex dimension by
+    # default; never pretend that missing top-dimensional H2 equals zero.
+    diagram = simplex_tree.persistence()
+    betti_numbers: list[int | None] = []
     landscapes: list[dict[str, Any]] = []
     fingerprint: list[float] = []
 
     for dim in range(max_dimension + 1):
-        intervals = [
-            (b, d) for (k, (b, d)) in simplex_tree.persistence() if k == dim and d < float("inf")
-        ]
-        betti = len(intervals)
-        betti_numbers.append(betti)
+        intervals = [(b, d) for (k, (b, d)) in diagram if k == dim and d < float("inf")]
+        betti_numbers.append(
+            None
+            if dim == max_dimension
+            else sum(1 for k, (_b, death) in diagram if k == dim and death == float("inf"))
+        )
 
         if intervals:
             lifetimes = [d - b for b, d in intervals]
@@ -416,32 +420,52 @@ def _compute_tda_fingerprint(
         "fingerprint_dimension": 64,
         "n_residues_used": len(ca_coords),
         "max_filtration_length_angstrom": max_edge_length,
-        "methodology": "Vietoris-Rips persistent homology via gudhi.",
+        "methodology": (
+            "Vietoris-Rips 2-skeleton via GUDHI; H0/H1 at the terminal 15-Å "
+            "filtration; H2 not computed."
+        ),
+        "gudhi_available": True,
     }
 
 
 def _fallback_tda_fingerprint(ca_coords: np.ndarray) -> dict[str, Any]:
     """Coarse fallback fingerprint when gudhi is not installed.
 
-    Computes a few distance-matrix statistics (mean, std, min, max,
-    histogram bins) as a proxy for topological features. This is **not**
-    persistent homology and the returned ``betti_numbers`` field beyond
-    β₀ is set to zero. Install gudhi (``pip install
-    alphafold-sovereign-mcp[tda]``) for the real persistent-homology
-    computation.
+    Computes distance-matrix statistics and the connected-component count
+    of the 4-Å contact graph. This is NOT persistent homology: H1 and H2
+    are unknown (None), not zero. Install gudhi with the [tda] extra
+    for H0/H1 persistence.
     """
     if len(ca_coords) < 2:
-        return {"betti_numbers": [], "fingerprint_vector": [0.0] * 64, "gudhi_available": False}
+        return {
+            "betti_numbers": [len(ca_coords), None, None],
+            "fingerprint_vector": [0.0] * 64,
+            "fingerprint_dimension": 64,
+            "n_residues_used": len(ca_coords),
+            "gudhi_available": False,
+        }
 
     dists = np.sqrt(np.sum((ca_coords[:, None, :] - ca_coords[None, :, :]) ** 2, axis=-1))
     np.fill_diagonal(dists, np.inf)
 
-    # Approximate β0: connected components (residues within 4 Å of another)
-    contacts = (dists < 4.0).sum(axis=1)
-    b0 = int((contacts == 0).sum())  # isolated residues ≈ components
+    # Exact β0 for the 4-Å contact graph, including non-singleton components.
+    adjacency = dists < 4.0
+    contacts = adjacency.sum(axis=1)
+    seen = np.zeros(len(ca_coords), dtype=bool)
+    b0 = 0
+    for start in range(len(ca_coords)):
+        if seen[start]:
+            continue
+        b0 += 1
+        seen[start] = True
+        stack = [start]
+        while stack:
+            for neighbor in np.flatnonzero(adjacency[stack.pop()]):
+                if not seen[neighbor]:
+                    seen[neighbor] = True
+                    stack.append(int(neighbor))
 
-    # Approximate β1: residues forming cycles (high local connectivity)
-    mean_contacts = float(np.mean(contacts[contacts < np.inf]))
+    mean_contacts = float(np.mean(contacts))
 
     fingerprint: list[float] = [
         float(np.mean(dists[dists < np.inf])),
@@ -456,7 +480,7 @@ def _fallback_tda_fingerprint(ca_coords: np.ndarray) -> dict[str, Any]:
     fingerprint = (fingerprint + [0.0] * 64)[:64]
 
     return {
-        "betti_numbers": [b0, 0, 0],
+        "betti_numbers": [b0, None, None],
         "fingerprint_vector": [round(f, 6) for f in fingerprint],
         "fingerprint_dimension": 64,
         "n_residues_used": len(ca_coords),
@@ -606,18 +630,13 @@ async def compute_topology_fingerprint(
 ) -> dict[str, Any]:
     """Compute a rotation-invariant topological fingerprint of a protein's fold.
 
-    Fetches the AlphaFold model for ``uniprot_id`` and runs persistent homology
-    (a Vietoris-Rips filtration over the Cα point cloud) to produce a
-    64-dimensional fingerprint vector plus Betti numbers β₀, β₁, β₂. Use it as the
-    per-protein input to structure-similarity comparisons:
-    ``compare_proteins_topologically`` and ``find_evolutionary_structural_shifts``
-    consume these fingerprints.
-
-    The Betti numbers summarise fold topology: β₀ counts connected components
-    (single- vs multi-domain or fragmented chains), β₁ counts loops/holes
-    (β-barrels, large macrocycles), β₂ counts enclosed voids (cavities). Because
-    they are invariant to rotation and translation, two orientations of the same
-    fold produce the same fingerprint.
+    Fetches the AlphaFold model for ``uniprot_id`` and derives an
+    exploratory 64-dimensional geometric/topological feature vector from
+    Cα coordinates. With GUDHI installed, H0 and H1 are computed on the
+    15-Å Vietoris-Rips 2-skeleton. H2 is NOT computed. Without GUDHI
+    only a 4-Å graph component count and geometric statistics are available.
+    Betti numbers describe this chosen filtration, not protein domains,
+    β-barrels, drug cavities, molecular function, or an experimental structure.
 
     Returns the fingerprint vector, the Betti numbers, the residue count, and which
     method ran. Full persistent homology needs the optional ``[tda]`` extra
@@ -652,11 +671,12 @@ async def compute_topology_fingerprint(
         "topological_fingerprint": tda,
         "interpretation": _interpret_tda(tda),
         "usage": (
-            "Use this fingerprint vector with compare_proteins_topologically to measure "
-            "structural similarity between any two proteins, regardless of sequence identity. "
-            "Store in your knowledge graph for rapid cross-protein screening."
+            "Exploratory feature-vector comparison only; not validated structural homology, "
+            "functional identity, binding-site equivalence, or a diagnostic endpoint."
         ),
-        "provenance": _provenance(alphafold_db="v6", methodology="VR-persistent-homology"),
+        "provenance": _provenance(
+            alphafold_db="v6", methodology=tda.get("methodology", "geometric-proxy")
+        ),
     }
 
 
@@ -757,11 +777,9 @@ async def compare_proteins_topologically(
         "most_topologically_similar": most_similar,
         "protein_metadata": protein_meta,
         "interpretation": (
-            "Distance < 0.1: very similar fingerprints. "
-            "Distance 0.1-0.4: moderately divergent. "
-            "Distance > 0.4: clearly divergent. "
-            "These bands are heuristic and are not calibrated to any "
-            "fold-classification scheme such as SCOP/CATH."
+            "Uncalibrated geometric/topological feature-vector distances. "
+            "No validated threshold for fold similarity, protein function, "
+            "drug repurposing, or off-target effects; verify the calculation method."
         ),
         "provenance": _provenance(alphafold_db="v6", methodology="VR-persistent-homology"),
     }
@@ -781,24 +799,12 @@ async def compare_proteins_topologically(
 async def find_evolutionary_structural_shifts(
     params: EvolutionaryInput,
 ) -> dict[str, Any]:
-    """Quantify cross-species structural and sequence divergence for a gene.
+    """Report ortholog sequence identity and exploratory structural distances.
 
-    For each ortholog, attempts to fetch the AlphaFold structure and compute
-    a TDA fingerprint distance against the human structure. When an ortholog
-    structure is available in AlphaFold DB, the ``divergence_method`` is
-    ``tda_fingerprint`` and the distance is the L2 distance between
-    length-normalised fingerprint vectors. When the ortholog has no
-    AlphaFold model, the method falls back to ``sequence_identity``
-    (``1 - identity/100``).
-
-    AlphaFold DB coverage of non-human proteomes is partial: model organisms
-    (mouse, rat, zebrafish) are well-covered; others may not be. The
-    ``divergence_method`` field on each result tells you which method was
-    used.
-
-    Input fields:
-        params.gene_symbol: Human gene symbol.
-        params.target_species: List of species to compare.
+    Distances between Cα-derived feature vectors are not calibrated
+    evolutionary, functional, binding, or antibody cross-reactivity measures.
+    The GUDHI and geometric-proxy methods are distinguished in each result.
+    There is deliberately no cross-method conservation ranking.
     """
     sym = params.gene_symbol.upper()
     log = logger.bind(gene=sym, tool="find_evolutionary_structural_shifts")
@@ -806,17 +812,14 @@ async def find_evolutionary_structural_shifts(
 
     ensembl = EnsemblClient()
     orthologs = await ensembl.orthologs(sym, target_species=params.target_species, limit=20)
-
     if not orthologs:
         return {
             "gene_symbol": sym,
             "error": "No orthologs found via Ensembl for the specified species.",
         }
 
-    # Fetch human structure and compute TDA fingerprint
     human_gene = await ensembl.gene_lookup(sym)
     human_uniprot = (human_gene.get("uniprot_ids") or [""])[0]
-
     human_struct = await _fetch_af_structure(human_uniprot) if human_uniprot else None
     human_ca: np.ndarray | None = None
     if human_struct:
@@ -825,22 +828,24 @@ async def find_evolutionary_structural_shifts(
             human_ca = None
 
     human_fingerprint: list[float] | None = None
+    human_has_gudhi = False
     if human_ca is not None:
         human_tda = _compute_tda_fingerprint(human_ca)
         human_fingerprint = human_tda["fingerprint_vector"]
+        human_has_gudhi = human_tda.get("gudhi_available") is True
 
-    # For each ortholog, try to fetch its AlphaFold structure and compute
-    # TDA fingerprint distance; fall back to sequence identity.
-    drift_results: list[dict[str, Any]] = []
+    results: list[dict[str, Any]] = []
     for orth in orthologs[:8]:
         species = orth.get("species", "")
         orth_gene_id = orth.get("gene_id", "")
-        identity = orth.get("identity", 0.0)
+        raw_identity = orth.get("identity")
+        identity = float(raw_identity) if raw_identity is not None else None
         dn_ds = orth.get("dn_ds")
 
-        divergence_estimate: float | None = None
-        divergence_method = "sequence_identity"
+        feature_distance: float | None = None
         tda_distance: float | None = None
+        proxy_distance: float | None = None
+        method = "sequence_identity"
 
         if orth_gene_id and human_fingerprint:
             orth_uniprot = await _resolve_ortholog_uniprot(ensembl, orth_gene_id)
@@ -850,55 +855,59 @@ async def find_evolutionary_structural_shifts(
                     orth_ca = _parse_ca_coords_from_pdb(orth_struct["pdb_text"])
                     if orth_ca.shape[0] > 0:
                         orth_tda = _compute_tda_fingerprint(orth_ca)
-                        tda_distance = round(
+                        feature_distance = round(
                             _fingerprint_distance(
                                 human_fingerprint, orth_tda["fingerprint_vector"]
                             ),
                             6,
                         )
-                        divergence_estimate = tda_distance
-                        divergence_method = "tda_fingerprint"
+                        if human_has_gudhi and orth_tda.get("gudhi_available") is True:
+                            tda_distance = feature_distance
+                            method = "tda_fingerprint"
+                        else:
+                            proxy_distance = feature_distance
+                            method = "geometric_proxy"
 
-        if divergence_estimate is None and orth_gene_id:
-            divergence_estimate = round(1.0 - (identity / 100.0), 4)
-
-        drift_results.append(
+        results.append(
             {
                 "species": species,
                 "ensembl_gene_id": orth_gene_id,
                 "gene_name": orth.get("gene_name", ""),
                 "orthology_type": orth.get("type", ""),
-                "sequence_identity_pct": round(identity, 2),
+                "sequence_identity_pct": round(identity, 2) if identity is not None else None,
+                "sequence_dissimilarity": (
+                    round(1.0 - identity / 100.0, 4) if identity is not None else None
+                ),
                 "dn_ds_ratio": round(dn_ds, 4) if dn_ds is not None else None,
-                "divergence_estimate": divergence_estimate,
-                "divergence_method": divergence_method,
+                "divergence_estimate": feature_distance,
+                "divergence_method": method,
                 "tda_fingerprint_distance": tda_distance,
-                "drift_interpretation": _drift_interpretation(divergence_estimate, dn_ds),
+                "geometric_proxy_distance": proxy_distance,
+                "drift_interpretation": _drift_interpretation(feature_distance, dn_ds),
                 "cross_reactivity_risk": _cross_reactivity_risk(identity, dn_ds),
             }
         )
 
-    drift_results.sort(key=lambda r: r.get("divergence_estimate") or 1.0)
-
-    tda_count = sum(1 for r in drift_results if r["divergence_method"] == "tda_fingerprint")
-    seq_count = sum(1 for r in drift_results if r["divergence_method"] == "sequence_identity")
-
+    # Ensembl ordering is retained: the methods above have incompatible scales.
+    tda_count = sum(1 for r in results if r["divergence_method"] == "tda_fingerprint")
+    seq_count = sum(1 for r in results if r["divergence_method"] == "sequence_identity")
+    proxy_count = sum(1 for r in results if r["divergence_method"] == "geometric_proxy")
     return {
         "gene_symbol": sym,
         "human_uniprot_id": human_uniprot,
-        "species_compared": len(drift_results),
+        "species_compared": len(results),
         "tda_comparisons": tda_count,
         "sequence_identity_fallbacks": seq_count,
-        "evolutionary_profile": drift_results,
-        "most_conserved_species": drift_results[0]["species"] if drift_results else None,
-        "most_diverged_species": drift_results[-1]["species"] if drift_results else None,
+        "geometric_proxy_comparisons": proxy_count,
+        "evolutionary_profile": results,
+        "most_conserved_species": None,
+        "most_diverged_species": None,
+        "ranking_status": "not_computed_incomparable_metrics",
         "methodology_note": (
-            "When an ortholog has an AlphaFold structure, divergence_estimate is "
-            "the L2 distance between length-normalised TDA fingerprint vectors "
-            "(divergence_method='tda_fingerprint'). When no AlphaFold model "
-            "exists for the ortholog, divergence_estimate falls back to "
-            "1 - sequence_identity (divergence_method='sequence_identity'). "
-            f"{tda_count} of {len(drift_results)} comparisons used TDA."
+            "Sequence identity and exploratory structural distances are separately "
+            "reported. GUDHI and geometric-proxy distances are not interchangeable. "
+            "No cross-method conservation ranking, biological functional inference, "
+            "or antibody cross-reactivity risk assessment is supported."
         ),
         "provenance": _provenance(ensembl="current", alphafold_db="v6"),
     }
@@ -1569,22 +1578,17 @@ async def _resolve_ortholog_uniprot(ensembl: EnsemblClient, ensembl_gene_id: str
 
 
 def _interpret_tda(tda: dict[str, Any]) -> str:
-    betti = tda.get("betti_numbers", [0, 0, 0])
-    b0 = betti[0] if len(betti) > 0 else 0
-    b1 = betti[1] if len(betti) > 1 else 0
-    b2 = betti[2] if len(betti) > 2 else 0
-    parts = []
-    if b0 > 1:
-        parts.append(f"β₀={b0} disconnected components (multi-domain or extended chain)")
+    betti = tda.get("betti_numbers", [])
+    if not betti:
+        return "Topology unavailable."
+    scale = "15-Å Rips filtration" if tda.get("gudhi_available", True) else "4-Å contact graph"
+    parts = [f"β₀={betti[0]} connected components at {scale}"]
+    if len(betti) > 1 and betti[1] is not None:
+        parts.append(f"β₁={betti[1]} one-dimensional classes at filtration endpoint")
     else:
-        parts.append("β₀=1 single connected component (compact globular)")
-    if b1 > 3:
-        parts.append(f"β₁={b1} loops (ring-like topology such as β-barrels or large macrocycles)")
-    elif b1 > 0:
-        parts.append(f"β₁={b1} loop(s) detected")
-    if b2 > 0:
-        parts.append(f"β₂={b2} enclosed cavity/cavities (potential binding voids)")
-    return "; ".join(parts) + "." if parts else "Topology computed."
+        parts.append("β₁ not computed")
+    parts.append("β₂ not computed; no inference about protein cavities")
+    return "; ".join(parts) + "."
 
 
 # ── Evolutionary drift helpers ────────────────────────────────────────────────
@@ -1592,22 +1596,18 @@ def _interpret_tda(tda: dict[str, Any]) -> str:
 
 def _drift_interpretation(drift: float | None, dn_ds: float | None) -> str:
     if drift is None:
-        return "Structural drift not quantifiable (AF DB coverage unavailable for this species)."
-    if drift < 0.1:
-        return "Highly conserved structural topology — supports cross-species structural comparison (validate binding site separately)."
-    if drift < 0.3:
-        return "Moderate structural drift — drug binding site may differ; validate binding pose."
-    return "High structural drift — independent validation required before using as disease model."
+        return "Feature-vector distance unavailable; sequence identity is reported separately."
+    return (
+        "Exploratory feature-vector distance only; no validated inference about "
+        "evolutionary conservation, drug binding, or biological function."
+    )
 
 
-def _cross_reactivity_risk(identity: float, dn_ds: float | None) -> str:
-    if identity >= 90:
-        return "HIGH — near-identical sequence; antibody cross-reactivity likely."
-    if identity >= 70:
-        return "MODERATE — shared structural epitopes likely; antibody cross-reactivity possible."
-    if identity >= 50:
-        return "LOW — limited shared epitopes; selective immune targeting possible."
-    return "MINIMAL — distant homolog; cross-reactivity unlikely."
+def _cross_reactivity_risk(identity: float | None, dn_ds: float | None) -> str:
+    return (
+        "NOT ASSESSED — whole-protein sequence identity and topology are "
+        "insufficient to infer antibody cross-reactivity; requires epitope evidence."
+    )
 
 
 def _find_most_similar_pair(ids: list[str], matrix: list[list[float]]) -> dict[str, Any] | None:

@@ -1049,8 +1049,9 @@ async def test_orphan_atlas_partial_exceptions(monkeypatch: pytest.MonkeyPatch) 
 
     out = await get_orphan_disease_atlas(OrphanDiseaseInput(orphanet_id="79318"))
     parsed = json.loads(out.split("---")[0].strip())
-    # All sub-tasks raised → only mondo_id and status present
-    assert parsed["status"] == "success"
+    # All three sub-tasks failed: never claim a successful atlas.
+    assert parsed["status"] == "error"
+    assert set(parsed["source_errors"]) == {"mondo", "hpo", "open_targets"}
     assert "disease" not in parsed
     assert "phenotypes" not in parsed
     assert "protein_targets" not in parsed
@@ -1265,7 +1266,7 @@ async def test_fetch_disease_context() -> None:
 async def test_omim_to_mondo_success(monkeypatch: pytest.MonkeyPatch) -> None:
     hit = MagicMock(mondo_id="MONDO:0001")
     mock_mc = MagicMock()
-    mock_mc.search = AsyncMock(return_value=[hit])
+    mock_mc.from_omim = AsyncMock(return_value=[hit])
     _patch_client_class(monkeypatch, "alphafold_sovereign.tools.disease.MONDOClient", mock_mc)
 
     out = await _omim_to_mondo("OMIM:1234")
@@ -1278,7 +1279,7 @@ async def test_omim_to_mondo_empty_id() -> None:
 
 async def test_omim_to_mondo_no_results(monkeypatch: pytest.MonkeyPatch) -> None:
     mock_mc = MagicMock()
-    mock_mc.search = AsyncMock(return_value=[])
+    mock_mc.from_omim = AsyncMock(return_value=[])
     _patch_client_class(monkeypatch, "alphafold_sovereign.tools.disease.MONDOClient", mock_mc)
 
     out = await _omim_to_mondo("OMIM:9999")
@@ -1353,3 +1354,66 @@ def test_common_disease_roots_categories() -> None:
         "rare",
     }
     assert expected.issubset(COMMON_DISEASE_ROOTS.keys())
+
+
+async def test_orphan_atlas_ambiguous_verified_mapping(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mondo_client = MagicMock()
+    mondo_client.from_orphanet = AsyncMock(
+        return_value=[
+            MagicMock(mondo_id="MONDO:0000001"),
+            MagicMock(mondo_id="MONDO:0000002"),
+        ]
+    )
+    _patch_client_class(monkeypatch, "alphafold_sovereign.tools.disease.MONDOClient", mondo_client)
+    out = await get_orphan_disease_atlas(OrphanDiseaseInput(orphanet_id="79318"))
+    parsed = json.loads(out)
+    assert parsed["status"] == "ambiguous"
+    assert len(parsed["mondo_candidates"]) == 2
+    mondo_client.lookup.assert_not_called()
+
+
+async def test_orphan_atlas_reports_partial_failures(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mondo_client = MagicMock()
+    mondo_client.from_orphanet = AsyncMock(return_value=[MagicMock(mondo_id="MONDO:0001")])
+    mondo_client.lookup = AsyncMock(return_value=_disease_record())
+    _patch_client_class(monkeypatch, "alphafold_sovereign.tools.disease.MONDOClient", mondo_client)
+    hpo_client = MagicMock()
+    hpo_client.phenotypes_for_disease = AsyncMock(side_effect=RuntimeError("unavailable"))
+    _patch_client_class(monkeypatch, "alphafold_sovereign.tools.disease.HPOClient", hpo_client)
+    ot_client = MagicMock()
+    ot_client.associated_targets = AsyncMock(return_value=[])
+    _patch_client_class(
+        monkeypatch, "alphafold_sovereign.tools.disease.OpenTargetsClient", ot_client
+    )
+    out = await get_orphan_disease_atlas(OrphanDiseaseInput(orphanet_id="79318"))
+    parsed = json.loads(out.split("---")[0])
+    assert parsed["status"] == "partial"
+    assert parsed["source_status"]["hpo"] == "failed"
+    assert parsed["source_status"]["open_targets"] == "success"
+    assert parsed["source_errors"] == {"hpo": "RuntimeError"}
+    assert "disease" in parsed
+    assert "protein_targets" in parsed
+
+
+async def test_omim_to_mondo_orphanet_xref(monkeypatch: pytest.MonkeyPatch) -> None:
+    mock_mc = MagicMock()
+    mock_mc.from_orphanet = AsyncMock(return_value=[MagicMock(mondo_id="MONDO:0001")])
+    _patch_client_class(monkeypatch, "alphafold_sovereign.tools.disease.MONDOClient", mock_mc)
+    assert await _omim_to_mondo("ORPHA:79318") == "MONDO:0001"
+
+
+async def test_omim_to_mondo_rejects_ambiguous_or_unknown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert await _omim_to_mondo("UNTRUSTED:79318") is None
+    assert await _omim_to_mondo("OMIM:not_numeric") is None
+    mock_mc = MagicMock()
+    mock_mc.from_omim = AsyncMock(
+        return_value=[MagicMock(mondo_id="MONDO:0001"), MagicMock(mondo_id="MONDO:0002")]
+    )
+    _patch_client_class(monkeypatch, "alphafold_sovereign.tools.disease.MONDOClient", mock_mc)
+    assert await _omim_to_mondo("OMIM:79318") is None

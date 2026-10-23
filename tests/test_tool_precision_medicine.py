@@ -347,14 +347,14 @@ def test_compute_clinical_tier(
             global_af=global_af,
             acmg_criteria=criteria,
         )
-        == expected
+        == "NOT_ASSESSED"
     )
 
 
 @pytest.mark.parametrize("tier", ["HIGH", "MEDIUM", "LOW", "UNKNOWN", "OTHER"])
 def test_tier_explanation(tier: str) -> None:
     out = _tier_explanation(tier)
-    assert isinstance(out, str)
+    assert "No clinical tier assessed" in out
 
 
 @pytest.mark.parametrize(
@@ -589,7 +589,7 @@ async def test_generate_variant_report_full(monkeypatch: pytest.MonkeyPatch) -> 
     )
 
     out = await generate_variant_clinical_report(VariantClinicalReportInput(hgvs="BRCA1:c.181T>G"))
-    assert out["clinical_tier"] == "HIGH"
+    assert out["clinical_tier"] == "NOT_ASSESSED"
     assert out["gene_symbol"] == "BRCA1"
     assert "PP5" not in out["acmg_criteria_draft"]["criteria"]
     assert out["clinvar"]["classification"] == "Pathogenic"
@@ -618,7 +618,7 @@ async def test_generate_variant_report_pdbe_opt_in(monkeypatch: pytest.MonkeyPat
     output = await generate_variant_clinical_report(params)
     assert output["literature_residue_evidence"]["status"] == "ok"
     assert output["data_sources_status"]["pdbe_iucr_literature"] == "ok"
-    assert output["clinical_tier"] == "UNKNOWN"
+    assert output["clinical_tier"] == "NOT_ASSESSED"
     assert output["acmg_criteria_draft"]["criteria"] == {}
     mocks["pdbe_literature"].get_residue_annotations.assert_awaited_once_with("P38398", 61)
 
@@ -666,7 +666,7 @@ async def test_generate_variant_report_pdbe_failure_is_not_absence(
     )
     assert out["data_sources_status"]["pdbe_iucr_literature"] == "failed"
     assert out["literature_residue_evidence"]["status"] == "unavailable"
-    assert out["clinical_tier"] == "UNKNOWN"
+    assert out["clinical_tier"] == "NOT_ASSESSED"
 
 
 async def test_generate_variant_report_ignores_non_exact_clinvar_hit(
@@ -705,7 +705,7 @@ async def test_generate_variant_report_ignores_non_exact_clinvar_hit(
     assert out["clinvar"]["classification"] == PathogenicityClass.NOT_PROVIDED.value
     assert out["clinvar"]["variation_id"] == ""
     # The mismatched record's Pathogenic call must not drive the tier either.
-    assert out["clinical_tier"] == "UNKNOWN"
+    assert out["clinical_tier"] == "NOT_ASSESSED"
 
 
 async def test_generate_variant_report_minimal(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -724,7 +724,7 @@ async def test_generate_variant_report_minimal(monkeypatch: pytest.MonkeyPatch) 
             include_drug_context=False,
         )
     )
-    assert out["clinical_tier"] == "UNKNOWN"
+    assert out["clinical_tier"] == "NOT_ASSESSED"
     assert "drug_context" not in out
     assert out["population_genetics"]["populations"] == []
 
@@ -743,7 +743,7 @@ async def test_generate_variant_report_with_exceptions(
     out = await generate_variant_clinical_report(
         VariantClinicalReportInput(hgvs="BRCA1:c.181T>G", include_drug_context=False)
     )
-    assert out["clinical_tier"] == "UNKNOWN"
+    assert out["clinical_tier"] == "NOT_ASSESSED"
 
 
 async def test_generate_variant_report_drug_context_failure(
@@ -1597,8 +1597,8 @@ async def test_classify_variant_acmg_pathogenic(monkeypatch: pytest.MonkeyPatch)
     out = await classify_variant_acmg(
         ACMGVariantInput(hgvs="BRCA1:c.181T>G", inheritance_pattern="AD")
     )
-    assert "PVS1" in out["criteria_met"]
-    assert out["draft_classification"] == "Variant of Uncertain Significance"
+    assert "PVS1" in out["candidate_criteria"]
+    assert out["draft_classification"] == "Not assessed"
     assert out["clinvar_reference"]["classification"] == "Pathogenic"
 
 
@@ -1622,8 +1622,8 @@ async def test_classify_variant_acmg_benign(monkeypatch: pytest.MonkeyPatch) -> 
     mocks["gnomad"].gene_constraint = AsyncMock(return_value={"loeuf": 0.5})
 
     out = await classify_variant_acmg(ACMGVariantInput(hgvs="BRCA1:c.18T>G"))
-    assert "BP7" in out["criteria_met"] or "BS1" in out["criteria_met"]
-    assert "Benign" in out["draft_classification"]
+    assert "BP7" in out["candidate_criteria"] or "BS1" in out["candidate_criteria"]
+    assert out["draft_classification"] == "Not assessed"
 
 
 async def test_classify_variant_acmg_clinvar_pathogenic_only(
@@ -1639,7 +1639,7 @@ async def test_classify_variant_acmg_clinvar_pathogenic_only(
     mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
 
     out = await classify_variant_acmg(ACMGVariantInput(hgvs="BRCA1:c.18T>G"))
-    assert out["draft_classification"] == "Variant of Uncertain Significance"
+    assert out["draft_classification"] == "Not assessed"
     assert out["clinvar_reference"]["classification"] == "Pathogenic"
     assert out["clinvar_reference"]["found"] is True
     assert "PP5" not in out["criteria_met"]
@@ -1665,7 +1665,7 @@ async def test_classify_variant_acmg_ignores_non_exact_clinvar_hit(
     mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
 
     out = await classify_variant_acmg(ACMGVariantInput(hgvs="BRCA1:c.182A>G"))
-    assert out["draft_classification"] == "Variant of Uncertain Significance"
+    assert out["draft_classification"] == "Not assessed"
     assert out["clinvar_reference"]["found"] is False
 
 
@@ -1681,7 +1681,7 @@ async def test_classify_variant_acmg_clinvar_likely_pathogenic(
     mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
 
     out = await classify_variant_acmg(ACMGVariantInput(hgvs="BRCA1:c.18T>G"))
-    assert out["draft_classification"] == "Variant of Uncertain Significance"
+    assert out["draft_classification"] == "Not assessed"
     assert out["clinvar_reference"]["classification"] == "Likely pathogenic"
     assert "PP5" not in out["criteria_met"]
 
@@ -1707,7 +1707,7 @@ async def test_classify_variant_acmg_pvs1_with_high_loeuf(
     mocks["gnomad"].gene_constraint = AsyncMock(return_value={"loeuf": 0.5})
 
     out = await classify_variant_acmg(ACMGVariantInput(hgvs="BRCA1:c.18T>G"))
-    assert "downgrade" in out["criteria_met"]["PVS1"]["evidence"]
+    assert "not sufficient" in out["candidate_criteria"]["PVS1"]["computational_observation"]
 
 
 async def test_classify_variant_acmg_with_exceptions(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1718,7 +1718,7 @@ async def test_classify_variant_acmg_with_exceptions(monkeypatch: pytest.MonkeyP
     mocks["gnomad"].gene_constraint = AsyncMock(side_effect=RuntimeError("e"))
 
     out = await classify_variant_acmg(ACMGVariantInput(hgvs="BRCA1:c.18T>G"))
-    assert out["draft_classification"] == "Variant of Uncertain Significance"
+    assert out["draft_classification"] == "Not assessed"
 
 
 async def test_classify_variant_acmg_no_gnomad_id(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1800,7 +1800,7 @@ async def test_classify_variant_acmg_pathogenic_strong_strong(
     mocks["gnomad"].gene_constraint = AsyncMock(return_value={"loeuf": 0.2})
 
     out = await classify_variant_acmg(ACMGVariantInput(hgvs="BRCA1:c.18T>G"))
-    assert out["draft_classification"] == "Pathogenic"
+    assert out["draft_classification"] == "Not assessed"
 
 
 async def test_classify_variant_acmg_likely_pathogenic_two_strong(
@@ -1843,7 +1843,7 @@ async def test_classify_variant_acmg_likely_pathogenic_two_strong(
     mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
 
     out = await classify_variant_acmg(ACMGVariantInput(hgvs="BRCA1:c.18T>G"))
-    assert out["draft_classification"] == "Likely Pathogenic"
+    assert out["draft_classification"] == "Not assessed"
 
 
 async def test_classify_variant_acmg_lone_pvs1_not_pathogenic(
@@ -1874,9 +1874,9 @@ async def test_classify_variant_acmg_lone_pvs1_not_pathogenic(
     mocks["gnomad"].gene_constraint = AsyncMock(return_value={"loeuf": 0.2})
 
     out = await classify_variant_acmg(ACMGVariantInput(hgvs="BRCA1:c.181T>G"))
-    assert "PVS1" in out["criteria_met"]
-    assert out["criteria_met"]["PVS1"]["evidence"].startswith("Null variant")
-    assert out["draft_classification"] == "Variant of Uncertain Significance"
+    assert "PVS1" in out["candidate_criteria"]
+    assert out["candidate_criteria"]["PVS1"]["clinical_criterion_status"] == "not_assessed"
+    assert out["draft_classification"] == "Not assessed"
 
 
 def test_is_pathogenic_strong_key_counts_by_key_not_evidence() -> None:
@@ -1936,7 +1936,7 @@ async def test_classify_variant_acmg_canonical_skip(
     mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
 
     out = await classify_variant_acmg(ACMGVariantInput(hgvs="BRCA1:c.18T>G"))
-    assert "BP7" in out["criteria_met"]
+    assert "BP7" in out["candidate_criteria"]
 
 
 # ---------------------------------------------------------------------------
@@ -2133,3 +2133,22 @@ async def test_find_drug_repurposing_gather_exception(
         DrugRepurposingInput(disease_mondo_id="MONDO:0007254")
     )
     assert out["candidate_count"] == 0
+
+
+async def test_classify_variant_acmg_never_asserts_pvs1_without_mechanism(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_clients(monkeypatch)
+    mocks["ensembl"].vep_hgvs = AsyncMock(
+        return_value=[{"canonical": True, "consequence_terms": ["frameshift_variant"]}]
+    )
+    mocks["clinvar"].search_by_hgvs = AsyncMock(return_value=[])
+    mocks["gnomad"].variant_frequencies = AsyncMock(return_value={"global_af": 1e-6})
+    mocks["gnomad"].gene_constraint = AsyncMock(return_value={"loeuf": 0.1})
+    out = await classify_variant_acmg(ACMGVariantInput(hgvs="BRCA1:c.18T>G"))
+    assert out["criteria_met"] == {}
+    assert out["criteria_not_met"] == []
+    assert out["draft_classification"] == "Not assessed"
+    assert out["clinical_classification_performed"] is False
+    assert out["candidate_criteria"]["PVS1"]["clinical_criterion_status"] == "not_assessed"
+    assert "not sufficient" in out["candidate_criteria"]["PVS1"]["computational_observation"]

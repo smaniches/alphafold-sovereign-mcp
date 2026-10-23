@@ -3,10 +3,10 @@
     "criteria": {
       "PP3": "Multiple computational evidence suggesting pathogenicity: SIFT=deleterious_low_confidence; PolyPhen=probably_damaging"
     },
-    "note": "Draft ACMG/AMP criteria from computational and population evidence. ClinVar classification is reported separately and is not PP5/BP6 evidence. Expert review is required before clinical reporting."
+    "note": "Unreviewed computational signals only; no ACMG/AMP criteria are established by this report. ClinVar classification is independent source context, not PP5/BP6 evidence. Gene-disease mechanism and variant-specific clinical criteria require qualified expert assessment."
   },
-  "clinical_tier": "MEDIUM",
-  "clinical_tier_explanation": "Computational evidence suggests pathogenicity; lacks expert ClinVar curation. Further clinical and functional evidence recommended.",
+  "clinical_tier": "NOT_ASSESSED",
+  "clinical_tier_explanation": "No clinical tier assessed by Topologica. Source-reported ClinVar classifications and computational observations remain separate; clinical interpretation requires disease-specific evidence and review.",
   "clinvar": {
     "acmg_code": "NP",
     "classification": "Not provided",
@@ -28,7 +28,7 @@
     "alphamissense": "ok",
     "chembl": "no_data",
     "clinvar": "ok",
-    "disgenet": "ok",
+    "disgenet": "failed",
     "ensembl_vep": "ok",
     "gnomad": "skipped",
     "open_targets": "ok"
