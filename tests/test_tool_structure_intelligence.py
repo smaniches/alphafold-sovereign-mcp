@@ -151,33 +151,17 @@ def test_interpret_tda_fallback_does_not_infer_loops() -> None:
 
 
 def test_drift_interpretation_none() -> None:
-    assert "not quantifiable" in _drift_interpretation(None, None)
+    assert "unavailable" in _drift_interpretation(None, None)
 
 
-def test_drift_interpretation_low() -> None:
-    assert "Highly conserved" in _drift_interpretation(0.05, None)
+@pytest.mark.parametrize("drift", [0.05, 0.2, 0.6])
+def test_drift_interpretation_uncalibrated(drift: float) -> None:
+    assert "no validated inference" in _drift_interpretation(drift, None)
 
 
-def test_drift_interpretation_moderate() -> None:
-    assert "Moderate" in _drift_interpretation(0.2, None)
-
-
-def test_drift_interpretation_high() -> None:
-    assert "High" in _drift_interpretation(0.6, None)
-
-
-@pytest.mark.parametrize(
-    ("identity", "expected"),
-    [
-        (95.0, "HIGH"),
-        (75.0, "MODERATE"),
-        (60.0, "LOW"),
-        (30.0, "MINIMAL"),
-    ],
-)
-def test_cross_reactivity_risk(identity: float, expected: str) -> None:
-    out = _cross_reactivity_risk(identity, None)
-    assert expected in out
+@pytest.mark.parametrize("identity", [95.0, 75.0, 60.0, 30.0])
+def test_cross_reactivity_risk(identity: float) -> None:
+    assert "NOT ASSESSED" in _cross_reactivity_risk(identity, None)
 
 
 def test_fingerprint_distance() -> None:
@@ -1126,10 +1110,13 @@ async def test_evolutionary_shifts_tda_comparison(
     monkeypatch.setattr(si, "_fetch_af_structure", fake_fetch)
     out = await find_evolutionary_structural_shifts(EvolutionaryInput(gene_symbol="BRCA1"))
     profile = out["evolutionary_profile"][0]
-    assert profile["divergence_method"] == "tda_fingerprint"
-    assert profile["tda_fingerprint_distance"] is not None
-    assert out["tda_comparisons"] == 1
+    assert profile["divergence_method"] == "geometric_proxy"
+    assert profile["tda_fingerprint_distance"] is None
+    assert profile["geometric_proxy_distance"] is not None
+    assert out["tda_comparisons"] == 0
+    assert out["geometric_proxy_comparisons"] == 1
     assert out["sequence_identity_fallbacks"] == 0
+    assert out["most_conserved_species"] is None
 
 
 async def test_evolutionary_shifts_ortholog_no_uniprot(
@@ -1151,7 +1138,8 @@ async def test_evolutionary_shifts_ortholog_no_uniprot(
     out = await find_evolutionary_structural_shifts(EvolutionaryInput(gene_symbol="BRCA1"))
     profile = out["evolutionary_profile"][0]
     assert profile["divergence_method"] == "sequence_identity"
-    assert profile["divergence_estimate"] == 0.2
+    assert profile["divergence_estimate"] is None
+    assert profile["sequence_dissimilarity"] == 0.2
 
 
 async def test_resolve_ortholog_uniprot_success(
@@ -1574,3 +1562,64 @@ def test_gudhi_missing_top_dimension_is_unknown(monkeypatch: pytest.MonkeyPatch)
     coords = np.array([[i, 0.0, 0.0] for i in range(5)])
     out = _compute_tda_fingerprint(coords)
     assert out["betti_numbers"] == [1, 1, None]
+
+
+async def test_evolutionary_no_mixed_rank_or_antibody_claim(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mock_ensembl = MagicMock()
+    mock_ensembl.orthologs = AsyncMock(
+        return_value=[
+            {"species": "species_a", "gene_id": "G1", "identity": 100.0},
+            {"species": "species_b", "gene_id": "G2", "identity": 60.0},
+        ]
+    )
+    mock_ensembl.gene_lookup = AsyncMock(return_value={"uniprot_ids": []})
+    monkeypatch.setattr(si, "EnsemblClient", lambda: mock_ensembl)
+    out = await find_evolutionary_structural_shifts(EvolutionaryInput(gene_symbol="BRCA1"))
+    assert [x["species"] for x in out["evolutionary_profile"]] == ["species_a", "species_b"]
+    assert out["most_conserved_species"] is None
+    assert out["most_diverged_species"] is None
+    assert out["ranking_status"] == "not_computed_incomparable_metrics"
+    assert out["evolutionary_profile"][0]["sequence_dissimilarity"] == 0.0
+    assert all("NOT ASSESSED" in x["cross_reactivity_risk"] for x in out["evolutionary_profile"])
+
+
+async def test_evolutionary_missing_sequence_identity_is_unknown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mock_ensembl = MagicMock()
+    mock_ensembl.orthologs = AsyncMock(return_value=[{"species": "species_a", "gene_id": "G1"}])
+    mock_ensembl.gene_lookup = AsyncMock(return_value={"uniprot_ids": []})
+    monkeypatch.setattr(si, "EnsemblClient", lambda: mock_ensembl)
+    out = await find_evolutionary_structural_shifts(EvolutionaryInput(gene_symbol="BRCA1"))
+    profile = out["evolutionary_profile"][0]
+    assert profile["sequence_identity_pct"] is None
+    assert profile["sequence_dissimilarity"] is None
+
+
+async def test_evolutionary_with_gudhi_reports_tda_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mock_ensembl = MagicMock()
+    mock_ensembl.orthologs = AsyncMock(
+        return_value=[{"species": "mus_musculus", "gene_id": "ENSMUSG1", "identity": 85.0}]
+    )
+    mock_ensembl.gene_lookup = AsyncMock(return_value={"uniprot_ids": ["P12345"]})
+    mock_ensembl._get = AsyncMock(return_value=[{"primary_id": "Q62469"}])
+    monkeypatch.setattr(si, "EnsemblClient", lambda: mock_ensembl)
+
+    async def fake_fetch(uid: str) -> dict[str, Any]:
+        return {"pdb_text": _make_pdb(10), "uniprot_id": uid}
+
+    monkeypatch.setattr(si, "_fetch_af_structure", fake_fetch)
+    monkeypatch.setattr(
+        si, "_compute_tda_fingerprint",
+        lambda ca: {"fingerprint_vector": [1.0, 2.0], "gudhi_available": True}
+    )
+    out = await find_evolutionary_structural_shifts(EvolutionaryInput(gene_symbol="BRCA1"))
+    profile = out["evolutionary_profile"][0]
+    assert profile["divergence_method"] == "tda_fingerprint"
+    assert profile["tda_fingerprint_distance"] is not None
+    assert profile["geometric_proxy_distance"] is None
+    assert out["tda_comparisons"] == 1

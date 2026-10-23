@@ -800,24 +800,12 @@ async def compare_proteins_topologically(
 async def find_evolutionary_structural_shifts(
     params: EvolutionaryInput,
 ) -> dict[str, Any]:
-    """Quantify cross-species structural and sequence divergence for a gene.
+    """Report ortholog sequence identity and exploratory structural distances.
 
-    For each ortholog, attempts to fetch the AlphaFold structure and compute
-    a TDA fingerprint distance against the human structure. When an ortholog
-    structure is available in AlphaFold DB, the ``divergence_method`` is
-    ``tda_fingerprint`` and the distance is the L2 distance between
-    length-normalised fingerprint vectors. When the ortholog has no
-    AlphaFold model, the method falls back to ``sequence_identity``
-    (``1 - identity/100``).
-
-    AlphaFold DB coverage of non-human proteomes is partial: model organisms
-    (mouse, rat, zebrafish) are well-covered; others may not be. The
-    ``divergence_method`` field on each result tells you which method was
-    used.
-
-    Input fields:
-        params.gene_symbol: Human gene symbol.
-        params.target_species: List of species to compare.
+    Distances between Cα-derived feature vectors are not calibrated
+    evolutionary, functional, binding, or antibody cross-reactivity measures.
+    The GUDHI and geometric-proxy methods are distinguished in each result.
+    There is deliberately no cross-method conservation ranking.
     """
     sym = params.gene_symbol.upper()
     log = logger.bind(gene=sym, tool="find_evolutionary_structural_shifts")
@@ -825,17 +813,14 @@ async def find_evolutionary_structural_shifts(
 
     ensembl = EnsemblClient()
     orthologs = await ensembl.orthologs(sym, target_species=params.target_species, limit=20)
-
     if not orthologs:
         return {
             "gene_symbol": sym,
             "error": "No orthologs found via Ensembl for the specified species.",
         }
 
-    # Fetch human structure and compute TDA fingerprint
     human_gene = await ensembl.gene_lookup(sym)
     human_uniprot = (human_gene.get("uniprot_ids") or [""])[0]
-
     human_struct = await _fetch_af_structure(human_uniprot) if human_uniprot else None
     human_ca: np.ndarray | None = None
     if human_struct:
@@ -844,22 +829,24 @@ async def find_evolutionary_structural_shifts(
             human_ca = None
 
     human_fingerprint: list[float] | None = None
+    human_has_gudhi = False
     if human_ca is not None:
         human_tda = _compute_tda_fingerprint(human_ca)
         human_fingerprint = human_tda["fingerprint_vector"]
+        human_has_gudhi = human_tda.get("gudhi_available") is True
 
-    # For each ortholog, try to fetch its AlphaFold structure and compute
-    # TDA fingerprint distance; fall back to sequence identity.
-    drift_results: list[dict[str, Any]] = []
+    results: list[dict[str, Any]] = []
     for orth in orthologs[:8]:
         species = orth.get("species", "")
         orth_gene_id = orth.get("gene_id", "")
-        identity = orth.get("identity", 0.0)
+        raw_identity = orth.get("identity")
+        identity = float(raw_identity) if raw_identity is not None else None
         dn_ds = orth.get("dn_ds")
 
-        divergence_estimate: float | None = None
-        divergence_method = "sequence_identity"
+        feature_distance: float | None = None
         tda_distance: float | None = None
+        proxy_distance: float | None = None
+        method = "sequence_identity"
 
         if orth_gene_id and human_fingerprint:
             orth_uniprot = await _resolve_ortholog_uniprot(ensembl, orth_gene_id)
@@ -869,55 +856,59 @@ async def find_evolutionary_structural_shifts(
                     orth_ca = _parse_ca_coords_from_pdb(orth_struct["pdb_text"])
                     if orth_ca.shape[0] > 0:
                         orth_tda = _compute_tda_fingerprint(orth_ca)
-                        tda_distance = round(
+                        feature_distance = round(
                             _fingerprint_distance(
                                 human_fingerprint, orth_tda["fingerprint_vector"]
                             ),
                             6,
                         )
-                        divergence_estimate = tda_distance
-                        divergence_method = "tda_fingerprint"
+                        if human_has_gudhi and orth_tda.get("gudhi_available") is True:
+                            tda_distance = feature_distance
+                            method = "tda_fingerprint"
+                        else:
+                            proxy_distance = feature_distance
+                            method = "geometric_proxy"
 
-        if divergence_estimate is None and orth_gene_id:
-            divergence_estimate = round(1.0 - (identity / 100.0), 4)
-
-        drift_results.append(
+        results.append(
             {
                 "species": species,
                 "ensembl_gene_id": orth_gene_id,
                 "gene_name": orth.get("gene_name", ""),
                 "orthology_type": orth.get("type", ""),
-                "sequence_identity_pct": round(identity, 2),
+                "sequence_identity_pct": round(identity, 2) if identity is not None else None,
+                "sequence_dissimilarity": (
+                    round(1.0 - identity / 100.0, 4) if identity is not None else None
+                ),
                 "dn_ds_ratio": round(dn_ds, 4) if dn_ds is not None else None,
-                "divergence_estimate": divergence_estimate,
-                "divergence_method": divergence_method,
+                "divergence_estimate": feature_distance,
+                "divergence_method": method,
                 "tda_fingerprint_distance": tda_distance,
-                "drift_interpretation": _drift_interpretation(divergence_estimate, dn_ds),
+                "geometric_proxy_distance": proxy_distance,
+                "drift_interpretation": _drift_interpretation(feature_distance, dn_ds),
                 "cross_reactivity_risk": _cross_reactivity_risk(identity, dn_ds),
             }
         )
 
-    drift_results.sort(key=lambda r: r.get("divergence_estimate") or 1.0)
-
-    tda_count = sum(1 for r in drift_results if r["divergence_method"] == "tda_fingerprint")
-    seq_count = sum(1 for r in drift_results if r["divergence_method"] == "sequence_identity")
-
+    # Ensembl ordering is retained: the methods above have incompatible scales.
+    tda_count = sum(1 for r in results if r["divergence_method"] == "tda_fingerprint")
+    seq_count = sum(1 for r in results if r["divergence_method"] == "sequence_identity")
+    proxy_count = sum(1 for r in results if r["divergence_method"] == "geometric_proxy")
     return {
         "gene_symbol": sym,
         "human_uniprot_id": human_uniprot,
-        "species_compared": len(drift_results),
+        "species_compared": len(results),
         "tda_comparisons": tda_count,
         "sequence_identity_fallbacks": seq_count,
-        "evolutionary_profile": drift_results,
-        "most_conserved_species": drift_results[0]["species"] if drift_results else None,
-        "most_diverged_species": drift_results[-1]["species"] if drift_results else None,
+        "geometric_proxy_comparisons": proxy_count,
+        "evolutionary_profile": results,
+        "most_conserved_species": None,
+        "most_diverged_species": None,
+        "ranking_status": "not_computed_incomparable_metrics",
         "methodology_note": (
-            "When an ortholog has an AlphaFold structure, divergence_estimate is "
-            "the L2 distance between length-normalised TDA fingerprint vectors "
-            "(divergence_method='tda_fingerprint'). When no AlphaFold model "
-            "exists for the ortholog, divergence_estimate falls back to "
-            "1 - sequence_identity (divergence_method='sequence_identity'). "
-            f"{tda_count} of {len(drift_results)} comparisons used TDA."
+            "Sequence identity and exploratory structural distances are separately "
+            "reported. GUDHI and geometric-proxy distances are not interchangeable. "
+            "No cross-method conservation ranking, biological functional inference, "
+            "or antibody cross-reactivity risk assessment is supported."
         ),
         "provenance": _provenance(ensembl="current", alphafold_db="v6"),
     }
@@ -1606,22 +1597,18 @@ def _interpret_tda(tda: dict[str, Any]) -> str:
 
 def _drift_interpretation(drift: float | None, dn_ds: float | None) -> str:
     if drift is None:
-        return "Structural drift not quantifiable (AF DB coverage unavailable for this species)."
-    if drift < 0.1:
-        return "Highly conserved structural topology — supports cross-species structural comparison (validate binding site separately)."
-    if drift < 0.3:
-        return "Moderate structural drift — drug binding site may differ; validate binding pose."
-    return "High structural drift — independent validation required before using as disease model."
+        return "Feature-vector distance unavailable; sequence identity is reported separately."
+    return (
+        "Exploratory feature-vector distance only; no validated inference about "
+        "evolutionary conservation, drug binding, or biological function."
+    )
 
 
-def _cross_reactivity_risk(identity: float, dn_ds: float | None) -> str:
-    if identity >= 90:
-        return "HIGH — near-identical sequence; antibody cross-reactivity likely."
-    if identity >= 70:
-        return "MODERATE — shared structural epitopes likely; antibody cross-reactivity possible."
-    if identity >= 50:
-        return "LOW — limited shared epitopes; selective immune targeting possible."
-    return "MINIMAL — distant homolog; cross-reactivity unlikely."
+def _cross_reactivity_risk(identity: float | None, dn_ds: float | None) -> str:
+    return (
+        "NOT ASSESSED — whole-protein sequence identity and topology are "
+        "insufficient to infer antibody cross-reactivity; requires epitope evidence."
+    )
 
 
 def _find_most_similar_pair(ids: list[str], matrix: list[list[float]]) -> dict[str, Any] | None:
