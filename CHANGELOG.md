@@ -7,6 +7,13 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.5.6](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.5.5...v1.5.6) (2026-10-23)
+
+
+### Bug Fixes
+
+* **science:** retire orphan atlas and clinical narrative overclaims ([d66c97e](https://github.com/smaniches/alphafold-sovereign-mcp/commit/d66c97ea38d8c265d307fcda09bfbe67eeec14c4))
+
 ## [1.5.5](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.5.4...v1.5.5) (2026-10-23)
 
 

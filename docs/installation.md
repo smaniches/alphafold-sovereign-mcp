@@ -36,7 +36,7 @@ uv pip install -e ".[tda]"
 
 <!-- x-release-please-start-version -->
 ```bash
-alphafold-sovereign --version       # → 1.5.5
+alphafold-sovereign --version       # → 1.5.6
 alphafold-sovereign --self-test     # → SELF-TEST PASS
 ```
 <!-- x-release-please-end-version -->
