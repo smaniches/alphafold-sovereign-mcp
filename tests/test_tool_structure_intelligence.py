@@ -128,22 +128,26 @@ def test_estimate_ordered_fraction() -> None:
 
 
 def test_interpret_tda_multi_domain() -> None:
-    out = _interpret_tda({"betti_numbers": [3, 5, 1]})
-    assert "disconnected components" in out
-    assert "ring-like topology" in out
-    assert "cavity" in out
+    out = _interpret_tda({"betti_numbers": [3, 5, None], "gudhi_available": True})
+    assert "connected components" in out
+    assert "one-dimensional classes" in out
+    assert "no inference about protein cavities" in out
 
 
 def test_interpret_tda_single_loop() -> None:
-    out = _interpret_tda({"betti_numbers": [1, 2, 0]})
-    assert "single connected component" in out
-    assert "loop(s)" in out
+    out = _interpret_tda({"betti_numbers": [1, 2, None], "gudhi_available": True})
+    assert "β₀=1" in out
+    assert "β₁=2" in out
 
 
 def test_interpret_tda_empty() -> None:
-    out = _interpret_tda({"betti_numbers": []})
-    # empty list → empty parts → "Topology computed."
-    assert "Topology computed" in out or "single connected component" in out
+    assert _interpret_tda({"betti_numbers": []}) == "Topology unavailable."
+
+
+def test_interpret_tda_fallback_does_not_infer_loops() -> None:
+    out = _interpret_tda({"betti_numbers": [2, None, None], "gudhi_available": False})
+    assert "β₁ not computed" in out
+    assert "4-Å contact graph" in out
 
 
 def test_drift_interpretation_none() -> None:
@@ -528,7 +532,8 @@ def test_compute_tda_fingerprint_with_gudhi(monkeypatch: pytest.MonkeyPatch) -> 
 
     coords = np.array([[i * 1.0, 0.0, 0.0] for i in range(20)])
     out = _compute_tda_fingerprint(coords)
-    assert "betti_numbers" in out
+    assert out["betti_numbers"] == [1, 0, None]
+    assert out["gudhi_available"] is True
     assert len(out["fingerprint_vector"]) == 64
     # First dim has intervals → landscape entry filled
     assert out["persistence_landscapes"][0]["n_intervals"] >= 1
@@ -551,7 +556,7 @@ def test_compute_tda_fingerprint_with_gudhi_empty_intervals(
     _install_fake_gudhi(monkeypatch, [])
     coords = np.array([[i * 1.0, 0.0, 0.0] for i in range(20)])
     out = _compute_tda_fingerprint(coords)
-    assert out["betti_numbers"] == [0, 0, 0]
+    assert out["betti_numbers"] == [0, 0, None]
 
 
 def test_compute_tda_fingerprint_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -576,6 +581,20 @@ def test_fallback_tda_fingerprint_few_residues() -> None:
     coords = np.array([[1.0, 0.0, 0.0]])
     out = _fallback_tda_fingerprint(coords)
     assert out["fingerprint_vector"] == [0.0] * 64
+    assert out["betti_numbers"] == [1, None, None]
+
+
+def test_fallback_tda_fingerprint_empty() -> None:
+    assert _fallback_tda_fingerprint(np.empty((0, 3)))["betti_numbers"] == [0, None, None]
+
+
+def test_fallback_connected_components_not_isolated_vertex_count() -> None:
+    one_chain = np.array([[0.0, 0.0, 0.0], [3.0, 0.0, 0.0], [6.0, 0.0, 0.0]])
+    two_pairs = np.array(
+        [[0.0, 0.0, 0.0], [3.0, 0.0, 0.0], [20.0, 0.0, 0.0], [23.0, 0.0, 0.0]]
+    )
+    assert _fallback_tda_fingerprint(one_chain)["betti_numbers"] == [1, None, None]
+    assert _fallback_tda_fingerprint(two_pairs)["betti_numbers"] == [2, None, None]
 
 
 def test_fallback_tda_fingerprint_normal() -> None:
@@ -1538,3 +1557,22 @@ async def test_get_protein_structure_prediction_raises(monkeypatch: pytest.Monke
     af.get_prediction.side_effect = RuntimeError("boom")
     out = await get_protein_structure(StructureRetrievalInput(uniprot_id="P38398"))
     assert out["structure_available"] is False
+
+
+def test_gudhi_finite_bars_not_betti_numbers(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Two finite H0 bars do not imply β0=2 at terminal filtration."""
+    _install_fake_gudhi(
+        monkeypatch,
+        [(0, (0.0, 1.0)), (0, (0.0, 2.0)), (0, (0.0, float("inf")))],
+    )
+    coords = np.array([[i, 0.0, 0.0] for i in range(5)])
+    out = _compute_tda_fingerprint(coords)
+    assert out["betti_numbers"] == [1, 0, None]
+    assert out["persistence_landscapes"][0]["n_intervals"] == 2
+
+
+def test_gudhi_missing_top_dimension_is_unknown(monkeypatch: pytest.MonkeyPatch) -> None:
+    _install_fake_gudhi(monkeypatch, [(0, (0.0, float("inf"))), (1, (4.0, float("inf")))])
+    coords = np.array([[i, 0.0, 0.0] for i in range(5)])
+    out = _compute_tda_fingerprint(coords)
+    assert out["betti_numbers"] == [1, 1, None]

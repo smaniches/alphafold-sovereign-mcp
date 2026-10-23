@@ -331,11 +331,11 @@ def _compute_tda_fingerprint(
 ) -> dict[str, Any]:
     """Compute a topological fingerprint from Cα coordinates.
 
-    Builds a Vietoris-Rips complex over the Cα point cloud with a
-    Euclidean metric and reads off the persistent-homology Betti
-    numbers (β₀, β₁, β₂) using `gudhi`. If `gudhi` is not installed,
-    falls back to a coarse heuristic (see ``_fallback_tda_fingerprint``)
-    that does not compute persistent homology.
+    Builds a Vietoris-Rips 2-skeleton over the Cα point cloud.
+    GUDHI provides H0/H1 persistence at a finite 15-Å filtration scale.
+    H2 is not established from this truncated complex and is reported as
+    unavailable, never as zero. Without GUDHI the distance-statistics
+    fallback computes only the exact 4-Å graph component count.
 
     Args:
         ca_coords: (N, 3) array of Cα coordinates.
@@ -363,17 +363,24 @@ def _compute_tda_fingerprint(
     simplex_tree = rips.create_simplex_tree(max_dimension=max_dimension)
     simplex_tree.compute_persistence()
 
-    # Extract persistence diagrams per dimension
-    betti_numbers: list[int] = []
+    # The number of finite persistence bars is NOT a Betti number.
+    # At the terminal filtration value, infinite bars represent surviving
+    # homology classes. GUDHI excludes the maximum simplex dimension by
+    # default; never pretend that missing top-dimensional H2 equals zero.
+    diagram = simplex_tree.persistence()
+    betti_numbers: list[int | None] = []
     landscapes: list[dict[str, Any]] = []
     fingerprint: list[float] = []
 
     for dim in range(max_dimension + 1):
         intervals = [
-            (b, d) for (k, (b, d)) in simplex_tree.persistence() if k == dim and d < float("inf")
+            (b, d) for (k, (b, d)) in diagram if k == dim and d < float("inf")
         ]
-        betti = len(intervals)
-        betti_numbers.append(betti)
+        betti_numbers.append(
+            None
+            if dim == max_dimension
+            else sum(1 for k, (_b, death) in diagram if k == dim and death == float("inf"))
+        )
 
         if intervals:
             lifetimes = [d - b for b, d in intervals]
@@ -416,32 +423,52 @@ def _compute_tda_fingerprint(
         "fingerprint_dimension": 64,
         "n_residues_used": len(ca_coords),
         "max_filtration_length_angstrom": max_edge_length,
-        "methodology": "Vietoris-Rips persistent homology via gudhi.",
+        "methodology": (
+            "Vietoris-Rips 2-skeleton via GUDHI; H0/H1 at the terminal 15-Å "
+            "filtration; H2 not computed."
+        ),
+        "gudhi_available": True,
     }
 
 
 def _fallback_tda_fingerprint(ca_coords: np.ndarray) -> dict[str, Any]:
     """Coarse fallback fingerprint when gudhi is not installed.
 
-    Computes a few distance-matrix statistics (mean, std, min, max,
-    histogram bins) as a proxy for topological features. This is **not**
-    persistent homology and the returned ``betti_numbers`` field beyond
-    β₀ is set to zero. Install gudhi (``pip install
-    alphafold-sovereign-mcp[tda]``) for the real persistent-homology
-    computation.
+    Computes distance-matrix statistics and the connected-component count
+    of the 4-Å contact graph. This is NOT persistent homology: H1 and H2
+    are unknown (None), not zero. Install gudhi with the [tda] extra
+    for H0/H1 persistence.
     """
     if len(ca_coords) < 2:
-        return {"betti_numbers": [], "fingerprint_vector": [0.0] * 64, "gudhi_available": False}
+        return {
+            "betti_numbers": [len(ca_coords), None, None],
+            "fingerprint_vector": [0.0] * 64,
+            "fingerprint_dimension": 64,
+            "n_residues_used": len(ca_coords),
+            "gudhi_available": False,
+        }
 
     dists = np.sqrt(np.sum((ca_coords[:, None, :] - ca_coords[None, :, :]) ** 2, axis=-1))
     np.fill_diagonal(dists, np.inf)
 
-    # Approximate β0: connected components (residues within 4 Å of another)
-    contacts = (dists < 4.0).sum(axis=1)
-    b0 = int((contacts == 0).sum())  # isolated residues ≈ components
+    # Exact β0 for the 4-Å contact graph, including non-singleton components.
+    adjacency = dists < 4.0
+    contacts = adjacency.sum(axis=1)
+    seen = np.zeros(len(ca_coords), dtype=bool)
+    b0 = 0
+    for start in range(len(ca_coords)):
+        if seen[start]:
+            continue
+        b0 += 1
+        seen[start] = True
+        stack = [start]
+        while stack:
+            for neighbor in np.flatnonzero(adjacency[stack.pop()]):
+                if not seen[neighbor]:
+                    seen[neighbor] = True
+                    stack.append(int(neighbor))
 
-    # Approximate β1: residues forming cycles (high local connectivity)
-    mean_contacts = float(np.mean(contacts[contacts < np.inf]))
+    mean_contacts = float(np.mean(contacts))
 
     fingerprint: list[float] = [
         float(np.mean(dists[dists < np.inf])),
@@ -456,7 +483,7 @@ def _fallback_tda_fingerprint(ca_coords: np.ndarray) -> dict[str, Any]:
     fingerprint = (fingerprint + [0.0] * 64)[:64]
 
     return {
-        "betti_numbers": [b0, 0, 0],
+        "betti_numbers": [b0, None, None],
         "fingerprint_vector": [round(f, 6) for f in fingerprint],
         "fingerprint_dimension": 64,
         "n_residues_used": len(ca_coords),
@@ -606,18 +633,13 @@ async def compute_topology_fingerprint(
 ) -> dict[str, Any]:
     """Compute a rotation-invariant topological fingerprint of a protein's fold.
 
-    Fetches the AlphaFold model for ``uniprot_id`` and runs persistent homology
-    (a Vietoris-Rips filtration over the Cα point cloud) to produce a
-    64-dimensional fingerprint vector plus Betti numbers β₀, β₁, β₂. Use it as the
-    per-protein input to structure-similarity comparisons:
-    ``compare_proteins_topologically`` and ``find_evolutionary_structural_shifts``
-    consume these fingerprints.
-
-    The Betti numbers summarise fold topology: β₀ counts connected components
-    (single- vs multi-domain or fragmented chains), β₁ counts loops/holes
-    (β-barrels, large macrocycles), β₂ counts enclosed voids (cavities). Because
-    they are invariant to rotation and translation, two orientations of the same
-    fold produce the same fingerprint.
+    Fetches the AlphaFold model for ``uniprot_id`` and derives an
+    exploratory 64-dimensional geometric/topological feature vector from
+    Cα coordinates. With GUDHI installed, H0 and H1 are computed on the
+    15-Å Vietoris-Rips 2-skeleton. H2 is NOT computed. Without GUDHI
+    only a 4-Å graph component count and geometric statistics are available.
+    Betti numbers describe this chosen filtration, not protein domains,
+    β-barrels, drug cavities, molecular function, or an experimental structure.
 
     Returns the fingerprint vector, the Betti numbers, the residue count, and which
     method ran. Full persistent homology needs the optional ``[tda]`` extra
@@ -652,11 +674,12 @@ async def compute_topology_fingerprint(
         "topological_fingerprint": tda,
         "interpretation": _interpret_tda(tda),
         "usage": (
-            "Use this fingerprint vector with compare_proteins_topologically to measure "
-            "structural similarity between any two proteins, regardless of sequence identity. "
-            "Store in your knowledge graph for rapid cross-protein screening."
+            "Exploratory feature-vector comparison only; not validated structural homology, "
+            "functional identity, binding-site equivalence, or a diagnostic endpoint."
         ),
-        "provenance": _provenance(alphafold_db="v6", methodology="VR-persistent-homology"),
+        "provenance": _provenance(
+            alphafold_db="v6", methodology=tda.get("methodology", "geometric-proxy")
+        ),
     }
 
 
@@ -757,11 +780,9 @@ async def compare_proteins_topologically(
         "most_topologically_similar": most_similar,
         "protein_metadata": protein_meta,
         "interpretation": (
-            "Distance < 0.1: very similar fingerprints. "
-            "Distance 0.1-0.4: moderately divergent. "
-            "Distance > 0.4: clearly divergent. "
-            "These bands are heuristic and are not calibrated to any "
-            "fold-classification scheme such as SCOP/CATH."
+            "Uncalibrated geometric/topological feature-vector distances. "
+            "No validated threshold for fold similarity, protein function, "
+            "drug repurposing, or off-target effects; verify the calculation method."
         ),
         "provenance": _provenance(alphafold_db="v6", methodology="VR-persistent-homology"),
     }
@@ -1569,22 +1590,17 @@ async def _resolve_ortholog_uniprot(ensembl: EnsemblClient, ensembl_gene_id: str
 
 
 def _interpret_tda(tda: dict[str, Any]) -> str:
-    betti = tda.get("betti_numbers", [0, 0, 0])
-    b0 = betti[0] if len(betti) > 0 else 0
-    b1 = betti[1] if len(betti) > 1 else 0
-    b2 = betti[2] if len(betti) > 2 else 0
-    parts = []
-    if b0 > 1:
-        parts.append(f"β₀={b0} disconnected components (multi-domain or extended chain)")
+    betti = tda.get("betti_numbers", [])
+    if not betti:
+        return "Topology unavailable."
+    scale = "15-Å Rips filtration" if tda.get("gudhi_available", True) else "4-Å contact graph"
+    parts = [f"β₀={betti[0]} connected components at {scale}"]
+    if len(betti) > 1 and betti[1] is not None:
+        parts.append(f"β₁={betti[1]} one-dimensional classes at filtration endpoint")
     else:
-        parts.append("β₀=1 single connected component (compact globular)")
-    if b1 > 3:
-        parts.append(f"β₁={b1} loops (ring-like topology such as β-barrels or large macrocycles)")
-    elif b1 > 0:
-        parts.append(f"β₁={b1} loop(s) detected")
-    if b2 > 0:
-        parts.append(f"β₂={b2} enclosed cavity/cavities (potential binding voids)")
-    return "; ".join(parts) + "." if parts else "Topology computed."
+        parts.append("β₁ not computed")
+    parts.append("β₂ not computed; no inference about protein cavities")
+    return "; ".join(parts) + "."
 
 
 # ── Evolutionary drift helpers ────────────────────────────────────────────────
