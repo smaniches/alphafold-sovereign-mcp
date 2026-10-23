@@ -12,6 +12,7 @@ import httpx
 import pytest
 import respx
 
+from alphafold_sovereign.clients._base import UpstreamError
 from alphafold_sovereign.clients.alphafold import (
     AlphaFoldClient,
     _parse_alphamissense_csv,
@@ -509,3 +510,14 @@ async def test_alphamissense_fetches_advertised_files_url_verbatim(
     assert files_route.called, "client must fetch the advertised /files/ URL verbatim"
     assert hit is not None
     assert hit["am_pathogenicity"] == 0.9904
+
+
+async def test_check_availability_source_access_failure_is_not_absence(
+    respx_mock: respx.MockRouter,
+) -> None:
+    respx_mock.get("https://alphafold.ebi.ac.uk/api/prediction/BLOCKED").mock(
+        return_value=httpx.Response(403)
+    )
+    async with AlphaFoldClient() as client:
+        with pytest.raises(UpstreamError):
+            await client.check_availability("BLOCKED")
