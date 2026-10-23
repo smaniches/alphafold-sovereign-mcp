@@ -6,11 +6,10 @@ These tools take raw AlphaFold structures (PDB text and PAE arrays from
 AlphaFold DB) and derive a small set of summaries from them:
 
 * pLDDT / PAE confidence-and-domain maps,
-* a 64-dimensional topological-data-analysis (TDA) fingerprint
-  (Betti numbers β₀, β₁, β₂ from a Vietoris-Rips filtration of Cα
-  coordinates, computed with `gudhi` when the optional `[tda]` extra
-  is installed; a coarse fallback without persistent homology
-  otherwise — see ``_compute_lightweight_tda``),
+* a 64-component exploratory Cα feature vector. Optional GUDHI computes
+  H₀/H₁ at the final 15-Å Vietoris-Rips filtration step; H₂ is not
+  computed. Without GUDHI, the fallback reports 4-Å graph components
+  and geometry, not persistent homology,
 * a pairwise distance matrix between TDA fingerprints (the
   implementation is an L2 distance on length-normalised fingerprint
   vectors — it is **not** an optimal-transport Wasserstein distance;
@@ -24,7 +23,7 @@ structure cache.
 
 Tool inventory:
   1. analyze_structural_confidence       — pLDDT + PAE domain map
-  2. compute_topology_fingerprint        — TDA Betti numbers (β₀, β₁, β₂)
+  2. compute_topology_fingerprint        — Exploratory Cα features; H₀/H₁ if GUDHI
   3. compare_proteins_topologically      — Pairwise fingerprint-distance matrix
   4. find_evolutionary_structural_shifts — Cross-species TDA fingerprint compare
   5. score_binding_pocket_geometry       — Heuristic pocket detection + score
