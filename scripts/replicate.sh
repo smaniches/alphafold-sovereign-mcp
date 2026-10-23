@@ -305,6 +305,28 @@ jq -e '
 ' "$SPDX" >/dev/null || fail "SPDX release asset is missing required SPDX document structure"
 pass "SPDX SBOM has the required SPDX document structure"
 
+# Older published tags used scan-only SPDX output. Keep historical readback
+# possible, but require the installed-wheel package and dependency closure
+# for every release from the corrective patch onward.
+SPDX_VALIDATION_MODE="$(python3 - "$VERSION" <<'PY'
+import re
+import sys
+
+match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)(?:(?:a|b|rc)\d+)?", sys.argv[1])
+if match is None:
+    raise SystemExit("invalid PyPI release version for SPDX validation")
+version = tuple(int(part) for part in match.groups())
+print("strict" if version >= (1, 5, 5) else "historical")
+PY
+)" || fail "could not determine SPDX validation floor"
+if [[ "$SPDX_VALIDATION_MODE" == "strict" ]]; then
+  python3 "$REPO_ROOT/scripts/release_spdx.py" verify "$CYCLONE" "$SPDX" "$WHEEL_PATH" \
+    || fail "SPDX dependency inventory disagrees with wheel/CycloneDX"
+  pass "SPDX root identity, wheel SHA-256, package closure and dependencies verified"
+else
+  warn "Historical release $VERSION predates strict SPDX parity; structural verification only"
+fi
+
 echo ""
 echo "Step 5: SLSA provenance (when attached to the GitHub Release)"
 PROVENANCE="$TMP_ROOT/alphafold-sovereign-mcp.intoto.jsonl"

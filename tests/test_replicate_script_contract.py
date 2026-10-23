@@ -57,12 +57,15 @@ def test_replicate_verifies_sigstore_bundle_against_exact_artifact_and_tag() -> 
     assert "refs/heads/main" not in text
 
 
-def test_release_signs_and_uploads_sbom_bundles() -> None:
+def test_release_signs_only_missing_bundles_and_never_clobbers_assets() -> None:
     text = RELEASE.read_text(encoding="utf-8")
 
     assert "sboms/sbom.cyclonedx.json sboms/sbom.spdx.json" in text
-    assert 'cosign sign-blob --yes "$f" --bundle "${f}.sigstore"' in text
-    assert "sboms/*.sigstore" in text
+    assert "scripts/release_assets.py sign dist/ sboms/ release-plan.json" in text
+    assert "scripts/release_assets.py paths dist/ sboms/ release-plan.json" in text
+    assert 'gh release upload "$TAG" "${assets[@]}"' in text
+    assert "--clobber" not in text
+    assert "release-readback.json" in text
 
 
 def test_replicate_authenticates_new_sboms_and_documents_legacy_boundary() -> None:
