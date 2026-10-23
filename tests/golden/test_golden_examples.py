@@ -6,6 +6,7 @@ Fixtures record upstream HTTP responses and are tested offline.
 Passing this test validates repeatability of the software path, not
 independent clinical, experimental, therapeutic, or biological truth.
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
