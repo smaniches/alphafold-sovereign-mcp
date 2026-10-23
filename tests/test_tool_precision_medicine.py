@@ -2152,3 +2152,23 @@ async def test_classify_variant_acmg_never_asserts_pvs1_without_mechanism(
     assert out["clinical_classification_performed"] is False
     assert out["candidate_criteria"]["PVS1"]["clinical_criterion_status"] == "not_assessed"
     assert "not sufficient" in out["candidate_criteria"]["PVS1"]["computational_observation"]
+
+
+async def test_generate_variant_report_gene_lookup_failure_retains_other_sources(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_clients(monkeypatch)
+    mocks["ensembl"].vep_hgvs = AsyncMock(return_value=[])
+    mocks["ensembl"].gene_lookup = AsyncMock(side_effect=RuntimeError("Ensembl unavailable"))
+    mocks["clinvar"].search_by_hgvs = AsyncMock(return_value=[])
+    mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
+    mocks["disgenet"].gene_disease_associations = AsyncMock(return_value=[])
+
+    report = await generate_variant_clinical_report(
+        VariantClinicalReportInput(hgvs="BRCA1:c.181T>G", include_drug_context=False)
+    )
+    assert report["data_sources_status"]["ensembl_gene_lookup"] == "failed"
+    assert report["data_sources_status"]["open_targets"] == "skipped_upstream_failed"
+    assert report["data_sources_status"]["disgenet"] == "ok"
+    assert report["data_sources_status"]["clinvar"] == "ok"
+    assert report["clinical_tier"] == "NOT_ASSESSED"

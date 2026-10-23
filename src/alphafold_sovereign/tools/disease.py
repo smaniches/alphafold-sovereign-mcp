@@ -2,7 +2,7 @@
 # Copyright 2024-2026 Santiago Maniches
 """Disease ontology and clinical intelligence MCP tools.
 
-12 tools spanning:
+11 tools spanning:
 - MONDO disease lookup and hierarchy traversal
 - HPO phenotype-to-disease and gene-to-phenotype
 - Common disease protein target profiling (all major ICD chapters)
@@ -10,7 +10,6 @@
 - Variant 3-D triage (HGVS → ClinVar + gnomAD constraint + disease context)
 - Phenotype-to-structure pipeline
 - Cross-disease structural comparison
-- Orphan disease structural atlas
 
 All tools are read-only, idempotent, and append a provenance footer
 with server version, request timestamp, and data-source identifiers.
@@ -303,16 +302,6 @@ class PhenotypeToStructureInput(BaseModel):
     )
     targets_per_disease: int = Field(
         default=5, ge=1, le=20, description="Maximum targets to return per disease (1–20)."
-    )
-
-
-class OrphanDiseaseInput(BaseModel):
-    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
-    orphanet_id: str = Field(
-        ...,
-        description="Orphanet disease ID, e.g. '79318' (PMM2-CDG).",
-        min_length=1,
-        max_length=15,
     )
 
 
@@ -1029,116 +1018,7 @@ async def phenotype_to_structures(params: PhenotypeToStructureInput) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Tool 10: Orphan disease atlas
-# ---------------------------------------------------------------------------
-
-
-@mcp.tool(
-    annotations={
-        "title": "Orphan Disease Structural Atlas",
-        "readOnlyHint": True,
-        "idempotentHint": True,
-        "openWorldHint": True,
-    }
-)
-async def get_orphan_disease_atlas(params: OrphanDiseaseInput) -> str:
-    """Map an Orphanet rare disease to its MONDO record, HPO phenotypes, and protein targets.
-
-    Rare / orphan diseases are often under-studied because their small
-    patient populations make large trials impractical.  This tool aggregates
-    the available structural and clinical intelligence into one report to
-    accelerate research.
-
-    Returns:
-    - MONDO record with ICD-10 coding
-    - HPO phenotype profile of the disease
-    - Open Targets protein target evidence scores
-    - UniProt IDs for AlphaFold structural retrieval
-
-    Example: ``get_orphan_disease_atlas(orphanet_id='79318')``
-    returns a PMM2-related congenital disorder of glycosylation (PMM2-CDG) atlas.
-    """
-    try:
-        # Resolve Orphanet → MONDO
-        async with MONDOClient() as mondo_client:
-            search_results = await mondo_client.from_orphanet(params.orphanet_id)
-
-        if not search_results:
-            return json.dumps(
-                {
-                    "status": "not_found",
-                    "orphanet_id": params.orphanet_id,
-                    "message": f"No MONDO record found for Orphanet:{params.orphanet_id}.",
-                }
-            )
-
-        # A single verified identity is required before joining biological data.
-        # Multiple exact cross-references may describe differing disease scope.
-        if len(search_results) != 1:
-            return json.dumps(
-                {
-                    "status": "ambiguous",
-                    "orphanet_id": params.orphanet_id,
-                    "mondo_candidates": [hit.mondo_id for hit in search_results],
-                    "message": "Multiple MONDO terms cross-reference this Orphanet ID; review manually.",
-                }
-            )
-
-        mondo_id = search_results[0].mondo_id
-
-        # Parallel: MONDO record + HPO diseases + OT targets
-        async with MONDOClient() as mc, HPOClient() as hpo, OpenTargetsClient() as ot:
-            record, hpo_diseases, ot_targets = await asyncio.gather(
-                mc.lookup(mondo_id),
-                hpo.phenotypes_for_disease(f"ORPHA:{params.orphanet_id}"),
-                ot.associated_targets(mondo_id, limit=10),
-                return_exceptions=True,
-            )
-
-        upstream_results = {
-            "mondo": record,
-            "hpo": hpo_diseases,
-            "open_targets": ot_targets,
-        }
-        source_errors = {
-            name: type(value).__name__
-            for name, value in upstream_results.items()
-            if isinstance(value, BaseException)
-        }
-        result: dict[str, Any] = {
-            "status": (
-                "error"
-                if len(source_errors) == len(upstream_results)
-                else "partial"
-                if source_errors
-                else "success"
-            ),
-            "orphanet_id": params.orphanet_id,
-            "mondo_id": mondo_id,
-            "source_status": {
-                name: "failed" if name in source_errors else "success" for name in upstream_results
-            },
-            "source_errors": source_errors,
-        }
-
-        if not isinstance(record, BaseException):
-            result["disease"] = record.to_dict()
-        if not isinstance(hpo_diseases, BaseException):
-            result["phenotypes"] = [p.to_dict() for p in hpo_diseases[:20]]
-        if not isinstance(ot_targets, BaseException):
-            result["protein_targets"] = [t.to_dict() for t in ot_targets]
-
-        return json.dumps(result, indent=2) + _provenance(
-            mondo="OLS4", hpo="JAX-HPO", open_targets="OT-platform-live-release-unverified"
-        )
-
-    except Exception as exc:
-        logger.error("orphan_disease_atlas_failed", orphanet=params.orphanet_id, error=str(exc))
-        _raise_tool_error("get_orphan_disease_atlas", exc)
-
-
-# ---------------------------------------------------------------------------
-# Tool 11: Disease structural similarity
+# Tool 10: Disease structural similarity
 # ---------------------------------------------------------------------------
 
 
@@ -1246,7 +1126,7 @@ async def compare_disease_target_overlap(params: DiseaseSimilarityInput) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Tool 12: ICD-10 to MONDO resolution
+# Tool 11: ICD-10 to MONDO resolution
 # ---------------------------------------------------------------------------
 
 

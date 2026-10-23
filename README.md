@@ -236,7 +236,7 @@ Refuses outbound HTTP before a socket is opened (raising `AirGapError`), except 
 
 ## Tool inventory
 
-The server exposes 30 MCP tools across four modules. Each tool's
+The server exposes 29 MCP tools across four modules. Each tool's
 input schema is a Pydantic model; results are JSON.
 
 ### Disease & ontology (`tools/disease.py`)
@@ -252,7 +252,6 @@ input schema is a Pydantic model; results are JSON.
 | `get_common_disease_targets` | Parallel profiling across curated MONDO diseases |
 | `triage_variant_3d` | HGVS → ClinVar + gnomAD constraint (disease/structure context: pointer notes) |
 | `phenotype_to_structures` | HPO → diseases → OT targets → UniProt IDs |
-| `get_orphan_disease_atlas` | Orphanet → MONDO → HPO + OT targets |
 | `compare_disease_target_overlap` | Jaccard similarity of target sets for two diseases |
 | `resolve_icd10_to_mondo` | ICD-10 code → MONDO disease record |
 

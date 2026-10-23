@@ -603,3 +603,16 @@ async def test_ncbi_gene_id_returns_empty_for_authoritative_missing_gene(
     )
     async with EnsemblClient() as client:
         assert await client.ncbi_gene_id("MISSING") == ""
+
+
+async def test_variant_info_authoritative_404_is_not_outage(
+    respx_mock: respx.MockRouter,
+) -> None:
+    respx_mock.get("https://rest.ensembl.org/variation/human/rsMISSING").mock(
+        return_value=httpx.Response(404)
+    )
+    async with EnsemblClient() as client:
+        assert await client.variant_info("rsMISSING") == {
+            "rsid": "rsMISSING",
+            "found": False,
+        }

@@ -30,7 +30,6 @@ from alphafold_sovereign.tools.disease import (
     ICD10ToMONDOInput,
     MONDOLookupInput,
     MONDOSearchInput,
-    OrphanDiseaseInput,
     PhenotypeToStructureInput,
     TargetDiseaseInput,
     VariantTriageInput,
@@ -48,7 +47,6 @@ from alphafold_sovereign.tools.disease import (
     get_common_disease_targets,
     get_disease_targets,
     get_gene_phenotype_profile,
-    get_orphan_disease_atlas,
     get_target_diseases,
     lookup_disease,
     lookup_phenotype,
@@ -988,89 +986,6 @@ async def test_phenotype_to_structures_outer_error(monkeypatch: pytest.MonkeyPat
 
 
 # ---------------------------------------------------------------------------
-# get_orphan_disease_atlas
-# ---------------------------------------------------------------------------
-
-
-async def test_orphan_atlas_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
-    mondo_client = MagicMock()
-    mondo_client.from_orphanet = AsyncMock(return_value=[])
-    _patch_client_class(monkeypatch, "alphafold_sovereign.tools.disease.MONDOClient", mondo_client)
-
-    out = await get_orphan_disease_atlas(OrphanDiseaseInput(orphanet_id="9999"))
-    parsed = json.loads(out)
-    assert parsed["status"] == "not_found"
-
-
-async def test_orphan_atlas_success(monkeypatch: pytest.MonkeyPatch) -> None:
-    search_hit = MagicMock(mondo_id="MONDO:0001")
-
-    mondo_client = MagicMock()
-    mondo_client.from_orphanet = AsyncMock(return_value=[search_hit])
-    mondo_client.lookup = AsyncMock(return_value=_disease_record())
-    _patch_client_class(monkeypatch, "alphafold_sovereign.tools.disease.MONDOClient", mondo_client)
-
-    hpo_client = MagicMock()
-    hpo_client.phenotypes_for_disease = AsyncMock(return_value=[_phenotype_assoc()])
-    _patch_client_class(monkeypatch, "alphafold_sovereign.tools.disease.HPOClient", hpo_client)
-
-    ot_client = MagicMock()
-    ot_client.associated_targets = AsyncMock(return_value=[_evidence_score()])
-    _patch_client_class(
-        monkeypatch, "alphafold_sovereign.tools.disease.OpenTargetsClient", ot_client
-    )
-
-    out = await get_orphan_disease_atlas(OrphanDiseaseInput(orphanet_id="79318"))
-    parsed = json.loads(out.split("---")[0].strip())
-    assert parsed["status"] == "success"
-    assert parsed["mondo_id"] == "MONDO:0001"
-    # HPO phenotype annotations must be requested with the Orphanet CURIE,
-    # not an OMIM prefix on an Orphanet number (a different disease).
-    hpo_client.phenotypes_for_disease.assert_awaited_once_with("ORPHA:79318")
-
-
-async def test_orphan_atlas_partial_exceptions(monkeypatch: pytest.MonkeyPatch) -> None:
-    search_hit = MagicMock(mondo_id="MONDO:0001")
-
-    mondo_client = MagicMock()
-    mondo_client.from_orphanet = AsyncMock(return_value=[search_hit])
-    mondo_client.lookup = AsyncMock(side_effect=RuntimeError("lookup err"))
-    _patch_client_class(monkeypatch, "alphafold_sovereign.tools.disease.MONDOClient", mondo_client)
-
-    hpo_client = MagicMock()
-    hpo_client.phenotypes_for_disease = AsyncMock(side_effect=RuntimeError("hpo err"))
-    _patch_client_class(monkeypatch, "alphafold_sovereign.tools.disease.HPOClient", hpo_client)
-
-    ot_client = MagicMock()
-    ot_client.associated_targets = AsyncMock(side_effect=RuntimeError("ot err"))
-    _patch_client_class(
-        monkeypatch, "alphafold_sovereign.tools.disease.OpenTargetsClient", ot_client
-    )
-
-    out = await get_orphan_disease_atlas(OrphanDiseaseInput(orphanet_id="79318"))
-    parsed = json.loads(out.split("---")[0].strip())
-    # All three sub-tasks failed: never claim a successful atlas.
-    assert parsed["status"] == "error"
-    assert set(parsed["source_errors"]) == {"mondo", "hpo", "open_targets"}
-    assert "disease" not in parsed
-    assert "phenotypes" not in parsed
-    assert "protein_targets" not in parsed
-
-
-async def test_orphan_atlas_outer_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    class _Boom:
-        async def __aenter__(self) -> Any:
-            raise RuntimeError("ctx fail")
-
-        async def __aexit__(self, *_: object) -> None:
-            return None
-
-    monkeypatch.setattr("alphafold_sovereign.tools.disease.MONDOClient", lambda *a, **kw: _Boom())
-    with pytest.raises(ToolError):
-        await get_orphan_disease_atlas(OrphanDiseaseInput(orphanet_id="79318"))
-
-
-# ---------------------------------------------------------------------------
 # compare_disease_target_overlap
 # ---------------------------------------------------------------------------
 
@@ -1354,49 +1269,6 @@ def test_common_disease_roots_categories() -> None:
         "rare",
     }
     assert expected.issubset(COMMON_DISEASE_ROOTS.keys())
-
-
-async def test_orphan_atlas_ambiguous_verified_mapping(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    mondo_client = MagicMock()
-    mondo_client.from_orphanet = AsyncMock(
-        return_value=[
-            MagicMock(mondo_id="MONDO:0000001"),
-            MagicMock(mondo_id="MONDO:0000002"),
-        ]
-    )
-    _patch_client_class(monkeypatch, "alphafold_sovereign.tools.disease.MONDOClient", mondo_client)
-    out = await get_orphan_disease_atlas(OrphanDiseaseInput(orphanet_id="79318"))
-    parsed = json.loads(out)
-    assert parsed["status"] == "ambiguous"
-    assert len(parsed["mondo_candidates"]) == 2
-    mondo_client.lookup.assert_not_called()
-
-
-async def test_orphan_atlas_reports_partial_failures(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    mondo_client = MagicMock()
-    mondo_client.from_orphanet = AsyncMock(return_value=[MagicMock(mondo_id="MONDO:0001")])
-    mondo_client.lookup = AsyncMock(return_value=_disease_record())
-    _patch_client_class(monkeypatch, "alphafold_sovereign.tools.disease.MONDOClient", mondo_client)
-    hpo_client = MagicMock()
-    hpo_client.phenotypes_for_disease = AsyncMock(side_effect=RuntimeError("unavailable"))
-    _patch_client_class(monkeypatch, "alphafold_sovereign.tools.disease.HPOClient", hpo_client)
-    ot_client = MagicMock()
-    ot_client.associated_targets = AsyncMock(return_value=[])
-    _patch_client_class(
-        monkeypatch, "alphafold_sovereign.tools.disease.OpenTargetsClient", ot_client
-    )
-    out = await get_orphan_disease_atlas(OrphanDiseaseInput(orphanet_id="79318"))
-    parsed = json.loads(out.split("---")[0])
-    assert parsed["status"] == "partial"
-    assert parsed["source_status"]["hpo"] == "failed"
-    assert parsed["source_status"]["open_targets"] == "success"
-    assert parsed["source_errors"] == {"hpo": "RuntimeError"}
-    assert "disease" in parsed
-    assert "protein_targets" in parsed
 
 
 async def test_omim_to_mondo_orphanet_xref(monkeypatch: pytest.MonkeyPatch) -> None:
