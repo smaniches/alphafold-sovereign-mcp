@@ -191,11 +191,12 @@ The disease-layer tools query six upstreams directly:
 | gnomAD | Population allele frequencies and constraint | GraphQL |
 | DisGeNET | Gene–disease association scores | REST |
 
-ICD-10 codes (`resolve_icd10_to_mondo`) and Orphanet rare-disease identifiers
-(`get_orphan_disease_atlas`) are resolved through MONDO's cross-references,
-not by querying separate ICD or Orphanet services. The
-`get_common_disease_targets` tool profiles protein targets across the major
-ICD-10 disease chapters, anchored to MONDO disease roots.
+ICD-10 codes are resolved through `resolve_icd10_to_mondo`, using
+MONDO cross-references. The MONDO client also supports exact Orphanet
+cross-reference lookup for source integration, without offering a curated
+clinical narrative or orphan-disease atlas. The `get_common_disease_targets`
+tool retrieves live source evidence from a small, ontology-checked set
+of example disease identifiers.
 
 ---
 

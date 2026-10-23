@@ -1,48 +1,27 @@
-# Examples
+# Source-retrieval examples
 
-Three end-to-end illustrations of what an MCP session against
-`alphafold-sovereign-mcp` looks like.
+These examples describe the current database-access MCP's source and
+calculation boundaries. They do not provide clinical case narratives.
 
-| Example | Tools exercised | What it shows |
-|---|---|---|
-| [`01-variant-triage/`](01-variant-triage/) | `generate_variant_clinical_report`, `classify_variant_acmg` | Pulling Ensembl VEP + ClinVar + gnomAD + AlphaMissense + AlphaFold structural context for **BRCA1 c.181T>G**; draft ACMG/AMP evidence. |
-| [`02-target-characterization/`](02-target-characterization/) | `assess_target_druggability` | Characterising **EGFR** as a drug target: Open Targets, ChEMBL, gnomAD constraint, AlphaFold pLDDT (fetched automatically as the structural-confidence component of the druggability score). |
-| [`03-drug-discovery/`](03-drug-discovery/) | `map_disease_drug_landscape`, `assess_target_druggability`, `analyze_structural_confidence` | Multi-turn flow: **Imatinib → BCR-ABL → CML**. The molecular story behind a TKI, plus the T315I resistance gatekeeper. |
+| Example | Tools and evidence |
+|---|---|
+| [Variant source retrieval](01-variant-triage/) | Ensembl VEP, ClinVar, population sources, computational predictions |
+| [Target evidence retrieval](02-target-characterization/) | ChEMBL, Open Targets, gnomAD, AlphaFold DB prediction confidence |
+| [Disease/drug source retrieval](03-drug-discovery/) | Disease, drug, target, and predicted structure records |
 
-## Status of these examples
+The original June 2026 illustrative transcripts were withdrawn from the
+active repository because their old tool outputs and interpretations are
+not the current contract. Re-query live upstreams for current evidence;
+the source's classification or prediction is not a new Topologica
+scientific observation.
 
-These transcripts were **captured live** against the upstream APIs on
-2026-06-08; each example's `README.md` records the exact run and the
-full payload is in its `transcript.jsonl`. The READMEs abridge long
-arrays for readability, so cross-check a specific number against the
-corresponding `transcript.jsonl` line rather than the prose.
+For reproducible offline regression tests, see [golden fixtures](golden/).
+These retain hashed recorded upstream responses and test what the code
+returns, not clinical correctness.
 
-The transcripts here are point-in-time captures, not regression-gated
-fixtures. The **CI-diffed golden examples** live separately under
-[`golden/`](golden/): the full variant clinical-report pipeline run
-against three canonical variants (BRCA1 c.5266dupC, TP53 R175H, EGFR
-L858R) on real upstream responses recorded once with SHA-256 provenance,
-replayed offline and asserted against a pinned `expected.json` in CI.
-Each carries a scientific concordance analysis against the cited
-literature. See [`golden/README.md`](golden/README.md).
+## Run
 
-## Reproducing locally
-
-```bash
-# 1. Install from source
-git clone https://github.com/smaniches/alphafold-sovereign-mcp
-cd alphafold-sovereign-mcp
-uv pip install -e .
-
-# 2. Verify the install
-alphafold-sovereign --version       # → 1.2.2
-alphafold-sovereign --self-test     # → PASS on the deterministic BRCA1 fixture
-
-# 3. Configure Claude Desktop
-#    Add to claude_desktop_config.json:
-#      "mcpServers": { "alphafold-sovereign": { "command": "alphafold-sovereign-mcp" } }
-#    Restart Claude Desktop.
-
-# 4. In a Claude Desktop conversation, paste the user prompt from any of
-#    the three README.md files in this directory.
-```
+Follow the root [installation instructions](../README.md#installation).
+Run the current MCP server through your client, then inspect each tool's
+source identifiers and failure status rather than treating an illustrative
+example as a fixed biological conclusion.

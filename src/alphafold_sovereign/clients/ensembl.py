@@ -234,7 +234,9 @@ class EnsemblClient(BaseAsyncClient):
                 f"/variation/{self.species}/{rsid}",
                 params={"genotypes": 0, "phenotypes": 0, "pops": 0},
             )
-        except Exception as exc:
+        except UpstreamError as exc:
+            if exc.status == 404:
+                return {"rsid": rsid, "found": False}
             logger.warning("ensembl.variant.error", rsid=rsid, exc=str(exc))
             raise
 

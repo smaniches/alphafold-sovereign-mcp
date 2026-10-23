@@ -54,7 +54,8 @@ async def test_registered_tools_discoverable_over_mcp_protocol() -> None:
         tools = await client.list_tools()
 
     names = [tool.name for tool in tools]
-    assert len(names) == 30
+    assert len(names) == 29
+    assert "get_orphan_disease_atlas" not in names
     assert len(names) == len(set(names))
     assert {
         "get_protein_structure",

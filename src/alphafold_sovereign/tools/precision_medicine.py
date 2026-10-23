@@ -550,8 +550,15 @@ async def generate_variant_clinical_report(
     ot_diseases: list[dict[str, Any]] = []
     disgenet_assocs: list[dict[str, Any]] = []
     if gene_symbol:
-        gene_info = await _ensembl().gene_lookup(gene_symbol)
-        ensembl_id = gene_info.get("ensembl_gene_id", "")
+        gene_lookup_failed = False
+        try:
+            gene_info = await _ensembl().gene_lookup(gene_symbol)
+            ensembl_id = gene_info.get("ensembl_gene_id", "")
+        except Exception as exc:
+            log.warning("ensembl.gene_lookup.failed", exc=str(exc))
+            ensembl_id = ""
+            gene_lookup_failed = True
+            source_status["ensembl_gene_lookup"] = "failed"
 
         tasks: list[Any] = [
             _disgenet().gene_disease_associations(gene_symbol, min_score=0.1, limit=5),
@@ -571,7 +578,11 @@ async def generate_variant_clinical_report(
             source_status["disgenet"] = "ok"
         else:
             source_status["disgenet"] = "failed"
-        if len(results) > 1 and not isinstance(results[1], BaseException):
+        if not ensembl_id:
+            source_status["open_targets"] = (
+                "skipped_upstream_failed" if gene_lookup_failed else "skipped_no_gene_id"
+            )
+        elif len(results) > 1 and not isinstance(results[1], BaseException):
             ot_diseases = [s.to_dict() if hasattr(s, "to_dict") else s for s in results[1]]
             source_status["open_targets"] = "ok"
         else:

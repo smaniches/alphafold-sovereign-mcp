@@ -44,11 +44,12 @@ def test_uncertain_legacy_disease_mapping_is_not_served() -> None:
     assert "nonalcoholic_fatty_liver" not in _catalog()["metabolic"]
 
 
-def test_orphanet_example_not_misidentified() -> None:
+def test_retired_orphan_atlas_not_exported() -> None:
     source = SOURCE.read_text(encoding="utf-8")
-    assert "79318' (Gaucher disease)" not in source
-    assert "returns the Gaucher disease atlas" not in source
-    assert "79318' (PMM2-CDG)" in source
+    assert "async def get_orphan_disease_atlas(" not in source
+    assert "class OrphanDiseaseInput(" not in source
+    # Exact cross-reference resolution remains independently available.
+    assert "from_orphanet(identifier)" in source
 
 
 def test_open_targets_version_is_not_falsely_asserted() -> None:

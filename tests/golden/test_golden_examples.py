@@ -1,18 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2024-2026 Santiago Maniches and TOPOLOGICA LLC
-"""End-to-end golden examples: the pipeline output pinned on canonical variants.
+"""Replay source responses and assert deterministic pipeline output.
 
-Each example replays real upstream responses (recorded once from the live public
-APIs; see ``scripts/record_golden_examples.py``) through the full variant
-clinical-report pipeline via respx, entirely offline, and asserts the tool
-reproduces the committed ``expected.json`` byte-for-byte after the volatile
-provenance version/timestamp is redacted. A failure here means either the
-pipeline's behaviour changed or a re-recorded upstream response diverged — both
-are facts to investigate, never to silence by regenerating blindly.
-
-The scientific interpretation of each case (canonical identifiers, the
-established ClinVar classification, concordance with the pipeline, and cited
-literature) lives in the per-example ``README.md`` under ``examples/golden/``.
+Fixtures record upstream HTTP responses and are tested offline.
+Passing this test validates repeatability of the software path, not
+independent clinical, experimental, therapeutic, or biological truth.
 """
 
 from __future__ import annotations
