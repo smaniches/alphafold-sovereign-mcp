@@ -8,6 +8,7 @@ list-of-dict synonym shapes, plus every cross-reference regex branch.
 
 from __future__ import annotations
 
+from unittest.mock import AsyncMock
 from urllib.parse import quote
 
 import httpx
@@ -21,6 +22,7 @@ from alphafold_sovereign.clients.mondo import (
     _normalise_mondo_id,
     _url_encode,
 )
+from alphafold_sovereign.domain.disease import DiseaseRecord
 
 # ---------------------------------------------------------------------------
 # Pure helpers
@@ -58,6 +60,7 @@ def test_extract_xrefs_all_buckets() -> None:
     assert buckets["icd11"] == ["abc123"]
     assert buckets["omim"] == ["114480"]
     assert buckets["orphanet"] == ["524"]
+    assert _extract_xrefs(["ORPHA:79318"])["orphanet"] == ["79318"]
     assert buckets["mesh"] == ["D001943"]
     assert buckets["doid"] == ["1909"]
     # EFO is stored as the full CURIE (the native key for OT / ChEMBL).
@@ -395,3 +398,59 @@ async def test_from_orphanet(respx_mock: respx.MockRouter) -> None:
     )
     async with MONDOClient() as client:
         assert await client.from_orphanet("524") == []
+
+
+@pytest.mark.parametrize(
+    ("method", "identifier", "xref_field", "search_key"),
+    [
+        ("from_icd10", "G40", "icd10_codes", "ICD10CM:G40"),
+        ("from_omim", "114480", "omim_ids", "OMIM:114480"),
+        ("from_orphanet", "79318", "orphanet_ids", "Orphanet:79318"),
+    ],
+)
+async def test_cross_reference_resolution_requires_exact_xref(
+    monkeypatch: pytest.MonkeyPatch,
+    method: str,
+    identifier: str,
+    xref_field: str,
+    search_key: str,
+) -> None:
+    """A top full-text hit without the xref is never a valid disease identity."""
+    a = MONDOSearchResult("MONDO:0000001", "wrong", "", [], 100.0)
+    b = MONDOSearchResult("MONDO:0000002", "correct", "", [], 1.0)
+    wrong = DiseaseRecord(mondo_id=a.mondo_id, name="unrelated")
+    correct = DiseaseRecord(mondo_id=b.mondo_id, name="verified", **{xref_field: (identifier,)})
+    async with MONDOClient() as client:
+        search = AsyncMock(return_value=[a, b])
+        lookup = AsyncMock(side_effect=[wrong, correct])
+        monkeypatch.setattr(client, "search", search)
+        monkeypatch.setattr(client, "lookup", lookup)
+        actual = await getattr(client, method)(identifier)
+    assert [hit.mondo_id for hit in actual] == ["MONDO:0000002"]
+    search.assert_awaited_once_with(search_key, limit=50)
+    assert lookup.await_count == 2
+
+
+async def test_cross_reference_missing_annotation_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    hit = MONDOSearchResult("MONDO:0000001", "unknown", "", [], 1.0)
+    async with MONDOClient() as client:
+        monkeypatch.setattr(client, "search", AsyncMock(return_value=[hit]))
+        monkeypatch.setattr(
+            client,
+            "lookup",
+            AsyncMock(return_value=DiseaseRecord(mondo_id=hit.mondo_id, name="unknown")),
+        )
+        assert await client.from_orphanet("79318") == []
+
+
+async def test_cross_reference_mismatched_mondo_record_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    hit = MONDOSearchResult("MONDO:0000001", "unknown", "", [], 1.0)
+    wrong = DiseaseRecord(mondo_id="MONDO:0000002", name="other", orphanet_ids=("79318",))
+    async with MONDOClient() as client:
+        monkeypatch.setattr(client, "search", AsyncMock(return_value=[hit]))
+        monkeypatch.setattr(client, "lookup", AsyncMock(return_value=wrong))
+        assert await client.from_orphanet("79318") == []

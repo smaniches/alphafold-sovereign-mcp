@@ -128,52 +128,40 @@ def test_estimate_ordered_fraction() -> None:
 
 
 def test_interpret_tda_multi_domain() -> None:
-    out = _interpret_tda({"betti_numbers": [3, 5, 1]})
-    assert "disconnected components" in out
-    assert "ring-like topology" in out
-    assert "cavity" in out
+    out = _interpret_tda({"betti_numbers": [3, 5, None], "gudhi_available": True})
+    assert "connected components" in out
+    assert "one-dimensional classes" in out
+    assert "no inference about protein cavities" in out
 
 
 def test_interpret_tda_single_loop() -> None:
-    out = _interpret_tda({"betti_numbers": [1, 2, 0]})
-    assert "single connected component" in out
-    assert "loop(s)" in out
+    out = _interpret_tda({"betti_numbers": [1, 2, None], "gudhi_available": True})
+    assert "β₀=1" in out
+    assert "β₁=2" in out
 
 
 def test_interpret_tda_empty() -> None:
-    out = _interpret_tda({"betti_numbers": []})
-    # empty list → empty parts → "Topology computed."
-    assert "Topology computed" in out or "single connected component" in out
+    assert _interpret_tda({"betti_numbers": []}) == "Topology unavailable."
+
+
+def test_interpret_tda_fallback_does_not_infer_loops() -> None:
+    out = _interpret_tda({"betti_numbers": [2, None, None], "gudhi_available": False})
+    assert "β₁ not computed" in out
+    assert "4-Å contact graph" in out
 
 
 def test_drift_interpretation_none() -> None:
-    assert "not quantifiable" in _drift_interpretation(None, None)
+    assert "unavailable" in _drift_interpretation(None, None)
 
 
-def test_drift_interpretation_low() -> None:
-    assert "Highly conserved" in _drift_interpretation(0.05, None)
+@pytest.mark.parametrize("drift", [0.05, 0.2, 0.6])
+def test_drift_interpretation_uncalibrated(drift: float) -> None:
+    assert "no validated inference" in _drift_interpretation(drift, None)
 
 
-def test_drift_interpretation_moderate() -> None:
-    assert "Moderate" in _drift_interpretation(0.2, None)
-
-
-def test_drift_interpretation_high() -> None:
-    assert "High" in _drift_interpretation(0.6, None)
-
-
-@pytest.mark.parametrize(
-    ("identity", "expected"),
-    [
-        (95.0, "HIGH"),
-        (75.0, "MODERATE"),
-        (60.0, "LOW"),
-        (30.0, "MINIMAL"),
-    ],
-)
-def test_cross_reactivity_risk(identity: float, expected: str) -> None:
-    out = _cross_reactivity_risk(identity, None)
-    assert expected in out
+@pytest.mark.parametrize("identity", [95.0, 75.0, 60.0, 30.0])
+def test_cross_reactivity_risk(identity: float) -> None:
+    assert "NOT ASSESSED" in _cross_reactivity_risk(identity, None)
 
 
 def test_fingerprint_distance() -> None:
@@ -528,7 +516,8 @@ def test_compute_tda_fingerprint_with_gudhi(monkeypatch: pytest.MonkeyPatch) -> 
 
     coords = np.array([[i * 1.0, 0.0, 0.0] for i in range(20)])
     out = _compute_tda_fingerprint(coords)
-    assert "betti_numbers" in out
+    assert out["betti_numbers"] == [1, 0, None]
+    assert out["gudhi_available"] is True
     assert len(out["fingerprint_vector"]) == 64
     # First dim has intervals → landscape entry filled
     assert out["persistence_landscapes"][0]["n_intervals"] >= 1
@@ -551,7 +540,7 @@ def test_compute_tda_fingerprint_with_gudhi_empty_intervals(
     _install_fake_gudhi(monkeypatch, [])
     coords = np.array([[i * 1.0, 0.0, 0.0] for i in range(20)])
     out = _compute_tda_fingerprint(coords)
-    assert out["betti_numbers"] == [0, 0, 0]
+    assert out["betti_numbers"] == [0, 0, None]
 
 
 def test_compute_tda_fingerprint_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -576,6 +565,18 @@ def test_fallback_tda_fingerprint_few_residues() -> None:
     coords = np.array([[1.0, 0.0, 0.0]])
     out = _fallback_tda_fingerprint(coords)
     assert out["fingerprint_vector"] == [0.0] * 64
+    assert out["betti_numbers"] == [1, None, None]
+
+
+def test_fallback_tda_fingerprint_empty() -> None:
+    assert _fallback_tda_fingerprint(np.empty((0, 3)))["betti_numbers"] == [0, None, None]
+
+
+def test_fallback_connected_components_not_isolated_vertex_count() -> None:
+    one_chain = np.array([[0.0, 0.0, 0.0], [3.0, 0.0, 0.0], [6.0, 0.0, 0.0]])
+    two_pairs = np.array([[0.0, 0.0, 0.0], [3.0, 0.0, 0.0], [20.0, 0.0, 0.0], [23.0, 0.0, 0.0]])
+    assert _fallback_tda_fingerprint(one_chain)["betti_numbers"] == [1, None, None]
+    assert _fallback_tda_fingerprint(two_pairs)["betti_numbers"] == [2, None, None]
 
 
 def test_fallback_tda_fingerprint_normal() -> None:
@@ -1109,10 +1110,13 @@ async def test_evolutionary_shifts_tda_comparison(
     monkeypatch.setattr(si, "_fetch_af_structure", fake_fetch)
     out = await find_evolutionary_structural_shifts(EvolutionaryInput(gene_symbol="BRCA1"))
     profile = out["evolutionary_profile"][0]
-    assert profile["divergence_method"] == "tda_fingerprint"
-    assert profile["tda_fingerprint_distance"] is not None
-    assert out["tda_comparisons"] == 1
+    assert profile["divergence_method"] == "geometric_proxy"
+    assert profile["tda_fingerprint_distance"] is None
+    assert profile["geometric_proxy_distance"] is not None
+    assert out["tda_comparisons"] == 0
+    assert out["geometric_proxy_comparisons"] == 1
     assert out["sequence_identity_fallbacks"] == 0
+    assert out["most_conserved_species"] is None
 
 
 async def test_evolutionary_shifts_ortholog_no_uniprot(
@@ -1134,7 +1138,8 @@ async def test_evolutionary_shifts_ortholog_no_uniprot(
     out = await find_evolutionary_structural_shifts(EvolutionaryInput(gene_symbol="BRCA1"))
     profile = out["evolutionary_profile"][0]
     assert profile["divergence_method"] == "sequence_identity"
-    assert profile["divergence_estimate"] == 0.2
+    assert profile["divergence_estimate"] is None
+    assert profile["sequence_dissimilarity"] == 0.2
 
 
 async def test_resolve_ortholog_uniprot_success(
@@ -1538,3 +1543,84 @@ async def test_get_protein_structure_prediction_raises(monkeypatch: pytest.Monke
     af.get_prediction.side_effect = RuntimeError("boom")
     out = await get_protein_structure(StructureRetrievalInput(uniprot_id="P38398"))
     assert out["structure_available"] is False
+
+
+def test_gudhi_finite_bars_not_betti_numbers(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Two finite H0 bars do not imply β0=2 at terminal filtration."""
+    _install_fake_gudhi(
+        monkeypatch,
+        [(0, (0.0, 1.0)), (0, (0.0, 2.0)), (0, (0.0, float("inf")))],
+    )
+    coords = np.array([[i, 0.0, 0.0] for i in range(5)])
+    out = _compute_tda_fingerprint(coords)
+    assert out["betti_numbers"] == [1, 0, None]
+    assert out["persistence_landscapes"][0]["n_intervals"] == 2
+
+
+def test_gudhi_missing_top_dimension_is_unknown(monkeypatch: pytest.MonkeyPatch) -> None:
+    _install_fake_gudhi(monkeypatch, [(0, (0.0, float("inf"))), (1, (4.0, float("inf")))])
+    coords = np.array([[i, 0.0, 0.0] for i in range(5)])
+    out = _compute_tda_fingerprint(coords)
+    assert out["betti_numbers"] == [1, 1, None]
+
+
+async def test_evolutionary_no_mixed_rank_or_antibody_claim(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mock_ensembl = MagicMock()
+    mock_ensembl.orthologs = AsyncMock(
+        return_value=[
+            {"species": "species_a", "gene_id": "G1", "identity": 100.0},
+            {"species": "species_b", "gene_id": "G2", "identity": 60.0},
+        ]
+    )
+    mock_ensembl.gene_lookup = AsyncMock(return_value={"uniprot_ids": []})
+    monkeypatch.setattr(si, "EnsemblClient", lambda: mock_ensembl)
+    out = await find_evolutionary_structural_shifts(EvolutionaryInput(gene_symbol="BRCA1"))
+    assert [x["species"] for x in out["evolutionary_profile"]] == ["species_a", "species_b"]
+    assert out["most_conserved_species"] is None
+    assert out["most_diverged_species"] is None
+    assert out["ranking_status"] == "not_computed_incomparable_metrics"
+    assert out["evolutionary_profile"][0]["sequence_dissimilarity"] == 0.0
+    assert all("NOT ASSESSED" in x["cross_reactivity_risk"] for x in out["evolutionary_profile"])
+
+
+async def test_evolutionary_missing_sequence_identity_is_unknown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mock_ensembl = MagicMock()
+    mock_ensembl.orthologs = AsyncMock(return_value=[{"species": "species_a", "gene_id": "G1"}])
+    mock_ensembl.gene_lookup = AsyncMock(return_value={"uniprot_ids": []})
+    monkeypatch.setattr(si, "EnsemblClient", lambda: mock_ensembl)
+    out = await find_evolutionary_structural_shifts(EvolutionaryInput(gene_symbol="BRCA1"))
+    profile = out["evolutionary_profile"][0]
+    assert profile["sequence_identity_pct"] is None
+    assert profile["sequence_dissimilarity"] is None
+
+
+async def test_evolutionary_with_gudhi_reports_tda_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mock_ensembl = MagicMock()
+    mock_ensembl.orthologs = AsyncMock(
+        return_value=[{"species": "mus_musculus", "gene_id": "ENSMUSG1", "identity": 85.0}]
+    )
+    mock_ensembl.gene_lookup = AsyncMock(return_value={"uniprot_ids": ["P12345"]})
+    mock_ensembl._get = AsyncMock(return_value=[{"primary_id": "Q62469"}])
+    monkeypatch.setattr(si, "EnsemblClient", lambda: mock_ensembl)
+
+    async def fake_fetch(uid: str) -> dict[str, Any]:
+        return {"pdb_text": _make_pdb(10), "uniprot_id": uid}
+
+    monkeypatch.setattr(si, "_fetch_af_structure", fake_fetch)
+    monkeypatch.setattr(
+        si,
+        "_compute_tda_fingerprint",
+        lambda ca: {"fingerprint_vector": [1.0, 2.0], "gudhi_available": True},
+    )
+    out = await find_evolutionary_structural_shifts(EvolutionaryInput(gene_symbol="BRCA1"))
+    profile = out["evolutionary_profile"][0]
+    assert profile["divergence_method"] == "tda_fingerprint"
+    assert profile["tda_fingerprint_distance"] is not None
+    assert profile["geometric_proxy_distance"] is None
+    assert out["tda_comparisons"] == 1

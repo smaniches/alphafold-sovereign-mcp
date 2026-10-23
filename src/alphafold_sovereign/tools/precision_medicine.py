@@ -380,7 +380,7 @@ def _gnomad_to_acmg(af: float | None) -> dict[str, str]:
 
 
 def _vep_to_acmg(consequences: list[dict[str, Any]]) -> dict[str, str]:
-    """Extract ACMG PVS1-level evidence from VEP functional predictions."""
+    """Extract provisional VEP signals, not clinical ACMG criteria."""
     criteria: dict[str, str] = {}
     null_terms = {
         "stop_gained",
@@ -398,8 +398,8 @@ def _vep_to_acmg(consequences: list[dict[str, Any]]) -> dict[str, str]:
         terms = set(tc.get("consequence_terms", []))
         if terms & null_terms:
             criteria["PVS1"] = (
-                "Null variant (stop-gain/frameshift/splice) in a gene where LoF is "
-                "the established mechanism of disease."
+                "Predicted loss-of-function consequence. Disease-specific LoF mechanism, "
+                "relevant transcript, NMD, and variant-specific PVS1 rules are NOT validated."
             )
         if terms & missense_terms:
             sift = tc.get("sift_prediction", "")
@@ -417,7 +417,10 @@ def _vep_to_acmg(consequences: list[dict[str, Any]]) -> dict[str, str]:
                     "Multiple computational evidence suggesting pathogenicity: " + "; ".join(parts)
                 )
         if terms & synonymous_terms:
-            criteria["BP7"] = "Synonymous variant with no predicted splicing impact."
+            criteria["BP7"] = (
+                "Synonymous consequence reported by VEP; no validated splice-impact "
+                "assessment performed. BP7 requires further evidence."
+            )
     return criteria
 
 
@@ -690,9 +693,10 @@ async def generate_variant_clinical_report(
         "acmg_criteria_draft": {
             "criteria": acmg_criteria,
             "note": (
-                "Draft ACMG/AMP criteria from computational and population evidence. "
-                "ClinVar classification is reported separately and is not PP5/BP6 evidence. "
-                "Expert review is required before clinical reporting."
+                "Unreviewed computational signals only; no ACMG/AMP criteria are established "
+                "by this report. ClinVar classification is independent source context, not "
+                "PP5/BP6 evidence. Gene-disease mechanism and variant-specific clinical "
+                "criteria require qualified expert assessment."
             ),
         },
         "disease_associations": {
@@ -1343,12 +1347,14 @@ async def classify_variant_acmg(
 ) -> dict[str, Any]:
     """Generate a draft ACMG/AMP variant classification framework.
 
-    Populates ACMG/AMP 2015 criteria (Richards et al.) automatically from
-    computational evidence.  Designed to pre-populate variant interpretation
-    forms for clinical laboratory review — NOT a substitute for expert review.
+    Reports computational observations that may inform an expert's later
+    disease-specific ACMG/AMP review. This tool does NOT establish ACMG
+    criteria or assign a pathogenicity class: generic consequence, model
+    scores, and population frequencies are insufficient without clinical
+    disease mechanism, inheritance, and criterion-specific validation.
 
     Criteria populated:
-      PVS1 — Null variant in LoF-intolerant gene
+      PVS1 — Candidate loss-of-function consequence; mechanism not established
       PM2   — Absent/extremely rare in gnomAD population databases
       PP3   — Multiple in-silico predictors (AlphaMissense ≥0.564, SIFT, PolyPhen, CADD)
       BP4   — In-silico benign evidence (AlphaMissense ≤0.340)
@@ -1436,46 +1442,32 @@ async def classify_variant_acmg(
     # ClinVar classification is an external assertion, not an ACMG
     # criterion. Preserve it below with its review status and source ID.
 
-    # LOEUF context for PVS1
+    # Gene-level constraint does not validate a gene-disease loss-of-function
+    # mechanism. Record it as context without changing any ACMG strength.
     if "PVS1" in criteria and loeuf is not None:
-        pv = criteria["PVS1"]
-        if loeuf < 0.35:
-            pv["evidence"] += f" LOEUF={loeuf:.3f} confirms LoF intolerance."
-        else:
-            pv["strength"] = "Strong"
-            pv["evidence"] += (
-                f" Note: LOEUF={loeuf:.3f} indicates moderate LoF tolerance — downgrade PVS1→PS1."
-            )
-
-    # Final classification rules (simplified Richards et al.). Counts are keyed
-    # on the ACMG criterion code — never on the free-text evidence — so empty or
-    # unusually-worded evidence can neither skew the result nor crash the tool.
-    # PVS1 (Very Strong) is a separate named gate below and is not counted among
-    # the Strong-tier criteria, so a lone PVS1 is never Pathogenic on its own.
-    pathogenic_strong = sum(1 for k, c in criteria.items() if _is_pathogenic_strong_key(k, c))
-    benign_strong = sum(1 for k, c in criteria.items() if _is_benign_strong_key(k, c))
-
-    final_class = "Variant of Uncertain Significance"
-    if "PVS1" in criteria and pathogenic_strong >= 1:
-        final_class = "Pathogenic"
-    elif pathogenic_strong >= 2:
-        final_class = "Likely Pathogenic"
-    elif benign_strong >= 2 or (
-        benign_strong >= 1
-        and sum(
-            1
-            for k, c in criteria.items()
-            if c.get("met") and k.startswith("B") and c.get("strength") == "Supporting"
+        criteria["PVS1"]["evidence"] += (
+            f" LOEUF={loeuf:.3f} is gene-level constraint; not sufficient "
+            "for disease-specific PVS1 assessment."
         )
-        >= 1
-    ):
-        final_class = "Likely Benign"
+
+    # No P/LP/VUS/B/LB classification is issued without gene-disease-specific
+    # evidence and accredited professional review. A VUS is itself a clinical
+    # classification; absent evidence must not silently become a VUS.
+    candidate_signals = {
+        code: {
+            "computational_observation": data["evidence"],
+            "suggested_criterion_for_review": code,
+            "clinical_criterion_status": "not_assessed",
+        }
+        for code, data in criteria.items()
+    }
 
     return {
         "hgvs": hgvs,
         "gene_symbol": gene_symbol,
         "inheritance_pattern": params.inheritance_pattern,
-        "draft_classification": final_class,
+        "draft_classification": "Not assessed",
+        "clinical_classification_performed": False,
         "clinvar_reference": {
             "found": clinvar_record is not None,
             "classification": clinvar_class,
@@ -1483,22 +1475,19 @@ async def classify_variant_acmg(
             "variation_id": (clinvar_record or {}).get("variation_id", ""),
             "interpretation": "External source classification; not counted as ACMG evidence.",
         },
-        "criteria_met": criteria,
-        "criteria_not_met": _criteria_not_met(criteria),
+        "criteria_met": {},
+        "criteria_not_met": [],
+        "candidate_criteria": candidate_signals,
         "summary": {
-            "pathogenic_evidence_count": sum(
-                1 for k in criteria if k.startswith("P") and criteria[k].get("met")
-            ),
-            "benign_evidence_count": sum(
-                1 for k in criteria if k.startswith("B") and criteria[k].get("met")
-            ),
+            "pathogenic_evidence_count": 0,
+            "benign_evidence_count": 0,
+            "unreviewed_computational_signals": len(candidate_signals),
         },
         "disclaimer": (
-            "This is a computational draft classification generated for clinical laboratory "
-            "review assistance only.  It MUST be reviewed by a board-certified clinical "
-            "molecular geneticist before use in any clinical or regulatory context.  "
-            "ClinVar's external classification is not counted as PP5/BP6 evidence. "
-            "Per ACMG/AMP 2015 and ClinGen SVI recommendations."
+            "This tool does not classify a variant or establish ACMG/AMP criteria. "
+            "All computed signals are unreviewed and disease mechanism evidence is absent. "
+            "Independent ClinVar records are context, never PP5/BP6 evidence. "
+            "A qualified clinical molecular geneticist must assess all applicable criteria."
         ),
         "provenance": _provenance(ensembl_vep="GRCh38", clinvar="current", gnomad="v4"),
     }
