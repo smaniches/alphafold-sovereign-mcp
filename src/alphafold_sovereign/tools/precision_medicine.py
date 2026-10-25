@@ -525,6 +525,13 @@ def _report_gene_from_sources(
     return next(iter(symbols)) if len(symbols) == 1 else None
 
 
+def _gnomad_result_status(payload: dict[str, Any], availability_field: str) -> str:
+    """Respect gnomAD's explicit negative flags even in nonempty responses."""
+    if not payload or payload.get(availability_field) is False:
+        return "no_data"
+    return "ok"
+
+
 @mcp.tool(
     annotations={
         "title": "Generate Precision Medicine Variant Report",
@@ -601,7 +608,7 @@ async def generate_variant_clinical_report(
             variant_response: object = await _gnomad().variant_frequencies(gnomad_id)
             if isinstance(variant_response, dict):
                 gnomad_data = variant_response
-                source_status["gnomad"] = "ok" if variant_response else "no_data"
+                source_status["gnomad"] = _gnomad_result_status(variant_response, "found")
             else:
                 source_status["gnomad"] = "invalid_response"
         except Exception as exc:
@@ -618,7 +625,9 @@ async def generate_variant_clinical_report(
             constraint_response: object = await _gnomad().gene_constraint(gene_symbol)
             if isinstance(constraint_response, dict):
                 gene_constraint = constraint_response
-                source_status["gnomad_constraint"] = "ok" if constraint_response else "no_data"
+                source_status["gnomad_constraint"] = _gnomad_result_status(
+                    constraint_response, "constraint_available"
+                )
             else:
                 source_status["gnomad_constraint"] = "invalid_response"
         except Exception as exc:
@@ -1471,8 +1480,6 @@ async def classify_variant_acmg(
 
     vep_task = _ensembl().vep_hgvs(hgvs, canonical=True)
     clinvar_task = _clinvar().search_by_hgvs(hgvs)
-    gene_symbol = EnsemblClient.parse_gene_from_hgvs(hgvs)
-
     gathered: list[Any] = await asyncio.gather(vep_task, clinvar_task, return_exceptions=True)
     vep_raw, clinvar_raw = gathered[0], gathered[1]
     source_status: dict[str, str] = {}
@@ -1489,6 +1496,7 @@ async def classify_variant_acmg(
 
     vep_results = _checked_rows("ensembl_vep", vep_raw)
     clinvar_results = _checked_rows("clinvar", clinvar_raw)
+    gene_symbol = _report_gene_from_sources(hgvs, vep_results, clinvar_results)
     if clinvar_results and not any(r.get("exact_change_match") is True for r in clinvar_results):
         source_status["clinvar"] = (
             "candidate_only"
@@ -1505,7 +1513,7 @@ async def classify_variant_acmg(
             variant_response: object = await _gnomad().variant_frequencies(gnomad_id)
             if isinstance(variant_response, dict):
                 gnomad_data = variant_response
-                source_status["gnomad_variant"] = "ok" if variant_response else "no_data"
+                source_status["gnomad_variant"] = _gnomad_result_status(variant_response, "found")
             else:
                 source_status["gnomad_variant"] = "invalid_response"
         except Exception as exc:
@@ -1524,7 +1532,9 @@ async def classify_variant_acmg(
             constraint_response: object = await _gnomad().gene_constraint(gene_symbol)
             if isinstance(constraint_response, dict):
                 gene_constraint = constraint_response
-                source_status["gnomad_constraint"] = "ok" if constraint_response else "no_data"
+                source_status["gnomad_constraint"] = _gnomad_result_status(
+                    constraint_response, "constraint_available"
+                )
             else:
                 source_status["gnomad_constraint"] = "invalid_response"
         except Exception as exc:

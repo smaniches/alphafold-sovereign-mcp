@@ -24,6 +24,18 @@ AlphaMissense is biologically inapplicable; an upstream error
 (`skipped_upstream_failed` or `skipped_upstream_invalid`) is not absence.
 A failed lookup is never treated as negative or benign biological evidence.
 
+## gnomAD and gene identity
+
+A gnomAD response flagged `found: false` or `constraint_available: false`
+is `no_data`, even if it includes other metadata. Absence must not be
+presented as available population or gene-constraint evidence.
+
+For versioned RefSeq HGVS input, the report and ACMG research tool may
+recover gene context from the parenthetical input gene, an exact ClinVar
+transcript-text match, or Ensembl VEP. Conflicting gene symbols cause
+abstention from gene-level joins; candidate-only ClinVar hits are never
+accepted as verified gene evidence.
+
 ## Optional PDBe/IUCr residue annotations
 
 Set `include_literature_evidence=True` on

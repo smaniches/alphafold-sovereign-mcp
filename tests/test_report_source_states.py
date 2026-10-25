@@ -105,6 +105,16 @@ async def test_report_source_rows_are_not_mislabelled(
         (["malformed"], ["malformed"], "invalid_response"),
         ({}, {}, "no_data"),
         ({"global_af": 0.002}, {"loeuf": 0.75}, "ok"),
+        (
+            {"found": False, "global_af": None},
+            {"constraint_available": False, "gene_symbol": "SYNTHX"},
+            "no_data",
+        ),
+        (
+            {"found": True, "global_af": 0.002},
+            {"constraint_available": True, "loeuf": 0.75},
+            "ok",
+        ),
         (RuntimeError("variant down"), RuntimeError("constraint down"), "failed"),
     ],
 )
@@ -292,3 +302,96 @@ async def test_open_targets_converter_failure_is_explicit(
     report = await _report()
     assert report["data_sources_status"]["open_targets"] == "failed"
     assert report["disease_associations"]["open_targets_top_diseases"] == []
+
+
+@pytest.mark.parametrize(
+    ("payload", "availability_field", "expected"),
+    [
+        ({}, "found", "no_data"),
+        ({"found": False, "global_af": None}, "found", "no_data"),
+        ({"found": True, "global_af": 0.002}, "found", "ok"),
+        ({"global_af": 0.002}, "found", "ok"),
+        ({}, "constraint_available", "no_data"),
+        (
+            {"constraint_available": False, "gene_symbol": "SYNTHX"},
+            "constraint_available",
+            "no_data",
+        ),
+        ({"constraint_available": True, "loeuf": 0.75}, "constraint_available", "ok"),
+        ({"loeuf": 0.75}, "constraint_available", "ok"),
+    ],
+)
+def test_gnomad_sentinels_do_not_count_as_evidence(
+    payload: dict[str, Any], availability_field: str, expected: str
+) -> None:
+    assert pm._gnomad_result_status(payload, availability_field) == expected
+
+
+async def test_acmg_reports_gnomad_negative_sentinels(
+    sources: dict[str, MagicMock],
+) -> None:
+    sources["ensembl"].vep_hgvs = AsyncMock(
+        return_value=[{"seq_region_name": "1", "start": 42, "allele_string": "A/G"}]
+    )
+    sources["gnomad"].variant_frequencies = AsyncMock(
+        return_value={"variant_id": "1-42-A-G", "found": False, "global_af": None}
+    )
+    sources["gnomad"].gene_constraint = AsyncMock(
+        return_value={"gene_symbol": "SYNTHX", "constraint_available": False}
+    )
+    out = await pm.classify_variant_acmg(pm.ACMGVariantInput(hgvs="SYNTHX:c.42A>G"))
+    assert out["data_sources_status"]["gnomad_variant"] == "no_data"
+    assert out["data_sources_status"]["gnomad_constraint"] == "no_data"
+    assert "BS1" not in out["candidate_criteria"]
+    assert "PM2" not in out["candidate_criteria"]
+    assert out["draft_classification"] == "Not assessed"
+
+
+@pytest.mark.parametrize(
+    ("query", "vep", "clinvar", "expected_gene"),
+    [
+        ("SYNTHX:c.42A>G", [], [], "SYNTHX"),
+        ("NM_999999.1(SYNTHX):c.42A>G", [], [], "SYNTHX"),
+        (
+            "NM_999999.1:c.42A>G",
+            [],
+            [{"exact_change_match": True, "gene_symbol": "SYNTHX"}],
+            "SYNTHX",
+        ),
+        ("NM_999999.1:c.42A>G", [{"gene_symbol": "SYNTHX"}], [], "SYNTHX"),
+        (
+            "NM_999999.1:c.42A>G",
+            [],
+            [{"candidate_change_match": True, "gene_symbol": "SYNTHX"}],
+            None,
+        ),
+        (
+            "NM_999999.1:c.42A>G",
+            [{"gene_symbol": "SYNTHX"}, {"gene_symbol": "OTHERX"}],
+            [],
+            None,
+        ),
+        (
+            "NM_999999.1(SYNTHX):c.42A>G",
+            [{"gene_symbol": "OTHERX"}],
+            [],
+            None,
+        ),
+    ],
+)
+async def test_acmg_gene_context_requires_nonconflicting_evidence(
+    sources: dict[str, MagicMock],
+    query: str,
+    vep: list[dict[str, Any]],
+    clinvar: list[dict[str, Any]],
+    expected_gene: str | None,
+) -> None:
+    sources["ensembl"].vep_hgvs = AsyncMock(return_value=vep)
+    sources["clinvar"].search_by_hgvs = AsyncMock(return_value=clinvar)
+    out = await pm.classify_variant_acmg(pm.ACMGVariantInput(hgvs=query))
+    assert out["gene_symbol"] == expected_gene
+    if expected_gene:
+        sources["gnomad"].gene_constraint.assert_awaited_once_with(expected_gene)
+    else:
+        sources["gnomad"].gene_constraint.assert_not_awaited()
+    assert out["draft_classification"] == "Not assessed"
