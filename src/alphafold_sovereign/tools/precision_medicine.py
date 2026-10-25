@@ -382,7 +382,7 @@ async def _alphamissense_for_variant(
         return None
 
     try:
-        record = await _alphafold().alphamissense_score(uniprot_id, protein_variant)
+        record: object = await _alphafold().alphamissense_score(uniprot_id, protein_variant)
     except Exception as exc:
         logger.warning("alphamissense.failed", gene=gene_symbol, exc=str(exc))
         _mark("failed")
@@ -394,16 +394,17 @@ async def _alphamissense_for_variant(
     if not isinstance(record, dict):
         _mark("invalid_response")
         return None
-    score = record.get("am_pathogenicity")
-    if type(score) not in (int, float):
+    raw_score: object = record.get("am_pathogenicity")
+    if not isinstance(raw_score, (int, float)) or isinstance(raw_score, bool):
         _mark("invalid_response")
         return None
-    score = float(score)
+    score = float(raw_score)
     if not math.isfinite(score) or not 0.0 <= score <= 1.0:
         _mark("invalid_response")
         return None
     _mark("ok")
     return score
+
 
 def _gnomad_to_acmg(af: float | None) -> dict[str, str]:
     if af is None:

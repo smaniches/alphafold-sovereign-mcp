@@ -1048,7 +1048,11 @@ async def test_alphamissense_reports_lookup_state(
 @pytest.mark.parametrize(
     ("vep", "vep_status", "expected_state"),
     [
-        ([{"canonical": True, "consequence_terms": ["stop_gained"]}], "ok", "skipped_not_applicable"),
+        (
+            [{"canonical": True, "consequence_terms": ["stop_gained"]}],
+            "ok",
+            "skipped_not_applicable",
+        ),
         ([], "no_data", "skipped_not_applicable"),
         ([], "failed", "skipped_upstream_failed"),
         ([], "invalid_response", "skipped_upstream_failed"),
