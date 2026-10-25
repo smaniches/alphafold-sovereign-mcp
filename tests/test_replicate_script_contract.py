@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -108,3 +109,43 @@ def test_replicate_never_uses_pypi_metadata_as_slsa_subject() -> None:
     assert "slsa-verifier verify-artifact" in text
     assert '"$WHEEL_PATH"' in text
     assert "/tmp/pypi_meta.json" not in text
+
+
+def test_historical_spdx_cutover_does_not_rewrite_published_assets() -> None:
+    """Execute the actual inline version policy, including malformed versions."""
+    text = SCRIPT.read_text(encoding="utf-8")
+    assert 'STRICT_SPDX_FIRST_RELEASE="1.5.8"' in text
+    marker = 'SPDX_VALIDATION_MODE="$(python3 - "$VERSION" "$STRICT_SPDX_FIRST_RELEASE" <<\'PY\'\n'
+    policy = text.split(marker, 1)[1].split("\nPY\n)\"", 1)[0]
+    for version, expected in [
+        ("1.4.7", "historical"),
+        ("1.5.5", "historical"),
+        ("1.5.6", "historical"),
+        ("1.5.7", "historical"),
+        ("1.5.8", "strict"),
+        ("1.5.8rc1", "strict"),
+        ("1.6.0", "strict"),
+    ]:
+        result = subprocess.run(
+            [sys.executable, "-", version, "1.5.8"],
+            input=policy,
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+        assert result.stdout.strip() == expected
+    invalid = subprocess.run(
+        [sys.executable, "-", "not-a-version", "1.5.8"],
+        input=policy,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert invalid.returncode != 0
+
+
+def test_historical_spdx_never_claims_full_dependency_parity() -> None:
+    text = SCRIPT.read_text(encoding="utf-8")
+    assert "historical SPDX dependency-graph parity NOT established" in text
+    assert "installed-wheel package/dependency parity NOT established" in text
+    assert '"$REPO_ROOT/scripts/release_spdx.py" verify "$CYCLONE" "$SPDX" "$WHEEL_PATH"' in text
