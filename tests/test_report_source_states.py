@@ -56,15 +56,15 @@ async def _report(hgvs: str = "SYNTHX:c.42A>G", *, drug_context: bool = False) -
             [{"exact_change_match": True, "gene_symbol": "SYNTHX"}],
             "SYNTHX",
         ),
-        ("NM_999999.1:c.42A>G", [{"gene_symbol": "SYNTHX"}], [], "SYNTHX"),
+        ("NM_999999.1:c.42A>G", [{"hgvsc": "NM_999999.1:c.42A>G", "gene_symbol": "SYNTHX"}], [], "SYNTHX"),
         (
             "NM_999999.1:c.42A>G",
             [],
             [{"candidate_change_match": True, "gene_symbol": "SYNTHX"}],
             None,
         ),
-        ("NM_999999.1:c.42A>G", [{"gene_symbol": "SYNTHX"}, {"gene_symbol": "OTHERX"}], [], None),
-        ("NM_999999.1(SYNTHX):c.42A>G", [{"gene_symbol": "OTHERX"}], [], None),
+        ("NM_999999.1:c.42A>G", [{"transcript_id": "NM_999999.1", "gene_symbol": "SYNTHX"}, {"transcript_id": "NM_999999.1", "gene_symbol": "OTHERX"}], [], None),
+        ("NM_999999.1(SYNTHX):c.42A>G", [{"transcript_id": "NM_999999.1", "gene_symbol": "OTHERX"}], [], None),
         ("NM_999999.1:c.42A>G", [], [{"exact_change_match": True, "gene_symbol": None}], None),
         ("NM_999999.1:c.42A>G", [{"gene_symbol": 42}], [], None),
         ("NM_999999.1:c.42A>G", [], [{"exact_change_match": True, "gene_symbol": " "}], None),
@@ -241,10 +241,10 @@ async def test_report_drug_gene_lookup_is_validated(
             [{"exact_change_match": True, "gene_symbol": "SYNTHX"}],
             "SYNTHX",
         ),
-        ("NM_999999.1:c.42A>G", [{"gene_symbol": "SYNTHX"}], [], "SYNTHX"),
+        ("NM_999999.1:c.42A>G", [{"hgvsc": "NM_999999.1:c.42A>G", "gene_symbol": "SYNTHX"}], [], "SYNTHX"),
         (
             "NM_999999.1:c.42A>G",
-            [{"gene_symbol": "SYNTHX"}, {"gene_symbol": "OTHERX"}],
+            [{"transcript_id": "NM_999999.1", "gene_symbol": "SYNTHX"}, {"transcript_id": "NM_999999.1", "gene_symbol": "OTHERX"}],
             [],
             None,
         ),
@@ -358,7 +358,7 @@ async def test_acmg_reports_gnomad_negative_sentinels(
             [{"exact_change_match": True, "gene_symbol": "SYNTHX"}],
             "SYNTHX",
         ),
-        ("NM_999999.1:c.42A>G", [{"gene_symbol": "SYNTHX"}], [], "SYNTHX"),
+        ("NM_999999.1:c.42A>G", [{"hgvsc": "NM_999999.1:c.42A>G", "gene_symbol": "SYNTHX"}], [], "SYNTHX"),
         (
             "NM_999999.1:c.42A>G",
             [],
@@ -367,13 +367,13 @@ async def test_acmg_reports_gnomad_negative_sentinels(
         ),
         (
             "NM_999999.1:c.42A>G",
-            [{"gene_symbol": "SYNTHX"}, {"gene_symbol": "OTHERX"}],
+            [{"transcript_id": "NM_999999.1", "gene_symbol": "SYNTHX"}, {"transcript_id": "NM_999999.1", "gene_symbol": "OTHERX"}],
             [],
             None,
         ),
         (
             "NM_999999.1(SYNTHX):c.42A>G",
-            [{"gene_symbol": "OTHERX"}],
+            [{"transcript_id": "NM_999999.1", "gene_symbol": "OTHERX"}],
             [],
             None,
         ),
@@ -395,3 +395,100 @@ async def test_acmg_gene_context_requires_nonconflicting_evidence(
     else:
         sources["gnomad"].gene_constraint.assert_not_awaited()
     assert out["draft_classification"] == "Not assessed"
+
+
+@pytest.mark.parametrize(
+    ("hgvs", "vep", "clinvar", "expected"),
+    [
+        (
+            "NM_999999.1:c.42A>G",
+            [{"hgvsc": "ENST000001:c.42A>G", "gene_symbol": "OTHERX"}],
+            [{"exact_change_match": True, "gene_symbol": "SYNTHX"}],
+            "SYNTHX",
+        ),
+        (
+            "NM_999999.1:c.42A>G",
+            [
+                {"transcript_id": "NM_999999.1", "gene_symbol": "SYNTHX"},
+                {"transcript_id": "ENST000001", "gene_symbol": "OTHERX"},
+            ],
+            [],
+            "SYNTHX",
+        ),
+        (
+            "NM_999999.1:c.42A>G",
+            [{"hgvsc": "NM_999999.2:c.42A>G", "gene_symbol": "SYNTHX"}],
+            [],
+            None,
+        ),
+        (
+            "NM_999999.1:c.42A>G",
+            [{"hgvsc": "NM_999999.1:c.42A>G", "gene_symbol": "OTHERX"}],
+            [{"exact_change_match": True, "gene_symbol": "SYNTHX"}],
+            None,
+        ),
+        (
+            "NM_999999.1:c.42A>G",
+            [{"gene_symbol": "OTHERX"}],
+            [{"exact_change_match": True, "gene_symbol": "SYNTHX"}],
+            "SYNTHX",
+        ),
+        (
+            "NM_999999.1(SYNTHX):c.42A>G",
+            [{"transcript_id": "ENST000001", "gene_symbol": "OTHERX"}],
+            [],
+            "SYNTHX",
+        ),
+        (
+            "NC_000001.11:g.42A>G",
+            [{"transcript_id": "ENST000001", "gene_symbol": "OTHERX"}],
+            [],
+            None,
+        ),
+        (
+            "NM_999999.1:c.42A>G",
+            [{"transcript_id": "NM_999999.1", "gene_symbol": None}],
+            [],
+            None,
+        ),
+        (
+            "NM_999999.1:c.42A>G",
+            [{"transcript_id": None, "hgvsc": None, "gene_symbol": "OTHERX"}],
+            [],
+            None,
+        ),
+        (
+            "NM_999999.1:c.42A>G",
+            [{"transcript_id": "ENST000001", "hgvsc": "NM_999999.1:c.42A>G", "gene_symbol": "SYNTHX"}],
+            [],
+            "SYNTHX",
+        ),
+    ],
+)
+def test_transcript_gene_source_ignores_collateral_vep_genes(
+    hgvs: str, vep: list[dict[str, Any]], clinvar: list[dict[str, Any]], expected: str | None
+) -> None:
+    assert pm._report_gene_from_sources(hgvs, vep, clinvar) == expected
+
+
+@pytest.mark.parametrize("report_kind", ["variant", "acmg"])
+async def test_exact_clinvar_gene_survives_collateral_vep_consequence(
+    sources: dict[str, MagicMock], report_kind: str
+) -> None:
+    sources["ensembl"].vep_hgvs = AsyncMock(
+        return_value=[
+            {"transcript_id": "ENST000001", "gene_symbol": "OTHERX"},
+            {"transcript_id": "NM_999999.1", "gene_symbol": "SYNTHX"},
+        ]
+    )
+    sources["clinvar"].search_by_hgvs = AsyncMock(
+        return_value=[{"exact_change_match": True, "gene_symbol": "SYNTHX"}]
+    )
+    if report_kind == "variant":
+        report = await _report("NM_999999.1:c.42A>G")
+    else:
+        report = await pm.classify_variant_acmg(
+            pm.ACMGVariantInput(hgvs="NM_999999.1:c.42A>G")
+        )
+    assert report["gene_symbol"] == "SYNTHX"
+    sources["gnomad"].gene_constraint.assert_awaited_once_with("SYNTHX")

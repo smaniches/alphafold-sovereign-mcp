@@ -32,9 +32,11 @@ presented as available population or gene-constraint evidence.
 
 For versioned RefSeq HGVS input, the report and ACMG research tool may
 recover gene context from the parenthetical input gene, an exact ClinVar
-transcript-text match, or Ensembl VEP. Conflicting gene symbols cause
-abstention from gene-level joins; candidate-only ClinVar hits are never
-accepted as verified gene evidence.
+transcript-text match, or an Ensembl VEP consequence explicitly linked to the queried versioned
+transcript. VEP consequences for overlapping genes or unrelated transcripts
+are excluded from the identity decision. Conflicting evidence for the queried
+transcript still causes abstention; candidate-only ClinVar hits never establish
+gene identity.
 
 ## Optional PDBe/IUCr residue annotations
 

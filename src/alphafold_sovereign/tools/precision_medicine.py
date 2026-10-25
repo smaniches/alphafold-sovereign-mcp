@@ -507,21 +507,34 @@ def _report_gene_from_sources(
 
     symbols: set[str] = set()
     reference = re.match(
-        r"^(?:NM|NR|XM|XR)_\d+\.\d+\(([A-Za-z0-9-]+)\):[cnr]\.",
+        r"^((?:NM|NR|XM|XR)_\d+\.\d+)(?:\(([A-Za-z0-9-]+)\))?:[cnr]\.",
         hgvs,
         flags=re.IGNORECASE,
     )
-    if reference:
-        symbols.add(reference.group(1).upper())
+    queried_transcript = reference.group(1).upper() if reference else ""
+    if reference and reference.group(2):
+        symbols.add(reference.group(2).upper())
+
     for row in clinvar_rows:
         symbol = row.get("gene_symbol")
         if row.get("exact_change_match") is True and isinstance(symbol, str) and symbol.strip():
             symbols.add(symbol.strip().upper())
+
     for row in vep_rows:
         symbol = row.get("gene_symbol")
-        if isinstance(symbol, str) and symbol.strip():
+        if not queried_transcript or not isinstance(symbol, str) or not symbol.strip():
+            continue
+        hgvsc = row.get("hgvsc")
+        transcript_id = row.get("transcript_id")
+        if (
+            isinstance(hgvsc, str)
+            and hgvsc.partition(":")[0].upper() == queried_transcript
+        ) or (isinstance(transcript_id, str) and transcript_id.upper() == queried_transcript):
             symbols.add(symbol.strip().upper())
-    # Do not join gene-level evidence when independent sources disagree.
+
+    # An overlapping-gene VEP consequence does not override an exact
+    # transcript match. True conflicting evidence for the same queried
+    # transcript still requires abstention.
     return next(iter(symbols)) if len(symbols) == 1 else None
 
 
