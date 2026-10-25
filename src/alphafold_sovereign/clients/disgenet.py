@@ -108,7 +108,7 @@ class DisGeNETClient(BaseAsyncClient):
             data = await self._get("/api/v1/gda/gene", params=params)
         except Exception as exc:
             logger.warning("disgenet.gda.error", gene=gene_symbol, exc=str(exc))
-            return []
+            raise
 
         results: list[dict[str, Any]] = []
         _d: Any = data
@@ -175,7 +175,7 @@ class DisGeNETClient(BaseAsyncClient):
             data = await self._get("/api/v1/gda/disease", params=params)
         except Exception as exc:
             logger.warning("disgenet.gda.disease.error", disease=disease_id, exc=str(exc))
-            return []
+            raise
 
         results: list[dict[str, Any]] = []
         _d: Any = data
@@ -236,7 +236,7 @@ class DisGeNETClient(BaseAsyncClient):
             data = await self._get("/api/v1/vda/variant", params=params)
         except Exception as exc:
             logger.warning("disgenet.vda.error", variant=variant_id, exc=str(exc))
-            return []
+            raise
 
         results: list[dict[str, Any]] = []
         _d: Any = data
@@ -304,7 +304,7 @@ class DisGeNETClient(BaseAsyncClient):
             data = await self._get("/api/v1/enrichment/gene", params=params)
         except Exception as exc:
             logger.warning("disgenet.enrichment.error", exc=str(exc))
-            return []
+            raise
 
         results: list[dict[str, Any]] = []
         _d: Any = data

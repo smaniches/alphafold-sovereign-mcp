@@ -21,13 +21,15 @@ PM1, …) is implemented from a reading of Richards et al. 2015 by the
 project author. No clinical geneticist has signed off on the
 criterion-by-criterion mapping.
 
-**Impact:** Variant classifications produced by
-``generate_variant_clinical_report`` and ``classify_variant_acmg``
-may be **incorrect** in ways that unit tests cannot catch.
+**Impact:** Computational evidence could be mistaken for established
+clinical criteria if source attribution or the unassessed state is lost.
+The corrected ``classify_variant_acmg`` output no longer issues a
+pathogenicity classification without disease-specific verification.
+The multi-source clinical report remains a research aid, not a clinical call.
 
-**Mitigation:** Treat the report as a literature aggregator, not as a
-clinical call. Re-derive each ACMG criterion from the cited primary
-source before any clinical use.
+**Mitigation:** Preserve the separate source data and unreviewed candidate
+signals. Determine disease mechanism and clinical criteria from primary
+sources under qualified independent review.
 
 **Planned resolution:** Roadmap step 2 (traceability matrix) and step 3
 (external review). See ``STATUS.md``.

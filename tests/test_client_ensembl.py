@@ -10,6 +10,7 @@ import httpx
 import pytest
 import respx
 
+from alphafold_sovereign.clients._base import UpstreamError
 from alphafold_sovereign.clients.ensembl import EnsemblClient, _first_uniprot
 
 # ---------------------------------------------------------------------------
@@ -185,7 +186,8 @@ async def test_vep_hgvs_error_returns_empty(respx_mock: respx.MockRouter) -> Non
         "https://rest.ensembl.org/vep/human/hgvs/BAD",
     ).mock(return_value=httpx.Response(500))
     async with EnsemblClient() as client:
-        assert await client.vep_hgvs("BAD") == []
+        with pytest.raises(UpstreamError):
+            await client.vep_hgvs("BAD")
 
 
 # ---------------------------------------------------------------------------
@@ -237,8 +239,8 @@ async def test_gene_lookup_error_returns_not_found(
         "https://rest.ensembl.org/lookup/symbol/human/BAD",
     ).mock(return_value=httpx.Response(500))
     async with EnsemblClient() as client:
-        info = await client.gene_lookup("BAD")
-    assert info["found"] is False
+        with pytest.raises(UpstreamError):
+            await client.gene_lookup("BAD")
 
 
 # ---------------------------------------------------------------------------
@@ -264,7 +266,8 @@ async def test_ncbi_gene_id_gene_not_found(respx_mock: respx.MockRouter) -> None
         return_value=httpx.Response(500),
     )
     async with EnsemblClient() as client:
-        assert await client.ncbi_gene_id("BAD") == ""
+        with pytest.raises(UpstreamError):
+            await client.ncbi_gene_id("BAD")
 
 
 async def test_ncbi_gene_id_xrefs_error(respx_mock: respx.MockRouter) -> None:
@@ -275,7 +278,8 @@ async def test_ncbi_gene_id_xrefs_error(respx_mock: respx.MockRouter) -> None:
         return_value=httpx.Response(503),
     )
     async with EnsemblClient() as client:
-        assert await client.ncbi_gene_id("BRCA1") == ""
+        with pytest.raises(UpstreamError):
+            await client.ncbi_gene_id("BRCA1")
 
 
 async def test_ncbi_gene_id_no_primary_id(respx_mock: respx.MockRouter) -> None:
@@ -352,8 +356,8 @@ async def test_variant_info_error(respx_mock: respx.MockRouter) -> None:
         "https://rest.ensembl.org/variation/human/rs0",
     ).mock(return_value=httpx.Response(500))
     async with EnsemblClient() as client:
-        info = await client.variant_info("rs0")
-    assert info["found"] is False
+        with pytest.raises(UpstreamError):
+            await client.variant_info("rs0")
 
 
 # ---------------------------------------------------------------------------
@@ -525,8 +529,7 @@ async def test_orthologs_gene_lookup_fails(respx_mock: respx.MockRouter) -> None
         "https://rest.ensembl.org/lookup/symbol/human/UNKNOWN",
     ).mock(return_value=httpx.Response(404))
     async with EnsemblClient() as client:
-        rows = await client.orthologs("UNKNOWN")
-    assert rows == []
+        assert await client.orthologs("UNKNOWN") == []
 
 
 async def test_orthologs_homology_error(respx_mock: respx.MockRouter) -> None:
@@ -537,8 +540,8 @@ async def test_orthologs_homology_error(respx_mock: respx.MockRouter) -> None:
         "https://rest.ensembl.org/homology/id/human/ENSG0001",
     ).mock(return_value=httpx.Response(500))
     async with EnsemblClient() as client:
-        rows = await client.orthologs("BRCA1")
-    assert rows == []
+        with pytest.raises(UpstreamError):
+            await client.orthologs("BRCA1")
 
 
 # ---------------------------------------------------------------------------
@@ -588,5 +591,28 @@ async def test_transcript_protein_error(respx_mock: respx.MockRouter) -> None:
         "https://rest.ensembl.org/lookup/id/BAD",
     ).mock(return_value=httpx.Response(500))
     async with EnsemblClient() as client:
-        info = await client.transcript_protein("BAD")
-    assert info["found"] is False
+        with pytest.raises(UpstreamError):
+            await client.transcript_protein("BAD")
+
+
+async def test_ncbi_gene_id_returns_empty_for_authoritative_missing_gene(
+    respx_mock: respx.MockRouter,
+) -> None:
+    respx_mock.get("https://rest.ensembl.org/lookup/symbol/human/MISSING").mock(
+        return_value=httpx.Response(404)
+    )
+    async with EnsemblClient() as client:
+        assert await client.ncbi_gene_id("MISSING") == ""
+
+
+async def test_variant_info_authoritative_404_is_not_outage(
+    respx_mock: respx.MockRouter,
+) -> None:
+    respx_mock.get("https://rest.ensembl.org/variation/human/rsMISSING").mock(
+        return_value=httpx.Response(404)
+    )
+    async with EnsemblClient() as client:
+        assert await client.variant_info("rsMISSING") == {
+            "rsid": "rsMISSING",
+            "found": False,
+        }

@@ -21,7 +21,7 @@ from typing import Any
 
 import structlog
 
-from alphafold_sovereign.clients._base import BaseAsyncClient, UpstreamConfig
+from alphafold_sovereign.clients._base import BaseAsyncClient, UpstreamConfig, UpstreamError
 
 logger = structlog.get_logger(__name__)
 
@@ -108,7 +108,7 @@ class EnsemblClient(BaseAsyncClient):
             )
         except Exception as exc:
             logger.warning("ensembl.vep.error", hgvs=hgvs, exc=str(exc))
-            return []
+            raise
 
         results: list[dict[str, Any]] = []
         any_data: Any = data
@@ -137,9 +137,11 @@ class EnsemblClient(BaseAsyncClient):
                 f"/lookup/symbol/{self.species}/{gene_symbol}",
                 params={"expand": 1, "xrefs": 1},
             )
-        except Exception as exc:
+        except UpstreamError as exc:
+            if exc.status == 404:
+                return {"gene_symbol": gene_symbol, "found": False}
             logger.warning("ensembl.gene_lookup.error", gene=gene_symbol, exc=str(exc))
-            return {"gene_symbol": gene_symbol, "found": False}
+            raise
 
         uniprot_ids = self._extract_xref_ids(data.get("Xref", []) or [], "Uniprot")
         return {
@@ -181,7 +183,7 @@ class EnsemblClient(BaseAsyncClient):
             )
         except Exception as exc:
             logger.warning("ensembl.ncbi_gene_id.error", gene=gene_symbol, exc=str(exc))
-            return ""
+            raise
         # This endpoint returns a JSON array of cross-reference objects; guard
         # against an unexpected non-list payload (e.g. an error object).
         if not isinstance(data, list):
@@ -232,9 +234,11 @@ class EnsemblClient(BaseAsyncClient):
                 f"/variation/{self.species}/{rsid}",
                 params={"genotypes": 0, "phenotypes": 0, "pops": 0},
             )
-        except Exception as exc:
+        except UpstreamError as exc:
+            if exc.status == 404:
+                return {"rsid": rsid, "found": False}
             logger.warning("ensembl.variant.error", rsid=rsid, exc=str(exc))
-            return {"rsid": rsid, "found": False}
+            raise
 
         return {
             "rsid": rsid,
@@ -299,7 +303,7 @@ class EnsemblClient(BaseAsyncClient):
             )
         except Exception as exc:
             logger.warning("ensembl.orthologs.error", gene=gene_symbol, exc=str(exc))
-            return []
+            raise
 
         results: list[dict[str, Any]] = []
         for group in data.get("data", []):
@@ -345,7 +349,7 @@ class EnsemblClient(BaseAsyncClient):
             )
         except Exception as exc:
             logger.warning("ensembl.transcript.error", tid=transcript_id, exc=str(exc))
-            return {"transcript_id": transcript_id, "found": False}
+            raise
 
         protein_id = data.get("Translation", {}).get("id", "")
         uniprot_ids = self._extract_xref_ids(data.get("Xref", []) or [], "Uniprot")
