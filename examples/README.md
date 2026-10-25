@@ -15,9 +15,9 @@ not the current contract. Re-query live upstreams for current evidence;
 the source's classification or prediction is not a new Topologica
 scientific observation.
 
-For reproducible offline regression tests, see [golden fixtures](golden/).
-These retain hashed recorded upstream responses and test what the code
-returns, not clinical correctness.
+For reproducible offline behavior tests, see
+[`tests/test_synthetic_variant_pipeline.py`](../tests/test_synthetic_variant_pipeline.py).
+Those tests use fabricated source responses rather than real clinical cases.
 
 ## Run
 

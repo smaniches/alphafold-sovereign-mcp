@@ -5,12 +5,12 @@ therapeutic or mechanistic conclusion by Topologica.
 
 An MCP client can request:
 
-1. `map_disease_drug_landscape(disease_mondo_id="MONDO:0011996")` for
-   Open Targets and ChEMBL source-reported disease-drug records.
-2. `assess_target_druggability(uniprot_id="P00519")` for the original
-   target-side evidence and an explicitly heuristic local summary.
-3. `analyze_structural_confidence(uniprot_id="P00519")` for
-   AlphaFold DB predicted-coordinate and model-confidence information.
+1. `map_disease_drug_landscape` with a source-checked MONDO identifier to
+   retrieve Open Targets and ChEMBL disease-drug records.
+2. `assess_target_druggability` with a source-checked UniProt accession to
+   retrieve target evidence and an explicitly heuristic local summary.
+3. `analyze_structural_confidence` with the same source-checked accession
+   to inspect AlphaFold DB predicted coordinates and confidence information.
 
 Gene products, drug indications, structural models, and disease records are
 **different evidence objects**. A drug's reported indication does not show
