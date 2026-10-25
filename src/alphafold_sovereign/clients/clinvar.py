@@ -249,66 +249,75 @@ class ClinVarClient(BaseAsyncClient):
         return f"{prefix}[gene] AND {change}"
 
     @staticmethod
-    def _match_confidence(hgvs: str, summary: dict[str, Any]) -> str:
-        """Distinguish exact *versioned-transcript text* from candidate titles.
-
-        A gene-relative c./p. token is not an allele identifier: different
-        transcripts can use the same coordinate/change text for different
-        alleles. Likewise a query's explicit deletion/duplication bases cannot
-        be checked against a ClinVar title that omits those bases. These are
-        searchable candidate matches, not identity evidence. "exact_transcript"
-        is limited to the same versioned transcript and identical primary
-        nucleotide change text, without unvalidated equivalence mappings.
-        """
+    def _match_reference_parts(
+        hgvs: str, summary: dict[str, Any]
+    ) -> tuple[str, str, str, str, str] | None:
+        """Require compatible RefSeq and gene context before comparing changes."""
         prefix, sep, change = hgvs.partition(":")
-        if not sep or not change.strip():
-            return "unmatched"
-        reference = _query_reference(prefix)
+        reference = _query_reference(prefix) if sep and change.strip() else None
         if reference is None:
-            return "unmatched"
+            return None
         accession, gene = reference
-        if accession:
-            # Neither an unversioned RefSeq nor a protein/genomic accession
-            # can be verified against a transcript-based ClinVar title.
-            if not accession.startswith(_TRANSCRIPT_ACCESSION_PREFIXES):
-                return "unmatched"
-            if re.fullmatch(r"[a-z]{2}_\d+\.\d+", accession) is None:
-                return "unmatched"
+        # The current title parser does not establish protein or genomic
+        # accession identity, and transcript versions must be explicit.
+        if accession and (
+            not accession.startswith(_TRANSCRIPT_ACCESSION_PREFIXES)
+            or re.fullmatch(r"[a-z]{2}_\d+\.\d+", accession) is None
+        ):
+            return None
         name = str(summary.get("name", "")).strip().lower()
         title = re.match(r"^([a-z]{2}_\d+(?:\.\d+)?)(?:\(([^()\s]+)\))?:(\S+)", name)
         if title is None:
-            return "unmatched"
+            return None
         record_accession, record_gene, primary_change = title.groups()
-        if gene and gene != record_gene:
-            return "unmatched"
-        if accession and accession != record_accession:
-            return "unmatched"
+        if (gene and gene != record_gene) or (
+            accession and accession != record_accession
+        ):
+            return None
+        return accession, record_accession, change.strip().lower(), primary_change, name
 
-        requested_change = change.strip().lower()
-        canonical_query = _canonical_change(requested_change)
+    @staticmethod
+    def _match_nucleotide_change(
+        requested_change: str, primary_change: str, accession: str
+    ) -> str:
+        """Match literal nucleotide text without inferring deleted-base identity."""
+        if _canonical_change(primary_change) != _canonical_change(requested_change):
+            return "unmatched"
+        # Optional deletion/duplication bases are useful for discovery, but
+        # omitted bases in an upstream title require reference verification.
+        explicit_query = re.fullmatch(r"(.+(?:dup|del))([acgt]+)", requested_change)
+        explicit_record = re.fullmatch(r"(.+(?:dup|del))([acgt]+)", primary_change)
+        if explicit_query and explicit_record and explicit_query != explicit_record:
+            return "unmatched"
+        return (
+            "exact_transcript"
+            if accession and primary_change == requested_change
+            else "candidate_text"
+        )
+
+    @staticmethod
+    def _match_confidence(hgvs: str, summary: dict[str, Any]) -> str:
+        """Identify literal same-version transcript matches; otherwise abstain.
+
+        Gene-relative expressions and protein annotations only discover
+        candidates. Matching canonical text is not cross-transcript or
+        patient-level allele equivalence, nor a clinical interpretation.
+        """
+        parts = ClinVarClient._match_reference_parts(hgvs, summary)
+        if parts is None:
+            return "unmatched"
+        accession, record_accession, requested_change, primary_change, name = parts
         if requested_change.startswith(("c.", "n.", "r.")):
             if not record_accession.startswith(_TRANSCRIPT_ACCESSION_PREFIXES):
                 return "unmatched"
-            if _canonical_change(primary_change) != canonical_query:
-                return "unmatched"
-            # Canonicalising optional deleted/duplicated bases is useful for
-            # search, but contradictory *explicit* bases must not even count
-            # as a candidate. A bare ClinVar del/dup title remains a candidate
-            # because the query's stated bases have not been checked.
-            explicit_query = re.fullmatch(r"(.+(?:dup|del))([acgt]+)", requested_change)
-            explicit_record = re.fullmatch(r"(.+(?:dup|del))([acgt]+)", primary_change)
-            if explicit_query and explicit_record and explicit_query != explicit_record:
-                return "unmatched"
-            # Deletion/duplication aliases require independent reference
-            # sequence verification before the omitted bases can be trusted.
-            if accession and primary_change == requested_change:
-                return "exact_transcript"
+            return ClinVarClient._match_nucleotide_change(
+                requested_change, primary_change, accession
+            )
+        if requested_change.startswith("p.") and re.search(
+            r"\(\s*" + re.escape(requested_change) + r"\s*\)", name
+        ):
+            # A secondary protein annotation is not a verified reference allele.
             return "candidate_text"
-        if requested_change.startswith("p."):
-            # Protein change appears only as a secondary annotation in these
-            # titles, not as a checked protein-reference allele.
-            if re.search(r"\(\s*" + re.escape(requested_change) + r"\s*\)", name):
-                return "candidate_text"
         return "unmatched"
 
     @staticmethod

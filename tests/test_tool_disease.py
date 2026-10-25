@@ -1435,3 +1435,39 @@ async def test_triage_unmatched_transcript_does_not_guess_gnomad_gene(
     assert report["data_sources_status"] == {
         "clinvar": "no_data", "gnomad": "skipped_no_verified_gene"
     }
+
+
+@pytest.mark.parametrize(
+    ("outcome", "expected_status"),
+    [("exception", "failed"), ("malformed", "invalid_response")],
+)
+async def test_synthetic_transcript_lookup_without_gene_handles_failure(
+    monkeypatch: pytest.MonkeyPatch, outcome: str, expected_status: str
+) -> None:
+    """A transcript lookup failure never causes a guessed gene-level request."""
+
+    async def fake_clinvar(hgvs: str, gene: str) -> Any:
+        assert gene == ""
+        if outcome == "exception":
+            raise RuntimeError("fabricated retrieval outage")
+        return ["fabricated invalid response"]
+
+    async def forbid_gene_fetch(hgvs: str, gene: str) -> dict[str, Any]:
+        raise AssertionError("unverified transcript must not trigger gene lookup")
+
+    monkeypatch.setattr(
+        "alphafold_sovereign.tools.disease._fetch_clinvar", fake_clinvar
+    )
+    monkeypatch.setattr(
+        "alphafold_sovereign.tools.disease._fetch_gnomad", forbid_gene_fetch
+    )
+    output = await triage_variant_3d(
+        VariantTriageInput(hgvs="NM_999999.1:c.42A>G", include_structure=False)
+    )
+    report = json.loads(output.split("---", 1)[0])
+    assert report["status"] == "success"
+    assert report["gene_symbol"] == ""
+    assert report["data_sources_status"] == {
+        "clinvar": expected_status,
+        "gnomad": "skipped_no_verified_gene",
+    }

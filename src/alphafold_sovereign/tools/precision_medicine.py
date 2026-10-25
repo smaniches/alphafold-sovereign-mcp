@@ -1418,10 +1418,10 @@ async def classify_variant_acmg(
     source_status["gnomad_variant"] = "skipped"
     if gnomad_id:
         try:
-            response = await _gnomad().variant_frequencies(gnomad_id)
-            if isinstance(response, dict):
-                gnomad_data = response
-                source_status["gnomad_variant"] = "ok" if response else "no_data"
+            variant_response: object = await _gnomad().variant_frequencies(gnomad_id)
+            if isinstance(variant_response, dict):
+                gnomad_data = variant_response
+                source_status["gnomad_variant"] = "ok" if variant_response else "no_data"
             else:
                 source_status["gnomad_variant"] = "invalid_response"
         except Exception as exc:
@@ -1437,10 +1437,10 @@ async def classify_variant_acmg(
     source_status["gnomad_constraint"] = "skipped"
     if gene_symbol:
         try:
-            response = await _gnomad().gene_constraint(gene_symbol)
-            if isinstance(response, dict):
-                gene_constraint = response
-                source_status["gnomad_constraint"] = "ok" if response else "no_data"
+            constraint_response: object = await _gnomad().gene_constraint(gene_symbol)
+            if isinstance(constraint_response, dict):
+                gene_constraint = constraint_response
+                source_status["gnomad_constraint"] = "ok" if constraint_response else "no_data"
             else:
                 source_status["gnomad_constraint"] = "invalid_response"
         except Exception as exc:

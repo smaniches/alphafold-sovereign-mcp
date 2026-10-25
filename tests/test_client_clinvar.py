@@ -745,3 +745,30 @@ def test_match_confidence_does_not_promote_unverified_alleles(
     query: str, name: str, confidence: str
 ) -> None:
     assert ClinVarClient._match_confidence(query, {"name": name}) == confidence
+
+
+@pytest.mark.parametrize(
+    ("query", "name", "expected"),
+    [
+        (
+            "SYNTHX:c.42A>G",
+            "NP_999999.1(SYNTHX):c.42A>G",
+            "unmatched",
+        ),
+        (
+            "SYNTHX:p.Gly12Ser",
+            "NM_999999.1(SYNTHX):c.34G>A (p.Gly12Ser)",
+            "candidate_text",
+        ),
+        (
+            "SYNTHX:p.Gly12Arg",
+            "NM_999999.1(SYNTHX):c.34G>A (p.Gly12Ser)",
+            "unmatched",
+        ),
+    ],
+)
+def test_synthetic_reference_type_and_protein_annotations(
+    query: str, name: str, expected: str
+) -> None:
+    """Secondary protein tags do not establish nucleotide reference identity."""
+    assert ClinVarClient._match_confidence(query, {"name": name}) == expected

@@ -2269,3 +2269,46 @@ async def test_classify_acmg_preserves_failed_upstream_status(
         "gnomad_variant": "skipped",
         "gnomad_constraint": "failed",
     }
+
+
+@pytest.mark.parametrize(
+    ("vep_payload", "clinvar_payload", "expected_statuses"),
+    [
+        ({"invalid": "response"}, [], ("invalid_response", "no_data")),
+        ([], ["invalid element"], ("no_data", "invalid_response")),
+    ],
+)
+async def test_synthetic_acmg_rejects_malformed_upstream_rows(
+    monkeypatch: pytest.MonkeyPatch,
+    vep_payload: Any,
+    clinvar_payload: Any,
+    expected_statuses: tuple[str, str],
+) -> None:
+    """Malformed external results are not converted into an absence claim."""
+    mocks = _patch_clients(monkeypatch)
+    mocks["ensembl"].vep_hgvs = AsyncMock(return_value=vep_payload)
+    mocks["clinvar"].search_by_hgvs = AsyncMock(return_value=clinvar_payload)
+    mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
+
+    out = await classify_variant_acmg(ACMGVariantInput(hgvs="SYNTHX:c.42A>G"))
+    assert out["draft_classification"] == "Not assessed"
+    assert out["data_sources_status"]["ensembl_vep"] == expected_statuses[0]
+    assert out["data_sources_status"]["clinvar"] == expected_statuses[1]
+    assert out["clinvar_reference"]["found"] is False
+
+
+async def test_synthetic_acmg_rejects_invalid_population_responses(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Invalid gnomAD payloads are marked as invalid, not treated as no_data."""
+    mocks = _patch_clients(monkeypatch)
+    mocks["ensembl"].vep_hgvs = AsyncMock(return_value=[])
+    mocks["clinvar"].search_by_hgvs = AsyncMock(return_value=[])
+    mocks["gnomad"].variant_frequencies = AsyncMock(return_value=["malformed"])
+    mocks["gnomad"].gene_constraint = AsyncMock(return_value=["malformed"])
+    monkeypatch.setattr(pm, "_build_gnomad_id", lambda hgvs, rows: "1-42-A-G")
+
+    out = await classify_variant_acmg(ACMGVariantInput(hgvs="SYNTHX:c.42A>G"))
+    assert out["draft_classification"] == "Not assessed"
+    assert out["data_sources_status"]["gnomad_variant"] == "invalid_response"
+    assert out["data_sources_status"]["gnomad_constraint"] == "invalid_response"
