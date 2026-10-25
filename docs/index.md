@@ -63,9 +63,9 @@ conversations. Full instructions: [Installation](installation.md).
 
 ## Examples
 
-- [Variant triage on BRCA1 c.5266dupC](examples/01-variant-triage.md)
-- [Target characterisation on EGFR](examples/02-target-characterization.md)
-- [Drug-discovery walk-through: Imatinib → BCR-ABL → CML](examples/03-drug-discovery.md)
+- [Variant evidence retrieval](examples/01-variant-triage.md)
+- [Target evidence retrieval](examples/02-target-characterization.md)
+- [Disease and drug source retrieval](examples/03-drug-discovery.md)
 
 ## Cite
 
