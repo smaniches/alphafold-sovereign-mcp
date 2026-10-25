@@ -13,6 +13,15 @@
     calibrated against a benchmark. See
     [Limitations L2](../limitations.md).
 
+## AlphaMissense evidence status
+
+The variant report and draft ACMG tool preserve the AlphaMissense numerical
+score only when a VEP-mapped substitution has a well-formed score in [0, 1].
+The `data_sources_status.alphamissense` field distinguishes `ok`,
+`no_data`, `failed`, `invalid_response`, and explicit `skipped_*` states
+when the variant or UniProt mapping is unavailable. A failed lookup is never
+treated as negative or benign biological evidence.
+
 ## Optional PDBe/IUCr residue annotations
 
 Set `include_literature_evidence=True` on

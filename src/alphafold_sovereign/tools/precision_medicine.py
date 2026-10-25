@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import asyncio
 import datetime
+import math
 import re
 from typing import TYPE_CHECKING, Any, Literal, cast
 
@@ -341,39 +342,68 @@ def _protein_variant_from_vep(consequence: dict[str, Any]) -> str | None:
 
 
 async def _alphamissense_for_variant(
-    gene_symbol: str | None, vep_results: list[dict[str, Any]]
+    gene_symbol: str | None,
+    vep_results: list[dict[str, Any]],
+    *,
+    source_status: dict[str, str] | None = None,
 ) -> float | None:
-    """Resolve the AlphaMissense pathogenicity score for a variant.
+    """Look up a VEP-mapped AlphaMissense score without conflating failure and absence.
 
-    Builds the substitution key from the canonical VEP consequence, reads
-    the SwissProt accession that Ensembl VEP attaches to that same
-    consequence, and looks the substitution up in the AlphaFold DB
-    AlphaMissense annotations. Returns ``None`` when the variant is not a
-    single-residue missense substitution, the canonical consequence
-    carries no SwissProt accession, or AlphaFold DB has no annotation for
-    it.
-
-    ``gene_symbol`` is retained for log context only; the UniProt
-    accession is resolved from the VEP consequence itself, so this
-    function no longer requires a parseable gene symbol. End-to-end
-    resolution for a RefSeq-form HGVS then depends only on Ensembl VEP
-    accepting that HGVS string and returning a canonical missense
-    consequence carrying a SwissProt accession.
+    The optional status sink is additive: existing score-only callers continue
+    receiving a float or None. An absent score is not evidence of benignity.
     """
+
+    def _mark(state: str) -> None:
+        if source_status is not None:
+            source_status["alphamissense"] = state
+
     canonical = next((tc for tc in vep_results if tc.get("canonical")), {})
     protein_variant = _protein_variant_from_vep(canonical)
     if not protein_variant:
+        if source_status is not None and source_status.get("ensembl_vep") in {
+            "failed",
+            "invalid_response",
+        }:
+            _mark("skipped_upstream_failed")
+        else:
+            _mark("skipped_not_applicable")
         return None
-    uniprot_id = (canonical.get("swissprot") or "").split(".")[0]
+
+    swissprot = canonical.get("swissprot")
+    if swissprot is None or swissprot == "":
+        _mark("skipped_no_swissprot")
+        return None
+    if not isinstance(swissprot, str):
+        _mark("invalid_response")
+        return None
+    uniprot_id = swissprot.split(".")[0]
     if not uniprot_id:
+        _mark("invalid_response")
         return None
+
     try:
         record = await _alphafold().alphamissense_score(uniprot_id, protein_variant)
     except Exception as exc:
         logger.warning("alphamissense.failed", gene=gene_symbol, exc=str(exc))
+        _mark("failed")
         return None
-    return record.get("am_pathogenicity") if record else None
 
+    if record is None:
+        _mark("no_data")
+        return None
+    if not isinstance(record, dict):
+        _mark("invalid_response")
+        return None
+    score = record.get("am_pathogenicity")
+    if type(score) not in (int, float):
+        _mark("invalid_response")
+        return None
+    score = float(score)
+    if not math.isfinite(score) or not 0.0 <= score <= 1.0:
+        _mark("invalid_response")
+        return None
+    _mark("ok")
+    return score
 
 def _gnomad_to_acmg(af: float | None) -> dict[str, str]:
     if af is None:
@@ -682,8 +712,8 @@ async def generate_variant_clinical_report(
     am_score: float | None = await _alphamissense_for_variant(
         gene_symbol,
         vep_results,
+        source_status=source_status,
     )
-    source_status["alphamissense"] = "ok" if am_score is not None else "no_data"
 
     # ── Step 9: Draft ACMG criteria ───────────────────────────────────────────
     acmg_criteria: dict[str, str] = {}
@@ -1501,6 +1531,7 @@ async def classify_variant_acmg(
     am_score: float | None = await _alphamissense_for_variant(
         gene_symbol,
         vep_results,
+        source_status=source_status,
     )
     global_af: float | None = gnomad_data.get("global_af")
     # See generate_variant_clinical_report: a non-exact top hit must not be
