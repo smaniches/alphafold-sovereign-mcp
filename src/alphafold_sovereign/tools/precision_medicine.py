@@ -526,10 +526,9 @@ def _report_gene_from_sources(
             continue
         hgvsc = row.get("hgvsc")
         transcript_id = row.get("transcript_id")
-        if (
-            isinstance(hgvsc, str)
-            and hgvsc.partition(":")[0].upper() == queried_transcript
-        ) or (isinstance(transcript_id, str) and transcript_id.upper() == queried_transcript):
+        if (isinstance(hgvsc, str) and hgvsc.partition(":")[0].upper() == queried_transcript) or (
+            isinstance(transcript_id, str) and transcript_id.upper() == queried_transcript
+        ):
             symbols.add(symbol.strip().upper())
 
     # An overlapping-gene VEP consequence does not override an exact
