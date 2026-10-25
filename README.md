@@ -113,6 +113,16 @@ structure remains conditional on that prediction; it does not become an
 experimental observation because it is joined to another database. Derived
 heuristics are research aids, not source-validated clinical conclusions.
 
+**ClinVar identity boundary:** A gene-relative expression such as
+`BRCA1:c.181T>G` discovers possible records but does not identify a unique
+reference allele; results are labelled *unverified candidates* and their
+classifications cannot be assigned to that query. A matching versioned
+transcript expression such as `NM_007294.4:c.181T>G` permits only a literal
+transcript-title match. ClinVar Variation IDs can represent sets of alleles;
+neither match level establishes independent clinical equivalence or a
+patient-specific classification. Source failures are reported separately
+from absent matches. No cross-transcript equivalence is assumed.
+
 ## What this is **not**
 
 - It is **not** a hosted service or a SaaS.
@@ -310,12 +320,15 @@ paraphrased reply.
 generate_variant_clinical_report(hgvs="BRCA1:c.181T>G")
 ```
 
-The server resolves the HGVS, fetches ClinVar, gnomAD, AlphaMissense
-(via AlphaFold DB), Open Targets disease evidence, ChEMBL drug data,
-and Ensembl VEP consequence annotations, and returns a single JSON
-record with the cross-referenced fields plus a research-only ACMG/AMP
-draft. The client does not automatically perform a variant-specific
-experimental-structure or SIFTS mapping.
+The server searches ClinVar, gnomAD, AlphaMissense (via AlphaFold DB),
+Open Targets disease evidence, ChEMBL and Ensembl VEP, and returns a
+source-attributed research report with unreviewed computational signals.
+The gene-relative example above is a candidate search: it cannot borrow a
+ClinVar record's classification as though it proved allele identity. Use a
+versioned transcript expression for strict transcript-title matching; even
+then, additional validation is required for clinical allele identity. The
+client does not automatically perform a variant-specific experimental-
+structure or SIFTS mapping.
 
 ### Optional PDBe/IUCr literature evidence
 

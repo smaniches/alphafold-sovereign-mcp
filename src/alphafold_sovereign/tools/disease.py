@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from datetime import datetime, timezone
 from typing import Any, NoReturn
 
@@ -258,9 +259,10 @@ class VariantTriageInput(BaseModel):
     hgvs: str = Field(
         ...,
         description=(
-            "HGVS variant expression. Supports coding DNA notation "
-            "e.g. 'BRCA1:c.181T>G', 'TP53:c.817C>T', "
-            "or genomic e.g. 'chr17:g.43094692G>A'."
+            "HGVS variant expression, e.g. 'BRCA1:c.181T>G' for candidate "
+            "discovery or 'NM_007294.4(BRCA1):c.181T>G' for versioned-"
+            "transcript identity matching. Gene-only coordinates cannot "
+            "verify allele identity."
         ),
         min_length=5,
         max_length=200,
@@ -818,8 +820,10 @@ async def triage_variant_3d(params: VariantTriageInput) -> str:
        accession first); the AlphaFold pLDDT / PAE join into this report
        is a roadmap (Wave-3) item.
 
-    Returns a ``pathogenicity_tier``: HIGH / MEDIUM / LOW / UNKNOWN
-    (derived from ClinVar; the AlphaMissense input is always absent here).
+    Returns a ``pathogenicity_tier``: HIGH / MEDIUM / LOW / UNKNOWN,
+    derived from ClinVar only for an exact versioned-transcript expression.
+    Gene-relative text can discover an explicitly unverified candidate, but
+    cannot borrow that candidate's classification. AlphaMissense is absent.
     This legacy display label is not a calibrated risk estimate, an ACMG
     classification, or an independently validated clinical assessment.
 
@@ -831,20 +835,46 @@ async def triage_variant_3d(params: VariantTriageInput) -> str:
     try:
         # -- Step 1: Parse gene + coding change from HGVS ---------------
         gene_symbol, _ = _parse_hgvs_gene(hgvs)
-        if not gene_symbol:
+        # An explicitly versioned RefSeq transcript without '(GENE)' can
+        # identify its allele, but not its gene for a gnomAD constraint query.
+        # Resolve ClinVar first, then use ONLY the exact matching record's
+        # source-reported gene. An unmatched accession must never be guessed.
+        transcript_only = not gene_symbol and re.fullmatch(
+            r"(?:NM|NR|XM|XR)_\d+\.\d+:[cnr]\..+", hgvs, re.IGNORECASE
+        ) is not None
+        if not gene_symbol and not transcript_only:
             return json.dumps(
                 {
                     "status": "error",
                     "error": f"Could not extract gene symbol from HGVS '{hgvs}'. "
-                    "Expected format: 'GENE:c.NNNx>y' e.g. 'BRCA1:c.181T>G'.",
+                    "Use GENE:c.change or a versioned RefSeq transcript.",
                 }
             )
 
-        # -- Step 2: Parallel data fetch --------------------------------
-        clinvar_coro = _fetch_clinvar(hgvs, gene_symbol)
-        gnomad_coro = _fetch_gnomad(hgvs, gene_symbol) if params.include_gnomad else None
+        # -- Step 2: Evidence fetch (parallel when gene is already known) --
+        pre_resolved_clinvar: Any = None
+        if transcript_only:
+            try:
+                pre_resolved_clinvar = await _fetch_clinvar(hgvs, "")
+            except Exception as exc:
+                pre_resolved_clinvar = exc
+            if isinstance(pre_resolved_clinvar, dict):
+                gene_symbol = str(pre_resolved_clinvar.get("gene_symbol", ""))
+
+        clinvar_coro = (
+            _identity(pre_resolved_clinvar)
+            if transcript_only
+            else _fetch_clinvar(hgvs, gene_symbol)
+        )
+        gnomad_coro = (
+            _fetch_gnomad(hgvs, gene_symbol)
+            if params.include_gnomad and gene_symbol
+            else None
+        )
         disease_coro = (
-            _fetch_disease_context(gene_symbol) if params.include_disease_context else None
+            _fetch_disease_context(gene_symbol)
+            if params.include_disease_context and gene_symbol
+            else None
         )
 
         # Map each coroutine to its source key so results stay
@@ -868,6 +898,23 @@ async def triage_variant_3d(params: VariantTriageInput) -> str:
 
         def _ok(value: Any) -> dict[str, Any]:
             return value if isinstance(value, dict) else {}
+
+        def _source_status(source: str) -> str:
+            """Distinguish a completed empty fetch from a failed upstream call."""
+            if source not in results:
+                if source == "gnomad" and params.include_gnomad and not gene_symbol:
+                    return "skipped_no_verified_gene"
+                return "skipped"
+            value = results[source]
+            if isinstance(value, BaseException):
+                return "failed"
+            if not isinstance(value, dict):
+                return "invalid_response"
+            if source == "clinvar" and "clinvar_unverified_candidate" in value:
+                return "candidate_only"
+            if not value or (source == "gnomad" and value.get("constraint_available") is False):
+                return "no_data"
+            return "ok"
 
         clinvar_data: dict[str, Any] = _ok(results.get("clinvar"))
         gnomad_data: dict[str, Any] = _ok(results.get("gnomad"))
@@ -893,26 +940,37 @@ async def triage_variant_3d(params: VariantTriageInput) -> str:
                 "clinvar_conditions": clinvar_data.get("conditions", []),
             },
             "population_genetics": gnomad_data,
+            # A candidate is discoverable, but its classification must not
+            # enter pathogenicity_tier or the source-attributed interpretation.
+            "clinvar_unverified_candidate": clinvar_data.get("clinvar_unverified_candidate"),
             "disease_context": disease_data,
             "sources_queried": sources,
+            "data_sources_status": {
+                "clinvar": _source_status("clinvar"),
+                "gnomad": _source_status("gnomad"),
+            },
         }
 
         # Structural context note (full integration in Wave 3 when the
         # existing alphafold_mcp tools are migrated to the new module layout)
         if params.include_structure:
             report["structure_note"] = (
-                f"AlphaFold structural confidence for {gene_symbol}: resolve "
-                f"{gene_symbol} to a UniProt accession, then call "
-                "analyze_structural_confidence(uniprot_id='<UNIPROT>'). "
-                "Automatic structural integration into this report is a "
-                "Wave-3 roadmap item."
+                (
+                    f"AlphaFold structural confidence for {gene_symbol}: resolve "
+                    f"{gene_symbol} to a UniProt accession, then call "
+                    "analyze_structural_confidence(uniprot_id='<UNIPROT>'). "
+                    "Automatic structural integration into this report is a "
+                    "Wave-3 roadmap item."
+                )
+                if gene_symbol
+                else "Gene identity not verified; no automatic structure mapping."
             )
 
         # Stamp only the upstreams actually queried for this call: ClinVar
         # always, gnomAD when requested. Open Targets / MONDO are not
         # queried (disease context is a stub), so they are not stamped.
         prov: dict[str, str] = {"clinvar": "NCBI-ClinVar"}
-        if params.include_gnomad:
+        if "gnomad" in coro_map:
             prov["gnomad"] = "gnomAD-r4"
         return json.dumps(report, indent=2) + _provenance(**prov)
 
@@ -1223,7 +1281,7 @@ def _parse_hgvs_gene(hgvs: str) -> tuple[str, str]:
         # A bare RefSeq/Ensembl transcript or genomic accession, or a bare
         # chromosome name (genomic HGVS like 'NC_000017.11:g.…' / 'chr17:g.…'),
         # is not a gene symbol.
-        is_accession = raw_gene.startswith(
+        is_accession = raw_gene.upper().startswith(
             ("NM_", "NR_", "NP_", "XM_", "XR_", "ENST", "ENSP", "NC_", "NG_", "NT_", "NW_", "NZ_")
         )
         is_chromosome = re.match(r"^chr([0-9]+|[XYM]|MT)$", raw_gene, re.IGNORECASE) is not None
@@ -1236,19 +1294,31 @@ def _parse_hgvs_gene(hgvs: str) -> tuple[str, str]:
 async def _fetch_clinvar(hgvs: str, gene_symbol: str) -> dict[str, Any]:
     """Return the ClinVar record for exactly ``hgvs``, or ``{}`` when none is verified.
 
-    ``search_by_hgvs`` ranks verified matches first and stamps each row's
-    ``exact_change_match`` (same canonical change on the queried gene /
-    transcript). Anything else — no hit, a nearby variant, the same change in
-    another gene, or an unstamped row — is not this variant, so nothing is
-    attributed. There is deliberately no gene-level fallback: another variant's
-    classification is not evidence about the queried one. ``gene_symbol`` is
-    kept for the caller's signature; the client derives the gene from ``hgvs``.
+    ``search_by_hgvs`` distinguishes exact versioned-transcript expressions
+    from gene-relative textual candidate matches. Only the former can supply
+    clinical source attribution. Candidate metadata remains discoverable but
+    is never merged into pathogenicity. There is deliberately no gene-level
+    classification fallback; ``gene_symbol`` is retained for API stability.
     """
     async with ClinVarClient() as cv:
         results = await cv.search_by_hgvs(hgvs)
-    if not results or results[0].get("exact_change_match") is not True:
+    if not results:
         return {}
-    return results[0]
+    verified = next((r for r in results if r.get("exact_change_match") is True), None)
+    if verified is not None:
+        return verified
+    # Explicitly *not* a classification: keep a safe retrieval pointer when
+    # a gene-relative title matches but the transcript/allele is unverified.
+    candidate = next((r for r in results if r.get("candidate_change_match") is True), None)
+    if candidate is not None:
+        return {
+            "clinvar_unverified_candidate": {
+                "variation_id": candidate.get("variation_id", ""),
+                "name": candidate.get("name", ""),
+                "identity_status": "candidate_text_not_allele_verified",
+            }
+        }
+    return {}
 
 
 async def _fetch_gnomad(hgvs: str, gene_symbol: str) -> dict[str, Any]:

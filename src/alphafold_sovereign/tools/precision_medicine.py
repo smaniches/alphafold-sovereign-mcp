@@ -141,8 +141,10 @@ class VariantClinicalReportInput(BaseModel):
     hgvs: str = Field(
         ...,
         description=(
-            "HGVS expression — gene-relative (preferred): 'BRCA1:c.181T>G'; "
-            "or RefSeq-based: 'NM_007294.3:c.181T>G'."
+            "HGVS expression. Gene-relative 'BRCA1:c.181T>G' is candidate "
+            "discovery only; a versioned transcript such as "
+            "'NM_007294.4:c.181T>G' permits exact transcript-text matching, "
+            "not an independent clinical allele validation."
         ),
         examples=["BRCA1:c.181T>G", "TP53:p.Arg248Trp"],
         min_length=5,
@@ -234,7 +236,11 @@ class ACMGVariantInput(BaseModel):
 
     hgvs: str = Field(
         ...,
-        description="HGVS expression for classification, e.g. 'BRCA1:c.181T>G'.",
+        description=(
+            "HGVS expression for unassessed evidence review. Gene-relative "
+            "terms can find unverified ClinVar candidates; include a versioned "
+            "RefSeq transcript for exact transcript-text matching."
+        ),
         min_length=5,
     )
     inheritance_pattern: Literal["AD", "AR", "XL", "Unknown"] = Field(
@@ -485,7 +491,9 @@ async def generate_variant_clinical_report(
     variant-specific three-dimensional structural impact.
 
     Input fields:
-        params.hgvs: HGVS expression (gene-relative preferred).
+        params.hgvs: HGVS expression. Gene-relative expressions discover
+            candidate records; clinical source identity requires an exact
+            versioned-transcript expression.
         params.include_population_breakdown: Include per-ancestry gnomAD data.
         params.include_drug_context: Include drugs acting on the gene product.
         params.include_literature_evidence: Query PDBe at an explicitly supplied
@@ -613,12 +621,10 @@ async def generate_variant_clinical_report(
         source_status["chembl"] = "skipped"
 
     # ── Step 7: Consolidate ClinVar ───────────────────────────────────────────
-    # A non-exact top hit (correct record absent from ClinVar, or a nearby
-    # variant returned instead) must not be reported as if it were the queried
-    # variant's own classification; exact_change_match defaults True so
-    # get_variant()/search_gene() results (which never set it) still apply.
+    # search_by_hgvs stamps verified identity explicitly. An absent flag is
+    # not proof: never attribute a record's classification by default.
     clinvar_record: dict[str, Any] | None = None
-    if clinvar_results and clinvar_results[0].get("exact_change_match", True):
+    if clinvar_results and clinvar_results[0].get("exact_change_match") is True:
         clinvar_record = clinvar_results[0]
 
     clinvar_class = (clinvar_record or {}).get(
@@ -678,6 +684,12 @@ async def generate_variant_clinical_report(
             "review_status": (clinvar_record or {}).get("review_status", ""),
             "conditions": (clinvar_record or {}).get("conditions", []),
             "variation_id": (clinvar_record or {}).get("variation_id", ""),
+            "identity_status": "exact_transcript" if clinvar_record is not None else "unverified",
+            "unverified_candidates": [
+                {"variation_id": row.get("variation_id", ""), "name": row.get("name", "")}
+                for row in clinvar_results
+                if row.get("candidate_change_match") is True
+            ][:3],
         },
         "population_genetics": {
             "global_af": gnomad_data.get("global_af"),
@@ -1379,18 +1391,41 @@ async def classify_variant_acmg(
 
     gathered: list[Any] = await asyncio.gather(vep_task, clinvar_task, return_exceptions=True)
     vep_raw, clinvar_raw = gathered[0], gathered[1]
-    vep_results: list[dict[str, Any]] = [] if isinstance(vep_raw, BaseException) else vep_raw
-    clinvar_results: list[dict[str, Any]] = (
-        [] if isinstance(clinvar_raw, BaseException) else clinvar_raw
-    )
+    source_status: dict[str, str] = {}
+
+    def _checked_rows(name: str, raw: Any) -> list[dict[str, Any]]:
+        if isinstance(raw, BaseException):
+            source_status[name] = "failed"
+            return []
+        if not isinstance(raw, list) or not all(isinstance(row, dict) for row in raw):
+            source_status[name] = "invalid_response"
+            return []
+        source_status[name] = "ok" if raw else "no_data"
+        return raw
+
+    vep_results = _checked_rows("ensembl_vep", vep_raw)
+    clinvar_results = _checked_rows("clinvar", clinvar_raw)
+    if clinvar_results and not any(r.get("exact_change_match") is True for r in clinvar_results):
+        source_status["clinvar"] = (
+            "candidate_only"
+            if any(r.get("candidate_change_match") is True for r in clinvar_results)
+            else "no_verified_match"
+        )
 
     # gnomAD
     gnomad_data: dict[str, Any] = {}
     gnomad_id = _build_gnomad_id(hgvs, vep_results)
+    source_status["gnomad_variant"] = "skipped"
     if gnomad_id:
         try:
-            gnomad_data = await _gnomad().variant_frequencies(gnomad_id)
+            response = await _gnomad().variant_frequencies(gnomad_id)
+            if isinstance(response, dict):
+                gnomad_data = response
+                source_status["gnomad_variant"] = "ok" if response else "no_data"
+            else:
+                source_status["gnomad_variant"] = "invalid_response"
         except Exception as exc:
+            source_status["gnomad_variant"] = "failed"
             logger.warning(
                 "gnomad.variant_frequencies.failed",
                 exc=str(exc),
@@ -1399,10 +1434,17 @@ async def classify_variant_acmg(
 
     # Gene constraint (for PVS1 context)
     gene_constraint: dict[str, Any] = {}
+    source_status["gnomad_constraint"] = "skipped"
     if gene_symbol:
         try:
-            gene_constraint = await _gnomad().gene_constraint(gene_symbol)
+            response = await _gnomad().gene_constraint(gene_symbol)
+            if isinstance(response, dict):
+                gene_constraint = response
+                source_status["gnomad_constraint"] = "ok" if response else "no_data"
+            else:
+                source_status["gnomad_constraint"] = "invalid_response"
         except Exception as exc:
+            source_status["gnomad_constraint"] = "failed"
             logger.warning(
                 "gnomad.gene_constraint.failed",
                 exc=str(exc),
@@ -1418,7 +1460,7 @@ async def classify_variant_acmg(
     # reported as the queried variant's own ClinVar classification.
     clinvar_record = (
         clinvar_results[0]
-        if clinvar_results and clinvar_results[0].get("exact_change_match", True)
+        if clinvar_results and clinvar_results[0].get("exact_change_match") is True
         else None
     )
     clinvar_class = (clinvar_record or {}).get(
@@ -1478,7 +1520,16 @@ async def classify_variant_acmg(
             "classification": clinvar_class,
             "review_status": (clinvar_record or {}).get("review_status", ""),
             "variation_id": (clinvar_record or {}).get("variation_id", ""),
-            "interpretation": "External source classification; not counted as ACMG evidence.",
+            "identity_status": "exact_transcript" if clinvar_record is not None else "unverified",
+            "unverified_candidates": [
+                {"variation_id": row.get("variation_id", ""), "name": row.get("name", "")}
+                for row in clinvar_results
+                if row.get("candidate_change_match") is True
+            ][:3],
+            "interpretation": (
+                "External source classification, only when versioned-transcript text "
+                "matches; unverified candidates are not counted as ACMG evidence."
+            ),
         },
         "criteria_met": {},
         "criteria_not_met": [],
@@ -1488,6 +1539,7 @@ async def classify_variant_acmg(
             "benign_evidence_count": 0,
             "unreviewed_computational_signals": len(candidate_signals),
         },
+        "data_sources_status": source_status,
         "disclaimer": (
             "This tool does not classify a variant or establish ACMG/AMP criteria. "
             "All computed signals are unreviewed and disease mechanism evidence is absent. "

@@ -53,11 +53,13 @@ _SCENARIOS: dict[str, tuple[str, list[str], str | None]] = {
     "no_hit": ("BRCA1:c.182A>G", [], None),
     "nearby_only": ("BRCA1:c.182A>G", ["900002"], None),
     "other_gene_same_change": ("BRCA1:c.182A>G", ["900003"], None),
-    "other_gene_ranked_first": ("BRCA1:c.182A>G", ["900003", "900002", "900001"], "900001"),
-    "exact": ("BRCA1:c.182A>G", ["900002", "900001"], "900001"),
-    "dup_alias": ("BRCA1:c.5266dupC", ["900002", "900004"], "900004"),
-    # RefSeq version drift (.3 queried, ClinVar on .4) is the same transcript.
-    "transcript_version_drift": ("NM_007294.3(BRCA1):c.182A>G", ["900001"], "900001"),
+    "other_gene_ranked_first": ("BRCA1:c.182A>G", ["900003", "900002", "900001"], None),
+    "gene_candidate": ("BRCA1:c.182A>G", ["900002", "900001"], None),
+    "dup_alias": ("BRCA1:c.5266dupC", ["900002", "900004"], None),
+    # The newer reference version may refer to the same allele, but this
+    # title alone cannot prove it. Do not borrow its classification.
+    "transcript_version_drift": ("NM_007294.3(BRCA1):c.182A>G", ["900001"], None),
+    "transcript_version_exact": ("NM_007294.4(BRCA1):c.182A>G", ["900001"], "900001"),
     # Another BRCA1 transcript numbers c. positions differently.
     "other_transcript": ("NM_007300.4(BRCA1):c.182A>G", ["900001"], None),
 }
@@ -135,6 +137,19 @@ async def test_triage_reports_only_the_queried_variant(
     assert report["sources_queried"] == ["ClinVar"]
     # Exactly one ClinVar search: the variant's own. No gene-level fallback.
     assert terms == [expected_term]
+    candidate_id = {
+        "gene_candidate": "900001",
+        "other_gene_ranked_first": "900001",
+        "dup_alias": "900004",
+    }.get(scenario)
+    if candidate_id is None:
+        assert report["clinvar_unverified_candidate"] is None
+    else:
+        assert report["clinvar_unverified_candidate"]["variation_id"] == candidate_id
+        assert report["clinvar_unverified_candidate"]["identity_status"] == (
+            "candidate_text_not_allele_verified"
+        )
+        assert report["data_sources_status"]["clinvar"] == "candidate_only"
 
     evidence = report["pathogenicity"]
     if expected_uid is None:
