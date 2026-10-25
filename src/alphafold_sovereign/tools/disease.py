@@ -860,7 +860,20 @@ async def triage_variant_3d(params: VariantTriageInput) -> str:
             except Exception as exc:
                 pre_resolved_clinvar = exc
             if isinstance(pre_resolved_clinvar, dict):
-                gene_symbol = str(pre_resolved_clinvar.get("gene_symbol", ""))
+                if pre_resolved_clinvar.get("exact_change_match") is True:
+                    matched_gene = pre_resolved_clinvar.get("gene_symbol")
+                    if isinstance(matched_gene, str) and matched_gene.strip():
+                        gene_symbol = matched_gene.strip()
+                elif "clinvar_unverified_candidate" in pre_resolved_clinvar:
+                    # Keep the retrieval pointer, never its classification.
+                    pre_resolved_clinvar = {
+                        "clinvar_unverified_candidate": pre_resolved_clinvar[
+                            "clinvar_unverified_candidate"
+                        ]
+                    }
+                else:
+                    # Nonexact or unstamped records cannot supply clinical evidence.
+                    pre_resolved_clinvar = {}
 
         clinvar_coro = (
             _identity(pre_resolved_clinvar)
