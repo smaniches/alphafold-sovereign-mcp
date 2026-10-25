@@ -607,11 +607,8 @@ async def test_vep_refseq_alignment_recovers_only_version_matched_gene_context(
         assert report["clinical_tier"] == "NOT_ASSESSED"
         assert report["clinvar"]["found"] is False
     else:
-        report = await pm.classify_variant_acmg(
-            pm.ACMGVariantInput(hgvs="NM_999999.1:c.42A>G")
-        )
+        report = await pm.classify_variant_acmg(pm.ACMGVariantInput(hgvs="NM_999999.1:c.42A>G"))
         assert report["draft_classification"] == "Not assessed"
         assert report["clinvar_reference"]["found"] is False
     assert report["gene_symbol"] == "SYNTHX"
-    sources["gnomad"].gene_constraint.assert_awaited_once_with("SYNTHX"
-    )
+    sources["gnomad"].gene_constraint.assert_awaited_once_with("SYNTHX")
