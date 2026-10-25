@@ -116,7 +116,7 @@ def test_historical_spdx_cutover_does_not_rewrite_published_assets() -> None:
     text = SCRIPT.read_text(encoding="utf-8")
     assert 'STRICT_SPDX_FIRST_RELEASE="1.5.8"' in text
     marker = 'SPDX_VALIDATION_MODE="$(python3 - "$VERSION" "$STRICT_SPDX_FIRST_RELEASE" <<\'PY\'\n'
-    policy = text.split(marker, 1)[1].split("\nPY\n)\"", 1)[0]
+    policy = text.split(marker, 1)[1].split('\nPY\n)"', 1)[0]
     for version, expected in [
         ("1.4.7", "historical"),
         ("1.5.5", "historical"),
