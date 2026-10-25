@@ -360,11 +360,17 @@ async def _alphamissense_for_variant(
     canonical = next((tc for tc in vep_results if tc.get("canonical")), {})
     protein_variant = _protein_variant_from_vep(canonical)
     if not protein_variant:
-        if source_status is not None and source_status.get("ensembl_vep") in {
-            "failed",
-            "invalid_response",
-        }:
+        vep_state = None if source_status is None else source_status.get("ensembl_vep")
+        if vep_state == "failed":
             _mark("skipped_upstream_failed")
+        elif vep_state == "invalid_response":
+            _mark("skipped_upstream_invalid")
+        elif vep_state == "no_data":
+            _mark("skipped_no_vep_data")
+        elif not canonical:
+            _mark("skipped_no_canonical")
+        elif "missense_variant" in (canonical.get("consequence_terms") or []):
+            _mark("skipped_incomplete_mapping")
         else:
             _mark("skipped_not_applicable")
         return None

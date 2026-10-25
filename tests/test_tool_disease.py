@@ -1414,7 +1414,6 @@ async def test_triage_transcript_only_resolves_gene_only_after_clinvar_match(
     assert report["data_sources_status"] == {"clinvar": "ok", "gnomad": "ok"}
 
 
-
 @pytest.mark.parametrize(
     ("result", "expected_candidate"),
     [

@@ -18,9 +18,11 @@
 The variant report and draft ACMG tool preserve the AlphaMissense numerical
 score only when a VEP-mapped substitution has a well-formed score in [0, 1].
 The `data_sources_status.alphamissense` field distinguishes `ok`,
-`no_data`, `failed`, `invalid_response`, and explicit `skipped_*` states
-when the variant or UniProt mapping is unavailable. A failed lookup is never
-treated as negative or benign biological evidence.
+`no_data`, `failed`, `invalid_response`, and explicit `skipped_*` states.
+In particular, missing VEP evidence (`skipped_no_vep_data`) does not mean
+AlphaMissense is biologically inapplicable; an upstream error
+(`skipped_upstream_failed` or `skipped_upstream_invalid`) is not absence.
+A failed lookup is never treated as negative or benign biological evidence.
 
 ## Optional PDBe/IUCr residue annotations
 
