@@ -283,7 +283,11 @@ class ClinVarClient(BaseAsyncClient):
         # omitted bases in an upstream title require reference verification.
         explicit_query = re.fullmatch(r"(.+(?:dup|del))([acgt]+)", requested_change)
         explicit_record = re.fullmatch(r"(.+(?:dup|del))([acgt]+)", primary_change)
-        if explicit_query and explicit_record and explicit_query.groups() != explicit_record.groups():
+        if (
+            explicit_query
+            and explicit_record
+            and explicit_query.groups() != explicit_record.groups()
+        ):
             return "unmatched"
         return (
             "exact_transcript"

@@ -39,9 +39,7 @@ def _response(value: Any) -> AsyncMock:
     return AsyncMock(return_value=value)
 
 
-async def _report(
-    hgvs: str = "SYNTHX:c.42A>G", *, drug_context: bool = False
-) -> dict[str, Any]:
+async def _report(hgvs: str = "SYNTHX:c.42A>G", *, drug_context: bool = False) -> dict[str, Any]:
     return await pm.generate_variant_clinical_report(
         pm.VariantClinicalReportInput(hgvs=hgvs, include_drug_context=drug_context)
     )
@@ -52,9 +50,19 @@ async def _report(
     [
         ("SYNTHX:c.42A>G", [], [], "SYNTHX"),
         ("NM_999999.1(SYNTHX):c.42A>G", [], [], "SYNTHX"),
-        ("NM_999999.1:c.42A>G", [], [{"exact_change_match": True, "gene_symbol": "SYNTHX"}], "SYNTHX"),
+        (
+            "NM_999999.1:c.42A>G",
+            [],
+            [{"exact_change_match": True, "gene_symbol": "SYNTHX"}],
+            "SYNTHX",
+        ),
         ("NM_999999.1:c.42A>G", [{"gene_symbol": "SYNTHX"}], [], "SYNTHX"),
-        ("NM_999999.1:c.42A>G", [], [{"candidate_change_match": True, "gene_symbol": "SYNTHX"}], None),
+        (
+            "NM_999999.1:c.42A>G",
+            [],
+            [{"candidate_change_match": True, "gene_symbol": "SYNTHX"}],
+            None,
+        ),
         ("NM_999999.1:c.42A>G", [{"gene_symbol": "SYNTHX"}, {"gene_symbol": "OTHERX"}], [], None),
         ("NM_999999.1(SYNTHX):c.42A>G", [{"gene_symbol": "OTHERX"}], [], None),
         ("NM_999999.1:c.42A>G", [], [{"exact_change_match": True, "gene_symbol": None}], None),
@@ -192,9 +200,7 @@ async def test_report_chembl_outcomes(
     sources["chembl"].find_repurposable_drugs = _response(response)
     report = await _report(drug_context=True)
     assert report["data_sources_status"]["chembl"] == expected
-    assert len(report["drug_context"]["repurposing_candidates"]) == (
-        1 if expected == "ok" else 0
-    )
+    assert len(report["drug_context"]["repurposing_candidates"]) == (1 if expected == "ok" else 0)
 
 
 @pytest.mark.parametrize(
@@ -210,9 +216,7 @@ async def test_report_chembl_outcomes(
 async def test_report_drug_gene_lookup_is_validated(
     sources: dict[str, MagicMock], drug_gene: Any, expected: str
 ) -> None:
-    sources["ensembl"].gene_lookup = AsyncMock(
-        side_effect=[{"ensembl_gene_id": ""}, drug_gene]
-    )
+    sources["ensembl"].gene_lookup = AsyncMock(side_effect=[{"ensembl_gene_id": ""}, drug_gene])
     report = await _report(drug_context=True)
     assert report["data_sources_status"]["chembl"] == expected
 
@@ -261,6 +265,13 @@ async def test_transcript_queries_retain_verified_gene_context(
         ([{"seq_region_name": None, "start": 42, "allele_string": "A/G"}], None),
         ([{"seq_region_name": "1", "start": 42, "allele_string": None}], None),
         ([{"seq_region_name": "chr1", "start": 42, "allele_string": "A/G"}], "1-42-A-G"),
+        (
+            [
+                {"seq_region_name": "1", "start": 42, "allele_string": "A"},
+                {"seq_region_name": "2", "start": 43, "allele_string": "G/T"},
+            ],
+            "2-43-G-T",
+        ),
     ],
 )
 def test_malformed_vep_coordinates_do_not_form_variant_ids(

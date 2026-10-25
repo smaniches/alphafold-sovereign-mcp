@@ -539,6 +539,7 @@ async def generate_variant_clinical_report(
     clinvar_task = _clinvar().search_by_hgvs(hgvs)
 
     gathered: list[Any] = await asyncio.gather(vep_task, clinvar_task, return_exceptions=True)
+
     # A malformed or null upstream response is not an empty biological result.
     def _checked_rows(source: str, raw: Any) -> list[dict[str, Any]]:
         if isinstance(raw, BaseException):
@@ -593,7 +594,7 @@ async def generate_variant_clinical_report(
     if gene_symbol:
         gene_lookup_failed = False
         try:
-            gene_info = await _ensembl().gene_lookup(gene_symbol)
+            gene_info: object = await _ensembl().gene_lookup(gene_symbol)
             if isinstance(gene_info, dict):
                 ensembl_id = gene_info.get("ensembl_gene_id") or ""
                 if not isinstance(ensembl_id, str):

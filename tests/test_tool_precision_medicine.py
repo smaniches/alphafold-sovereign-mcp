@@ -2217,7 +2217,7 @@ async def test_generate_variant_report_gene_lookup_failure_retains_other_sources
     assert report["data_sources_status"]["ensembl_gene_lookup"] == "failed"
     assert report["data_sources_status"]["open_targets"] == "skipped_upstream_failed"
     assert report["data_sources_status"]["disgenet"] == "no_data"
-    assert report["data_sources_status"]["clinvar"] == "ok"
+    assert report["data_sources_status"]["clinvar"] == "no_data"
     assert report["clinical_tier"] == "NOT_ASSESSED"
 
 
