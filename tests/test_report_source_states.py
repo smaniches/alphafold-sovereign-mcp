@@ -474,6 +474,57 @@ async def test_acmg_gene_context_requires_nonconflicting_evidence(
             "SYNTHX",
         ),
         (
+            "NM_999999.1:c.42A>G",
+            [
+                {
+                    "transcript_id": "ENST000001",
+                    "refseq_transcript_ids": ["NM_999999.1"],
+                    "gene_symbol": "SYNTHX",
+                }
+            ],
+            [],
+            "SYNTHX",
+        ),
+        (
+            "NM_999999.1:c.42A>G",
+            [{"refseq_transcript_ids": ["NM_999999.2"], "gene_symbol": "SYNTHX"}],
+            [],
+            None,
+        ),
+        (
+            "NM_999999.1:c.42A>G",
+            [{"refseq_transcript_ids": ["NM_999999"], "gene_symbol": "SYNTHX"}],
+            [],
+            None,
+        ),
+        (
+            "NM_999999.1:c.42A>G",
+            [{"refseq_transcript_ids": "NM_999999.1", "gene_symbol": "SYNTHX"}],
+            [],
+            None,
+        ),
+        (
+            "NM_999999.1:c.42A>G",
+            [
+                {"refseq_transcript_ids": ["NM_999999.2"], "gene_symbol": "OTHERX"},
+                {"refseq_transcript_ids": ["NM_999999.1"], "gene_symbol": "SYNTHX"},
+            ],
+            [],
+            "SYNTHX",
+        ),
+        (
+            "NM_999999.1:c.42A>G",
+            [{"refseq_transcript_ids": ["NM_999999.1"], "gene_symbol": "OTHERX"}],
+            [{"exact_change_match": True, "gene_symbol": "SYNTHX"}],
+            None,
+        ),
+        (
+            "NM_999999.1:c.42A>G",
+            [{"refseq_transcript_ids": [None, "NM_999999.1"], "gene_symbol": "SYNTHX"}],
+            [],
+            "SYNTHX",
+        ),
+        (
             "NC_000001.11:g.42A>G",
             [{"transcript_id": "ENST000001", "gene_symbol": "OTHERX"}],
             [],
@@ -530,3 +581,37 @@ async def test_exact_clinvar_gene_survives_collateral_vep_consequence(
         report = await pm.classify_variant_acmg(pm.ACMGVariantInput(hgvs="NM_999999.1:c.42A>G"))
     assert report["gene_symbol"] == "SYNTHX"
     sources["gnomad"].gene_constraint.assert_awaited_once_with("SYNTHX")
+
+
+@pytest.mark.parametrize("report_kind", ["variant", "acmg"])
+async def test_vep_refseq_alignment_recovers_only_version_matched_gene_context(
+    sources: dict[str, MagicMock], report_kind: str
+) -> None:
+    """Ensembl aligned xrefs support gene-level lookup, never allele classification."""
+    sources["ensembl"].vep_hgvs = AsyncMock(
+        return_value=[
+            {
+                "transcript_id": "ENST000001",
+                "gene_symbol": "SYNTHX",
+                "refseq_transcript_ids": ["NM_999999.1"],
+            },
+            {
+                "transcript_id": "ENST000002",
+                "gene_symbol": "OTHERX",
+                "refseq_transcript_ids": ["NM_999999.2"],
+            },
+        ]
+    )
+    if report_kind == "variant":
+        report = await _report("NM_999999.1:c.42A>G")
+        assert report["clinical_tier"] == "NOT_ASSESSED"
+        assert report["clinvar"]["found"] is False
+    else:
+        report = await pm.classify_variant_acmg(
+            pm.ACMGVariantInput(hgvs="NM_999999.1:c.42A>G")
+        )
+        assert report["draft_classification"] == "Not assessed"
+        assert report["clinvar_reference"]["found"] is False
+    assert report["gene_symbol"] == "SYNTHX"
+    sources["gnomad"].gene_constraint.assert_awaited_once_with("SYNTHX"
+    )

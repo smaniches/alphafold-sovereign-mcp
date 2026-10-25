@@ -526,9 +526,19 @@ def _report_gene_from_sources(
             continue
         hgvsc = row.get("hgvsc")
         transcript_id = row.get("transcript_id")
-        if (isinstance(hgvsc, str) and hgvsc.partition(":")[0].upper() == queried_transcript) or (
+        refseq_ids = row.get("refseq_transcript_ids")
+        matches_hgvsc = (
+            isinstance(hgvsc, str) and hgvsc.partition(":")[0].upper() == queried_transcript
+        )
+        matches_transcript = (
             isinstance(transcript_id, str) and transcript_id.upper() == queried_transcript
-        ):
+        )
+        # RefSeq xrefs are aligned transcript references; their accession AND
+        # version must agree. Do not infer allelic or sequence equivalence.
+        matches_refseq = isinstance(refseq_ids, list) and any(
+            isinstance(value, str) and value.upper() == queried_transcript for value in refseq_ids
+        )
+        if matches_hgvsc or matches_transcript or matches_refseq:
             symbols.add(symbol.strip().upper())
 
     # An overlapping-gene VEP consequence does not override an exact

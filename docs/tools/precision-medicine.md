@@ -33,10 +33,14 @@ presented as available population or gene-constraint evidence.
 For versioned RefSeq HGVS input, the report and ACMG research tool may
 recover gene context from the parenthetical input gene, an exact ClinVar
 transcript-text match, or an Ensembl VEP consequence explicitly linked to the queried versioned
-transcript. VEP consequences for overlapping genes or unrelated transcripts
-are excluded from the identity decision. Conflicting evidence for the queried
-transcript still causes abstention; candidate-only ClinVar hits never establish
-gene identity.
+transcript, including a matching versioned `xref_refseq` identifier.
+VEP RefSeq cross-references describe aligned transcript mappings: Ensembl
+warns aligned transcripts may differ in sequence, exon structure and protein.
+These mappings support *gene-level context only*, never allelic equivalence,
+a clinical classification or a validated transcript sequence identity.
+Versionless, mismatched-version, overlapping-gene and unrelated-transcript
+cross-references are excluded. Conflicting evidence for the queried transcript
+still causes abstention; candidate-only ClinVar hits never establish identity.
 
 ## Optional PDBe/IUCr residue annotations
 
