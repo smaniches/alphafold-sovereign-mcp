@@ -667,8 +667,7 @@ async def test_search_by_hgvs_other_gene_same_change_is_not_exact(
     async with ClinVarClient() as client:
         rows = await client.search_by_hgvs("BRCA1:c.182A>G")
     assert [
-        (r["variation_id"], r["exact_change_match"], r["candidate_change_match"])
-        for r in rows
+        (r["variation_id"], r["exact_change_match"], r["candidate_change_match"]) for r in rows
     ] == [
         ("2", False, True),
         ("1", False, False),
@@ -736,6 +735,8 @@ async def test_search_by_hgvs_stamps_exact_change_match(
         ("NM_007294.4:c.5266dupC", "NM_007294.4(BRCA1):c.5266dup", "candidate_text"),
         ("NM_007294.4:c.68_69delAG", "NM_007294.4(BRCA1):c.68_69del", "candidate_text"),
         ("NM_007294.4:c.68_69delAG", "NM_007294.4(BRCA1):c.68_69delAA", "unmatched"),
+        ("NM_007294.4:c.68_69delAG", "NM_007294.4(BRCA1):c.68_69delAG", "exact_transcript"),
+        ("NM_007294.4:c.5266dupC", "NM_007294.4(BRCA1):c.5266dupC", "exact_transcript"),
         ("NM_007294.4:c.5266dupC", "NM_007294.4(BRCA1):c.5266dupA", "unmatched"),
         ("NP_009225.1:p.Cys61Gly", _BRCA1_C181, "unmatched"),
         ("rs28897672", _BRCA1_C181, "unmatched"),

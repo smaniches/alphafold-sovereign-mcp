@@ -115,7 +115,9 @@ tools/disease.py::triage_variant_3d
   │
   ├─ _parse_hgvs_gene        extract gene symbol from the HGVS string
   │                          (local parse; no Ensembl/UniProt resolution yet)
-  ├─ clients/clinvar.py      ClinVar interpretation + review status
+  ├─ clients/clinvar.py      gene-relative HGVS: unverified candidates only;
+  │                          versioned-transcript match: source interpretation
+  │                          and review status, not independent allele proof
   ├─ clients/gnomad.py       gnomAD gene-constraint scores; AlphaMissense
   │                          score is read from this payload when present
   ├─ disease context         placeholder note today; full Open Targets /

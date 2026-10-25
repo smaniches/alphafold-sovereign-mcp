@@ -306,13 +306,11 @@ original attribution; clinical interpretation requires independent review.
 
 ## Example usage
 
-For three documented end-to-end illustrations of a Claude Desktop
-session against this server — variant triage on BRCA1 c.5266dupC,
-target characterisation on EGFR, and a drug-discovery walk-through
-on Imatinib → BCR-ABL → CML — see the [`examples/`](examples/)
-directory. Each example includes the user prompt, the tool calls
-the model issues, the server's response shape, and the model's
-paraphrased reply.
+See [`examples/`](examples/) for research workflow guidance.
+The previous named clinical session transcripts were retired because
+they described an obsolete output contract. Current synthetic regression
+tests exercise retrieval and evidence attribution without asserting
+independently validated clinical conclusions.
 
 ### Clinical variant report
 

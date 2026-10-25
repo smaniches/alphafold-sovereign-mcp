@@ -53,15 +53,11 @@ expectation of what this project is and is not.
 - The ACMG mapping, druggability tier scoring, and KG queries all have
   parametrised tests covering known input/output pairs from the
   implementation.
-- **End-to-end golden examples** (``examples/golden/``) run the full
-  variant clinical-report pipeline against three canonical variants
-  (BRCA1 c.5266dupC, TP53 R175H, EGFR L858R) using **real upstream
-  responses recorded once with per-response SHA-256 provenance**, then
-  replayed offline via ``respx`` and diffed against a pinned
-  ``expected.json`` in CI. These pin pipeline behaviour and give worked,
-  source-traceable examples; they are a regression and traceability
-  artifact, not independent scientific validation of the heuristics
-  (which remains roadmap items 3–4 below).
+- **Synthetic offline regression tests** in
+  ``tests/test_synthetic_variant_pipeline.py`` exercise source-response
+  handling and transcript identity with fabricated records and intercepted
+  HTTP requests. The previous named clinical replay collection was retired.
+  These tests do not independently validate clinical interpretation.
 
 ### Security & supply chain
 - Bandit + pip-audit on every PR and in the local ``nox -s security`` session.
@@ -163,15 +159,12 @@ expectation of what this project is and is not.
 The validation gap is the highest-priority work after v1.2.0. The
 planned, sequenced steps are:
 
-1. **End-to-end golden examples.** ✅ **Shipped** in ``examples/golden/``:
-   the full variant clinical-report pipeline run against BRCA1 c.5266dupC,
-   TP53 R175H, and EGFR L858R, using real upstream responses recorded once
-   with per-response SHA-256 provenance, replayed offline and diffed
-   against a pinned ``expected.json`` in CI. Each example carries a
-   concordance analysis against the cited literature. This pins pipeline
-   behaviour and provides worked, source-traceable examples; the
-   independent scientific validation of the heuristics themselves remains
-   items 3–4.
+1. **Offline regression examples.** Synthetic, fabricated ClinVar records
+   exercise report composition with intercepted HTTP in
+   ``tests/test_synthetic_variant_pipeline.py``. The previous clinical
+   replays were retired; live API concordance, independently validated allele
+   identity, and clinical validation are not claimed. Independent scientific
+   validation remains items 3–4.
 2. **ACMG traceability matrix.** A markdown table mapping each
    criterion (PVS1, PS1–4, PM1–6, PP1–5, BA1, BS1–4, BP1–7) to the
    line of code that implements it, the test that exercises it, and

@@ -876,9 +876,7 @@ async def test_triage_variant_3d_skips_optional_gnomad(
         return {}
 
     monkeypatch.setattr("alphafold_sovereign.tools.disease._fetch_clinvar", fake_clinvar)
-    out = await triage_variant_3d(
-        VariantTriageInput(hgvs="BRCA1:c.181T>G", include_gnomad=False)
-    )
+    out = await triage_variant_3d(VariantTriageInput(hgvs="BRCA1:c.181T>G", include_gnomad=False))
     parsed = json.loads(out.split("---")[0].strip())
     assert parsed["data_sources_status"] == {"clinvar": "no_data", "gnomad": "skipped"}
 
@@ -1433,7 +1431,8 @@ async def test_triage_unmatched_transcript_does_not_guess_gnomad_gene(
     assert report["sources_queried"] == ["ClinVar"]
     assert report["pathogenicity_tier"] == "UNKNOWN"
     assert report["data_sources_status"] == {
-        "clinvar": "no_data", "gnomad": "skipped_no_verified_gene"
+        "clinvar": "no_data",
+        "gnomad": "skipped_no_verified_gene",
     }
 
 
@@ -1455,12 +1454,8 @@ async def test_synthetic_transcript_lookup_without_gene_handles_failure(
     async def forbid_gene_fetch(hgvs: str, gene: str) -> dict[str, Any]:
         raise AssertionError("unverified transcript must not trigger gene lookup")
 
-    monkeypatch.setattr(
-        "alphafold_sovereign.tools.disease._fetch_clinvar", fake_clinvar
-    )
-    monkeypatch.setattr(
-        "alphafold_sovereign.tools.disease._fetch_gnomad", forbid_gene_fetch
-    )
+    monkeypatch.setattr("alphafold_sovereign.tools.disease._fetch_clinvar", fake_clinvar)
+    monkeypatch.setattr("alphafold_sovereign.tools.disease._fetch_gnomad", forbid_gene_fetch)
     output = await triage_variant_3d(
         VariantTriageInput(hgvs="NM_999999.1:c.42A>G", include_structure=False)
     )

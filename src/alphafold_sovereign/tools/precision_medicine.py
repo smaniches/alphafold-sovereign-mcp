@@ -460,6 +460,34 @@ def _druggability_tier(
 # ── Tool 1: Full clinical variant report ─────────────────────────────────────
 
 
+def _report_gene_from_sources(
+    hgvs: str, vep_rows: list[dict[str, Any]], clinvar_rows: list[dict[str, Any]]
+) -> str | None:
+    """Resolve a report gene only from query context or compatible source evidence."""
+    gene = EnsemblClient.parse_gene_from_hgvs(hgvs)
+    if gene:
+        return gene
+
+    symbols: set[str] = set()
+    reference = re.match(
+        r"^(?:NM|NR|XM|XR)_\d+\.\d+\(([A-Za-z0-9-]+)\):[cnr]\.",
+        hgvs,
+        flags=re.IGNORECASE,
+    )
+    if reference:
+        symbols.add(reference.group(1).upper())
+    for row in clinvar_rows:
+        symbol = row.get("gene_symbol")
+        if row.get("exact_change_match") is True and isinstance(symbol, str) and symbol.strip():
+            symbols.add(symbol.strip().upper())
+    for row in vep_rows:
+        symbol = row.get("gene_symbol")
+        if isinstance(symbol, str) and symbol.strip():
+            symbols.add(symbol.strip().upper())
+    # Do not join gene-level evidence when independent sources disagree.
+    return next(iter(symbols)) if len(symbols) == 1 else None
+
+
 @mcp.tool(
     annotations={
         "title": "Generate Precision Medicine Variant Report",
@@ -506,40 +534,38 @@ async def generate_variant_clinical_report(
 
     source_status: dict[str, str] = {}
 
-    # ── Step 1: Parse gene symbol ────────────────────────────────────────────
-    gene_symbol = EnsemblClient.parse_gene_from_hgvs(hgvs)
-
-    # ── Step 2: Parallel evidence gathering ──────────────────────────────────
+    # ── Step 1: Parallel evidence gathering ──────────────────────────────────
     vep_task = _ensembl().vep_hgvs(hgvs, canonical=True)
     clinvar_task = _clinvar().search_by_hgvs(hgvs)
 
     gathered: list[Any] = await asyncio.gather(vep_task, clinvar_task, return_exceptions=True)
-    vep_raw, clinvar_raw = gathered[0], gathered[1]
-    vep_results: list[dict[str, Any]] = []
-    clinvar_results: list[dict[str, Any]] = []
-    # gather(return_exceptions=True) yields each result or a BaseException;
-    # checking BaseException (not Exception) is intentional so a captured
-    # CancelledError is treated as a failed source, not misread as result data.
-    if isinstance(vep_raw, BaseException):
-        log.warning("vep.failed", exc=str(vep_raw))
-        source_status["ensembl_vep"] = "failed"
-    else:
-        vep_results = vep_raw
-        source_status["ensembl_vep"] = "ok"
-    if isinstance(clinvar_raw, BaseException):
-        log.warning("clinvar.failed", exc=str(clinvar_raw))
-        source_status["clinvar"] = "failed"
-    else:
-        clinvar_results = clinvar_raw
-        source_status["clinvar"] = "ok"
+    # A malformed or null upstream response is not an empty biological result.
+    def _checked_rows(source: str, raw: Any) -> list[dict[str, Any]]:
+        if isinstance(raw, BaseException):
+            log.warning("source.failed", source=source, exc=str(raw))
+            source_status[source] = "failed"
+            return []
+        if not isinstance(raw, list) or not all(isinstance(row, dict) for row in raw):
+            source_status[source] = "invalid_response"
+            return []
+        source_status[source] = "ok" if raw else "no_data"
+        return raw
+
+    vep_results = _checked_rows("ensembl_vep", gathered[0])
+    clinvar_results = _checked_rows("clinvar", gathered[1])
+    gene_symbol = _report_gene_from_sources(hgvs, vep_results, clinvar_results)
 
     # ── Step 3: gnomAD variant ID construction ───────────────────────────────
     gnomad_data: dict[str, Any] = {}
     gnomad_id = _build_gnomad_id(hgvs, vep_results)
     if gnomad_id:
         try:
-            gnomad_data = await _gnomad().variant_frequencies(gnomad_id)
-            source_status["gnomad"] = "ok"
+            variant_response: object = await _gnomad().variant_frequencies(gnomad_id)
+            if isinstance(variant_response, dict):
+                gnomad_data = variant_response
+                source_status["gnomad"] = "ok" if variant_response else "no_data"
+            else:
+                source_status["gnomad"] = "invalid_response"
         except Exception as exc:
             log.warning("gnomad.failed", exc=str(exc))
             source_status["gnomad"] = "failed"
@@ -548,11 +574,18 @@ async def generate_variant_clinical_report(
 
     # ── Step 4: Gene-level constraint ────────────────────────────────────────
     gene_constraint: dict[str, Any] = {}
+    source_status["gnomad_constraint"] = "skipped"
     if gene_symbol:
         try:
-            gene_constraint = await _gnomad().gene_constraint(gene_symbol)
+            constraint_response: object = await _gnomad().gene_constraint(gene_symbol)
+            if isinstance(constraint_response, dict):
+                gene_constraint = constraint_response
+                source_status["gnomad_constraint"] = "ok" if constraint_response else "no_data"
+            else:
+                source_status["gnomad_constraint"] = "invalid_response"
         except Exception as exc:
             log.warning("gnomad.constraint.failed", exc=str(exc))
+            source_status["gnomad_constraint"] = "failed"
 
     # ── Step 5: Disease context ───────────────────────────────────────────────
     ot_diseases: list[dict[str, Any]] = []
@@ -561,7 +594,16 @@ async def generate_variant_clinical_report(
         gene_lookup_failed = False
         try:
             gene_info = await _ensembl().gene_lookup(gene_symbol)
-            ensembl_id = gene_info.get("ensembl_gene_id", "")
+            if isinstance(gene_info, dict):
+                ensembl_id = gene_info.get("ensembl_gene_id") or ""
+                if not isinstance(ensembl_id, str):
+                    ensembl_id = ""
+                    source_status["ensembl_gene_lookup"] = "invalid_response"
+                else:
+                    source_status["ensembl_gene_lookup"] = "ok" if ensembl_id else "no_data"
+            else:
+                ensembl_id = ""
+                source_status["ensembl_gene_lookup"] = "invalid_response"
         except Exception as exc:
             log.warning("ensembl.gene_lookup.failed", exc=str(exc))
             ensembl_id = ""
@@ -581,20 +623,19 @@ async def generate_variant_clinical_report(
             tasks.append(_empty_list())
 
         results = await asyncio.gather(*tasks, return_exceptions=True)
-        if not isinstance(results[0], BaseException):
-            disgenet_assocs = results[0]
-            source_status["disgenet"] = "ok"
-        else:
-            source_status["disgenet"] = "failed"
+        disgenet_assocs = _checked_rows("disgenet", results[0])
         if not ensembl_id:
             source_status["open_targets"] = (
                 "skipped_upstream_failed" if gene_lookup_failed else "skipped_no_gene_id"
             )
-        elif len(results) > 1 and not isinstance(results[1], BaseException):
-            ot_diseases = [s.to_dict() if hasattr(s, "to_dict") else s for s in results[1]]
-            source_status["open_targets"] = "ok"
         else:
-            source_status["open_targets"] = "failed"
+            raw_ot: Any = results[1]
+            if isinstance(raw_ot, list):
+                try:
+                    raw_ot = [row.to_dict() if hasattr(row, "to_dict") else row for row in raw_ot]
+                except Exception as exc:
+                    raw_ot = exc
+            ot_diseases = _checked_rows("open_targets", raw_ot)
     else:
         source_status["disgenet"] = "skipped"
         source_status["open_targets"] = "skipped"
@@ -603,20 +644,25 @@ async def generate_variant_clinical_report(
     drug_candidates: list[dict[str, Any]] = []
     if params.include_drug_context and gene_symbol:
         try:
-            gene_info_for_drugs = await _ensembl().gene_lookup(gene_symbol)
-            uniprot_ids = gene_info_for_drugs.get("uniprot_ids", [])
-            if uniprot_ids:
-                drug_candidates = await _chembl().find_repurposable_drugs(
-                    uniprot_ids[0], max_phase=2
-                )
-                source_status["chembl"] = "ok"
+            gene_info_for_drugs: object = await _ensembl().gene_lookup(gene_symbol)
+            if not isinstance(gene_info_for_drugs, dict):
+                source_status["chembl"] = "invalid_response"
             else:
-                source_status["chembl"] = "no_data"
+                uniprot_ids = gene_info_for_drugs.get("uniprot_ids", [])
+                if not isinstance(uniprot_ids, list) or not all(
+                    isinstance(accession, str) for accession in uniprot_ids
+                ):
+                    source_status["chembl"] = "invalid_response"
+                elif uniprot_ids:
+                    drug_response: object = await _chembl().find_repurposable_drugs(
+                        uniprot_ids[0], max_phase=2
+                    )
+                    drug_candidates = _checked_rows("chembl", drug_response)
+                else:
+                    source_status["chembl"] = "no_data"
         except Exception as exc:
             log.warning("drugs.failed", exc=str(exc))
             source_status["chembl"] = "failed"
-    elif not params.include_drug_context:
-        source_status["chembl"] = "skipped"
     else:
         source_status["chembl"] = "skipped"
 
@@ -1695,9 +1741,12 @@ def _build_gnomad_id(hgvs: str, vep_results: list[dict[str, Any]]) -> str | None
     """Attempt to build a gnomAD variant ID from VEP result mappings."""
     for hit in vep_results:
         # VEP top-level hit contains seq_region_name, start, and allele_string
-        chrom = str(hit.get("seq_region_name", "")).lstrip("chr")
+        chrom_raw = hit.get("seq_region_name")
         pos = hit.get("start")
-        allele_str = hit.get("allele_string", "")
+        allele_str = hit.get("allele_string")
+        if not isinstance(chrom_raw, str) or not isinstance(allele_str, str):
+            continue
+        chrom = chrom_raw.removeprefix("chr")
         if chrom and pos and "/" in allele_str:
             ref, _, alt = allele_str.partition("/")
             if ref and alt and ref != "-" and alt != "-":

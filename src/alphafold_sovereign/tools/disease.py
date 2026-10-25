@@ -839,9 +839,10 @@ async def triage_variant_3d(params: VariantTriageInput) -> str:
         # identify its allele, but not its gene for a gnomAD constraint query.
         # Resolve ClinVar first, then use ONLY the exact matching record's
         # source-reported gene. An unmatched accession must never be guessed.
-        transcript_only = not gene_symbol and re.fullmatch(
-            r"(?:NM|NR|XM|XR)_\d+\.\d+:[cnr]\..+", hgvs, re.IGNORECASE
-        ) is not None
+        transcript_only = (
+            not gene_symbol
+            and re.fullmatch(r"(?:NM|NR|XM|XR)_\d+\.\d+:[cnr]\..+", hgvs, re.IGNORECASE) is not None
+        )
         if not gene_symbol and not transcript_only:
             return json.dumps(
                 {
@@ -867,9 +868,7 @@ async def triage_variant_3d(params: VariantTriageInput) -> str:
             else _fetch_clinvar(hgvs, gene_symbol)
         )
         gnomad_coro = (
-            _fetch_gnomad(hgvs, gene_symbol)
-            if params.include_gnomad and gene_symbol
-            else None
+            _fetch_gnomad(hgvs, gene_symbol) if params.include_gnomad and gene_symbol else None
         )
         disease_coro = (
             _fetch_disease_context(gene_symbol)

@@ -94,16 +94,12 @@ async def test_synthetic_clinvar_record_cannot_cross_reference_boundary(
     assert output["clinical_tier"] == "NOT_ASSESSED"
     assert "PP5" not in output["acmg_criteria_draft"]["criteria"]
     assert output["clinvar"]["found"] is expected_verified
-    assert output["clinvar"]["variation_id"] == (
-        _SYNTHETIC_ID if expected_verified else ""
-    )
+    assert output["clinvar"]["variation_id"] == (_SYNTHETIC_ID if expected_verified else "")
     assert output["clinvar"]["classification"] == (
         "Pathogenic" if expected_verified else "Not provided"
     )
     assert output["clinvar"]["unverified_candidates"] == (
-        [{"variation_id": _SYNTHETIC_ID, "name": _SYNTHETIC_TITLE}]
-        if expected_candidate
-        else []
+        [{"variation_id": _SYNTHETIC_ID, "name": _SYNTHETIC_TITLE}] if expected_candidate else []
     )
     assert output["data_sources_status"]["clinvar"] == "ok"
     assert len(respx_mock.calls) == 2
@@ -112,7 +108,7 @@ async def test_synthetic_clinvar_record_cannot_cross_reference_boundary(
 @pytest.mark.parametrize(
     ("source_outcome", "expected_status"),
     [
-        ("empty", "ok"),
+        ("empty", "no_data"),
         ("failed", "failed"),
     ],
 )

@@ -270,16 +270,12 @@ class ClinVarClient(BaseAsyncClient):
         if title is None:
             return None
         record_accession, record_gene, primary_change = title.groups()
-        if (gene and gene != record_gene) or (
-            accession and accession != record_accession
-        ):
+        if (gene and gene != record_gene) or (accession and accession != record_accession):
             return None
         return accession, record_accession, change.strip().lower(), primary_change, name
 
     @staticmethod
-    def _match_nucleotide_change(
-        requested_change: str, primary_change: str, accession: str
-    ) -> str:
+    def _match_nucleotide_change(requested_change: str, primary_change: str, accession: str) -> str:
         """Match literal nucleotide text without inferring deleted-base identity."""
         if _canonical_change(primary_change) != _canonical_change(requested_change):
             return "unmatched"
@@ -287,7 +283,7 @@ class ClinVarClient(BaseAsyncClient):
         # omitted bases in an upstream title require reference verification.
         explicit_query = re.fullmatch(r"(.+(?:dup|del))([acgt]+)", requested_change)
         explicit_record = re.fullmatch(r"(.+(?:dup|del))([acgt]+)", primary_change)
-        if explicit_query and explicit_record and explicit_query != explicit_record:
+        if explicit_query and explicit_record and explicit_query.groups() != explicit_record.groups():
             return "unmatched"
         return (
             "exact_transcript"
