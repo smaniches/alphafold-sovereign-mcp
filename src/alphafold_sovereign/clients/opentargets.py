@@ -297,28 +297,27 @@ class OpenTargetsClient(BaseAsyncClient):
         return {}
 
     async def resolve_disease_efo(self, query: str) -> str:
-        """Resolve a disease name or ID to an EFO CURIE via full-text search.
+        """Resolve only one exact EFO name or ID, never a relevance-ranked guess.
 
-        ChEMBL keys drug indications on EFO IDs, but many MONDO terms carry no
-        direct EFO cross-reference (e.g. the broad ``MONDO:0007254`` "breast
-        cancer" node). The Open Targets search index maps free-text disease
-        names to ontology IDs; this returns the first EFO hit as a colon-form
-        CURIE (e.g. ``'EFO:0000305'``), or ``''`` when none is found.
-
-        Args:
-            query: Disease name or ID, e.g. ``'breast cancer'``.
+        Search ranking alone cannot establish a disease identity. Unknown or
+        ambiguous aliases require an explicit ontology cross-reference.
         """
-        try:
-            data = await self._graphql(self._GQL_PATH, _DISEASE_SEARCH_QUERY, {"q": query})
-        except Exception as exc:
-            logger.warning("opentargets.disease_search.failed", q=query, exc=str(exc))
-            return ""
+        data = await self._graphql(self._GQL_PATH, _DISEASE_SEARCH_QUERY, {"q": query})
         hits = ((data or {}).get("search") or {}).get("hits") or []
-        for hit in hits:
-            hid: str = hit.get("id", "")
-            if hid.startswith("EFO_"):
-                return hid.replace("_", ":")
-        return ""
+        key = query.strip().casefold().replace("_", ":")
+        matches = {
+            hit["id"]
+            for hit in hits
+            if isinstance(hit, dict)
+            and hit.get("entity") == "disease"
+            and isinstance(hit.get("id"), str)
+            and hit["id"].startswith("EFO_")
+            and (
+                str(hit.get("name", "")).strip().casefold() == key
+                or hit["id"].replace("_", ":").casefold() == key
+            )
+        }
+        return next(iter(matches)).replace("_", ":") if len(matches) == 1 else ""
 
     # ------------------------------------------------------------------
     # Helpers

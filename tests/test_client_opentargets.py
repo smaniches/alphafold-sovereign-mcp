@@ -5,8 +5,10 @@
 from __future__ import annotations
 
 import httpx
+import pytest
 import respx
 
+from alphafold_sovereign.clients._base import UpstreamError
 from alphafold_sovereign.clients.opentargets import OpenTargetsClient, _to_curie
 
 _GQL_URL = "https://api.platform.opentargets.org/api/v4/graphql"
@@ -440,7 +442,7 @@ async def test_resolve_disease_efo_found(respx_mock: respx.MockRouter) -> None:
                     "search": {
                         "hits": [
                             {"id": "MONDO_0007254", "entity": "disease", "name": "breast cancer"},
-                            {"id": "EFO_0000305", "entity": "disease", "name": "breast carcinoma"},
+                            {"id": "EFO_0000305", "entity": "disease", "name": "breast cancer"},
                         ]
                     }
                 }
@@ -465,11 +467,55 @@ async def test_resolve_disease_efo_no_efo_hit(respx_mock: respx.MockRouter) -> N
 async def test_resolve_disease_efo_error_returns_empty(respx_mock: respx.MockRouter) -> None:
     respx_mock.post(_GQL_URL).mock(return_value=httpx.Response(500))
     async with OpenTargetsClient() as client:
-        assert await client.resolve_disease_efo("breast cancer") == ""
+        with pytest.raises(UpstreamError):
+            await client.resolve_disease_efo("breast cancer")
 
 
 async def test_resolve_disease_efo_null_data(respx_mock: respx.MockRouter) -> None:
     """A null GraphQL ``data`` payload yields '' without raising."""
     respx_mock.post(_GQL_URL).mock(return_value=httpx.Response(200, json={"data": None}))
+    async with OpenTargetsClient() as client:
+        assert await client.resolve_disease_efo("breast cancer") == ""
+
+
+async def test_resolve_disease_efo_rejects_nonexact_search_hit(
+    respx_mock: respx.MockRouter,
+) -> None:
+    respx_mock.post(_GQL_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "data": {
+                    "search": {
+                        "hits": [
+                            {"id": "EFO_0000305", "entity": "disease", "name": "breast carcinoma"},
+                        ]
+                    }
+                }
+            },
+        )
+    )
+    async with OpenTargetsClient() as client:
+        assert await client.resolve_disease_efo("breast cancer") == ""
+
+
+async def test_resolve_disease_efo_rejects_ambiguous_identity(
+    respx_mock: respx.MockRouter,
+) -> None:
+    respx_mock.post(_GQL_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "data": {
+                    "search": {
+                        "hits": [
+                            {"id": "EFO_0000305", "entity": "disease", "name": "breast cancer"},
+                            {"id": "EFO_1000001", "entity": "disease", "name": "breast cancer"},
+                        ]
+                    }
+                }
+            },
+        )
+    )
     async with OpenTargetsClient() as client:
         assert await client.resolve_disease_efo("breast cancer") == ""

@@ -1,0 +1,43 @@
+name: Frozen MONDO identity audit
+
+"on":
+  pull_request:
+    paths:
+      - "src/alphafold_sovereign/tools/disease.py"
+      - "scripts/audit_mondo_catalog.py"
+      - "tests/test_mondo_catalog_audit.py"
+      - ".github/workflows/frozen-mondo-audit.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit-catalog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Download and verify exact MONDO release
+        shell: bash
+        run: |
+          curl --fail --location --retry 3 --max-time 300 \
+            --output "$RUNNER_TEMP/mondo.obo" \
+            "https://github.com/monarch-initiative/mondo/releases/download/v2026-10-06/mondo.obo"
+          echo "2631e8e165d41def1a46749adb1ce0a336c8aba7f6bc0978729592cee8fed60b  $RUNNER_TEMP/mondo.obo" | sha256sum --check
+      - name: Inspect every curated MONDO identifier
+        shell: bash
+        run: |
+          python scripts/audit_mondo_catalog.py \
+            --source src/alphafold_sovereign/tools/disease.py \
+            --obo "$RUNNER_TEMP/mondo.obo" \
+            --expected-hash 2631e8e165d41def1a46749adb1ce0a336c8aba7f6bc0978729592cee8fed60b \
+            --output /tmp/mondo-audit-report.json \
+            --require-all-resolved
+      - name: Publish audit evidence
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always()
+        with:
+          name: public-mondo-identity-audit
+          path: /tmp/mondo-audit-report.json
+          if-no-files-found: warn

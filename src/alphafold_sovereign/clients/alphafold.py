@@ -22,7 +22,7 @@ from urllib.parse import urlsplit
 
 import structlog
 
-from alphafold_sovereign.clients._base import BaseAsyncClient, UpstreamConfig
+from alphafold_sovereign.clients._base import BaseAsyncClient, UpstreamConfig, UpstreamError
 from alphafold_sovereign.clients._isoform import UniProtIsoformClient, UniProtVerificationError
 
 logger = structlog.get_logger(__name__)
@@ -229,10 +229,10 @@ class AlphaFoldClient(BaseAsyncClient):
         try:
             meta = await self.get_prediction(uniprot_id)
             return bool(_prediction_model_id(meta))
-        except (UniProtVerificationError, AlphaFoldPredictionSchemaError):
+        except UpstreamError as exc:
+            if exc.status == 404:
+                return False
             raise
-        except Exception:
-            return False
 
     async def search_by_taxonomy(
         self, taxon_id: int, *, page_size: int = 25

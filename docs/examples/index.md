@@ -1,22 +1,18 @@
-# Examples
+# Source-retrieval examples
 
-Three end-to-end illustrations of a Claude Desktop session against
-`alphafold-sovereign-mcp`.
+Use these examples to inspect source attribution, prediction types, and
+partial-failure handling, not to obtain independent medical conclusions.
 
-| Example | What it shows |
+| Example | Data path |
 |---|---|
-| [Variant triage on BRCA1 c.181T>G](01-variant-triage.md) | Ensembl VEP + ClinVar + gnomAD + AlphaMissense + AlphaFold for a well-characterised pathogenic missense variant. |
-| [Target characterisation on EGFR](02-target-characterization.md) | Open Targets, ChEMBL, gnomAD constraint, AlphaFold pLDDT for a HOT-tier drug target. |
-| [Drug discovery: Imatinib → BCR-ABL → CML](03-drug-discovery.md) | Multi-turn flow tying a drug to its target to the disease to the structural gatekeeper (T315I). |
+| [Variant evidence retrieval](01-variant-triage.md) | Ensembl VEP, ClinVar, population and computational source fields |
+| [Target evidence retrieval](02-target-characterization.md) | ChEMBL, Open Targets, gnomAD, AlphaFold DB predicted-structure confidence |
+| [Drug/target evidence retrieval](03-drug-discovery.md) | Disease-drug and target-source lookup, with predicted structure confidence |
 
-## Status
+The original 2026-06-08 illustrative transcripts were captured under an
+earlier API/output contract. They are not maintained as current tool outputs.
+Use an installed current package to reproduce live results. Source records,
+confidence estimates, and model predictions retain their upstream meaning.
 
-These transcripts were **captured live** against the upstream APIs on 2026-06-08; the per-example pages record the exact run and the full payload is in each example's `transcript.jsonl`. They are point-in-time illustrations, not regression-gated.
-
-The **CI-diffed golden examples** — the full pipeline run against BRCA1 c.5266dupC, TP53 R175H, and EGFR L858R on real recorded upstream responses, replayed offline and asserted against a pinned `expected.json`, each with a cited concordance analysis — are documented separately at [Golden examples](golden.md).
-
-## Reproducing locally
-
-See [Installation](../installation.md), configure Claude Desktop,
-restart, then paste the user prompt from any example into a new
-conversation.
+For deterministic offline coverage, see [Golden fixtures](golden.md).
+For client configuration, see [Installation](../installation.md).

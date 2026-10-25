@@ -27,7 +27,7 @@ than described as if it exists. For the threat model, see
 3. **Single licence.** The codebase is Apache 2.0 — one licence, with no
    dual-licence funnel and no feature gated behind a paid edition.
 4. **Protocol-native, tools first.** The server implements the MCP *tools*
-   surface over the stdio transport: 30 tools registered on a single FastMCP
+   surface over the stdio transport: 29 tools registered on a single FastMCP
    application. MCP resources, MCP prompts, and the Streamable HTTP transport
    are on the roadmap and are not part of the shipped surface.
 5. **Disease-integrated.** Structural data is joined with disease context.
@@ -49,7 +49,7 @@ src/alphafold_sovereign/
 │   ├── app.py           The single FastMCP application instance
 │   └── stdio.py         stdio transport; imports the tool modules and runs it
 │
-├── tools/               MCP tool implementations (30 tools; thin orchestration)
+├── tools/               MCP tool implementations (29 tools; thin orchestration)
 │   ├── precision_medicine.py     variant clinical report, ACMG draft,
 │   │                             druggability tier, protein dossier,
 │   │                             disease–drug map, drug repurposing  (6)
@@ -58,7 +58,7 @@ src/alphafold_sovereign/
 │   │                             shifts, pocket geometry, disorder,
 │   │                             structure retrieval                    (7)
 │   ├── disease.py                MONDO/HPO lookups, target–disease evidence,
-│   │                             3-D variant triage, ICD-10 resolution  (12)
+│   │                             3-D variant triage, ICD-10 resolution  (11)
 │   └── knowledge_graph_tools.py  query and export the local graph        (5)
 │
 ├── clients/             Async HTTP clients — 11 specialized clients + shared base
@@ -191,11 +191,12 @@ The disease-layer tools query six upstreams directly:
 | gnomAD | Population allele frequencies and constraint | GraphQL |
 | DisGeNET | Gene–disease association scores | REST |
 
-ICD-10 codes (`resolve_icd10_to_mondo`) and Orphanet rare-disease identifiers
-(`get_orphan_disease_atlas`) are resolved through MONDO's cross-references,
-not by querying separate ICD or Orphanet services. The
-`get_common_disease_targets` tool profiles protein targets across the major
-ICD-10 disease chapters, anchored to MONDO disease roots.
+ICD-10 codes are resolved through `resolve_icd10_to_mondo`, using
+MONDO cross-references. The MONDO client also supports exact Orphanet
+cross-reference lookup for source integration, without offering a curated
+clinical narrative or orphan-disease atlas. The `get_common_disease_targets`
+tool retrieves live source evidence from a small, ontology-checked set
+of example disease identifiers.
 
 ---
 

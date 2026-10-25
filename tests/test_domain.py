@@ -94,7 +94,7 @@ def test_ontology_term_to_dict() -> None:
 @pytest.mark.unit
 def test_disease_record_to_dict() -> None:
     rec = DiseaseRecord(
-        mondo_id="MONDO:0004995",
+        mondo_id="MONDO:0005010",
         name="coronary artery disease",
         synonyms=("CAD",),
         definition="Narrowing of coronary arteries.",
@@ -112,7 +112,7 @@ def test_disease_record_to_dict() -> None:
     )
     d = rec.to_dict()
     # All declared keys present
-    assert d["mondo_id"] == "MONDO:0004995"
+    assert d["mondo_id"] == "MONDO:0005010"
     assert d["name"] == "coronary artery disease"
     assert d["synonyms"] == ["CAD"]
     assert d["definition"] == "Narrowing of coronary arteries."
