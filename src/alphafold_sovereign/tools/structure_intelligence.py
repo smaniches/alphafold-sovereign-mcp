@@ -1500,7 +1500,6 @@ def _plddt_tier_explanation(tier: str) -> str:
     }.get(tier, "Unknown.")
 
 
-
 # ── Ortholog resolution ──────────────────────────────────────────────────────
 
 

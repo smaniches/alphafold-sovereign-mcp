@@ -220,7 +220,9 @@ def test_am_label_branches(score: float | None, expected_substring: str) -> None
         (PathogenicityClass.NOT_PROVIDED, 0.4, "NOT_ASSESSED"),
     ],
 )
-def test_compute_tier_never_infers_clinical_risk(cls: PathogenicityClass, am: float | None, expected: str) -> None:
+def test_compute_tier_never_infers_clinical_risk(
+    cls: PathogenicityClass, am: float | None, expected: str
+) -> None:
     assert _compute_tier(cls, am) == expected
 
 
@@ -1465,7 +1467,7 @@ async def test_unverified_transcript_result_cannot_attribute_clinvar_or_gene(
     )
     report = json.loads(out.split("---", 1)[0])
     assert report["gene_symbol"] == ""
-    assert report["pathogenicity_tier"] == "UNKNOWN"
+    assert report["pathogenicity_tier"] == "NOT_ASSESSED"
     assert report["pathogenicity"]["clinvar_classification"] == "Not provided"
     assert report["data_sources_status"]["gnomad"] == "skipped_no_verified_gene"
     assert report["clinvar_unverified_candidate"] == expected_candidate
@@ -1511,7 +1513,7 @@ async def test_triage_unmatched_transcript_does_not_guess_gnomad_gene(
     )
     report = json.loads(out.split("---", 1)[0])
     assert report["sources_queried"] == ["ClinVar"]
-    assert report["pathogenicity_tier"] == "UNKNOWN"
+    assert report["pathogenicity_tier"] == "NOT_ASSESSED"
     assert report["data_sources_status"] == {
         "clinvar": "no_data",
         "gnomad": "skipped_no_verified_gene",

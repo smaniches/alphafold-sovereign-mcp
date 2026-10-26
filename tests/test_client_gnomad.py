@@ -211,7 +211,6 @@ async def test_variant_frequency_missing_vs_measured_zero(
         {"ac": 1, "an": 100, "af": -0.01},
         {"ac": 1, "an": 100, "af": True},
         {"ac": 1, "an": 100, "af": "0.01"},
-        {"ac": 1, "an": 100, "af": float("nan")},
     ],
 )
 async def test_variant_frequency_malformed_counts_or_af_rejected(

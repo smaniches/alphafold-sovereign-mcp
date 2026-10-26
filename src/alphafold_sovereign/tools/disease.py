@@ -823,7 +823,7 @@ async def triage_variant_3d(params: VariantTriageInput) -> str:
     verified ClinVar classifications remain source-attributed in the
     pathogenicity section; they are not converted into a local risk tier.
     Gene-relative candidates remain explicitly unverified. AlphaMissense
-    is not wired into this particular tool.
+    is not wired into this particular tool. The report is not a calibrated risk estimate.
 
     Example: ``triage_variant_3d(hgvs='BRCA1:c.181T>G')``
     """

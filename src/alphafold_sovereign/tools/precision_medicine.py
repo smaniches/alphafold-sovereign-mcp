@@ -1981,9 +1981,5 @@ def _investability_rating(
     if approved_count >= 1 or pipeline_count >= 3:
         return "MEDIUM — heuristic source-count category, not clinical validation."
     if druggable_targets >= 2:
-        return (
-            "EARLY — heuristic source-count category; no independent biological validation."
-        )
-    return (
-        "EXPLORATORY — limited retrieved evidence; absent records are not evidence of absence."
-    )
+        return "EARLY — heuristic source-count category; no independent biological validation."
+    return "EXPLORATORY — limited retrieved evidence; absent records are not evidence of absence."

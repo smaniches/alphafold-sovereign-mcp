@@ -200,7 +200,9 @@ def test_target_evidence_score_to_dict() -> None:
 
 @pytest.mark.unit
 def test_population_frequency_missing_homozygote_count_is_unknown() -> None:
-    pf = PopulationFrequency(population="afr", allele_count=0, allele_number=100, allele_frequency=0)
+    pf = PopulationFrequency(
+        population="afr", allele_count=0, allele_number=100, allele_frequency=0
+    )
     assert pf.to_dict()["homozygote_count"] is None
 
 
