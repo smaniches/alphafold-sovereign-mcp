@@ -67,13 +67,12 @@ def run_stdio() -> None:
 
 
 def _seed_kg_at_startup() -> None:
-    """Load the curated knowledge-graph seed once, before serving requests.
+    """Initialize the SQLite storage path without inserting example data.
 
-    Seeding at boot (rather than lazily on first tool call) keeps the KG
-    query/export tools genuinely read-only. Uses a throwaway instance so the
-    on-disk DB is populated without binding the request-time singleton's lock
-    to this transient event loop. Honours ``AFSMCP_DISABLE_KG_SEED`` and never
-    blocks startup on failure.
+    Retained for backwards compatibility and initial SQLite schema creation;
+    representative biomedical rows are never inserted. The schema and any
+    previously stored rows remain unchanged. Honours
+    ``AFSMCP_DISABLE_KG_SEED`` and never blocks startup on failure.
     """
     import asyncio  # noqa: PLC0415
 

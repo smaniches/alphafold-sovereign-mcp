@@ -64,16 +64,15 @@ _SCENARIOS: dict[str, tuple[str, list[str], str | None]] = {
     "other_transcript": ("NM_007300.4(BRCA1):c.182A>G", ["900001"], None),
 }
 
-# Source label -> the (classification, tier) the report currently derives. The
-# combined "Pathogenic/Likely pathogenic" label is not in the client's label
-# map and reads as "Not provided"; that is pre-existing label handling (AF-02
-# scope), pinned here only so this identity test notices if it changes.
+# Source label -> source classification plus unassessed local tier. The
+# source label remains available, but it never becomes a locally inferred
+# clinical risk category.
 _LABELS: dict[str, tuple[str, str]] = {
-    "Pathogenic": ("Pathogenic", "HIGH"),
-    "Likely pathogenic": ("Likely pathogenic", "HIGH"),
-    "Pathogenic/Likely pathogenic": ("Not provided", "UNKNOWN"),
-    "Uncertain significance": ("Uncertain significance", "MEDIUM"),
-    "Benign": ("Benign", "LOW"),
+    "Pathogenic": ("Pathogenic", "NOT_ASSESSED"),
+    "Likely pathogenic": ("Likely pathogenic", "NOT_ASSESSED"),
+    "Pathogenic/Likely pathogenic": ("Not provided", "NOT_ASSESSED"),
+    "Uncertain significance": ("Uncertain significance", "NOT_ASSESSED"),
+    "Benign": ("Benign", "NOT_ASSESSED"),
 }
 
 
@@ -157,7 +156,7 @@ async def test_triage_reports_only_the_queried_variant(
         assert evidence["clinvar_classification"] == "Not provided"
         assert evidence["clinvar_review_status"] == ""
         assert evidence["clinvar_conditions"] == []
-        assert report["pathogenicity_tier"] == "UNKNOWN"
+        assert report["pathogenicity_tier"] == "NOT_ASSESSED"
     else:
         classification, tier = _LABELS[source_label]
         assert evidence["clinvar_variation_id"] == expected_uid

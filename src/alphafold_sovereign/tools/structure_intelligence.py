@@ -546,14 +546,14 @@ async def analyze_structural_confidence(
       plus a coarse confidence tier
     - **PAE** (predicted aligned error): mean and max inter-residue uncertainty
       and PAE-derived domain boundaries
-    - **Druggability pre-screen**: an ordered-fraction estimate and a
-      structure-based-drug-design suitability flag
+    - **Druggability pre-screen**: model confidence limitations; actual
+      ordered fraction and ligand suitability are NOT assessed
 
     pLDDT interpretation:
       > 90: Very high confidence — likely correct at backbone + sidechain level
       70–90: High confidence — backbone correct, some sidechain uncertainty
       50–70: Low confidence — may be IDP or novel fold
-      < 50: Very low — disordered or no structure deposited
+      < 50: Very low model confidence; does not establish disorder
 
     Input fields:
         params.uniprot_id: UniProt accession.
@@ -598,10 +598,10 @@ async def analyze_structural_confidence(
             ),
         },
         "druggability_pre_screen": {
-            "ordered_fraction": _estimate_ordered_fraction(plddt),
+            "ordered_fraction": None,
             "ordered_fraction_note": (
-                "Unvalidated proxy calculated from mean pLDDT; NOT the fraction "
-                "of residues actually classified as ordered."
+                "NOT_ASSESSED: mean pLDDT cannot determine the fraction "
+                "of residues that are intrinsically ordered."
             ),
             "structural_suitability": (
                 "HIGHER MODEL CONFIDENCE: validate pockets and ligand binding independently"
@@ -939,8 +939,8 @@ async def score_binding_pocket_geometry(
     Each pocket reports a radius of gyration (compactness of the pocket
     residues), a centroid offset (distance of the pocket centroid from
     the structure centroid; larger means more peripheral — a
-    solvent-accessible cleft rather than a dead-central cavity, and NOT a
-    measure of solvent burial), a mean pLDDT, and a druggability index.
+    only a geometric offset, not measured solvent accessibility, cavity
+    validity, or ligand binding), a mean pLDDT, and a heuristic score.
     The druggability index runs 0 to 100 and is the sum of four equally
     weighted 0 to 25 sub-scores: residue count, radius of gyration, mean
     pLDDT, and centroid offset.
@@ -997,7 +997,7 @@ async def score_binding_pocket_geometry(
             "are discarded. Druggability index is the sum of four equally "
             "weighted 0 to 25 sub-scores: residue count, radius of "
             "gyration, mean pLDDT, and centroid offset (larger offset = more "
-            "peripheral, solvent-accessible cleft; not a burial measure)."
+            "peripheral geometry, not measured access or ligand binding)."
         ),
         "note": (
             "For production use, validate with fpocket, P2Rank, or DoGSiteScorer. "
@@ -1092,16 +1092,11 @@ async def detect_intrinsically_disordered(
         ),
         "idr_fraction": round(idr_fraction, 4),
         "disordered_residue_count": disordered_residues,
-        "is_idr_protein": idr_fraction > 0.3,
+        "is_idr_protein": None,
         "idr_segments": idr_segments,
-        "idr_classification": _classify_idr_protein(idr_fraction, idr_segments),
-        "clinical_implications": _idr_clinical_implications(idr_fraction, idr_segments),
-        "drug_target_potential": (
-            "EMERGING: long IDRs are targets for targeted covalent inhibitors and "
-            "phase-separation modulators — consult recent IDR drug discovery literature."
-            if idr_fraction > 0.3
-            else "CONVENTIONAL: ordered structure is suitable for classical SBDD approaches."
-        ),
+        "idr_classification": "NOT_ASSESSED: model confidence is not an IDR assay.",
+        "clinical_implications": None,
+        "drug_target_potential": None,
         "reference": "Ruff KM & Pappu RV (2021) J Mol Biol 433:167208. doi:10.1016/j.jmb.2021.167208",
         "provenance": _provenance(alphafold_db="v6", plddt_cutoff="50"),
     }
@@ -1480,42 +1475,6 @@ def _classify_idr_segment(
     }
 
 
-def _classify_idr_protein(
-    idr_fraction: float,
-    segments: list[dict[str, Any]],
-) -> str:
-    long_idrs = [s for s in segments if s["segment_type"] == "Long IDR"]
-    if idr_fraction > 0.7:
-        return "Fully disordered (IDP) — likely functions via disorder-to-order transitions."
-    if idr_fraction > 0.3 or long_idrs:
-        return "Partially disordered (IDPR) — ordered domains connected by IDRs."
-    return "Predominantly ordered — classical structural biology approaches apply."
-
-
-def _idr_clinical_implications(idr_fraction: float, segments: list[dict[str, Any]]) -> list[str]:
-    implications: list[str] = []
-    if idr_fraction > 0.3:
-        implications.append(
-            "High IDR fraction: enriched for post-translational modification sites "
-            "(phosphorylation, acetylation, ubiquitination)."
-        )
-    tails = [s for s in segments if "tail" in s["segment_type"].lower()]
-    if tails:
-        implications.append(
-            "Terminal IDRs identified: candidate nuclear localisation signals, "
-            "degradation signals, or binding motifs."
-        )
-    long_idrs = [s for s in segments if s["segment_type"] == "Long IDR"]
-    if long_idrs:
-        implications.append(
-            f"{len(long_idrs)} long IDR(s) detected: candidate liquid-liquid phase "
-            "separation (LLPS) driver. Relevant for neurodegenerative disease mechanisms."
-        )
-    if not implications:
-        implications.append("No significant IDRs: protein is predominantly ordered.")
-    return implications
-
-
 # ── pLDDT helpers ─────────────────────────────────────────────────────────────
 
 
@@ -1533,18 +1492,13 @@ def _plddt_tier(plddt: float | None) -> str:
 
 def _plddt_tier_explanation(tier: str) -> str:
     return {
-        "VERY_HIGH": "pLDDT ≥ 90: backbone and sidechain positions likely correct. Suitable for SBDD.",
-        "HIGH": "pLDDT 70–90: backbone correct, some sidechain uncertainty. Suitable for pocket analysis.",
-        "LOW": "pLDDT 50–70: may represent IDP region or novel fold. Verify with experimental structure.",
-        "VERY_LOW": "pLDDT < 50: disordered in isolation or no structural data. Not suitable for SBDD.",
+        "VERY_HIGH": "pLDDT ≥ 90: high model-local confidence; ligand binding is not assessed.",
+        "HIGH": "pLDDT 70–90: high model-local confidence; pockets require independent validation.",
+        "LOW": "pLDDT 50–70: low model confidence; disorder or function is not established.",
+        "VERY_LOW": "pLDDT < 50: very low model confidence; this does not establish disorder.",
         "UNKNOWN": "AlphaFold confidence data not available.",
     }.get(tier, "Unknown.")
 
-
-def _estimate_ordered_fraction(plddt: float | None) -> float | None:
-    if plddt is None:
-        return None
-    return round(min(1.0, max(0.0, (plddt - 50.0) / 50.0)), 3)
 
 
 # ── Ortholog resolution ──────────────────────────────────────────────────────
@@ -1623,5 +1577,6 @@ def _find_most_similar_pair(ids: list[str], matrix: list[list[float]]) -> dict[s
         "protein_a": best[1],
         "protein_b": best[2],
         "distance": best[0],
-        "similarity_pct": round((1.0 - best[0]) * 100, 1),
+        # Feature-vector distance has no calibrated biological similarity scale.
+        "similarity_pct": None,
     }

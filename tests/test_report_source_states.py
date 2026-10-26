@@ -335,6 +335,7 @@ async def test_open_targets_converter_failure_is_explicit(
     [
         ({}, "found", "no_data"),
         ({"found": False, "global_af": None}, "found", "no_data"),
+        ({"found": True, "global_af": None}, "found", "no_data"),
         ({"found": True, "global_af": 0.002}, "found", "ok"),
         ({"global_af": 0.002}, "found", "ok"),
         ({}, "constraint_available", "no_data"),

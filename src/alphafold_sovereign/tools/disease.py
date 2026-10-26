@@ -21,7 +21,7 @@ import asyncio
 import json
 import re
 from datetime import datetime, timezone
-from typing import Any, NoReturn
+from typing import TYPE_CHECKING, Any, NoReturn
 
 import structlog
 from fastmcp.exceptions import ToolError
@@ -34,11 +34,10 @@ from alphafold_sovereign.clients.gnomad import GnomADClient
 from alphafold_sovereign.clients.hpo import HPOClient
 from alphafold_sovereign.clients.mondo import MONDOClient
 from alphafold_sovereign.clients.opentargets import OpenTargetsClient
-from alphafold_sovereign.domain.disease import (
-    PathogenicityClass,
-    TargetEvidenceScore,
-)
 from alphafold_sovereign.server.app import mcp
+
+if TYPE_CHECKING:
+    from alphafold_sovereign.domain.disease import PathogenicityClass, TargetEvidenceScore
 
 logger = structlog.get_logger(__name__)
 
@@ -820,12 +819,11 @@ async def triage_variant_3d(params: VariantTriageInput) -> str:
        accession first); the AlphaFold pLDDT / PAE join into this report
        is a roadmap (Wave-3) item.
 
-    Returns a ``pathogenicity_tier``: HIGH / MEDIUM / LOW / UNKNOWN,
-    derived from ClinVar only for an exact versioned-transcript expression.
-    Gene-relative text can discover an explicitly unverified candidate, but
-    cannot borrow that candidate's classification. AlphaMissense is absent.
-    This legacy display label is not a calibrated risk estimate, an ACMG
-    classification, or an independently validated clinical assessment.
+    Returns the legacy ``pathogenicity_tier`` key as NOT_ASSESSED. Raw
+    verified ClinVar classifications remain source-attributed in the
+    pathogenicity section; they are not converted into a local risk tier.
+    Gene-relative candidates remain explicitly unverified. AlphaMissense
+    is not wired into this particular tool.
 
     Example: ``triage_variant_3d(hgvs='BRCA1:c.181T>G')``
     """
@@ -943,6 +941,10 @@ async def triage_variant_3d(params: VariantTriageInput) -> str:
             "hgvs": hgvs,
             "gene_symbol": gene_symbol,
             "pathogenicity_tier": tier,
+            "pathogenicity_tier_explanation": (
+                "NOT_ASSESSED: source-reported ClinVar interpretation is shown "
+                "separately; no independent clinical risk tier is calculated."
+            ),
             "pathogenicity": {
                 "alphamissense_score": am_score,
                 "alphamissense_interpretation": _am_label(am_score),
@@ -1412,14 +1414,5 @@ def _am_label(score: float | None) -> str:
 
 
 def _compute_tier(cls: PathogenicityClass, am_score: float | None) -> str:
-    if cls in (PathogenicityClass.PATHOGENIC, PathogenicityClass.LIKELY_PATHOGENIC):
-        return "HIGH"
-    if cls == PathogenicityClass.BENIGN:
-        return "LOW"
-    if am_score is not None and am_score >= 0.564:
-        return "HIGH"
-    if am_score is not None and am_score <= 0.34:
-        return "LOW"
-    if cls == PathogenicityClass.UNCERTAIN:
-        return "MEDIUM"
-    return "UNKNOWN"
+    """Legacy API compatibility: no independent clinical tier is assessed."""
+    return "NOT_ASSESSED"

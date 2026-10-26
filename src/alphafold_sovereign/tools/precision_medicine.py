@@ -551,6 +551,8 @@ def _gnomad_result_status(payload: dict[str, Any], availability_field: str) -> s
     """Respect gnomAD's explicit negative flags even in nonempty responses."""
     if not payload or payload.get(availability_field) is False:
         return "no_data"
+    if availability_field == "found" and payload.get("global_af") is None:
+        return "no_data"  # Identity is not measured frequency evidence.
     return "ok"
 
 
@@ -1855,20 +1857,20 @@ def _druggability_actionability(tier: str, drug_count: int, tractability_labels:
             basis = f"{drug_count} known drug(s) + small-molecule tractability label(s)"
         else:
             basis = f"{drug_count} known drug(s) on drug precedent alone (no small-molecule tractability label)"
-        return f"Target is HOT: {basis}. Prioritise for lead optimisation or repurposing screen."
+        return f"Research heuristic HOT: {basis}. Independently verify target engagement and indication."
     if tier == "WARM":
         return (
-            f"Target is WARM: limited clinical precedent ({drug_count} drugs). "
-            "Recommend structural analysis + FBDD/SBDD campaign."
+            f"Research heuristic WARM: {drug_count} reported compound(s). "
+            "No independent clinical or binding validation is implied."
         )
     if tier == "COLD":
         return (
-            "Target is COLD: no strong drug precedent. "
-            "Consider phenotypic screen, allosteric site search, or PROTAC approach."
+            "Research heuristic COLD: limited retrieved drug precedent. "
+            "This is not evidence of absent therapeutic potential."
         )
     return (
-        "Target has no current evidence of druggability. "
-        "Consider pathway-level intervention or indirect targeting strategy."
+        "NOT_DRUGGABLE is an uncalibrated heuristic label, not a conclusion "
+        "that the target cannot be drugged; check source coverage."
     )
 
 
@@ -1886,10 +1888,12 @@ def _narrative_summary(
     if loeuf is not None:
         constraint_desc = f"The gene is {'highly constrained (LoF intolerant, LOEUF=' + f'{loeuf:.3f}' + ')' if loeuf < 0.35 else 'moderately constrained' if loeuf < 0.6 else 'tolerant to LoF'}. "
     return (
-        f"{sym} is a {tier.lower()}-priority drug target with {drug_count} known clinical compound(s). "
+        f"{sym} has a local {tier.lower()} target-priority heuristic and "
+        f"{drug_count} retrieved clinical compound record(s). "
         f"Top associated diseases: {disease_names or 'not determined'}. "
         f"{constraint_desc}"
-        f"This dossier was synthesized in real-time from Open Targets, DisGeNET, ChEMBL, gnomAD, ClinVar, and Ensembl."
+        "This is an unvalidated research synthesis; inspect each source status "
+        "and record identity before relying on the reported evidence."
     )
 
 
@@ -1973,13 +1977,13 @@ def _investability_rating(
     *, approved_count: int, pipeline_count: int, druggable_targets: int
 ) -> str:
     if approved_count >= 3 and druggable_targets >= 5:
-        return "HIGH — well-validated therapeutic area with multiple approved agents and druggable targets."
+        return "HIGH — heuristic source-count category, not clinical validation."
     if approved_count >= 1 or pipeline_count >= 3:
-        return "MEDIUM — emerging therapeutic area with clinical validation."
+        return "MEDIUM — heuristic source-count category, not clinical validation."
     if druggable_targets >= 2:
         return (
-            "EARLY — biologically validated but limited clinical precedent; high-risk/high-reward."
+            "EARLY — heuristic source-count category; no independent biological validation."
         )
     return (
-        "EXPLORATORY — limited evidence; suitable for academic or phenotypic discovery programmes."
+        "EXPLORATORY — limited retrieved evidence; absent records are not evidence of absence."
     )

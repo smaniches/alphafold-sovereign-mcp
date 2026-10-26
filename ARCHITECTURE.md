@@ -89,7 +89,7 @@ src/alphafold_sovereign/
     ├── knowledge_graph.py   SQLite knowledge graph (WAL mode); six entity,
     │                        four relationship, and two provenance tables;
     │                        per-row SHA-256 fingerprint columns (not keys)
-    └── seed.py              Curated seed dataset loaded when the graph is empty
+    └── seed.py              No-op compatibility entrypoint; no automatic data seed
 ```
 
 The package also contains six reserved namespace packages — `compliance/`,

@@ -360,10 +360,10 @@ def test_tier_explanation(tier: str) -> None:
 @pytest.mark.parametrize(
     ("tier", "expected_substr"),
     [
-        ("HOT", "Prioritise"),
-        ("WARM", "FBDD"),
-        ("COLD", "phenotypic"),
-        ("NOT_DRUGGABLE", "pathway"),
+        ("HOT", "Research heuristic HOT"),
+        ("WARM", "Research heuristic WARM"),
+        ("COLD", "Research heuristic COLD"),
+        ("NOT_DRUGGABLE", "uncalibrated heuristic label"),
     ],
 )
 def test_druggability_actionability(tier: str, expected_substr: str) -> None:

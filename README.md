@@ -73,12 +73,12 @@ A Python MCP server that:
   heuristic target-druggability scoring, drug-repurposing candidate
   ranking, and cross-species structural-distance computation.
 - Ships a local SQLite knowledge graph (`storage/knowledge_graph.py`)
-  with query, export, and traversal tools. It loads a curated boot
-  seed automatically when empty (`storage/seed.py`, 16 entities and 15
-  relationships; disable with `AFSMCP_DISABLE_KG_SEED=1`) and can be
-  extended by writing through the knowledge-graph API. There is no
-  automatic per-invocation persistence: the analysis tools do not write
-  to the store on their own.
+  with query, export, and traversal tools. Fresh installations begin
+  without automatically inserted biomedical records; data is stored by
+  explicit writes through the knowledge-graph API. Existing SQLite files
+  are preserved, including illustrative rows from earlier releases;
+  historical numerical values are not independently validated source
+  records. Analysis tools do not automatically persist their results.
 - Includes an exploratory Cα-derived feature-vector module. With the
   optional `[tda]` extra (`gudhi`), it reports H₀/H₁ terminal-filtration
   Betti numbers; H₂ is not computed. The fallback reports a 4-Å contact

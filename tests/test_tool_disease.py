@@ -210,17 +210,17 @@ def test_am_label_branches(score: float | None, expected_substring: str) -> None
 @pytest.mark.parametrize(
     ("cls", "am", "expected"),
     [
-        (PathogenicityClass.PATHOGENIC, None, "HIGH"),
-        (PathogenicityClass.LIKELY_PATHOGENIC, None, "HIGH"),
-        (PathogenicityClass.BENIGN, None, "LOW"),
-        (PathogenicityClass.NOT_PROVIDED, 0.9, "HIGH"),
-        (PathogenicityClass.NOT_PROVIDED, 0.1, "LOW"),
-        (PathogenicityClass.UNCERTAIN, None, "MEDIUM"),
-        (PathogenicityClass.NOT_PROVIDED, None, "UNKNOWN"),
-        (PathogenicityClass.NOT_PROVIDED, 0.4, "UNKNOWN"),
+        (PathogenicityClass.PATHOGENIC, None, "NOT_ASSESSED"),
+        (PathogenicityClass.LIKELY_PATHOGENIC, None, "NOT_ASSESSED"),
+        (PathogenicityClass.BENIGN, None, "NOT_ASSESSED"),
+        (PathogenicityClass.NOT_PROVIDED, 0.9, "NOT_ASSESSED"),
+        (PathogenicityClass.NOT_PROVIDED, 0.1, "NOT_ASSESSED"),
+        (PathogenicityClass.UNCERTAIN, None, "NOT_ASSESSED"),
+        (PathogenicityClass.NOT_PROVIDED, None, "NOT_ASSESSED"),
+        (PathogenicityClass.NOT_PROVIDED, 0.4, "NOT_ASSESSED"),
     ],
 )
-def test_compute_tier_branches(cls: PathogenicityClass, am: float | None, expected: str) -> None:
+def test_compute_tier_never_infers_clinical_risk(cls: PathogenicityClass, am: float | None, expected: str) -> None:
     assert _compute_tier(cls, am) == expected
 
 
@@ -742,7 +742,7 @@ async def test_triage_variant_3d_full(monkeypatch: pytest.MonkeyPatch) -> None:
     out = await triage_variant_3d(VariantTriageInput(hgvs="BRCA1:c.181T>G"))
     parsed = json.loads(out.split("---")[0].strip())
     assert parsed["status"] == "success"
-    assert parsed["pathogenicity_tier"] == "HIGH"
+    assert parsed["pathogenicity_tier"] == "NOT_ASSESSED"
     assert "structure_note" in parsed
 
 
@@ -820,9 +820,9 @@ async def test_triage_variant_3d_partial_exceptions(monkeypatch: pytest.MonkeyPa
 
     out = await triage_variant_3d(VariantTriageInput(hgvs="BRCA1:c.1T>G"))
     parsed = json.loads(out.split("---")[0].strip())
-    # All exceptions captured → empty dicts, tier UNKNOWN
+    # All exceptions captured: source failures explicit; no clinical tier.
     assert parsed["status"] == "success"
-    assert parsed["pathogenicity_tier"] == "UNKNOWN"
+    assert parsed["pathogenicity_tier"] == "NOT_ASSESSED"
     assert parsed["data_sources_status"] == {"clinvar": "failed", "gnomad": "failed"}
 
 
