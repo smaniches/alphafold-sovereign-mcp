@@ -6,11 +6,11 @@ These tools read and traverse the local SQLite knowledge graph — a genuine
 ACID store (WAL journalling, versioned migrations, schema v3) with foreign-key
 integrity across proteins, variants, diseases, drugs and their relationships.
 
-The graph ships with a curated boot seed (loaded automatically when the store
-is empty; disable with ``AFSMCP_DISABLE_KG_SEED=1``) so these tools return
-representative results out of the box. It is extended by writing through the
-knowledge-graph storage API; the analysis tools do not write to it on their own
-(no automatic per-invocation persistence). On top of that store the tools provide:
+Only explicitly stored rows are available on a fresh installation; there is
+no automatic biomedical seed. Older SQLite files may contain illustrative rows
+inserted by earlier releases: these are preserved, but must not be mistaken
+for independently sourced observations. The analysis tools do not write to
+the store on their own. On top of that store the tools provide:
 
   - Recall of stored entities with no upstream API call required
   - Cross-entity pattern queries ("which HIGH-tier variants share a WARM target?")
@@ -130,9 +130,9 @@ async def query_variant_database(
 
     Returns variants matching the filter criteria. No upstream API calls are
     made — all data is served from the local SQLite knowledge graph, which is
-    populated by the curated boot seed and by any explicit writes through the
-    knowledge-graph storage API (the analysis tools do not write to it on their
-    own).
+    populated only through explicit writes to the knowledge-graph storage API.
+    Historical SQLite files may retain illustrative rows from older versions;
+    these should not be interpreted as independently verified biology.
 
     Input fields:
         params.gene: Gene symbol filter.
@@ -163,9 +163,9 @@ async def query_variant_database(
         "result_count": len(rows),
         "variants": rows,
         "note": (
-            "Results served from the local knowledge graph. The store is populated "
-            "by the curated boot seed (disable with AFSMCP_DISABLE_KG_SEED=1) and by "
-            "explicit writes through the knowledge-graph storage API."
+            "Local SQLite records only; no live lookup or automatic evidence "
+            "verification. New installs are empty until explicit writes. Older "
+            "databases may contain unverified illustrative rows."
         ),
         "provenance": _provenance(source="local-kg"),
     }
@@ -185,18 +185,16 @@ async def query_protein_database(
     """Recall proteins already stored in the local knowledge graph.
 
     This is a local-recall query, not a live lookup: it returns only proteins that
-    have previously been written to the local SQLite store (the curated boot seed,
-    plus anything added through the knowledge-graph storage API). No upstream API is
-    called. To assess a protein that may not be stored yet, use
+    have previously been written through the knowledge-graph storage API (or
+    retained from earlier versions of the database). No upstream API is called. To assess a protein that may not be stored yet, use
     ``assess_target_druggability`` (druggability tier) or
     ``analyze_structural_confidence`` (pLDDT), which query live sources.
 
     Filters are combined with AND; omit a filter to leave that dimension
     unconstrained. Returns a JSON record with the applied ``query``, a
     ``result_count``, and the matching ``proteins`` rows. The list is empty when
-    nothing stored matches — common when only the boot seed is loaded, so a broad
-    filter returning few rows usually means the store is small, not that no such
-    protein exists.
+    nothing stored matches; an empty result means the local store has no
+    matching row, not that the protein is absent from upstream biology.
 
     Input fields:
         params.druggability_tier: Keep only proteins whose stored tier equals this
@@ -220,9 +218,9 @@ async def query_protein_database(
         "result_count": len(rows),
         "proteins": rows,
         "note": (
-            "Results served from the local knowledge graph. The store is populated "
-            "by the curated boot seed (disable with AFSMCP_DISABLE_KG_SEED=1) and by "
-            "explicit writes through the knowledge-graph storage API."
+            "Local SQLite records only; no live lookup or automatic evidence "
+            "verification. New installs are empty until explicit writes. Older "
+            "databases may contain unverified illustrative rows."
         ),
         "provenance": _provenance(source="local-kg"),
     }
@@ -247,7 +245,7 @@ async def get_knowledge_graph_stats() -> dict[str, Any]:
 
     stats["description"] = (
         "AlphaFold Sovereign local knowledge graph — "
-        "persistent ACID SQLite store (curated seed plus explicitly stored entities). "
+        "persistent ACID SQLite store of explicitly written or historical rows. "
         f"Database: {stats['database_path']}"
     )
     stats["provenance"] = _provenance(source="local-kg")
@@ -320,7 +318,7 @@ async def find_drug_gene_network(
     symbol resolves to its encoded proteins and reported variants, a UniProt
     accession resolves to its stored protein record, and a MONDO disease
     resolves to drugs with an indication for it. The store is populated by the
-    curated boot seed and by explicit writes through the storage API.
+    storage API, or retained from historical database versions.
 
     Input fields:
         params.seed: Starting entity identifier.
@@ -336,10 +334,9 @@ async def find_drug_gene_network(
         "max_hops": params.max_hops,
         "network": network,
         "note": (
-            "Network contains only entities stored in the local knowledge graph. "
-            "The store is populated by the curated boot seed (disable with "
-            "AFSMCP_DISABLE_KG_SEED=1) and by explicit writes through the "
-            "knowledge-graph storage API."
+            "Network reflects stored SQLite rows, not independent live "
+            "source validation. New stores are empty until explicitly "
+            "written; older databases may retain illustrative rows."
         ),
         "provenance": _provenance(source="local-kg"),
     }

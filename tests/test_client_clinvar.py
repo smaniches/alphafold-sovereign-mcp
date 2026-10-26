@@ -449,11 +449,11 @@ def test_match_rank_key_exact_beats_review() -> None:
     }
     key_exact = ClinVarClient._match_rank_key("BRCA1:c.5266dupC", exact_single)
     key_nonmatch = ClinVarClient._match_rank_key("BRCA1:c.5266dupC", nonmatch_expert)
-    # (not exact, -review): the exact match sorts first even though its review
-    # status is weaker than the non-matching expert-panel record.
+    # The candidate title ranks first, but without a known transcript it is
+    # not an exact allele. Review quality only breaks ties in the same tier.
     assert key_exact < key_nonmatch
-    assert key_exact == (False, -1)
-    assert key_nonmatch == (True, -3)
+    assert key_exact == (False, True, -1)
+    assert key_nonmatch == (True, True, -3)
 
 
 def test_match_rank_key_review_breaks_ties_among_exact() -> None:
@@ -462,10 +462,10 @@ def test_match_rank_key_review_breaks_ties_among_exact() -> None:
     expert = {"name": name, "review_status": "reviewed by expert panel"}
     single = {"name": name, "review_status": "criteria provided, single submitter"}
     unknown = {"name": name, "review_status": "brand new status"}
-    assert ClinVarClient._match_rank_key("TP53:c.524G>A", expert) == (False, -3)
-    assert ClinVarClient._match_rank_key("TP53:c.524G>A", single) == (False, -1)
+    assert ClinVarClient._match_rank_key("TP53:c.524G>A", expert) == (False, True, -3)
+    assert ClinVarClient._match_rank_key("TP53:c.524G>A", single) == (False, True, -1)
     # Unrecognised review status ranks lowest (0).
-    assert ClinVarClient._match_rank_key("TP53:c.524G>A", unknown) == (False, 0)
+    assert ClinVarClient._match_rank_key("TP53:c.524G>A", unknown) == (False, True, 0)
 
 
 def test_match_rank_key_other_gene_ranks_as_non_match() -> None:
@@ -481,8 +481,8 @@ def test_match_rank_key_other_gene_ranks_as_non_match() -> None:
     }
     key_queried = ClinVarClient._match_rank_key("BRCA1:c.182A>G", queried)
     key_other = ClinVarClient._match_rank_key("BRCA1:c.182A>G", other_gene)
-    assert key_queried == (False, -1)
-    assert key_other == (True, -3)
+    assert key_queried == (False, True, -1)
+    assert key_other == (True, True, -3)
     assert key_queried < key_other
 
 
@@ -554,7 +554,7 @@ _BRCA1_C181 = "NM_007294.4(BRCA1):c.181T>G (p.Cys61Gly)"
     ("hgvs", "name", "expected"),
     [
         # Exact canonical match.
-        ("BRCA1:c.5266dupC", "NM_007294.4(BRCA1):c.5266dup (p.Gln1756fs)", True),
+        ("BRCA1:c.5266dupC", "NM_007294.4(BRCA1):c.5266dup (p.Gln1756fs)", False),
         # A nearby, non-matching variant — the real-world failure mode: the
         # gene-scoped search returns a candidate, but it is not the one asked
         # about.
@@ -564,35 +564,40 @@ _BRCA1_C181 = "NM_007294.4(BRCA1):c.181T>G (p.Cys61Gly)"
         # must not match an unrelated delins record at the same position. A
         # bare substring check (without the lookahead) would wrongly match.
         ("BRCA1:c.68_69delAG", "NM_007294.4(BRCA1):c.68_69delinsAAAA (p.Test)", False),
-        ("BRCA1:c.68_69delAG", "NM_007294.4(BRCA1):c.68_69del (p.Test)", True),
-        # No ':' (bare identifier such as an rsID) — no change token to
-        # compare, so esearch's own lookup is authoritative.
-        ("rs28897672", _BRCA1_C181, True),
+        ("BRCA1:c.68_69delAG", "NM_007294.4(BRCA1):c.68_69del (p.Test)", False),
+        # An rsID can represent multiple alleles. A bare identifier alone
+        # cannot establish which ClinVar record was intended.
+        ("rs28897672", _BRCA1_C181, False),
+        ("rs28897672", "NM_000546.6(TP53):c.182A>G (p.Asp61Gly)", False),
         # --- AF-01: gene identity -------------------------------------------
         # Same change token, different gene: not the queried variant. The
         # titles are ClinVar's observed spelling for these records (live
         # free-text esearch for "c.182A>G", 2026-10-15).
         ("BRCA1:c.182A>G", "NM_000546.6(TP53):c.182A>G (p.Asp61Gly)", False),
         ("BRCA1:c.182A>G", "NM_002451.4(MTAP):c.182A>G (p.His61Arg)", False),
-        ("TP53:c.182A>G", "NM_000546.6(TP53):c.182A>G (p.Asp61Gly)", True),
+        ("TP53:c.182A>G", "NM_000546.6(TP53):c.182A>G (p.Asp61Gly)", False),
         # Gene comparison is case-insensitive.
-        ("brca1:c.181t>g", _BRCA1_C181, True),
+        ("brca1:c.181t>g", _BRCA1_C181, False),
         # A shorter symbol must not match inside a longer one, either side.
         ("BRCA:c.181T>G", _BRCA1_C181, False),
         ("RCA1:c.181T>G", _BRCA1_C181, False),
         # Protein change on the queried gene matches; the same protein change
         # in another gene does not (both titles observed live).
-        ("BRCA1:p.Cys61Gly", _BRCA1_C181, True),
+        ("BRCA1:p.Cys61Gly", _BRCA1_C181, False),
         ("TP53:p.Asp61Gly", "NM_003470.3(USP7):c.182A>G (p.Asp61Gly)", False),
         # A title that does not bind the change to the queried gene cannot
         # establish gene identity.
         ("BRCA1:c.181T>G", "NM_007294.4:c.181T>G (p.Cys61Gly)", False),
         # --- AF-01: transcript context --------------------------------------
-        # RefSeq version drift (.3 queried, ClinVar on .4) is the same
-        # transcript, with or without a parenthesised gene.
-        ("NM_007294.3:c.181T>G", _BRCA1_C181, True),
-        ("NM_007294.3(BRCA1):c.181T>G", _BRCA1_C181, True),
+        # Same accession number, different version: sequence-coordinate
+        # equivalence requires a mapping that the title does not provide.
+        ("NM_007294.3:c.181T>G", _BRCA1_C181, False),
+        ("NM_007294.3(BRCA1):c.181T>G", _BRCA1_C181, False),
         ("NM_007294.4(BRCA1):c.181T>G", _BRCA1_C181, True),
+        ("NM_007294:c.181T>G", _BRCA1_C181, False),
+        ("NR_007294.4:c.181T>G", _BRCA1_C181, False),
+        # The token must identify the primary change, not a parenthetical note.
+        ("BRCA1:c.181T>G", "NM_007294.4(BRCA1):c.5181T>G (c.181T>G)", False),
         # Another transcript numbers c. positions differently: not verified.
         ("NM_007300.4(BRCA1):c.181T>G", _BRCA1_C181, False),
         ("NM_000546.6:c.182A>G", "NM_003470.3(USP7):c.182A>G (p.Asp61Gly)", False),
@@ -600,9 +605,11 @@ _BRCA1_C181 = "NM_007294.4(BRCA1):c.181T>G (p.Cys61Gly)"
         ("NM_00729.4:c.181T>G", _BRCA1_C181, False),
         # Gene and transcript must both agree when both are given.
         ("NM_007294.4(TP53):c.181T>G", _BRCA1_C181, False),
-        # A protein accession is not carried by ClinVar titles, so only the
-        # change token is checked for it (pre-existing behaviour, unchanged).
-        ("NP_009225.1:p.Cys61Gly", _BRCA1_C181, True),
+        # The title carries an NM_ reference, not the named protein/genomic
+        # accession. A matching change token alone cannot verify identity.
+        ("NP_009225.1:p.Cys61Gly", _BRCA1_C181, False),
+        ("NC_000017.11:g.43000000A>G", "NM_007294.4(BRCA1):g.43000000A>G", False),
+        ("NG_005905.2:c.181T>G", _BRCA1_C181, False),
         # --- AF-01: token boundaries ----------------------------------------
         # A token without its coordinate type must not match inside "c.181…".
         ("BRCA1:181T>G", _BRCA1_C181, False),
@@ -659,9 +666,11 @@ async def test_search_by_hgvs_other_gene_same_change_is_not_exact(
     )
     async with ClinVarClient() as client:
         rows = await client.search_by_hgvs("BRCA1:c.182A>G")
-    assert [(r["variation_id"], r["exact_change_match"]) for r in rows] == [
-        ("2", True),
-        ("1", False),
+    assert [
+        (r["variation_id"], r["exact_change_match"], r["candidate_change_match"]) for r in rows
+    ] == [
+        ("2", False, True),
+        ("1", False, False),
     ]
 
 
@@ -712,3 +721,55 @@ async def test_search_by_hgvs_stamps_exact_change_match(
         rows = await client.search_by_hgvs("BRCA1:c.182A>G")
     assert len(rows) == 2
     assert all(row["exact_change_match"] is False for row in rows)
+
+
+@pytest.mark.parametrize(
+    ("query", "name", "confidence"),
+    [
+        ("BRCA1:c.181T>G", _BRCA1_C181, "candidate_text"),
+        ("BRCA1:p.Cys61Gly", _BRCA1_C181, "candidate_text"),
+        ("NM_007294.4(BRCA1):c.181T>G", _BRCA1_C181, "exact_transcript"),
+        ("NM_007294.3(BRCA1):c.181T>G", _BRCA1_C181, "unmatched"),
+        ("NM_007294.4:c.181T>G", _BRCA1_C181, "exact_transcript"),
+        ("NM_007294.4:c.181T>A", _BRCA1_C181, "unmatched"),
+        ("NM_007294.4:c.5266dupC", "NM_007294.4(BRCA1):c.5266dup", "candidate_text"),
+        ("NM_007294.4:c.68_69delAG", "NM_007294.4(BRCA1):c.68_69del", "candidate_text"),
+        ("NM_007294.4:c.68_69delAG", "NM_007294.4(BRCA1):c.68_69delAA", "unmatched"),
+        ("NM_007294.4:c.68_69delAG", "NM_007294.4(BRCA1):c.68_69delAG", "exact_transcript"),
+        ("NM_007294.4:c.5266dupC", "NM_007294.4(BRCA1):c.5266dupC", "exact_transcript"),
+        ("NM_007294.4:c.5266dupC", "NM_007294.4(BRCA1):c.5266dupA", "unmatched"),
+        ("NP_009225.1:p.Cys61Gly", _BRCA1_C181, "unmatched"),
+        ("rs28897672", _BRCA1_C181, "unmatched"),
+    ],
+)
+def test_match_confidence_does_not_promote_unverified_alleles(
+    query: str, name: str, confidence: str
+) -> None:
+    assert ClinVarClient._match_confidence(query, {"name": name}) == confidence
+
+
+@pytest.mark.parametrize(
+    ("query", "name", "expected"),
+    [
+        (
+            "SYNTHX:c.42A>G",
+            "NP_999999.1(SYNTHX):c.42A>G",
+            "unmatched",
+        ),
+        (
+            "SYNTHX:p.Gly12Ser",
+            "NM_999999.1(SYNTHX):c.34G>A (p.Gly12Ser)",
+            "candidate_text",
+        ),
+        (
+            "SYNTHX:p.Gly12Arg",
+            "NM_999999.1(SYNTHX):c.34G>A (p.Gly12Ser)",
+            "unmatched",
+        ),
+    ],
+)
+def test_synthetic_reference_type_and_protein_annotations(
+    query: str, name: str, expected: str
+) -> None:
+    """Secondary protein tags do not establish nucleotide reference identity."""
+    assert ClinVarClient._match_confidence(query, {"name": name}) == expected

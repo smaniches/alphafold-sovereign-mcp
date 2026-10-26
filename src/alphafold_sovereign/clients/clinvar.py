@@ -74,20 +74,21 @@ def _canonical_change(change: str) -> str:
     return re.sub(r"(dup|del)[acgt]+$", r"\1", change.strip().lower())
 
 
-# Nucleotide transcript accessions whose numbering defines a c./n. change. A
-# ClinVar title names its reference transcript (``NM_007294.4(BRCA1):…``), so a
-# queried transcript of these kinds can be checked against it; other accession
-# kinds (NP_, NC_, NG_, …) are not carried by the title and stay unverified here.
+# Transcript accession identity requires the full RefSeq accession *and*
+# version. ClinVar may print a newer transcript than the caller supplied;
+# equivalence of c./n. coordinates across versions requires a separate mapping.
+# Protein/genomic accessions (NP_, NC_, NG_, ...) cannot be checked against
+# a title that displays a nucleotide transcript and must not be treated as exact.
 _TRANSCRIPT_ACCESSION_PREFIXES = ("nm_", "nr_", "xm_", "xr_")
 
 
 def _query_reference(prefix: str) -> tuple[str, str] | None:
-    """Split an HGVS reference prefix into a lower-cased ``(accession, gene)``.
+    """Parse a lower-cased ``(versioned_accession, gene)`` reference.
 
     ``BRCA1`` yields only a gene, ``NM_007294.3`` only an accession and
-    ``NM_007294.4(BRCA1)`` both. The accession is returned without its version
-    so a pinned ``.3`` still names ClinVar's current ``.4`` transcript. ``None``
-    means the prefix could not be parsed, so no record can be verified against it.
+    ``NM_007294.4(BRCA1)`` both. Preserve the accession version: silently
+    replacing ``.3`` with ``.4`` cannot establish variant identity. ``None``
+    means an unparseable prefix.
     """
     prefix = prefix.strip().lower()
     if not prefix:
@@ -96,7 +97,7 @@ def _query_reference(prefix: str) -> tuple[str, str] | None:
     # underscore; gene symbols do not.
     if not re.match(r"[a-z]{2}_\d", prefix):
         return ("", prefix)
-    ref = re.fullmatch(r"([a-z]{2}_\d+)(?:\.\d+)?(?:\(([^()\s]+)\))?", prefix)
+    ref = re.fullmatch(r"([a-z]{2}_\d+(?:\.\d+)?)(?:\(([^()\s]+)\))?", prefix)
     if ref is None:
         return None
     return (ref.group(1), ref.group(2) or "")
@@ -138,8 +139,12 @@ class ClinVarClient(BaseAsyncClient):
                 e.g. ``'NM_007294.3:c.181T>G'`` or ``'BRCA1:c.181T>G'``.
 
         Returns:
-            List of raw variant summary dicts.  Use ``get_variant`` to
-            fetch full details for a specific variation ID.
+            Ranked variant summary dicts. ``exact_change_match`` is true only
+            for identical changes on an explicit versioned transcript. A
+            gene-relative match is ``candidate_change_match`` only: its
+            ClinVar classification is NOT yet attributable to the input
+            allele. Use ``get_variant`` for more detail, not as proof of
+            cross-transcript equivalence.
         """
         params: dict[str, Any] = {
             "db": "clinvar",
@@ -161,13 +166,15 @@ class ClinVarClient(BaseAsyncClient):
         # wins over a single-submitter one. Without this, a legacy dup/del
         # spelling matched nothing and row[0] fell back to an arbitrary hit.
         summaries.sort(key=lambda s: self._match_rank_key(hgvs, s))
-        # Stamp whether each row actually is the queried variant (same change on
-        # the same gene / transcript), so a caller taking row[0] can tell "the
-        # best candidate ClinVar returned" from "the variant that was actually
-        # asked about" — without this, a query with no true match silently
-        # reports a nearby or other-gene variant's classification as its own.
+        # Search similarity is NOT variant identity. A gene-relative c./p.
+        # token can match titles from distinct transcripts (and a deletion's
+        # omitted reference bases require sequence validation). Preserve such
+        # rows for discovery, but never stamp them as an exact variant.
         for row in summaries:
-            row["exact_change_match"] = self._is_exact_match(hgvs, row)
+            confidence = self._match_confidence(hgvs, row)
+            row["exact_change_match"] = confidence == "exact_transcript"
+            row["candidate_change_match"] = confidence == "candidate_text"
+            row["identity_status"] = confidence
         return summaries
 
     async def get_variant(self, variation_id: str) -> dict[str, Any]:
@@ -242,54 +249,96 @@ class ClinVarClient(BaseAsyncClient):
         return f"{prefix}[gene] AND {change}"
 
     @staticmethod
-    def _is_exact_match(hgvs: str, summary: dict[str, Any]) -> bool:
-        """Whether ``summary`` is the variant ``hgvs`` names, judged by its title.
-
-        ClinVar titles bind a change to its reference, e.g.
-        ``NM_007294.4(BRCA1):c.181T>G (p.Cys61Gly)``. A record matches only when
-        the title contains the canonical change token as a whole token, and the
-        query's gene symbol (``(BRCA1):``) and transcript accession (any version)
-        where given. A shared change token alone is not identity: ``c.182A>G``
-        exists in many genes, and esearch's gene filter is not re-verified by it.
-
-        A query with no ``:`` — a bare identifier such as an rsID, passed
-        straight through by ``_build_search_term`` — carries no change token to
-        compare, so esearch's own lookup is treated as authoritative and this
-        returns ``True``.
-        """
+    def _match_reference_parts(
+        hgvs: str, summary: dict[str, Any]
+    ) -> tuple[str, str, str, str, str] | None:
+        """Require compatible RefSeq and gene context before comparing changes."""
         prefix, sep, change = hgvs.partition(":")
-        if not sep:
-            return True
-        canon = _canonical_change(change)
-        reference = _query_reference(prefix)
-        if not canon or reference is None:
-            return False
+        reference = _query_reference(prefix) if sep and change.strip() else None
+        if reference is None:
+            return None
         accession, gene = reference
-        name = str(summary.get("name", "")).lower()
-        if gene and f"({gene}):" not in name:
-            return False
-        if accession.startswith(_TRANSCRIPT_ACCESSION_PREFIXES) and not re.search(
-            r"(?<![a-z0-9_])" + re.escape(accession) + r"(?:\.\d+)?[(:]", name
+        # The current title parser does not establish protein or genomic
+        # accession identity, and transcript versions must be explicit.
+        if accession and (
+            not accession.startswith(_TRANSCRIPT_ACCESSION_PREFIXES)
+            or re.fullmatch(r"[a-z]{2}_\d+\.\d+", accession) is None
         ):
-            return False
-        # Whole-token match: c.182A>G must not match inside c.5182A>G (left) or
-        # c.68_69del inside c.68_69delinsAAAA (right).
+            return None
+        name = str(summary.get("name", "")).strip().lower()
+        title = re.match(r"^([a-z]{2}_\d+(?:\.\d+)?)(?:\(([^()\s]+)\))?:(\S+)", name)
+        if title is None:
+            return None
+        record_accession, record_gene, primary_change = title.groups()
+        if (gene and gene != record_gene) or (accession and accession != record_accession):
+            return None
+        return accession, record_accession, change.strip().lower(), primary_change, name
+
+    @staticmethod
+    def _match_nucleotide_change(requested_change: str, primary_change: str, accession: str) -> str:
+        """Match literal nucleotide text without inferring deleted-base identity."""
+        if _canonical_change(primary_change) != _canonical_change(requested_change):
+            return "unmatched"
+        # Optional deletion/duplication bases are useful for discovery, but
+        # omitted bases in an upstream title require reference verification.
+        explicit_query = re.fullmatch(r"(.+(?:dup|del))([acgt]+)", requested_change)
+        explicit_record = re.fullmatch(r"(.+(?:dup|del))([acgt]+)", primary_change)
+        if (
+            explicit_query
+            and explicit_record
+            and explicit_query.groups() != explicit_record.groups()
+        ):
+            return "unmatched"
         return (
-            re.search(r"(?<![0-9a-z.+*_-])" + re.escape(canon) + r"(?![0-9a-z])", name) is not None
+            "exact_transcript"
+            if accession and primary_change == requested_change
+            else "candidate_text"
         )
 
-    @classmethod
-    def _match_rank_key(cls, hgvs: str, summary: dict[str, Any]) -> tuple[bool, int]:
-        """Rank a candidate summary for ``search_by_hgvs`` ordering.
+    @staticmethod
+    def _match_confidence(hgvs: str, summary: dict[str, Any]) -> str:
+        """Identify literal same-version transcript matches; otherwise abstain.
 
-        Sorts an exact variant match ahead of nearby variants, then prefers the
-        better-reviewed record. The key is ``(not exact, -review_rank)`` so that
-        Python's ascending, stable sort puts exact matches first, the highest
-        review status next, and preserves the upstream order for genuine ties.
+        Gene-relative expressions and protein annotations only discover
+        candidates. Matching canonical text is not cross-transcript or
+        patient-level allele equivalence, nor a clinical interpretation.
         """
-        exact = cls._is_exact_match(hgvs, summary)
+        parts = ClinVarClient._match_reference_parts(hgvs, summary)
+        if parts is None:
+            return "unmatched"
+        accession, record_accession, requested_change, primary_change, name = parts
+        if requested_change.startswith(("c.", "n.", "r.")):
+            if not record_accession.startswith(_TRANSCRIPT_ACCESSION_PREFIXES):
+                return "unmatched"
+            return ClinVarClient._match_nucleotide_change(
+                requested_change, primary_change, accession
+            )
+        if requested_change.startswith("p.") and re.search(
+            r"\(\s*" + re.escape(requested_change) + r"\s*\)", name
+        ):
+            # A secondary protein annotation is not a verified reference allele.
+            return "candidate_text"
+        return "unmatched"
+
+    @staticmethod
+    def _is_exact_match(hgvs: str, summary: dict[str, Any]) -> bool:
+        """True only for a literal change on an identical, versioned transcript.
+
+        This is a transcript-expression match, not an independently validated
+        clinical allele normalization or cross-transcript equivalence claim.
+        """
+        return ClinVarClient._match_confidence(hgvs, summary) == "exact_transcript"
+
+    @classmethod
+    def _match_rank_key(cls, hgvs: str, summary: dict[str, Any]) -> tuple[bool, bool, int]:
+        """Put exact transcript expressions first, then same-text candidates.
+
+        Rank by review quality only WITHIN each match-confidence tier. Never
+        let an unrelated expert-panel record outrank a lower-review candidate.
+        """
+        confidence = cls._match_confidence(hgvs, summary)
         review_rank = _REVIEW_STATUS_RANK.get(str(summary.get("review_status", "")).lower(), 0)
-        return (not exact, -review_rank)
+        return (confidence == "unmatched", confidence != "exact_transcript", -review_rank)
 
     async def _fetch_summaries(self, ids: list[str]) -> list[dict[str, Any]]:
         """Batch-fetch esummary records for a list of variation IDs."""

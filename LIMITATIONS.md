@@ -82,7 +82,9 @@ serialisation may break.
 different results from a run a year from now.
 
 **Mitigation:** Client-level parsing, selected Pydantic input models,
-recorded upstream fixtures, and regression tests limit some schema risks.
+and synthetic source-response regression tests limit some schema risks.
+The former real-API replay fixtures are historical Git artifacts, not
+active tests or independently validated scientific reference cases.
 These measures are not a full schema contract for every upstream and
 cannot rule out silent data drift. AlphaFold prediction-field renames are
 handled explicitly; see `docs/afdb-compatibility.md`.

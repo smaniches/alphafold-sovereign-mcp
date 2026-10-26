@@ -135,7 +135,7 @@ class GnomADClient(BaseAsyncClient):
     # Variant queries
     # ------------------------------------------------------------------
 
-    async def variant_frequencies(self, variant_id: str) -> dict[str, Any]:
+    async def variant_frequencies(self, variant_id: str) -> dict[str, Any]:  # noqa: PLR0912
         """Fetch allele frequencies and population breakdown for a variant.
 
         Args:
@@ -161,9 +161,36 @@ class GnomADClient(BaseAsyncClient):
 
         # Prefer exome data; fall back to genome
         cohort = variant.get("exome") or variant.get("genome") or {}
-        global_ac: int = cohort.get("ac", 0) or 0
-        global_an: int = cohort.get("an", 0) or 0
-        global_af: float = cohort.get("af") or _af_safe(global_ac, global_an)
+        # A variant record without a sampled allele denominator is not AF=0.
+        raw_ac: object = cohort.get("ac")
+        raw_an: object = cohort.get("an")
+        if raw_ac is not None and (
+            not isinstance(raw_ac, int) or isinstance(raw_ac, bool) or raw_ac < 0
+        ):
+            raise ValueError("Invalid gnomAD allele count")
+        if raw_an is not None and (
+            not isinstance(raw_an, int) or isinstance(raw_an, bool) or raw_an < 0
+        ):
+            raise ValueError("Invalid gnomAD allele number")
+        global_ac: int | None = raw_ac if isinstance(raw_ac, int) else None
+        global_an: int | None = raw_an if isinstance(raw_an, int) else None
+        if global_ac is not None and global_an is not None and global_ac > global_an:
+            raise ValueError("gnomAD allele count exceeds allele number")
+
+        raw_af = cohort.get("af")
+        global_af: float | None = None
+        if global_an is not None and global_an > 0:
+            if raw_af is None:
+                if global_ac is not None:
+                    global_af = _af_safe(global_ac, global_an)
+            elif (
+                isinstance(raw_af, (int, float))
+                and not isinstance(raw_af, bool)
+                and 0.0 <= raw_af <= 1.0
+            ):
+                global_af = float(raw_af)
+            else:
+                raise ValueError("Invalid gnomAD allele frequency")
 
         populations: list[PopulationFrequency] = []
         for pop in cohort.get("populations", []):
@@ -171,15 +198,19 @@ class GnomADClient(BaseAsyncClient):
             # Skip sex-stratified and sub-populations (contain "-")
             if "-" in pop_id or pop_id.upper() in {"XX", "XY"}:
                 continue
-            ac = pop.get("ac", 0) or 0
-            an = pop.get("an", 0) or 0
+            ac = pop.get("ac")
+            an = pop.get("an")
+            if not isinstance(an, int) or isinstance(an, bool) or an <= 0:
+                continue  # No sampled denominator: do not claim frequency 0.
+            if not isinstance(ac, int) or isinstance(ac, bool) or not 0 <= ac <= an:
+                raise ValueError("Invalid gnomAD population allele count")
             populations.append(
                 PopulationFrequency(
                     population=_POP_LABELS.get(pop_id, pop_id),
                     allele_count=ac,
                     allele_number=an,
                     allele_frequency=_af_safe(ac, an),
-                    homozygote_count=pop.get("ac_hom", 0) or 0,
+                    homozygote_count=pop.get("ac_hom"),
                 )
             )
 
@@ -194,7 +225,7 @@ class GnomADClient(BaseAsyncClient):
             "global_af": global_af,
             "global_ac": global_ac,
             "global_an": global_an,
-            "homozygote_count": cohort.get("ac_hom", 0),
+            "homozygote_count": cohort.get("ac_hom"),
             "populations": [p.to_dict() for p in populations],
         }
 
@@ -215,7 +246,7 @@ class GnomADClient(BaseAsyncClient):
             Interpretation guidance:
             - ``loeuf`` (Loss-of-function Observed/Expected Upper-bound
               Fraction): < 0.35 = highly constrained (LoF intolerant).
-            - ``pLI`` ≥ 0.9 = likely haploinsufficient.
+            - ``pLI`` ≥ 0.9 = LoF depletion; haploinsufficiency is not established.
             - ``mis_z`` ≥ 3.09 = missense-intolerant.
         """
         data = await self._graphql(
@@ -245,7 +276,7 @@ def _interpret_constraint(c: dict[str, Any]) -> str:
     if loeuf < 0.35:
         return (
             f"Highly constrained (LOEUF={loeuf:.3f}): "
-            "strong intolerance to loss-of-function — likely haploinsufficient."
+            "loss-of-function depleted; haploinsufficiency not established."
         )
     if loeuf < 0.6:
         return (
