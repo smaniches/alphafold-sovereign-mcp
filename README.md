@@ -73,12 +73,12 @@ A Python MCP server that:
   heuristic target-druggability scoring, drug-repurposing candidate
   ranking, and cross-species structural-distance computation.
 - Ships a local SQLite knowledge graph (`storage/knowledge_graph.py`)
-  with query, export, and traversal tools. It loads a curated boot
-  seed automatically when empty (`storage/seed.py`, 16 entities and 15
-  relationships; disable with `AFSMCP_DISABLE_KG_SEED=1`) and can be
-  extended by writing through the knowledge-graph API. There is no
-  automatic per-invocation persistence: the analysis tools do not write
-  to the store on their own.
+  with query, export, and traversal tools. Fresh installations begin
+  without automatically inserted biomedical records; data is stored by
+  explicit writes through the knowledge-graph API. Existing SQLite files
+  are preserved, including illustrative rows from earlier releases;
+  historical numerical values are not independently validated source
+  records. Analysis tools do not automatically persist their results.
 - Includes an exploratory Cα-derived feature-vector module. With the
   optional `[tda]` extra (`gudhi`), it reports H₀/H₁ terminal-filtration
   Betti numbers; H₂ is not computed. The fallback reports a 4-Å contact
@@ -112,6 +112,16 @@ and honest failure/uncertainty reporting. An inference made from a predicted
 structure remains conditional on that prediction; it does not become an
 experimental observation because it is joined to another database. Derived
 heuristics are research aids, not source-validated clinical conclusions.
+
+**ClinVar identity boundary:** A gene-relative expression such as
+`BRCA1:c.181T>G` discovers possible records but does not identify a unique
+reference allele; results are labelled *unverified candidates* and their
+classifications cannot be assigned to that query. A matching versioned
+transcript expression such as `NM_007294.4:c.181T>G` permits only a literal
+transcript-title match. ClinVar Variation IDs can represent sets of alleles;
+neither match level establishes independent clinical equivalence or a
+patient-specific classification. Source failures are reported separately
+from absent matches. No cross-transcript equivalence is assumed.
 
 ## What this is **not**
 
@@ -296,13 +306,11 @@ original attribution; clinical interpretation requires independent review.
 
 ## Example usage
 
-For three documented end-to-end illustrations of a Claude Desktop
-session against this server — variant triage on BRCA1 c.5266dupC,
-target characterisation on EGFR, and a drug-discovery walk-through
-on Imatinib → BCR-ABL → CML — see the [`examples/`](examples/)
-directory. Each example includes the user prompt, the tool calls
-the model issues, the server's response shape, and the model's
-paraphrased reply.
+See [`examples/`](examples/) for research workflow guidance.
+The previous named clinical session transcripts were retired because
+they described an obsolete output contract. Current synthetic regression
+tests exercise retrieval and evidence attribution without asserting
+independently validated clinical conclusions.
 
 ### Clinical variant report
 
@@ -310,12 +318,15 @@ paraphrased reply.
 generate_variant_clinical_report(hgvs="BRCA1:c.181T>G")
 ```
 
-The server resolves the HGVS, fetches ClinVar, gnomAD, AlphaMissense
-(via AlphaFold DB), Open Targets disease evidence, ChEMBL drug data,
-and Ensembl VEP consequence annotations, and returns a single JSON
-record with the cross-referenced fields plus a research-only ACMG/AMP
-draft. The client does not automatically perform a variant-specific
-experimental-structure or SIFTS mapping.
+The server searches ClinVar, gnomAD, AlphaMissense (via AlphaFold DB),
+Open Targets disease evidence, ChEMBL and Ensembl VEP, and returns a
+source-attributed research report with unreviewed computational signals.
+The gene-relative example above is a candidate search: it cannot borrow a
+ClinVar record's classification as though it proved allele identity. Use a
+versioned transcript expression for strict transcript-title matching; even
+then, additional validation is required for clinical allele identity. The
+client does not automatically perform a variant-specific experimental-
+structure or SIFTS mapping.
 
 ### Optional PDBe/IUCr literature evidence
 

@@ -1,6 +1,6 @@
 # Target evidence retrieval
 
-Example tool: `assess_target_druggability` with `uniprot_id="P00533"`.
+Tool: `assess_target_druggability` with a caller-supplied, source-checked UniProt accession.
 
 This tool retrieves and attributes ChEMBL, Open Targets, gnomAD and
 AlphaFold DB information. AlphaFold pLDDT is confidence in a predicted

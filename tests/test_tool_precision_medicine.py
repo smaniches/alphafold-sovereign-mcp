@@ -360,10 +360,10 @@ def test_tier_explanation(tier: str) -> None:
 @pytest.mark.parametrize(
     ("tier", "expected_substr"),
     [
-        ("HOT", "Prioritise"),
-        ("WARM", "FBDD"),
-        ("COLD", "phenotypic"),
-        ("NOT_DRUGGABLE", "pathway"),
+        ("HOT", "Research heuristic HOT"),
+        ("WARM", "Research heuristic WARM"),
+        ("COLD", "Research heuristic COLD"),
+        ("NOT_DRUGGABLE", "uncalibrated heuristic label"),
     ],
 )
 def test_druggability_actionability(tier: str, expected_substr: str) -> None:
@@ -506,6 +506,7 @@ def _make_clinvar() -> list[dict[str, Any]]:
             "review_status": "criteria provided, multiple submitters",
             "variation_id": "55555",
             "conditions": ["Breast cancer"],
+            "exact_change_match": True,
         }
     ]
 
@@ -705,6 +706,27 @@ async def test_generate_variant_report_ignores_non_exact_clinvar_hit(
     assert out["clinvar"]["classification"] == PathogenicityClass.NOT_PROVIDED.value
     assert out["clinvar"]["variation_id"] == ""
     # The mismatched record's Pathogenic call must not drive the tier either.
+    assert out["clinical_tier"] == "NOT_ASSESSED"
+
+
+async def test_generate_variant_report_rejects_unstamped_clinvar(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A record without explicit identity verification is not usable evidence."""
+    mocks = _patch_clients(monkeypatch)
+    mocks["ensembl"].vep_hgvs = AsyncMock(return_value=[])
+    mocks["ensembl"].gene_lookup = AsyncMock(return_value={})
+    mocks["clinvar"].search_by_hgvs = AsyncMock(
+        return_value=[{"classification": "Pathogenic", "variation_id": "unverified"}]
+    )
+    mocks["gnomad"].variant_frequencies = AsyncMock(return_value={})
+    mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
+    mocks["disgenet"].gene_disease_associations = AsyncMock(return_value=[])
+    out = await generate_variant_clinical_report(
+        VariantClinicalReportInput(hgvs="BRCA1:c.181T>G", include_drug_context=False)
+    )
+    assert out["clinvar"]["found"] is False
+    assert out["clinvar"]["variation_id"] == ""
     assert out["clinical_tier"] == "NOT_ASSESSED"
 
 
@@ -985,6 +1007,101 @@ async def test_alphamissense_for_variant_score_exception(
     mocks = _patch_clients(monkeypatch)
     mocks["alphafold"].alphamissense_score = AsyncMock(side_effect=RuntimeError("af fail"))
     assert await _alphamissense_for_variant("BRCA1", _missense_vep("P38398")) is None
+
+
+@pytest.mark.parametrize(
+    ("result", "expected_state", "expected_score"),
+    [
+        (None, "no_data", None),
+        ({"am_pathogenicity": 0.9}, "ok", 0.9),
+        ({"am_pathogenicity": 0}, "ok", 0.0),
+        ({}, "invalid_response", None),
+        ([], "invalid_response", None),
+        ({"am_pathogenicity": True}, "invalid_response", None),
+        ({"am_pathogenicity": "0.9"}, "invalid_response", None),
+        ({"am_pathogenicity": float("nan")}, "invalid_response", None),
+        ({"am_pathogenicity": float("inf")}, "invalid_response", None),
+        ({"am_pathogenicity": -0.1}, "invalid_response", None),
+        ({"am_pathogenicity": 1.1}, "invalid_response", None),
+        (RuntimeError("synthetic upstream failure"), "failed", None),
+    ],
+)
+async def test_alphamissense_reports_lookup_state(
+    monkeypatch: pytest.MonkeyPatch,
+    result: Any,
+    expected_state: str,
+    expected_score: float | None,
+) -> None:
+    mocks = _patch_clients(monkeypatch)
+    if isinstance(result, Exception):
+        mocks["alphafold"].alphamissense_score = AsyncMock(side_effect=result)
+    else:
+        mocks["alphafold"].alphamissense_score = AsyncMock(return_value=result)
+    status = {"ensembl_vep": "ok"}
+    actual = await _alphamissense_for_variant(
+        "SYNTHX", _missense_vep("P38398"), source_status=status
+    )
+    assert actual == expected_score
+    assert status["alphamissense"] == expected_state
+
+
+@pytest.mark.parametrize(
+    ("vep", "vep_status", "expected_state"),
+    [
+        (
+            [{"canonical": True, "consequence_terms": ["stop_gained"]}],
+            "ok",
+            "skipped_not_applicable",
+        ),
+        ([], "no_data", "skipped_no_vep_data"),
+        ([], "failed", "skipped_upstream_failed"),
+        ([], "invalid_response", "skipped_upstream_invalid"),
+        ([{}], "ok", "skipped_no_canonical"),
+        (
+            [{"canonical": True, "consequence_terms": ["missense_variant"]}],
+            "ok",
+            "skipped_incomplete_mapping",
+        ),
+        (_missense_vep(), "ok", "skipped_no_swissprot"),
+        (_missense_vep(""), "ok", "skipped_no_swissprot"),
+        (_missense_vep(42), "ok", "invalid_response"),
+        (_missense_vep(".280"), "ok", "invalid_response"),
+    ],
+)
+async def test_alphamissense_does_not_infer_missing_mapping(
+    monkeypatch: pytest.MonkeyPatch,
+    vep: list[dict[str, Any]],
+    vep_status: str,
+    expected_state: str,
+) -> None:
+    mocks = _patch_clients(monkeypatch)
+    status = {"ensembl_vep": vep_status}
+    assert await _alphamissense_for_variant("SYNTHX", vep, source_status=status) is None
+    assert status["alphamissense"] == expected_state
+    mocks["alphafold"].alphamissense_score.assert_not_awaited()
+
+
+@pytest.mark.parametrize("report_kind", ["variant", "acmg"])
+async def test_report_preserves_alphamissense_upstream_failure(
+    monkeypatch: pytest.MonkeyPatch, report_kind: str
+) -> None:
+    mocks = _patch_clients(monkeypatch)
+    mocks["ensembl"].vep_hgvs = AsyncMock(return_value=_missense_vep("P38398"))
+    mocks["clinvar"].search_by_hgvs = AsyncMock(return_value=[])
+    mocks["ensembl"].gene_lookup = AsyncMock(return_value={})
+    mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
+    mocks["disgenet"].gene_disease_associations = AsyncMock(return_value=[])
+    mocks["alphafold"].alphamissense_score = AsyncMock(side_effect=RuntimeError("synthetic outage"))
+    if report_kind == "variant":
+        out = await generate_variant_clinical_report(
+            VariantClinicalReportInput(hgvs="SYNTHX:c.42A>G", include_drug_context=False)
+        )
+        assert out["population_genetics"]["alphamissense_score"] is None
+        assert out["clinical_tier"] == "NOT_ASSESSED"
+    else:
+        out = await classify_variant_acmg(ACMGVariantInput(hgvs="SYNTHX:c.42A>G"))
+        assert out["draft_classification"] == "Not assessed"
+    assert out["data_sources_status"]["alphamissense"] == "failed"
 
 
 async def test_generate_variant_report_alphamissense_scored(
@@ -1586,6 +1703,7 @@ async def test_classify_variant_acmg_pathogenic(monkeypatch: pytest.MonkeyPatch)
             {
                 "classification": "Pathogenic",
                 "review_status": "criteria provided",
+                "exact_change_match": True,
             }
         ]
     )
@@ -1633,7 +1751,9 @@ async def test_classify_variant_acmg_clinvar_pathogenic_only(
     mocks = _patch_clients(monkeypatch)
     mocks["ensembl"].vep_hgvs = AsyncMock(return_value=[])
     mocks["clinvar"].search_by_hgvs = AsyncMock(
-        return_value=[{"classification": "Pathogenic", "review_status": "x"}]
+        return_value=[
+            {"classification": "Pathogenic", "review_status": "x", "exact_change_match": True}
+        ]
     )
     mocks["gnomad"].variant_frequencies = AsyncMock(return_value={})
     mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
@@ -1669,13 +1789,35 @@ async def test_classify_variant_acmg_ignores_non_exact_clinvar_hit(
     assert out["clinvar_reference"]["found"] is False
 
 
+async def test_classify_variant_acmg_rejects_unstamped_clinvar(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Even a Pathogenic response is ignored without match provenance."""
+    mocks = _patch_clients(monkeypatch)
+    mocks["ensembl"].vep_hgvs = AsyncMock(return_value=[])
+    mocks["clinvar"].search_by_hgvs = AsyncMock(
+        return_value=[{"classification": "Pathogenic", "variation_id": "unverified"}]
+    )
+    mocks["gnomad"].variant_frequencies = AsyncMock(return_value={})
+    mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
+    out = await classify_variant_acmg(ACMGVariantInput(hgvs="BRCA1:c.181T>G"))
+    assert out["draft_classification"] == "Not assessed"
+    assert out["clinvar_reference"]["found"] is False
+
+
 async def test_classify_variant_acmg_clinvar_likely_pathogenic(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     mocks = _patch_clients(monkeypatch)
     mocks["ensembl"].vep_hgvs = AsyncMock(return_value=[])
     mocks["clinvar"].search_by_hgvs = AsyncMock(
-        return_value=[{"classification": "Likely pathogenic", "review_status": "x"}]
+        return_value=[
+            {
+                "classification": "Likely pathogenic",
+                "review_status": "x",
+                "exact_change_match": True,
+            }
+        ]
     )
     mocks["gnomad"].variant_frequencies = AsyncMock(return_value={})
     mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
@@ -2169,6 +2311,100 @@ async def test_generate_variant_report_gene_lookup_failure_retains_other_sources
     )
     assert report["data_sources_status"]["ensembl_gene_lookup"] == "failed"
     assert report["data_sources_status"]["open_targets"] == "skipped_upstream_failed"
-    assert report["data_sources_status"]["disgenet"] == "ok"
-    assert report["data_sources_status"]["clinvar"] == "ok"
+    assert report["data_sources_status"]["disgenet"] == "no_data"
+    assert report["data_sources_status"]["clinvar"] == "no_data"
     assert report["clinical_tier"] == "NOT_ASSESSED"
+
+
+async def test_generate_report_retains_candidate_without_attribution(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_clients(monkeypatch)
+    mocks["ensembl"].vep_hgvs = AsyncMock(return_value=[])
+    mocks["ensembl"].gene_lookup = AsyncMock(return_value={})
+    mocks["clinvar"].search_by_hgvs = AsyncMock(
+        return_value=[
+            {
+                "variation_id": "900001",
+                "name": "NM_007294.4(BRCA1):c.181T>G",
+                "classification": "Pathogenic",
+                "exact_change_match": False,
+                "candidate_change_match": True,
+            }
+        ]
+    )
+    mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
+    mocks["disgenet"].gene_disease_associations = AsyncMock(return_value=[])
+    out = await generate_variant_clinical_report(
+        VariantClinicalReportInput(hgvs="BRCA1:c.181T>G", include_drug_context=False)
+    )
+    assert out["clinical_tier"] == "NOT_ASSESSED"
+    assert out["clinvar"]["found"] is False
+    assert out["clinvar"]["variation_id"] == ""
+    assert out["clinvar"]["unverified_candidates"] == [
+        {"variation_id": "900001", "name": "NM_007294.4(BRCA1):c.181T>G"}
+    ]
+
+
+async def test_classify_acmg_preserves_failed_upstream_status(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_clients(monkeypatch)
+    mocks["ensembl"].vep_hgvs = AsyncMock(side_effect=RuntimeError("synthetic VEP failure"))
+    mocks["clinvar"].search_by_hgvs = AsyncMock(side_effect=RuntimeError("synthetic CV failure"))
+    mocks["gnomad"].gene_constraint = AsyncMock(
+        side_effect=RuntimeError("synthetic gnomAD failure")
+    )
+    out = await classify_variant_acmg(ACMGVariantInput(hgvs="BRCA1:c.181T>G"))
+    assert out["draft_classification"] == "Not assessed"
+    assert out["clinvar_reference"]["found"] is False
+    assert out["data_sources_status"] == {
+        "ensembl_vep": "failed",
+        "clinvar": "failed",
+        "gnomad_variant": "skipped",
+        "gnomad_constraint": "failed",
+        "alphamissense": "skipped_upstream_failed",
+    }
+
+
+@pytest.mark.parametrize(
+    ("vep_payload", "clinvar_payload", "expected_statuses"),
+    [
+        ({"invalid": "response"}, [], ("invalid_response", "no_data")),
+        ([], ["invalid element"], ("no_data", "invalid_response")),
+    ],
+)
+async def test_synthetic_acmg_rejects_malformed_upstream_rows(
+    monkeypatch: pytest.MonkeyPatch,
+    vep_payload: Any,
+    clinvar_payload: Any,
+    expected_statuses: tuple[str, str],
+) -> None:
+    """Malformed external results are not converted into an absence claim."""
+    mocks = _patch_clients(monkeypatch)
+    mocks["ensembl"].vep_hgvs = AsyncMock(return_value=vep_payload)
+    mocks["clinvar"].search_by_hgvs = AsyncMock(return_value=clinvar_payload)
+    mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
+
+    out = await classify_variant_acmg(ACMGVariantInput(hgvs="SYNTHX:c.42A>G"))
+    assert out["draft_classification"] == "Not assessed"
+    assert out["data_sources_status"]["ensembl_vep"] == expected_statuses[0]
+    assert out["data_sources_status"]["clinvar"] == expected_statuses[1]
+    assert out["clinvar_reference"]["found"] is False
+
+
+async def test_synthetic_acmg_rejects_invalid_population_responses(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Invalid gnomAD payloads are marked as invalid, not treated as no_data."""
+    mocks = _patch_clients(monkeypatch)
+    mocks["ensembl"].vep_hgvs = AsyncMock(return_value=[])
+    mocks["clinvar"].search_by_hgvs = AsyncMock(return_value=[])
+    mocks["gnomad"].variant_frequencies = AsyncMock(return_value=["malformed"])
+    mocks["gnomad"].gene_constraint = AsyncMock(return_value=["malformed"])
+    monkeypatch.setattr(pm, "_build_gnomad_id", lambda hgvs, rows: "1-42-A-G")
+
+    out = await classify_variant_acmg(ACMGVariantInput(hgvs="SYNTHX:c.42A>G"))
+    assert out["draft_classification"] == "Not assessed"
+    assert out["data_sources_status"]["gnomad_variant"] == "invalid_response"
+    assert out["data_sources_status"]["gnomad_constraint"] == "invalid_response"

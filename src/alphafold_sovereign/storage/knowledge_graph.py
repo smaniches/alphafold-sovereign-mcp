@@ -49,7 +49,6 @@ Usage:
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import datetime
 import hashlib
 import json
@@ -144,61 +143,16 @@ class KnowledgeGraph:
             logger.info("kg.closed")
 
     async def seed_if_empty(self) -> bool:
-        """Load the curated seed dataset when the graph holds no proteins.
+        """Compatibility no-op: never insert representative biomedical records.
 
-        Gives the local-knowledge-graph tools representative results out of the
-        box. Set ``AFSMCP_DISABLE_KG_SEED=1`` to keep the graph empty. Returns
-        ``True`` when seeding ran. Seeding is best-effort: a partial failure is
-        rolled back and swallowed so the graph stays usable (empty) and a later
-        run retries.
+        Earlier versions populated an empty SQLite graph with illustrative
+        numerical scores. The schema, explicit writes and all existing rows
+        remain untouched. This method is retained for callers that already
+        invoke it and never deletes, migrates or modifies user data.
         """
         if self._conn is None:
             raise RuntimeError("Database connection is not open; call connect() first.")
-        if os.environ.get("AFSMCP_DISABLE_KG_SEED"):
-            return False
-
-        def _count_entities() -> int:
-            # Seed only a fully empty graph: counting every entity table (not
-            # just proteins) avoids overwriting a DB that holds, e.g.,
-            # variants stored without a linked protein.
-            assert self._conn is not None
-            c = self._conn
-            return int(
-                c.execute("SELECT COUNT(*) FROM proteins").fetchone()[0]
-                + c.execute("SELECT COUNT(*) FROM variants").fetchone()[0]
-                + c.execute("SELECT COUNT(*) FROM diseases").fetchone()[0]
-                + c.execute("SELECT COUNT(*) FROM drugs").fetchone()[0]
-            )
-
-        async with self._lock:
-            loop = asyncio.get_running_loop()
-            existing = await loop.run_in_executor(None, _count_entities)
-        if existing > 0:
-            return False
-
-        from alphafold_sovereign.storage.seed import seed_knowledge_graph
-
-        try:
-            await seed_knowledge_graph(self)
-        except Exception as exc:
-            # Seeding is not atomic; roll back any partial seed so the empty
-            # check holds and a later run can retry, rather than leaving the
-            # graph permanently half-populated.
-            logger.error("kg.seed.failed", exc=str(exc))
-            for stmt in (
-                "DELETE FROM variant_disease",
-                "DELETE FROM protein_drug",
-                "DELETE FROM protein_disease",
-                "DELETE FROM variants",
-                "DELETE FROM drugs",
-                "DELETE FROM diseases",
-                "DELETE FROM proteins",
-            ):
-                with contextlib.suppress(Exception):
-                    await self._write(stmt, [])
-            return False
-        logger.info("kg.seeded")
-        return True
+        return False
 
     def _open_db(self) -> sqlite3.Connection:
         conn = sqlite3.connect(str(self._db_path), check_same_thread=False)
@@ -1285,10 +1239,9 @@ async def get_knowledge_graph(
     Creates a new connection if not yet initialised or if a custom path
     is provided.
 
-    Seeding is a startup concern, not a read concern: this accessor never
-    writes, so the read-only KG tools that use it honour their
-    ``readOnlyHint``. The curated seed is loaded once at server boot (see
-    ``server.stdio.run_stdio``) or explicitly via ``seed_if_empty``.
+    This accessor never inserts representative records or modifies existing
+    data. Only explicit storage API calls write biomedical entities; historical
+    SQLite files, including previously seeded entries, remain unchanged.
 
     Usage::
 

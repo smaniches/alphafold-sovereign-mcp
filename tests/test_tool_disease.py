@@ -154,6 +154,10 @@ def test_parse_hgvs_gene_refseq_returns_empty() -> None:
     assert change == "c.181T>G"
 
 
+def test_parse_hgvs_gene_lowercase_refseq_is_not_a_gene() -> None:
+    assert _parse_hgvs_gene("nm_007294.4:c.181T>G") == ("", "c.181T>G")
+
+
 def test_parse_hgvs_gene_refseq_NR() -> None:
     gene, change = _parse_hgvs_gene("NR_123:c.X")
     assert gene == ""
@@ -206,17 +210,19 @@ def test_am_label_branches(score: float | None, expected_substring: str) -> None
 @pytest.mark.parametrize(
     ("cls", "am", "expected"),
     [
-        (PathogenicityClass.PATHOGENIC, None, "HIGH"),
-        (PathogenicityClass.LIKELY_PATHOGENIC, None, "HIGH"),
-        (PathogenicityClass.BENIGN, None, "LOW"),
-        (PathogenicityClass.NOT_PROVIDED, 0.9, "HIGH"),
-        (PathogenicityClass.NOT_PROVIDED, 0.1, "LOW"),
-        (PathogenicityClass.UNCERTAIN, None, "MEDIUM"),
-        (PathogenicityClass.NOT_PROVIDED, None, "UNKNOWN"),
-        (PathogenicityClass.NOT_PROVIDED, 0.4, "UNKNOWN"),
+        (PathogenicityClass.PATHOGENIC, None, "NOT_ASSESSED"),
+        (PathogenicityClass.LIKELY_PATHOGENIC, None, "NOT_ASSESSED"),
+        (PathogenicityClass.BENIGN, None, "NOT_ASSESSED"),
+        (PathogenicityClass.NOT_PROVIDED, 0.9, "NOT_ASSESSED"),
+        (PathogenicityClass.NOT_PROVIDED, 0.1, "NOT_ASSESSED"),
+        (PathogenicityClass.UNCERTAIN, None, "NOT_ASSESSED"),
+        (PathogenicityClass.NOT_PROVIDED, None, "NOT_ASSESSED"),
+        (PathogenicityClass.NOT_PROVIDED, 0.4, "NOT_ASSESSED"),
     ],
 )
-def test_compute_tier_branches(cls: PathogenicityClass, am: float | None, expected: str) -> None:
+def test_compute_tier_never_infers_clinical_risk(
+    cls: PathogenicityClass, am: float | None, expected: str
+) -> None:
     assert _compute_tier(cls, am) == expected
 
 
@@ -738,7 +744,7 @@ async def test_triage_variant_3d_full(monkeypatch: pytest.MonkeyPatch) -> None:
     out = await triage_variant_3d(VariantTriageInput(hgvs="BRCA1:c.181T>G"))
     parsed = json.loads(out.split("---")[0].strip())
     assert parsed["status"] == "success"
-    assert parsed["pathogenicity_tier"] == "HIGH"
+    assert parsed["pathogenicity_tier"] == "NOT_ASSESSED"
     assert "structure_note" in parsed
 
 
@@ -816,9 +822,65 @@ async def test_triage_variant_3d_partial_exceptions(monkeypatch: pytest.MonkeyPa
 
     out = await triage_variant_3d(VariantTriageInput(hgvs="BRCA1:c.1T>G"))
     parsed = json.loads(out.split("---")[0].strip())
-    # All exceptions captured → empty dicts, tier UNKNOWN
+    # All exceptions captured: source failures explicit; no clinical tier.
     assert parsed["status"] == "success"
-    assert parsed["pathogenicity_tier"] == "UNKNOWN"
+    assert parsed["pathogenicity_tier"] == "NOT_ASSESSED"
+    assert parsed["data_sources_status"] == {"clinvar": "failed", "gnomad": "failed"}
+
+
+@pytest.mark.parametrize(
+    ("clinvar_result", "gnomad_result", "expected"),
+    [
+        ({}, {}, ("no_data", "no_data")),
+        ({"classification": "Benign"}, {"loeuf": 0.5}, ("ok", "ok")),
+        (RuntimeError("ClinVar unavailable"), {"loeuf": 0.5}, ("failed", "ok")),
+        ({"classification": "Benign"}, RuntimeError("gnomAD timeout"), ("ok", "failed")),
+        ({"classification": "Benign"}, ["malformed"], ("ok", "invalid_response")),
+        ({"classification": "Benign"}, {"constraint_available": False}, ("ok", "no_data")),
+    ],
+)
+async def test_triage_variant_3d_source_outcomes(
+    monkeypatch: pytest.MonkeyPatch,
+    clinvar_result: Any,
+    gnomad_result: Any,
+    expected: tuple[str, str],
+) -> None:
+    async def fake_clinvar(hgvs: str, gene: str) -> Any:
+        if isinstance(clinvar_result, BaseException):
+            raise clinvar_result
+        return clinvar_result
+
+    async def fake_gnomad(hgvs: str, gene: str) -> Any:
+        if isinstance(gnomad_result, BaseException):
+            raise gnomad_result
+        return gnomad_result
+
+    monkeypatch.setattr("alphafold_sovereign.tools.disease._fetch_clinvar", fake_clinvar)
+    monkeypatch.setattr("alphafold_sovereign.tools.disease._fetch_gnomad", fake_gnomad)
+
+    out = await triage_variant_3d(
+        VariantTriageInput(
+            hgvs="BRCA1:c.181T>G",
+            include_gnomad=True,
+            include_disease_context=False,
+            include_structure=False,
+        )
+    )
+    parsed = json.loads(out.split("---")[0].strip())
+    assert parsed["status"] == "success"
+    assert parsed["data_sources_status"] == dict(zip(("clinvar", "gnomad"), expected))
+
+
+async def test_triage_variant_3d_skips_optional_gnomad(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_clinvar(hgvs: str, gene: str) -> dict[str, Any]:
+        return {}
+
+    monkeypatch.setattr("alphafold_sovereign.tools.disease._fetch_clinvar", fake_clinvar)
+    out = await triage_variant_3d(VariantTriageInput(hgvs="BRCA1:c.181T>G", include_gnomad=False))
+    parsed = json.loads(out.split("---")[0].strip())
+    assert parsed["data_sources_status"] == {"clinvar": "no_data", "gnomad": "skipped"}
 
 
 async def test_triage_variant_3d_outer_exception(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1289,3 +1351,202 @@ async def test_omim_to_mondo_rejects_ambiguous_or_unknown(
     )
     _patch_client_class(monkeypatch, "alphafold_sovereign.tools.disease.MONDOClient", mock_mc)
     assert await _omim_to_mondo("OMIM:79318") is None
+
+
+async def test_fetch_clinvar_candidate_is_not_clinical_evidence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A gene-only title can be surfaced but cannot lend its classification."""
+    mock_cv = MagicMock()
+    mock_cv.search_by_hgvs = AsyncMock(
+        return_value=[
+            {
+                "variation_id": "900001",
+                "name": "NM_007294.4(BRCA1):c.181T>G",
+                "classification": "Pathogenic",
+                "exact_change_match": False,
+                "candidate_change_match": True,
+            }
+        ]
+    )
+    _patch_client_class(monkeypatch, "alphafold_sovereign.tools.disease.ClinVarClient", mock_cv)
+    out = await _fetch_clinvar("BRCA1:c.181T>G", "BRCA1")
+    assert out == {
+        "clinvar_unverified_candidate": {
+            "variation_id": "900001",
+            "name": "NM_007294.4(BRCA1):c.181T>G",
+            "identity_status": "candidate_text_not_allele_verified",
+        }
+    }
+    assert "classification" not in out
+
+
+async def test_triage_transcript_only_resolves_gene_only_after_clinvar_match(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A versioned transcript need not include a redundant parenthetical gene."""
+    queried: list[str] = []
+
+    async def fake_clinvar(hgvs: str, gene: str) -> dict[str, Any]:
+        assert gene == ""
+        return {
+            "variation_id": "900001",
+            "gene_symbol": "BRCA1",
+            "classification": "Pathogenic",
+            "exact_change_match": True,
+        }
+
+    async def fake_gnomad(hgvs: str, gene: str) -> dict[str, Any]:
+        queried.append(gene)
+        return {"loeuf": 0.7}
+
+    monkeypatch.setattr("alphafold_sovereign.tools.disease._fetch_clinvar", fake_clinvar)
+    monkeypatch.setattr("alphafold_sovereign.tools.disease._fetch_gnomad", fake_gnomad)
+    out = await triage_variant_3d(
+        VariantTriageInput(
+            hgvs="NM_007294.4:c.181T>G",
+            include_structure=False,
+            include_disease_context=False,
+        )
+    )
+    report = json.loads(out.split("---", 1)[0])
+    assert queried == ["BRCA1"]
+    assert report["gene_symbol"] == "BRCA1"
+    assert report["sources_queried"] == ["ClinVar", "gnomAD"]
+    assert report["data_sources_status"] == {"clinvar": "ok", "gnomad": "ok"}
+
+
+@pytest.mark.parametrize(
+    ("result", "expected_candidate"),
+    [
+        ({"classification": "Pathogenic", "gene_symbol": "BRCA1"}, None),
+        (
+            {
+                "classification": "Pathogenic",
+                "gene_symbol": "BRCA1",
+                "exact_change_match": False,
+            },
+            None,
+        ),
+        (
+            {
+                "classification": "Pathogenic",
+                "gene_symbol": "BRCA1",
+                "clinvar_unverified_candidate": {
+                    "variation_id": "900001",
+                    "name": "NM_007294.4(BRCA1):c.181T>G",
+                },
+            },
+            {
+                "variation_id": "900001",
+                "name": "NM_007294.4(BRCA1):c.181T>G",
+            },
+        ),
+    ],
+)
+async def test_unverified_transcript_result_cannot_attribute_clinvar_or_gene(
+    monkeypatch: pytest.MonkeyPatch,
+    result: dict[str, Any],
+    expected_candidate: dict[str, str] | None,
+) -> None:
+    async def unverified_record(hgvs: str, gene: str) -> dict[str, Any]:
+        assert gene == ""
+        return result
+
+    async def forbid_gnomad(hgvs: str, gene: str) -> dict[str, Any]:
+        raise AssertionError("unverified ClinVar result attempted gene-level retrieval")
+
+    monkeypatch.setattr("alphafold_sovereign.tools.disease._fetch_clinvar", unverified_record)
+    monkeypatch.setattr("alphafold_sovereign.tools.disease._fetch_gnomad", forbid_gnomad)
+    out = await triage_variant_3d(
+        VariantTriageInput(
+            hgvs="NM_999999.1:c.42A>G",
+            include_structure=False,
+            include_disease_context=False,
+        )
+    )
+    report = json.loads(out.split("---", 1)[0])
+    assert report["gene_symbol"] == ""
+    assert report["pathogenicity_tier"] == "NOT_ASSESSED"
+    assert report["pathogenicity"]["clinvar_classification"] == "Not provided"
+    assert report["data_sources_status"]["gnomad"] == "skipped_no_verified_gene"
+    assert report["clinvar_unverified_candidate"] == expected_candidate
+
+
+@pytest.mark.parametrize("bad_gene", [None, "", "  ", 99])
+async def test_exact_transcript_requires_usable_gene_for_gene_level_lookup(
+    monkeypatch: pytest.MonkeyPatch, bad_gene: Any
+) -> None:
+    async def exact_record(hgvs: str, gene: str) -> dict[str, Any]:
+        return {
+            "exact_change_match": True,
+            "gene_symbol": bad_gene,
+            "classification": "Not provided",
+        }
+
+    async def forbid_gnomad(hgvs: str, gene: str) -> dict[str, Any]:
+        raise AssertionError("invalid gene requested")
+
+    monkeypatch.setattr("alphafold_sovereign.tools.disease._fetch_clinvar", exact_record)
+    monkeypatch.setattr("alphafold_sovereign.tools.disease._fetch_gnomad", forbid_gnomad)
+    out = await triage_variant_3d(
+        VariantTriageInput(hgvs="NM_999999.1:c.42A>G", include_structure=False)
+    )
+    report = json.loads(out.split("---", 1)[0])
+    assert report["gene_symbol"] == ""
+    assert report["data_sources_status"]["gnomad"] == "skipped_no_verified_gene"
+
+
+async def test_triage_unmatched_transcript_does_not_guess_gnomad_gene(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def no_match(hgvs: str, gene: str) -> dict[str, Any]:
+        return {}
+
+    async def must_not_call(hgvs: str, gene: str) -> dict[str, Any]:
+        raise AssertionError("guessed gene from unverified transcript")
+
+    monkeypatch.setattr("alphafold_sovereign.tools.disease._fetch_clinvar", no_match)
+    monkeypatch.setattr("alphafold_sovereign.tools.disease._fetch_gnomad", must_not_call)
+    out = await triage_variant_3d(
+        VariantTriageInput(hgvs="NM_007294.3:c.181T>G", include_structure=False)
+    )
+    report = json.loads(out.split("---", 1)[0])
+    assert report["sources_queried"] == ["ClinVar"]
+    assert report["pathogenicity_tier"] == "NOT_ASSESSED"
+    assert report["data_sources_status"] == {
+        "clinvar": "no_data",
+        "gnomad": "skipped_no_verified_gene",
+    }
+
+
+@pytest.mark.parametrize(
+    ("outcome", "expected_status"),
+    [("exception", "failed"), ("malformed", "invalid_response")],
+)
+async def test_synthetic_transcript_lookup_without_gene_handles_failure(
+    monkeypatch: pytest.MonkeyPatch, outcome: str, expected_status: str
+) -> None:
+    """A transcript lookup failure never causes a guessed gene-level request."""
+
+    async def fake_clinvar(hgvs: str, gene: str) -> Any:
+        assert gene == ""
+        if outcome == "exception":
+            raise RuntimeError("fabricated retrieval outage")
+        return ["fabricated invalid response"]
+
+    async def forbid_gene_fetch(hgvs: str, gene: str) -> dict[str, Any]:
+        raise AssertionError("unverified transcript must not trigger gene lookup")
+
+    monkeypatch.setattr("alphafold_sovereign.tools.disease._fetch_clinvar", fake_clinvar)
+    monkeypatch.setattr("alphafold_sovereign.tools.disease._fetch_gnomad", forbid_gene_fetch)
+    output = await triage_variant_3d(
+        VariantTriageInput(hgvs="NM_999999.1:c.42A>G", include_structure=False)
+    )
+    report = json.loads(output.split("---", 1)[0])
+    assert report["status"] == "success"
+    assert report["gene_symbol"] == ""
+    assert report["data_sources_status"] == {
+        "clinvar": expected_status,
+        "gnomad": "skipped_no_verified_gene",
+    }

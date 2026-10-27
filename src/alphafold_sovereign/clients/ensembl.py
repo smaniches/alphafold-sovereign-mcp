@@ -391,6 +391,9 @@ class EnsemblClient(BaseAsyncClient):
             "codons": tc.get("codons", ""),
             "hgvsp": tc.get("hgvsp", ""),
             "hgvsc": tc.get("hgvsc", ""),
+            # These are sequence-aligned mappings, NOT proof of identical
+            # transcript versions or exact RefSeq variant equivalence.
+            "refseq_transcript_ids": tc.get("refseq_transcript_ids", []),
             "exon": tc.get("exon", ""),
             "intron": tc.get("intron", ""),
             "sift_score": tc.get("sift_score"),

@@ -8,7 +8,10 @@ branch and every constraint-interpretation tier.
 
 from __future__ import annotations
 
+from typing import Any
+
 import httpx
+import pytest
 import respx
 
 from alphafold_sovereign.clients.gnomad import (
@@ -37,6 +40,7 @@ def test_interpret_constraint_unavailable() -> None:
 def test_interpret_constraint_highly_constrained() -> None:
     msg = _interpret_constraint({"loeuf": 0.2})
     assert "Highly constrained" in msg
+    assert "haploinsufficiency not established" in msg
 
 
 def test_interpret_constraint_moderately_constrained() -> None:
@@ -109,8 +113,8 @@ async def test_variant_frequencies_full_payload(respx_mock: respx.MockRouter) ->
     assert result["found"] is True
     assert result["global_af"] == 0.00002
     populations = result["populations"]
-    # We expect exactly 3 entries: nfe, unknown, afr
-    assert len(populations) == 3
+    # Only nfe and unknown have observed allele denominators; afr is excluded.
+    assert len(populations) == 2
     labels = {p["population"] for p in populations}
     assert "Non-Finnish European" in labels  # from _POP_LABELS
     assert "unknown" in labels  # fallthrough to raw id
@@ -127,9 +131,9 @@ async def test_variant_frequencies_falls_back_to_genome(respx_mock: respx.MockRo
                         "variantId": "1-1-A-G",
                         "exome": None,
                         "genome": {
-                            "ac": None,  # → 0
-                            "an": None,  # → 0 ⇒ _af_safe(0,0)=0.0
-                            "af": None,  # → fall through to _af_safe
+                            "ac": None,
+                            "an": None,  # No observed denominator
+                            "af": None,  # No source frequency
                             "ac_hom": None,
                             "populations": [],
                         },
@@ -141,11 +145,13 @@ async def test_variant_frequencies_falls_back_to_genome(respx_mock: respx.MockRo
     async with GnomADClient() as client:
         result = await client.variant_frequencies("1-1-A-G")
     assert result["found"] is True
-    assert result["global_af"] == 0.0
+    assert result["global_af"] is None
+    assert result["global_ac"] is None
+    assert result["global_an"] is None
 
 
 async def test_variant_frequencies_no_cohort_data(respx_mock: respx.MockRouter) -> None:
-    """No exome AND no genome → cohort = {} → global_af = _af_safe(0,0) = 0.0."""
+    """A variant identity without cohort counts has no measured AF."""
     respx_mock.post("https://gnomad.broadinstitute.org/api").mock(
         return_value=httpx.Response(
             200,
@@ -164,7 +170,100 @@ async def test_variant_frequencies_no_cohort_data(respx_mock: respx.MockRouter) 
     async with GnomADClient() as client:
         result = await client.variant_frequencies("1-1-A-G")
     assert result["found"] is True
-    assert result["global_af"] == 0.0
+    assert result["global_af"] is None
+    assert result["homozygote_count"] is None
+
+
+@pytest.mark.parametrize(
+    ("cohort", "expected_af"),
+    [
+        ({"ac": 0, "an": 200, "af": None}, 0.0),
+        ({"ac": 2, "an": 200, "af": None}, 0.01),
+        ({"ac": None, "an": 200, "af": None}, None),
+        ({"ac": 0, "an": 0, "af": None}, None),
+        ({"ac": 0, "an": 200, "af": 0.0}, 0.0),
+    ],
+)
+async def test_variant_frequency_missing_vs_measured_zero(
+    respx_mock: respx.MockRouter, cohort: dict[str, Any], expected_af: float | None
+) -> None:
+    """Only a sampled cohort can establish AF=0 or a nonzero frequency."""
+    respx_mock.post("https://gnomad.broadinstitute.org/api").mock(
+        return_value=httpx.Response(200, json={"data": {"variant": {"exome": cohort}}})
+    )
+    async with GnomADClient() as client:
+        result = await client.variant_frequencies("1-1-A-G")
+    assert result["found"] is True
+    assert result["global_af"] == expected_af
+
+
+@pytest.mark.parametrize(
+    "cohort",
+    [
+        {"ac": -1, "an": 100},
+        {"ac": "one", "an": 100},
+        {"ac": True, "an": 100},
+        {"ac": 1, "an": -1},
+        {"ac": 1, "an": "one hundred"},
+        {"ac": 1, "an": False},
+        {"ac": 101, "an": 100},
+        {"ac": 1, "an": 100, "af": 1.5},
+        {"ac": 1, "an": 100, "af": -0.01},
+        {"ac": 1, "an": 100, "af": True},
+        {"ac": 1, "an": 100, "af": "0.01"},
+    ],
+)
+async def test_variant_frequency_malformed_counts_or_af_rejected(
+    respx_mock: respx.MockRouter, cohort: dict[str, Any]
+) -> None:
+    """Never convert malformed upstream cohort observations into usable evidence."""
+    respx_mock.post("https://gnomad.broadinstitute.org/api").mock(
+        return_value=httpx.Response(200, json={"data": {"variant": {"exome": cohort}}})
+    )
+    async with GnomADClient() as client:
+        with pytest.raises(ValueError):
+            await client.variant_frequencies("1-1-A-G")
+
+
+async def test_variant_frequency_population_missing_denominator_skipped(
+    respx_mock: respx.MockRouter,
+) -> None:
+    cohort = {
+        "ac": 0,
+        "an": 100,
+        "af": 0.0,
+        "populations": [
+            {"id": "nfe", "ac": 0, "an": 0},
+            {"id": "fin", "ac": 0, "an": True},
+            {"id": "eas", "ac": 0, "an": None},
+            {"id": "afr", "ac": 0, "an": 10},
+        ],
+    }
+    respx_mock.post("https://gnomad.broadinstitute.org/api").mock(
+        return_value=httpx.Response(200, json={"data": {"variant": {"exome": cohort}}})
+    )
+    async with GnomADClient() as client:
+        out = await client.variant_frequencies("1-1-A-G")
+    assert len(out["populations"]) == 1
+    assert out["populations"][0]["population"] == "African/African-American"
+
+
+@pytest.mark.parametrize("allele_count", [None, True, -1, 10])
+async def test_variant_frequency_population_malformed_count_rejected(
+    respx_mock: respx.MockRouter, allele_count: Any
+) -> None:
+    cohort = {
+        "ac": 0,
+        "an": 100,
+        "af": 0.0,
+        "populations": [{"id": "nfe", "ac": allele_count, "an": 3}],
+    }
+    respx_mock.post("https://gnomad.broadinstitute.org/api").mock(
+        return_value=httpx.Response(200, json={"data": {"variant": {"exome": cohort}}})
+    )
+    async with GnomADClient() as client:
+        with pytest.raises(ValueError):
+            await client.variant_frequencies("1-1-A-G")
 
 
 # ---------------------------------------------------------------------------

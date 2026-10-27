@@ -375,32 +375,31 @@ async def test_query_variant_database_kg_patch(
 # ---------------------------------------------------------------------------
 
 
-async def test_kg_autoseed_populates_tools(
+async def test_kg_autoseed_does_not_insert_example_rows(
     monkeypatch: pytest.MonkeyPatch, kg_db_path: Path
 ) -> None:
-    """Once seeded at startup, the read-only tools return the curated data."""
+    """Historical boot seeding must never present sample biology as real data."""
     monkeypatch.delenv("AFSMCP_DISABLE_KG_SEED", raising=False)
-    # The server seeds the on-disk DB at boot; emulate that here.
-    async with kg_mod.KnowledgeGraph() as kg:
-        assert await kg.seed_if_empty() is True
+    async with kg_mod.KnowledgeGraph() as db:
+        assert await db.seed_if_empty() is False
     proteins = await query_protein_database(ProteinQueryInput(limit=10))
-    assert len(proteins["proteins"]) >= 5
     variants = await query_variant_database(VariantQueryInput(limit=10))
-    assert len(variants["variants"]) >= 2
-    net = await find_drug_gene_network(DrugNetworkInput(seed="MONDO:0011996", max_hops=2))
-    assert len(net["network"]["nodes"]) > 0
-    assert len(net["network"]["edges"]) > 0
+    assert proteins["proteins"] == []
+    assert variants["variants"] == []
 
 
-async def test_kg_autoseed_skips_when_populated(
+async def test_seed_if_empty_does_not_change_existing_rows(
     monkeypatch: pytest.MonkeyPatch, kg_db_path: Path
 ) -> None:
-    """seed_if_empty is a no-op once the graph already holds entities."""
+    """Previously stored SQLite records remain untouched."""
     monkeypatch.delenv("AFSMCP_DISABLE_KG_SEED", raising=False)
-    async with kg_mod.KnowledgeGraph() as kg:
-        assert await kg.seed_if_empty() is True
-        # Already populated, so a second call does nothing.
-        assert await kg.seed_if_empty() is False
+    async with kg_mod.KnowledgeGraph() as db:
+        await db.store_protein(uniprot_id="P99999", gene_symbol="TEST")
+        before = await db.query_proteins(limit=10)
+        assert await db.seed_if_empty() is False
+        after = await db.query_proteins(limit=10)
+    assert before == after
+    assert len(after) == 1
 
 
 async def test_seed_if_empty_disabled_by_env(kg_db_path: Path) -> None:
@@ -416,23 +415,25 @@ async def test_seed_if_empty_requires_connection(tmp_path: Path) -> None:
         await kg.seed_if_empty()
 
 
-async def test_seed_if_empty_rolls_back_on_failure(
+async def test_seed_if_empty_never_deletes_user_records(
     monkeypatch: pytest.MonkeyPatch, kg_db_path: Path
 ) -> None:
-    """A failed seed is rolled back and swallowed; the graph stays empty/usable."""
+    """No legacy cleanup DELETEs may run against existing user data."""
     monkeypatch.delenv("AFSMCP_DISABLE_KG_SEED", raising=False)
+    async with kg_mod.get_knowledge_graph() as db:
+        await db.store_variant(hgvs="TEST:c.1A>G", gene_symbol="TEST")
+        assert await db.seed_if_empty() is False
+        rows = await db.query_variants(gene="TEST")
+    assert len(rows) == 1
+    assert rows[0]["hgvs"] == "TEST:c.1A>G"
 
-    async def _boom(_kg: Any) -> None:
-        raise RuntimeError("seed boom")
 
-    async def _boom_write(_self: Any, _sql: str, _params: Any) -> None:
-        # Force the best-effort cleanup DELETEs to fail too — they must be
-        # swallowed rather than masking the seed failure.
-        raise RuntimeError("write boom")
+async def test_retired_seed_entrypoint_never_writes() -> None:
+    """The legacy public entrypoint may be called but may not create data."""
+    from alphafold_sovereign.storage.seed import seed_knowledge_graph
 
-    monkeypatch.setattr("alphafold_sovereign.storage.seed.seed_knowledge_graph", _boom)
-    monkeypatch.setattr(kg_mod.KnowledgeGraph, "_write", _boom_write)
-    async with kg_mod.get_knowledge_graph() as kg:
-        assert await kg.seed_if_empty() is False
-        proteins = await kg.query_proteins(limit=5)
-    assert proteins == []
+    class _NoWrite:
+        def __getattr__(self, key: str) -> Any:
+            raise AssertionError(f"Unexpected seed write: {key}")
+
+    await seed_knowledge_graph(_NoWrite())

@@ -57,15 +57,12 @@ uv run nox -s security  # bandit + pip-audit
 
 ## 7. Inspect examples
 
-The `examples/` directory contains three end-to-end transcripts:
-
-- `01-variant-triage/` — BRCA1 c.5266dupC variant report
-- `02-target-characterization/` — EGFR target dossier
-- `03-drug-discovery/` — Imatinib drug-repurposing walk-through
-
-Each includes a `transcript.jsonl` with the tool calls and responses
-the model issued against the server. The transcripts are
-documentation of what a session looks like, not automated tests.
+The `docs/examples/` directory describes source retrieval and evidence
+boundaries, without clinical case narratives. Deterministic synthetic
+regressions in `tests/test_synthetic_variant_pipeline.py` and
+`tests/test_report_source_states.py` exercise selected source-attribution,
+identifier-matching and failure semantics. They are not independently
+validated clinical cases or recordings of live API behavior.
 
 ## 8. Verify release provenance
 

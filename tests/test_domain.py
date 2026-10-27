@@ -199,6 +199,13 @@ def test_target_evidence_score_to_dict() -> None:
 
 
 @pytest.mark.unit
+def test_population_frequency_missing_homozygote_count_is_unknown() -> None:
+    pf = PopulationFrequency(
+        population="afr", allele_count=0, allele_number=100, allele_frequency=0
+    )
+    assert pf.to_dict()["homozygote_count"] is None
+
+
 def test_population_frequency_to_dict() -> None:
     pf = PopulationFrequency(
         population="nfe",
@@ -268,8 +275,8 @@ def test_variant_report_to_dict_full() -> None:
     assert d["residue_position"] == 61
     assert d["reference_aa"] == "C"
     assert d["alternate_aa"] == "G"
-    # Aggregate tier — Pathogenic clinvar should be HIGH
-    assert d["pathogenicity_tier"] == "HIGH"
+    # No independent clinical tier is computed from the source assertion.
+    assert d["pathogenicity_tier"] == "NOT_ASSESSED"
     # Nested structure block
     assert d["structure"] == {
         "available": True,
@@ -320,66 +327,66 @@ def _mk_variant(
 
 
 @pytest.mark.unit
-def test_pathogenicity_tier_high_from_clinvar_pathogenic() -> None:
+def test_clinvar_pathogenic_does_not_create_local_risk_tier() -> None:
     v = _mk_variant(clinvar=PathogenicityClass.PATHOGENIC)
-    assert v.pathogenicity_tier() == "HIGH"
+    assert v.pathogenicity_tier() == "NOT_ASSESSED"
 
 
 @pytest.mark.unit
-def test_pathogenicity_tier_high_from_clinvar_likely_pathogenic() -> None:
+def test_clinvar_likely_pathogenic_does_not_create_local_risk_tier() -> None:
     v = _mk_variant(clinvar=PathogenicityClass.LIKELY_PATHOGENIC)
-    assert v.pathogenicity_tier() == "HIGH"
+    assert v.pathogenicity_tier() == "NOT_ASSESSED"
 
 
 @pytest.mark.unit
-def test_pathogenicity_tier_high_from_alphamissense() -> None:
-    """AlphaMissense >= 0.564 yields HIGH when ClinVar is not pathogenic."""
+def test_alphamissense_upper_score_does_not_create_clinical_tier() -> None:
+    """Keep model predictions separate from clinical classification."""
     v = _mk_variant(clinvar=PathogenicityClass.NOT_PROVIDED, am=0.6)
-    assert v.pathogenicity_tier() == "HIGH"
+    assert v.pathogenicity_tier() == "NOT_ASSESSED"
 
 
 @pytest.mark.unit
-def test_pathogenicity_tier_high_from_alphamissense_boundary() -> None:
-    """The 0.564 boundary itself should be HIGH (>= is inclusive)."""
+def test_alphamissense_upper_boundary_does_not_create_clinical_tier() -> None:
+    """A model threshold does not establish a clinical tier."""
     v = _mk_variant(clinvar=PathogenicityClass.NOT_PROVIDED, am=0.564)
-    assert v.pathogenicity_tier() == "HIGH"
+    assert v.pathogenicity_tier() == "NOT_ASSESSED"
 
 
 @pytest.mark.unit
-def test_pathogenicity_tier_low_from_clinvar_benign() -> None:
+def test_clinvar_benign_does_not_create_local_risk_tier() -> None:
     v = _mk_variant(clinvar=PathogenicityClass.BENIGN)
-    assert v.pathogenicity_tier() == "LOW"
+    assert v.pathogenicity_tier() == "NOT_ASSESSED"
 
 
 @pytest.mark.unit
-def test_pathogenicity_tier_low_from_alphamissense() -> None:
-    """AlphaMissense <= 0.34 yields LOW when no benign ClinVar."""
+def test_alphamissense_lower_score_does_not_create_clinical_tier() -> None:
+    """Low model scores are not independently validated benign calls."""
     v = _mk_variant(clinvar=PathogenicityClass.NOT_PROVIDED, am=0.2)
-    assert v.pathogenicity_tier() == "LOW"
+    assert v.pathogenicity_tier() == "NOT_ASSESSED"
 
 
 @pytest.mark.unit
-def test_pathogenicity_tier_low_from_alphamissense_boundary() -> None:
-    """The 0.34 boundary should be LOW (<= is inclusive)."""
+def test_alphamissense_lower_boundary_does_not_create_clinical_tier() -> None:
+    """A low model threshold does not establish a clinical tier."""
     v = _mk_variant(clinvar=PathogenicityClass.NOT_PROVIDED, am=0.34)
-    assert v.pathogenicity_tier() == "LOW"
+    assert v.pathogenicity_tier() == "NOT_ASSESSED"
 
 
 @pytest.mark.unit
-def test_pathogenicity_tier_medium_from_clinvar_uncertain() -> None:
+def test_clinvar_uncertain_does_not_create_local_risk_tier() -> None:
     v = _mk_variant(clinvar=PathogenicityClass.UNCERTAIN)
-    assert v.pathogenicity_tier() == "MEDIUM"
+    assert v.pathogenicity_tier() == "NOT_ASSESSED"
 
 
 @pytest.mark.unit
-def test_pathogenicity_tier_unknown_fallthrough() -> None:
-    """No ClinVar signal, AlphaMissense in grey zone -> UNKNOWN."""
+def test_grey_zone_does_not_create_local_risk_tier() -> None:
+    """Missing clinical review remains not assessed."""
     v = _mk_variant(clinvar=PathogenicityClass.NOT_PROVIDED, am=0.45)
-    assert v.pathogenicity_tier() == "UNKNOWN"
+    assert v.pathogenicity_tier() == "NOT_ASSESSED"
 
 
 @pytest.mark.unit
-def test_pathogenicity_tier_unknown_no_data() -> None:
-    """All defaults — no ClinVar, no AlphaMissense — falls through to UNKNOWN."""
+def test_no_evidence_does_not_create_local_risk_tier() -> None:
+    """No source or model data means no assessment was performed."""
     v = _mk_variant()
-    assert v.pathogenicity_tier() == "UNKNOWN"
+    assert v.pathogenicity_tier() == "NOT_ASSESSED"
