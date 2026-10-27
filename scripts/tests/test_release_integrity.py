@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import re
 import sys
 import tempfile
 import unittest
@@ -24,9 +25,7 @@ class ReleaseIntegrityTests(unittest.TestCase):
         self.root = Path(self.temp.name)
         self.dist = self.root / "dist"
         self.dist.mkdir()
-        self.wheel = (
-            self.dist / "alphafold_sovereign_mcp-1.5.5-py3-none-any.whl"
-        )
+        self.wheel = self.dist / "alphafold_sovereign_mcp-1.5.5-py3-none-any.whl"
         with zipfile.ZipFile(self.wheel, "w") as archive:
             archive.writestr(
                 "alphafold_sovereign_mcp-1.5.5.dist-info/METADATA",
@@ -48,11 +47,13 @@ class ReleaseIntegrityTests(unittest.TestCase):
             },
             "components": [
                 {
-                    "bom-ref": "fastmcp", "name": "fastmcp",
+                    "bom-ref": "fastmcp",
+                    "name": "fastmcp",
                     "version": "4.0.11",
                 },
                 {
-                    "bom-ref": "pydantic", "name": "pydantic",
+                    "bom-ref": "pydantic",
+                    "name": "pydantic",
                     "version": "2.14.1",
                 },
             ],
@@ -76,9 +77,31 @@ class ReleaseIntegrityTests(unittest.TestCase):
         self.verify()
         self.assertEqual(len(self.spdx["packages"]), 3)
         self.assertEqual(len(self.spdx["relationships"]), 3)
-        self.assertEqual(
-            self.spdx, release_spdx.spdx_document(self.cdx)
-        )
+        self.assertEqual(self.spdx, release_spdx.spdx_document(self.cdx))
+
+    def test_reject_inventoried_package_without_dependency_node(self) -> None:
+        # A package with a graph edge pointing at it but no node of its own
+        # (fastmcp), and a leaf package with no node at all (pydantic).
+        for omitted in ("fastmcp", "pydantic"):
+            with self.subTest(omitted=omitted):
+                bad = copy.deepcopy(self.cdx)
+                bad["dependencies"] = [
+                    node for node in bad["dependencies"] if node["ref"] != omitted
+                ]
+                with self.assertRaisesRegex(ValueError, "lacks a dependency node"):
+                    release_spdx.spdx_document(bad)
+                with self.assertRaisesRegex(ValueError, "lacks a dependency node"):
+                    self.verify(cdx=bad)
+
+    def test_leaf_package_with_empty_node_is_accepted(self) -> None:
+        self.assertIn({"ref": "pydantic", "dependsOn": []}, self.cdx["dependencies"])
+        self.verify()
+
+    def test_reject_dangling_dependency_reference(self) -> None:
+        bad = copy.deepcopy(self.cdx)
+        bad["dependencies"][1]["dependsOn"] = ["not-inventoried"]
+        with self.assertRaisesRegex(ValueError, "invalid dependency child"):
+            self.verify(cdx=bad)
 
     def test_reject_missing_spdx_package(self) -> None:
         bad = copy.deepcopy(self.spdx)
@@ -130,8 +153,8 @@ class ReleaseIntegrityTests(unittest.TestCase):
         python = env / "bin" / "python"
         python.write_text(
             "#!/bin/sh\n"
-            "printf '%s\\n' '[[\"alphafold-sovereign-mcp\",\"1.5.5\"],"
-            "[\"fastmcp\",\"4.0.11\"]]'\n",
+            'printf \'%s\\n\' \'[["alphafold-sovereign-mcp","1.5.5"],'
+            '["fastmcp","4.0.11"]]\'\n',
             encoding="utf-8",
         )
         python.chmod(0o755)
@@ -141,14 +164,13 @@ class ReleaseIntegrityTests(unittest.TestCase):
     def pypi_metadata(self) -> dict:
         return {
             "info": {
-                "name": "alphafold-sovereign-mcp", "version": "1.5.5",
+                "name": "alphafold-sovereign-mcp",
+                "version": "1.5.5",
             },
             "urls": [
                 {
                     "filename": path.name,
-                    "packagetype": (
-                        "bdist_wheel" if path.suffix == ".whl" else "sdist"
-                    ),
+                    "packagetype": ("bdist_wheel" if path.suffix == ".whl" else "sdist"),
                     "digests": {"sha256": release_assets.sha256(path)},
                 }
                 for path in (self.wheel, self.sdist)
@@ -157,20 +179,18 @@ class ReleaseIntegrityTests(unittest.TestCase):
 
     def test_matching_pypi_pair_and_absent_version(self) -> None:
         self.assertFalse(
-            release_assets.check_pypi(
-                self.dist, "v1.5.5", None, require_present=False
-            )
+            release_assets.check_pypi(self.dist, "v1.5.5", None, require_present=False)
         )
         self.assertTrue(
             release_assets.check_pypi(
-                self.dist, "v1.5.5", self.pypi_metadata(),
+                self.dist,
+                "v1.5.5",
+                self.pypi_metadata(),
                 require_present=True,
             )
         )
         with self.assertRaisesRegex(ValueError, "not published"):
-            release_assets.check_pypi(
-                self.dist, "v1.5.5", None, require_present=True
-            )
+            release_assets.check_pypi(self.dist, "v1.5.5", None, require_present=True)
 
     def test_reject_pypi_digest_and_file_mismatch(self) -> None:
         for kind in ("digest", "filename"):
@@ -181,9 +201,7 @@ class ReleaseIntegrityTests(unittest.TestCase):
                 else:
                     data["urls"][0]["filename"] = "different.whl"
                 with self.assertRaises(ValueError):
-                    release_assets.check_pypi(
-                        self.dist, "v1.5.5", data, require_present=True
-                    )
+                    release_assets.check_pypi(self.dist, "v1.5.5", data, require_present=True)
 
     def test_partial_pypi_publish_stages_only_missing_file(self) -> None:
         for remote_kind, missing in (
@@ -192,26 +210,20 @@ class ReleaseIntegrityTests(unittest.TestCase):
         ):
             with self.subTest(remote_kind=remote_kind):
                 data = self.pypi_metadata()
-                data["urls"] = [
-                    item for item in data["urls"] if item["packagetype"] == remote_kind
-                ]
+                data["urls"] = [item for item in data["urls"] if item["packagetype"] == remote_kind]
                 to_publish = release_assets.missing_pypi_distributions(
                     self.dist, "v1.5.5", data, require_present=False
                 )
                 self.assertEqual([path.name for path in to_publish], [missing.name])
                 staging = self.root / f"stage-{remote_kind}"
                 release_assets.stage_pypi_distributions(to_publish, staging)
-                self.assertEqual(
-                    {path.name for path in staging.iterdir()}, {missing.name}
-                )
+                self.assertEqual({path.name for path in staging.iterdir()}, {missing.name})
                 self.assertEqual(
                     release_assets.sha256(staging / missing.name),
                     release_assets.sha256(missing),
                 )
                 with self.assertRaisesRegex(ValueError, "pair incomplete"):
-                    release_assets.check_pypi(
-                        self.dist, "v1.5.5", data, require_present=True
-                    )
+                    release_assets.check_pypi(self.dist, "v1.5.5", data, require_present=True)
 
     def test_unpublished_pypi_stages_both_and_complete_stages_neither(self) -> None:
         for name, metadata, expected in (
@@ -270,26 +282,18 @@ class ReleaseIntegrityTests(unittest.TestCase):
         self.assertNotIn("packages-dir: dist/", workflow)
         self.assertIn("if: steps.existing.outputs.present == 'false'", workflow)
 
-
     def github_files(self) -> dict[str, Path]:
         sboms = self.root / "sboms"
         sboms.mkdir(exist_ok=True)
-        (sboms / "sbom.cyclonedx.json").write_text(
-            json.dumps(self.cdx), encoding="utf-8"
-        )
-        (sboms / "sbom.spdx.json").write_text(
-            json.dumps(self.spdx), encoding="utf-8"
-        )
+        (sboms / "sbom.cyclonedx.json").write_text(json.dumps(self.cdx), encoding="utf-8")
+        (sboms / "sbom.spdx.json").write_text(json.dumps(self.spdx), encoding="utf-8")
         return release_assets.release_paths(self.dist, sboms)
 
     def test_existing_identical_github_asset_is_not_reuploaded(self) -> None:
         files = self.github_files()
-        prefix = (
-            "https://github.com/smaniches/alphafold-sovereign-mcp/"
-            "releases/download/v1.5.5/"
-        )
+        prefix = "https://github.com/smaniches/alphafold-sovereign-mcp/releases/download/v1.5.5/"
         assets = [
-            {"name": name, "browser_download_url": prefix + name}
+            {"name": name, "state": "uploaded", "browser_download_url": prefix + name}
             for name in files
         ]
 
@@ -297,43 +301,53 @@ class ReleaseIntegrityTests(unittest.TestCase):
             dest.write_bytes(files[url.rsplit("/", 1)[-1]].read_bytes())
 
         missing = release_assets.check_github_assets(
-            files, assets, "smaniches/alphafold-sovereign-mcp",
-            "v1.5.5", downloader=download,
+            files,
+            assets,
+            "smaniches/alphafold-sovereign-mcp",
+            "v1.5.5",
+            downloader=download,
         )
-        self.assertEqual(
-            set(missing), {f"{name}.sigstore" for name in files}
-        )
+        self.assertEqual(set(missing), {f"{name}.sigstore" for name in files})
 
     def test_reject_changed_existing_release_asset(self) -> None:
         files = self.github_files()
         name = self.wheel.name
-        assets = [{
-            "name": name,
-            "browser_download_url": (
-                "https://github.com/smaniches/alphafold-sovereign-mcp/"
-                f"releases/download/v1.5.5/{name}"
-            ),
-        }]
+        assets = [
+            {
+                "name": name,
+                "state": "uploaded",
+                "browser_download_url": (
+                    "https://github.com/smaniches/alphafold-sovereign-mcp/"
+                    f"releases/download/v1.5.5/{name}"
+                ),
+            }
+        ]
 
         def changed(url: str, dest: Path) -> None:
             dest.write_bytes(b"changed bytes")
 
         with self.assertRaisesRegex(ValueError, "SHA-256 mismatch"):
             release_assets.check_github_assets(
-                files, assets, "smaniches/alphafold-sovereign-mcp",
-                "v1.5.5", downloader=changed,
+                files,
+                assets,
+                "smaniches/alphafold-sovereign-mcp",
+                "v1.5.5",
+                downloader=changed,
             )
 
     def test_reject_invalid_existing_sigstore_bundle(self) -> None:
         files = self.github_files()
         name = self.wheel.name + ".sigstore"
-        assets = [{
-            "name": name,
-            "browser_download_url": (
-                "https://github.com/smaniches/alphafold-sovereign-mcp/"
-                f"releases/download/v1.5.5/{name}"
-            ),
-        }]
+        assets = [
+            {
+                "name": name,
+                "state": "uploaded",
+                "browser_download_url": (
+                    "https://github.com/smaniches/alphafold-sovereign-mcp/"
+                    f"releases/download/v1.5.5/{name}"
+                ),
+            }
+        ]
 
         def download(url: str, dest: Path) -> None:
             dest.write_bytes(b"invalid signature")
@@ -343,25 +357,244 @@ class ReleaseIntegrityTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "invalid signature"):
             release_assets.check_github_assets(
-                files, assets, "smaniches/alphafold-sovereign-mcp",
-                "v1.5.5", downloader=download,
+                files,
+                assets,
+                "smaniches/alphafold-sovereign-mcp",
+                "v1.5.5",
+                downloader=download,
                 signature_verifier=reject_signature,
             )
 
     def test_reject_unknown_release_asset(self) -> None:
         files = self.github_files()
-        assets = [{
-            "name": "unexpected.zip",
-            "browser_download_url": (
-                "https://github.com/smaniches/alphafold-sovereign-mcp/"
-                "releases/download/v1.5.5/unexpected.zip"
-            ),
-        }]
+        assets = [
+            {
+                "name": "unexpected.zip",
+                "browser_download_url": (
+                    "https://github.com/smaniches/alphafold-sovereign-mcp/"
+                    "releases/download/v1.5.5/unexpected.zip"
+                ),
+            }
+        ]
         with self.assertRaisesRegex(ValueError, "unknown/duplicate"):
             release_assets.check_github_assets(
-                files, assets, "smaniches/alphafold-sovereign-mcp",
+                files,
+                assets,
+                "smaniches/alphafold-sovereign-mcp",
                 "v1.5.5",
             )
+
+    # ---- interrupted GitHub Release creation (draft recovery) ----------
+
+    REPO = "smaniches/alphafold-sovereign-mcp"
+
+    def release_listing(self, *, draft: bool, names=None, tag="v1.5.5") -> dict:
+        files = self.github_files()
+        names = list(files) if names is None else names
+        return {
+            "tag_name": tag,
+            "draft": draft,
+            "assets": [
+                {
+                    "name": name,
+                    "state": "uploaded",
+                    "browser_download_url": (
+                        "https://github.com/smaniches/alphafold-sovereign-mcp/"
+                        f"releases/download/{tag}/{name}"
+                    ),
+                }
+                for name in names
+            ],
+        }
+
+    def test_find_release_prefers_public_tag_and_finds_drafts(self) -> None:
+        public = self.release_listing(draft=False)
+        draft = self.release_listing(draft=True)
+
+        def fetch(url: str, token=None):
+            if "/releases/tags/" in url:
+                return public
+            return [draft]
+
+        self.assertEqual(release_assets.find_release(self.REPO, "v1.5.5", "t", fetch=fetch), public)
+
+        def draft_only(url: str, token=None):
+            return (
+                None
+                if "/releases/tags/" in url
+                else [
+                    {"tag_name": "v1.5.4", "draft": True},
+                    draft,
+                ]
+            )
+
+        self.assertEqual(
+            release_assets.find_release(self.REPO, "v1.5.5", "t", fetch=draft_only),
+            draft,
+        )
+        self.assertIsNone(release_assets.find_release(self.REPO, "v9.9.9", "t", fetch=draft_only))
+
+    def test_find_release_rejects_duplicate_drafts_and_anonymous_lookup(self) -> None:
+        draft = self.release_listing(draft=True)
+
+        def duplicated(url: str, token=None):
+            return None if "/releases/tags/" in url else [draft, dict(draft)]
+
+        with self.assertRaisesRegex(ValueError, "multiple draft"):
+            release_assets.find_release(self.REPO, "v1.5.5", "t", fetch=duplicated)
+        # Drafts are invisible without a token: an anonymous miss is not proof
+        # that no draft exists, so recovery must not silently create a second.
+        with self.assertRaisesRegex(ValueError, "token"):
+            release_assets.find_release(self.REPO, "v1.5.5", None, fetch=duplicated)
+
+    def test_draft_with_partial_assets_resumes_by_uploading_only_missing(self) -> None:
+        files = self.github_files()
+        present = [self.wheel.name, self.sdist.name]
+        listing = self.release_listing(draft=True, names=present)
+        fetched = []
+
+        def download(location: str, dest: Path) -> None:
+            fetched.append(location)
+            dest.write_bytes(files[location].read_bytes())
+
+        plan = release_assets.plan_from_release(
+            files, listing, self.REPO, "v1.5.5", downloader=download
+        )
+        self.assertTrue(plan["exists"])
+        self.assertTrue(plan["draft"])
+        self.assertEqual(sorted(fetched), sorted(present))
+        self.assertEqual(
+            set(plan["missing"]),
+            (set(files) | {f"{n}.sigstore" for n in files}) - set(present),
+        )
+
+    def test_draft_asset_bytes_and_state_are_verified(self) -> None:
+        files = self.github_files()
+        listing = self.release_listing(draft=True, names=[self.wheel.name])
+
+        def tampered(location: str, dest: Path) -> None:
+            dest.write_bytes(b"truncated")
+
+        with self.assertRaisesRegex(ValueError, "SHA-256 mismatch"):
+            release_assets.plan_from_release(
+                files, listing, self.REPO, "v1.5.5", downloader=tampered
+            )
+        listing["assets"][0]["state"] = "starter"
+        with self.assertRaisesRegex(ValueError, "not fully uploaded"):
+            release_assets.plan_from_release(
+                files, listing, self.REPO, "v1.5.5", downloader=tampered
+            )
+
+    def test_conflicting_or_duplicate_assets_in_draft_fail_closed(self) -> None:
+        files = self.github_files()
+        listing = self.release_listing(draft=True, names=[self.wheel.name] * 2)
+        with self.assertRaisesRegex(ValueError, "unknown/duplicate"):
+            release_assets.plan_from_release(
+                files,
+                listing,
+                self.REPO,
+                "v1.5.5",
+                downloader=lambda n, d: d.write_bytes(files[n].read_bytes()),
+            )
+        listing = self.release_listing(draft=True, names=["rogue.bin"])
+        with self.assertRaisesRegex(ValueError, "unknown/duplicate"):
+            release_assets.plan_from_release(
+                files,
+                listing,
+                self.REPO,
+                "v1.5.5",
+                downloader=lambda n, d: d.write_bytes(b""),
+            )
+
+    def test_published_release_plan_is_not_draft_and_wrong_tag_rejected(self) -> None:
+        files = self.github_files()
+        listing = self.release_listing(draft=False, names=[])
+        plan = release_assets.plan_from_release(
+            files, listing, self.REPO, "v1.5.5", downloader=lambda n, d: None
+        )
+        self.assertFalse(plan["draft"])
+        with self.assertRaisesRegex(ValueError, "wrong GitHub Release tag"):
+            release_assets.plan_from_release(
+                files,
+                self.release_listing(draft=True, tag="v1.5.4"),
+                self.REPO,
+                "v1.5.5",
+                downloader=lambda n, d: None,
+            )
+        plan = release_assets.plan_from_release(
+            files, None, self.REPO, "v1.5.5", downloader=lambda n, d: None
+        )
+        self.assertEqual((plan["exists"], plan["draft"]), (False, False))
+
+    def test_complete_draft_rerun_needs_no_uploads_only_publication(self) -> None:
+        files = self.github_files()
+        names = [*files, *(f"{name}.sigstore" for name in files)]
+        listing = self.release_listing(draft=True, names=names)
+        plan = release_assets.plan_from_release(
+            files,
+            listing,
+            self.REPO,
+            "v1.5.5",
+            downloader=lambda n, d: d.write_bytes(files[n.removesuffix(".sigstore")].read_bytes()),
+            signature_verifier=lambda *args: None,
+        )
+        self.assertEqual((plan["draft"], plan["missing"]), (True, []))
+
+    def test_release_workflow_stages_as_draft_and_publishes_after_readback(self) -> None:
+        workflow = (
+            Path(__file__).resolve().parents[2] / ".github" / "workflows" / "release.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("gh release create", workflow)
+        create = workflow[workflow.index("gh release create") :].splitlines()[0]
+        self.assertIn("--draft", create)
+        self.assertNotIn("--clobber", workflow)
+        self.assertIn("gh release edit", workflow)
+        self.assertLess(workflow.index("release-readback.json"), workflow.index("gh release edit"))
+        self.assertIn("--draft=false", workflow)
+
+    # ---- deterministic SBOM dependency resolution ----------------------
+
+    def test_lock_pyproject_and_release_interpreter_agree(self) -> None:
+        try:
+            import tomllib
+        except ImportError:  # pragma: no cover - interpreter older than 3.11
+            self.skipTest("tomllib requires Python 3.11+")
+        root = Path(__file__).resolve().parents[2]
+        project = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+        lock = tomllib.loads((root / "uv.lock").read_text(encoding="utf-8"))
+        self.assertEqual(lock["requires-python"], project["project"]["requires-python"])
+        self_entry = next(
+            package for package in lock["package"] if package["name"] == project["project"]["name"]
+        )
+        self.assertEqual(self_entry["version"], project["project"]["version"])
+        self.assertEqual(
+            {dependency["name"] for dependency in self_entry["dependencies"]},
+            {
+                release_spdx.normalized(re.split(r"[\s<>=!~;\[(]", spec, 1)[0])
+                for spec in project["project"]["dependencies"]
+            },
+        )
+        # The release interpreter (3.12) must lie inside the locked range.
+        self.assertTrue(project["project"]["requires-python"].startswith(">=3."))
+        self.assertLessEqual(int(project["project"]["requires-python"].split(".")[1]), 12)
+
+    def test_sbom_environment_is_resolved_from_the_locked_hashes(self) -> None:
+        script = (Path(__file__).resolve().parents[1] / "generate_release_sbom.sh").read_text(
+            encoding="utf-8"
+        )
+        code = "\n".join(line for line in script.splitlines() if not line.lstrip().startswith("#"))
+        self.assertIn("uv export --locked", code)
+        self.assertIn("--no-dev", code)
+        self.assertIn("--no-emit-project", code)
+        self.assertIn("--require-hashes", code)
+        # No floating resolution: every install touching the wheel or the
+        # lock is dependency-free, and the lock is installed hash-verified.
+        installs = [line for line in code.splitlines() if "pip install" in line]
+        self.assertTrue(installs)
+        for line in installs:
+            self.assertIn("--no-deps", line)
+        self.assertTrue(any('"$wheel"' in line for line in installs))
+        self.assertIn("pip check", code)
 
 
 if __name__ == "__main__":

@@ -45,7 +45,7 @@ def package_version(tag: str) -> str:
     return match.group(1) + (match.group(2) or "") + (match.group(3) or "")
 
 
-def request_json(url: str, token: str | None = None) -> dict | None:
+def request_json(url: str, token: str | None = None) -> dict | list | None:
     headers = {
         "Accept": "application/vnd.github+json",
         "User-Agent": "alphafold-sovereign-release-verifier",
@@ -175,6 +175,59 @@ def download_asset(url: str, destination: Path) -> None:
             output.write(chunk)
 
 
+def download_draft_asset(repo: str, tag: str):
+    """Downloader for assets of an unpublished draft.
+
+    Draft assets have no public URL, so bytes are fetched through the
+    authenticated `gh` client; the token is never given to a CDN redirect.
+    """
+
+    def download(name: str, destination: Path) -> None:
+        subprocess.run(
+            [
+                "gh",
+                "release",
+                "download",
+                tag,
+                "--repo",
+                repo,
+                "--pattern",
+                name,
+                "--output",
+                str(destination),
+            ],
+            check=True,
+            capture_output=True,
+        )
+
+    return download
+
+
+def find_release(repo: str, tag: str, token: str | None, *, fetch=request_json) -> dict | None:
+    """Return the published release for `tag`, else its single draft, else None.
+
+    The by-tag endpoint never returns drafts, so an interrupted run that left
+    only a draft would otherwise look like "no release" and be recreated.
+    """
+    public = fetch(f"https://api.github.com/repos/{repo}/releases/tags/{tag}", token)
+    if public is not None:
+        return public
+    # Drafts are visible only to an authenticated writer; an anonymous miss
+    # is therefore not evidence that no draft exists.
+    require(bool(token), "a GitHub token is required to look for draft releases")
+    drafts = []
+    for page in range(1, 11):
+        batch = fetch(
+            f"https://api.github.com/repos/{repo}/releases?per_page=100&page={page}", token
+        )
+        require(isinstance(batch, list), "invalid GitHub release listing")
+        drafts += [r for r in batch if r.get("tag_name") == tag and r.get("draft")]
+        if len(batch) < 100:
+            break
+    require(len(drafts) <= 1, f"multiple draft releases exist for {tag}")
+    return drafts[0] if drafts else None
+
+
 def verify_signature(bundle: Path, artifact: Path, repo: str, tag: str) -> None:
     identity = f"https://github.com/{repo}/.github/workflows/release.yml@refs/tags/{tag}"
     command = [
@@ -203,6 +256,7 @@ def check_github_assets(
     *,
     downloader=None,
     signature_verifier=None,
+    draft: bool = False,
 ) -> list[str]:
     """Verify all existing assets before any upload or signing."""
     require(
@@ -231,9 +285,17 @@ def check_github_assets(
             f"unknown/duplicate GitHub Release asset: {name!r}",
         )
         require(
-            isinstance(url, str) and url == url_prefix + name,
-            f"wrong release asset location: {name!r}",
+            asset.get("state") == "uploaded",
+            f"release asset is not fully uploaded: {name!r}",
         )
+        if draft:
+            # A draft has no public download URL; fetch it by name.
+            url = name
+        else:
+            require(
+                isinstance(url, str) and url == url_prefix + name,
+                f"wrong release asset location: {name!r}",
+            )
         seen.add(name)
         missing.remove(name)
         with tempfile.TemporaryDirectory(prefix="release-readback-") as temp:
@@ -252,28 +314,49 @@ def check_github_assets(
     return sorted(missing)
 
 
-def plan_github(dist: Path, sboms: Path, tag: str, repo: str) -> dict:
-    files = release_paths(dist, sboms)
-    response = request_json(
-        f"https://api.github.com/repos/{repo}/releases/tags/{tag}",
-        os.environ.get("GH_TOKEN"),
-    )
-    exists = response is not None
+def plan_from_release(
+    files: dict[str, Path],
+    release: dict | None,
+    repo: str,
+    tag: str,
+    *,
+    downloader=None,
+    signature_verifier=None,
+) -> dict:
+    exists = release is not None
+    draft = False
+    assets: list = []
     if exists:
         require(
-            isinstance(response, dict) and response.get("tag_name") == tag,
+            isinstance(release, dict) and release.get("tag_name") == tag,
             "wrong GitHub Release tag",
         )
-        assets = response.get("assets")
-    else:
-        assets = []
-    missing = check_github_assets(files, assets, repo, tag)
+        draft = release.get("draft") is True
+        assets = release.get("assets")
+        if draft and downloader is None:
+            downloader = download_draft_asset(repo, tag)
+    missing = check_github_assets(
+        files,
+        assets,
+        repo,
+        tag,
+        downloader=downloader,
+        signature_verifier=signature_verifier,
+        draft=draft,
+    )
     return {
+        "draft": draft,
         "exists": exists,
         "missing": missing,
         "tag": tag,
         "repo": repo,
     }
+
+
+def plan_github(dist: Path, sboms: Path, tag: str, repo: str) -> dict:
+    files = release_paths(dist, sboms)
+    release = find_release(repo, tag, os.environ.get("GH_TOKEN"))
+    return plan_from_release(files, release, repo, tag)
 
 
 def paths_from_plan(plan: dict, files: dict[str, Path]) -> list[Path]:

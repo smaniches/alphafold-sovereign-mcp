@@ -3,9 +3,13 @@
 # runtime environment, then bind SHA-256(wheel) into the SBOM root component.
 #
 #   1. identify exactly one wheel in the dist directory;
-#   2. install that wheel (with its runtime dependencies) into a dedicated
-#      Python 3.12 environment, so the SBOM documents the dependency tree the
-#      wheel actually resolves;
+#   2. install the runtime dependency closure pinned and hash-locked by the
+#      checked-out uv.lock (`uv export --locked` fails if uv.lock disagrees
+#      with pyproject.toml), then the wheel itself with --no-deps, into a
+#      dedicated Python 3.12 environment. Nothing is resolved from a package
+#      index at release time, so a rerun after upstream publishes a newer
+#      compatible version regenerates the same dependency set; `pip check`
+#      proves the locked set satisfies the wheel's own Requires-Dist;
 #   3. run the hash-locked cyclonedx-py against that environment, seeding the
 #      root component from pyproject.toml (PEP 621) with reproducible output;
 #   4. bind the wheel digest into the root component via
@@ -77,11 +81,24 @@ fi
 wheel="${wheels[0]}"
 echo "SBOM subject wheel: $wheel"
 
-# The SBOM environment contains the exact wheel and its resolved runtime
-# dependencies — nothing else. The SBOM tool itself runs from the separate
-# hash-locked tooling venv so its own dependencies never leak into the SBOM.
-"$python_bin" -m venv --clear "$sbom_env"
-"$sbom_env/bin/python" -m pip install --quiet --no-cache-dir "$wheel"
+if ! command -v uv >/dev/null 2>&1; then
+  echo "uv is required to export the locked runtime closure" >&2
+  exit 68
+fi
+
+# The SBOM environment contains the exact wheel and the locked runtime
+# dependencies — nothing else (no pip/setuptools seed packages either). The SBOM
+# tool itself runs from the separate hash-locked tooling venv so its own
+# dependencies never leak into the SBOM.
+requirements="$(mktemp)"
+trap 'rm -f "$requirements"' EXIT
+(cd "$ROOT" && uv export --locked --no-dev --no-emit-project --no-header \
+  --no-annotate --format requirements-txt --output-file "$requirements")
+"$python_bin" -m venv --clear --without-pip "$sbom_env"
+uv pip install --quiet --python "$sbom_env/bin/python" --require-hashes --no-deps \
+  --no-cache -r "$requirements"
+uv pip install --quiet --python "$sbom_env/bin/python" --no-deps --no-cache "$wheel"
+uv pip check --python "$sbom_env/bin/python"
 
 "$cyclonedx" environment "$sbom_env/bin/python" \
   --pyproject "$ROOT/pyproject.toml" \

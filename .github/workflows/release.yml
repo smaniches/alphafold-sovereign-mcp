@@ -299,25 +299,43 @@ jobs:
           # Reconcile a second time immediately before any write.
           python3 scripts/release_assets.py github dist/ sboms/ "$TAG" "$GITHUB_REPOSITORY" release-plan.json
           mapfile -t assets < <(python3 scripts/release_assets.py paths dist/ sboms/ release-plan.json)
-          if (( ${#assets[@]} == 0 )); then
-            echo "All existing assets match; no upload required."
-          elif gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "${assets[@]}"
+          exists="$(python3 -c 'import json; print(json.load(open("release-plan.json"))["exists"])')"
+          # Releases are staged as drafts and published only after the complete
+          # asset set is read back, so an interruption never exposes a partial
+          # public release and a rerun resumes the existing draft.
+          if [[ "$exists" == "True" ]]; then
+            if (( ${#assets[@]} == 0 )); then
+              echo "All existing assets match; no upload required."
+            else
+              gh release upload "$TAG" "${assets[@]}"
+            fi
           else
             args=()
             if [[ "$TAG" == *-* ]]; then args+=(--prerelease); fi
-            gh release create "$TAG" --verify-tag --title "AlphaFold Sovereign MCP $TAG" --notes-file CHANGELOG.md "${args[@]}" "${assets[@]}"
+            gh release create "$TAG" --draft --verify-tag --title "AlphaFold Sovereign MCP $TAG" --notes-file CHANGELOG.md "${args[@]}" "${assets[@]}"
           fi
-          # Published contents and pre-existing signatures must still match.
+          # Staged contents and pre-existing signatures must still match.
           python3 scripts/release_assets.py github dist/ sboms/ "$TAG" "$GITHUB_REPOSITORY" release-readback.json
           python3 - <<'PY'
           import json
           with open("release-readback.json", encoding="utf-8") as stream:
               plan = json.load(stream)
           if not plan["exists"] or plan["missing"]:
-              raise SystemExit(f"incomplete release after publication: {plan}")
+              raise SystemExit(f"incomplete release after upload: {plan}")
+          print("Release assets verified with no missing assets")
+          PY
+          if python3 -c 'import json,sys; sys.exit(0 if json.load(open("release-readback.json"))["draft"] else 1)'; then
+            gh release edit "$TAG" --draft=false
+            python3 scripts/release_assets.py github dist/ sboms/ "$TAG" "$GITHUB_REPOSITORY" release-published.json
+            python3 - <<'PY'
+          import json
+          with open("release-published.json", encoding="utf-8") as stream:
+              plan = json.load(stream)
+          if not plan["exists"] or plan["draft"] or plan["missing"]:
+              raise SystemExit(f"release is not published and complete: {plan}")
           print("Published GitHub Release verified with no missing assets")
           PY
+          fi
 
   # Publish server.json to the official MCP Registry after PyPI is available.
   # Externally mutating: writes to the public MCP Registry. Gated on

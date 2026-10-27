@@ -69,6 +69,10 @@ def dependency_edges(cdx: dict, refs: dict[str, dict], root_ref: str) -> set[tup
         for child in children:
             require(child in refs and child != parent, "invalid dependency child")
             edges.add((parent, child))
+    # Every inventoried package, including leaves, needs its own node: an
+    # omitted node silently drops that package's transitive edges.
+    absent = sorted(set(refs) - seen)
+    require(not absent, f"inventoried package lacks a dependency node: {absent}")
     require(bool(edges), "empty dependency relationships")
     require(any(parent == root_ref for parent, _ in edges), "root has no dependencies")
     return edges
