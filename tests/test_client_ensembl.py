@@ -11,7 +11,11 @@ import pytest
 import respx
 
 from alphafold_sovereign.clients._base import UpstreamError
-from alphafold_sovereign.clients.ensembl import EnsemblClient, _first_uniprot
+from alphafold_sovereign.clients.ensembl import (
+    EnsemblClient,
+    _first_uniprot,
+    _optional_percent_identity,
+)
 
 # ---------------------------------------------------------------------------
 # parse_gene_from_hgvs (static helper)
@@ -621,3 +625,71 @@ async def test_variant_info_authoritative_404_is_not_outage(
             "rsid": "rsMISSING",
             "found": False,
         }
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [(None, None), (0, 0.0), ("0.0", 0.0), ("76.5", 76.5), (100.0, 100.0)],
+)
+def test_ensembl_optional_identity_preserves_observed_zero(
+    raw: Any, expected: float | None
+) -> None:
+    assert _optional_percent_identity(raw) == expected
+
+
+@pytest.mark.parametrize("raw", [True, False, -1, 101, "bad", float("nan"), float("inf")])
+def test_ensembl_optional_identity_rejects_malformed_values(raw: Any) -> None:
+    with pytest.raises(ValueError, match="Ensembl perc_id"):
+        _optional_percent_identity(raw)
+
+
+async def test_ortholog_missing_identity_is_unassessed_not_zero(
+    respx_mock: respx.MockRouter,
+) -> None:
+    respx_mock.get("https://rest.ensembl.org/lookup/symbol/human/BRCA1").mock(
+        return_value=httpx.Response(200, json=_GENE_LOOKUP_OK)
+    )
+    respx_mock.get("https://rest.ensembl.org/homology/id/human/ENSG0001").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "homologies": [
+                            {"target": {"species": "mus_musculus", "id": "M", "perc_id": None}},
+                            {"target": {"species": "gallus_gallus", "id": "G", "perc_id": 0.0}},
+                        ]
+                    }
+                ]
+            },
+        )
+    )
+    async with EnsemblClient() as client:
+        rows = await client.orthologs("BRCA1")
+    assert rows[0]["identity"] is None
+    assert rows[1]["identity"] == 0.0
+
+
+async def test_ortholog_malformed_identity_fails_closed(
+    respx_mock: respx.MockRouter,
+) -> None:
+    respx_mock.get("https://rest.ensembl.org/lookup/symbol/human/BRCA1").mock(
+        return_value=httpx.Response(200, json=_GENE_LOOKUP_OK)
+    )
+    respx_mock.get("https://rest.ensembl.org/homology/id/human/ENSG0001").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "homologies": [
+                            {"target": {"species": "mus_musculus", "id": "M", "perc_id": "bad"}}
+                        ]
+                    }
+                ]
+            },
+        )
+    )
+    async with EnsemblClient() as client:
+        with pytest.raises(ValueError, match="Ensembl perc_id"):
+            await client.orthologs("BRCA1")

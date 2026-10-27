@@ -7,11 +7,17 @@
     research aid, never as clinical decision support. See
     [Limitations L1](../limitations.md).
 
-!!! warning "Druggability tier is a heuristic"
-    `assess_target_druggability` returns a `HOT/WARM/COLD/NOT_DRUGGABLE`
-    tier from a 4-line scoring heuristic. The thresholds are not
-    calibrated against a benchmark. See
-    [Limitations L2](../limitations.md).
+!!! warning "Druggability tiers are unvalidated research heuristics"
+    `assess_target_druggability` and `synthesize_protein_dossier` report
+    `HOT`, `WARM`, `COLD`, or `NOT_DRUGGABLE` only when at least one
+    drug-precedent source provides an observed count. If neither ChEMBL nor
+    Open Targets supplies a count, the tool reports an evidence-availability error and the
+    score is unavailable. A failed upstream request is not evidence of zero.
+    ChEMBL mechanism-linked molecule counts and Open Targets clinical-
+    candidate counts have different source scopes; fallback is not a
+    harmonized or deduplicated total. The thresholds are author-defined,
+    not calibrated against outcomes, and do not establish target safety
+    or biological druggability. See [Limitations L2](../limitations.md).
 
 ## AlphaMissense evidence status
 

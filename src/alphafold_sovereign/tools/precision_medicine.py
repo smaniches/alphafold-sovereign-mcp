@@ -55,6 +55,7 @@ from alphafold_sovereign.domain.disease import PathogenicityClass
 from alphafold_sovereign.domain.druggability import (
     has_small_molecule_tractability,
     score_target_druggability,
+    validated_plddt,
 )
 from alphafold_sovereign.domain.uniprot import UNIPROT_ACCESSION_PATTERN
 from alphafold_sovereign.server.app import mcp
@@ -930,11 +931,11 @@ async def assess_target_druggability(
 
     1. **Drug precedent** — ChEMBL approved drugs + clinical compounds
     2. **Tractability** — Open Targets tractability labels (small-molecule, antibody, PROTAC)
-    3. **Structural confidence** — AF2 pLDDT (ordered → analysable binding pockets)
-    4. **Population constraint** — gnomAD LOEUF (highly constrained → safety risk on inhibition)
+    3. **Structural confidence** — AF2 pLDDT (model-local confidence, not binding evidence)
+    4. **Population constraint** — gnomAD LOEUF (gene-level LoF depletion, not toxicity evidence)
 
-    It assembles existing public-database evidence into one tier; it does
-    not add scientific judgement and is not a validated predictive model.
+    This is an author-defined, uncalibrated research score, not a validated
+    predictive model, clinical safety result, or independent biological fact.
 
     Input fields:
         params.uniprot_id: UniProt accession.
@@ -953,16 +954,24 @@ async def assess_target_druggability(
         return_exceptions=True,
     )
 
-    drug_count = 0
+    drug_count: int | None = None
     tractability_labels: list[str] = []
     approved_drugs: list[dict[str, Any]] = []
+    chembl_status = "failed" if isinstance(chembl_target, BaseException) else "no_data"
 
-    if isinstance(chembl_target, dict) and chembl_target:
+    if isinstance(chembl_target, dict) and chembl_target.get("chembl_id"):
         target_id = chembl_target["chembl_id"]
-        approved_drugs = await _chembl().approved_drugs(
-            target_id, include_clinical=params.include_clinical_stage
-        )
-        drug_count = len(approved_drugs)
+        try:
+            approved_drugs = await _chembl().approved_drugs(
+                target_id,
+                include_clinical=params.include_clinical_stage,
+                require_complete=True,
+            )
+            drug_count = len(approved_drugs)
+            chembl_status = "ok"
+        except Exception as exc:
+            chembl_status = "failed"
+            log.warning("chembl.drugs.incomplete", exc=str(exc))
 
     # Resolve UniProt accession -> Open Targets target (Ensembl ID + symbol).
     # Open Targets keys all target data on Ensembl gene IDs, not UniProt IDs.
@@ -976,13 +985,20 @@ async def assess_target_druggability(
 
     # Open Targets tractability (keyed on the resolved Ensembl gene ID)
     ot_tractability: dict[str, Any] = {}
+    ot_status = "skipped" if not ensembl_id else "no_data"
     if ensembl_id:
         try:
             ot_tractability = await _opentargets().drug_count_and_tractability(ensembl_id)
             tractability_labels = ot_tractability.get("tractability_labels", [])
-            if not drug_count:
-                drug_count = ot_tractability.get("drug_count", 0)
+            ot_count = ot_tractability.get("drug_count")
+            if isinstance(ot_count, int) and not isinstance(ot_count, bool) and ot_count >= 0:
+                ot_status = "ok"
+                if not drug_count:
+                    drug_count = ot_count
+            elif ot_count is not None:
+                ot_status = "invalid_response"
         except Exception as exc:
+            ot_status = "failed"
             log.warning("ot.tractability.failed", exc=str(exc))
 
     # gnomAD constraint (keyed on the HGNC gene symbol resolved above)
@@ -995,16 +1011,28 @@ async def assess_target_druggability(
         except Exception as exc:
             log.warning("constraint.failed", exc=str(exc))
 
-    # AlphaFold pLDDT (structural confidence)
+    # AlphaFold confidence is an observed [0, 100] measurement or unassessed.
     plddt_mean: float | None = None
+    plddt_status = "missing"
     try:
-        af_meta = await _alphafold().get_prediction(uid)
+        af_meta: Any = await _alphafold().get_prediction(uid)
         if isinstance(af_meta, dict):
-            plddt_mean = af_meta.get("globalMetricValue")
+            plddt_mean, plddt_status = validated_plddt(af_meta.get("globalMetricValue"))
+        else:
+            plddt_status = "invalid_response"
     except Exception as exc:
+        plddt_status = "failed"
         log.warning("plddt.failed", exc=str(exc))
 
-    # Druggability tier
+    # The published successful response promises four tiers and a dict
+    # breakdown. A missing count cannot justify a tier: fail explicitly,
+    # rather than inventing a zero or returning an unversioned new shape.
+    if drug_count is None:
+        raise ValueError(
+            "Druggability assessment unavailable: no observed drug count "
+            f"(chembl={chembl_status}, open_targets={ot_status}). "
+            "No tier was assigned."
+        )
     tier, rationale, scoring = _druggability_tier(
         drug_count=drug_count,
         tractability_labels=tractability_labels,
@@ -1017,6 +1045,11 @@ async def assess_target_druggability(
         "druggability_tier": tier,
         "tier_rationale": rationale,
         "scoring_breakdown": scoring,
+        "data_sources_status": {
+            "chembl_drug_count": chembl_status,
+            "open_targets_drug_count": ot_status,
+            "alphafold_plddt": plddt_status,
+        },
         "evidence": {
             "drug_count": drug_count,
             "tractability_labels": tractability_labels,
@@ -1055,7 +1088,10 @@ async def assess_target_druggability(
             "alphafold_db": "https://alphafold.ebi.ac.uk",
         },
         "provenance": _provenance(
-            chembl="v37", open_targets="26.03", gnomad="v4", alphafold_db="v6"
+            chembl="v37",
+            open_targets="OT-platform-live-release-unverified",
+            gnomad="v4",
+            alphafold_db="v6",
         ),
     }
 
@@ -1081,8 +1117,8 @@ async def synthesize_protein_dossier(
 
     It assembles disease associations, drug precedent, population
     constraint, ClinVar variants, and cross-species orthologs for one
-    protein into a single structured record. It composes upstream
-    databases; it does not add scientific judgement.
+    protein into a single structured record. It composes upstream records
+    and author-defined research heuristics, without issuing clinical conclusions.
 
     Sources fused in parallel:
       - **Open Targets**: disease associations + tractability + drug count
@@ -1122,19 +1158,43 @@ async def synthesize_protein_dossier(
     }
 
     gathered = await asyncio.gather(*tasks.values(), return_exceptions=True)
+
+    # Keep upstream failures distinguishable from valid empty source results.
+    def _source_state(value: Any) -> str:
+        if isinstance(value, BaseException):
+            return "failed"
+        if not isinstance(value, (dict, list)):
+            return "invalid_response"
+        return "ok" if value else "no_data"
+
+    source_status = {key: _source_state(value) for key, value in zip(tasks.keys(), gathered)}
     results: dict[str, Any] = {
-        k: (v if not isinstance(v, Exception) else None) for k, v in zip(tasks.keys(), gathered)
+        k: (v if isinstance(v, (dict, list)) else None) for k, v in zip(tasks.keys(), gathered)
     }
 
-    # Drug data (needs ChEMBL target lookup first)
-    chembl_target = await _chembl().target_by_uniprot(uid)
+    # A failed ChEMBL target lookup must not abort the other dossier sources.
     drugs: list[dict[str, Any]] = []
-    if isinstance(chembl_target, dict) and chembl_target:
+    chembl_drug_status = "no_data"
+    chembl_target: dict[str, Any] | None = None
+    try:
+        target_result: Any = await _chembl().target_by_uniprot(uid)
+        if isinstance(target_result, dict):
+            chembl_target = target_result
+        elif target_result is not None:
+            chembl_drug_status = "invalid_response"
+    except Exception as exc:
+        chembl_drug_status = "failed"
+        log.warning("chembl.target.failed", uniprot_id=uid, exc=str(exc))
+    if chembl_target:
         target_id = chembl_target.get("chembl_id", "")
         if target_id:
             try:
-                drugs = await _chembl().approved_drugs(target_id, include_clinical=True)
+                drugs = await _chembl().approved_drugs(
+                    target_id, include_clinical=True, require_complete=True
+                )
+                chembl_drug_status = "ok"
             except Exception as exc:
+                chembl_drug_status = "failed"
                 log.warning(
                     "chembl.approved_drugs.failed",
                     exc=str(exc),
@@ -1162,22 +1222,43 @@ async def synthesize_protein_dossier(
     clinvar_vars = results.get("clinvar_variants") or []
     ensembl_gene = results.get("ensembl_gene") or {}
 
-    # AlphaFold pLDDT
+    # AlphaFold confidence must be a valid measured [0, 100] value.
     dossier_plddt: float | None = None
+    dossier_plddt_status = "missing"
     try:
-        af_meta = await _alphafold().get_prediction(uid)
+        af_meta: Any = await _alphafold().get_prediction(uid)
         if isinstance(af_meta, dict):
-            dossier_plddt = af_meta.get("globalMetricValue")
+            dossier_plddt, dossier_plddt_status = validated_plddt(af_meta.get("globalMetricValue"))
+        else:
+            dossier_plddt_status = "invalid_response"
     except Exception as exc:
+        dossier_plddt_status = "failed"
         log.warning(
             "alphafold.plddt.failed",
             exc=str(exc),
             uniprot_id=uid,
         )
 
-    # Compute druggability
+    # Missing retrieval is not an observed drug count of zero.
+    ot_count = ot_tract.get("drug_count")
+    drug_count: int | None
+    if isinstance(ot_count, int) and not isinstance(ot_count, bool) and ot_count >= 0:
+        drug_count = ot_count
+    elif chembl_drug_status == "ok":
+        drug_count = len(drugs)
+    else:
+        drug_count = None
+
+    # Keep the established successful tier schema; fail on unavailable evidence.
+    if drug_count is None:
+        raise ValueError(
+            "Protein dossier druggability unavailable: no observed drug count "
+            f"(chembl={chembl_drug_status}, "
+            f"open_targets={source_status['ot_tractability']}). "
+            "No dossier tier was assigned."
+        )
     tier, rationale, dossier_scoring = _druggability_tier(
-        drug_count=ot_tract.get("drug_count", len(drugs)),
+        drug_count=drug_count,
         tractability_labels=ot_tract.get("tractability_labels", []),
         loeuf=constraint.get("loeuf"),
         plddt_mean=dossier_plddt,
@@ -1216,15 +1297,12 @@ async def synthesize_protein_dossier(
         "druggability": {
             "tier": tier,
             "rationale": rationale,
-            "drug_count": ot_tract.get("drug_count", len(drugs)),
+            "drug_count": drug_count,
             "tractability_labels": ot_tract.get("tractability_labels", []),
-            # Surface how much evidence backs the tier (same fields the
-            # assess_target_druggability scoring_breakdown reports), so the
-            # dossier no longer presents a bare tier without its uncertainty.
-            "confidence": dossier_scoring["confidence"],
-            "borderline": dossier_scoring["borderline"],
-            "signals": dossier_scoring["signals"],
-            "score_normalized": dossier_scoring["score_normalized"],
+            "confidence": dossier_scoring["confidence"] if dossier_scoring else None,
+            "borderline": dossier_scoring["borderline"] if dossier_scoring else None,
+            "signals": dossier_scoring["signals"] if dossier_scoring else None,
+            "score_normalized": dossier_scoring["score_normalized"] if dossier_scoring else None,
         },
         "disease_associations": list(disease_map.values()),
         "approved_drugs": [
@@ -1247,7 +1325,7 @@ async def synthesize_protein_dossier(
         "intelligence_summary": _narrative_summary(
             sym=sym,
             tier=tier,
-            drug_count=ot_tract.get("drug_count", len(drugs)),
+            drug_count=drug_count,
             diseases=list(disease_map.values()),
             constraint=constraint,
         ),
@@ -1260,6 +1338,20 @@ async def synthesize_protein_dossier(
     if params.depth == "comprehensive":
         dossier["cross_species_orthologs"] = orthologs
 
+    if source_status["ot_tractability"] in {"failed", "invalid_response"}:
+        ot_count_status = source_status["ot_tractability"]
+    elif isinstance(ot_count, int) and not isinstance(ot_count, bool) and ot_count >= 0:
+        ot_count_status = "ok"
+    elif ot_count is not None:
+        ot_count_status = "invalid_response"
+    else:
+        ot_count_status = "no_data"
+    dossier["data_sources_status"] = {
+        **source_status,
+        "chembl_drugs": chembl_drug_status,
+        "open_targets_drug_count": ot_count_status,
+        "alphafold_plddt": dossier_plddt_status,
+    }
     dossier["data_sources"] = {
         "open_targets": "https://platform.opentargets.org",
         "disgenet": "https://www.disgenet.com",
@@ -1273,7 +1365,7 @@ async def synthesize_protein_dossier(
     # above), not tool parameters. ClinVar / Ensembl / DisGeNET serve current
     # releases and are not pinned to a version here.
     dossier["provenance"] = _provenance(
-        open_targets="26.03",
+        open_targets="OT-platform-live-release-unverified",
         gnomad="v4",
         chembl="v37",
         alphafold_db="v6",
@@ -1300,10 +1392,10 @@ async def synthesize_protein_dossier(
 async def map_disease_drug_landscape(
     params: DiseaseDrugLandscapeInput,
 ) -> dict[str, Any]:
-    """Map the complete therapeutic landscape for a disease.
+    """Map a bounded, source-attributed therapeutic landscape for a disease.
 
-    Returns approved drugs, pipeline agents, top druggable targets,
-    and an investability summary for a given MONDO disease.
+    Returns retrieved approved drugs, pipeline agents, top druggable targets,
+    and an exploratory summary for a given MONDO disease.
 
     Combines Open Targets evidence with ChEMBL drug indications and
     MONDO disease hierarchy to produce a comprehensive landscape report
@@ -1333,6 +1425,7 @@ async def map_disease_drug_landscape(
 
     disease_name = ""
     efo_curie = ""  # e.g. "EFO:0000339" — the native key for OT and ChEMBL
+    mondo_status = "failed" if isinstance(mondo_result, BaseException) else "ok"
     if isinstance(mondo_result, BaseException):
         log.warning("mondo.failed", exc=str(mondo_result))
     else:
@@ -1359,6 +1452,13 @@ async def map_disease_drug_landscape(
         except Exception as exc:
             log.warning("opentargets.efo_fallback.failed", exc=str(exc))
 
+    if isinstance(ot_targets, BaseException):
+        ot_status = "failed"
+    elif ot_targets:
+        ot_status = "ok"
+    else:
+        ot_status = "no_data"
+
     top_targets: list[dict[str, Any]] = []
     if not isinstance(ot_targets, BaseException):
         top_targets = [
@@ -1369,12 +1469,16 @@ async def map_disease_drug_landscape(
     # ChEMBL drug indications are keyed on EFO / MeSH, not MONDO. Use the EFO
     # cross-reference when available, falling back to the disease name (MeSH).
     chembl_drugs: list[dict[str, Any]] = []
+    chembl_status = "skipped"
     try:
         if efo_curie:
             chembl_drugs = await _chembl().drug_indications(efo_id=efo_curie, limit=20)
+            chembl_status = "ok" if chembl_drugs else "no_data"
         elif disease_name:
             chembl_drugs = await _chembl().drug_indications(mesh_heading=disease_name, limit=20)
+            chembl_status = "ok" if chembl_drugs else "no_data"
     except Exception as exc:
+        chembl_status = "failed"
         log.warning("chembl.indications.failed", exc=str(exc))
 
     # Classify drugs by phase
@@ -1391,8 +1495,33 @@ async def map_disease_drug_landscape(
             if not d.get("pref_name"):
                 d["pref_name"] = names.get(d.get("molecule_chembl_id", ""), "")
 
-    # Druggable top targets
-    druggable_targets = [t for t in top_targets if t.get("tractable")]
+    # Count the entire retrieved page, not just the displayed top ten.
+    target_rows = (
+        [cast("dict[str, Any]", t.to_dict() if hasattr(t, "to_dict") else t) for t in ot_targets]
+        if isinstance(ot_targets, list)
+        else []
+    )
+    druggable_targets = [t for t in target_rows if t.get("tractable")]
+    retrieved_targets = len(ot_targets) if isinstance(ot_targets, list) else None
+    retrieved_indications = len(chembl_drugs) if chembl_status in {"ok", "no_data"} else None
+    total_targets = (
+        retrieved_targets if retrieved_targets is not None and retrieved_targets < 20 else None
+    )
+    total_indications = (
+        retrieved_indications
+        if retrieved_indications is not None and retrieved_indications < 20
+        else None
+    )
+    counts_assessable = total_targets is not None and total_indications is not None
+    investability = (
+        _investability_rating(
+            approved_count=len(approved),
+            pipeline_count=len(phase3) + len(phase12),
+            druggable_targets=len(druggable_targets),
+        )
+        if counts_assessable
+        else "NOT_ASSESSED — source lookup failed, was skipped, or pagination is unverified."
+    )
 
     landscape: dict[str, Any] = {
         "disease": {
@@ -1403,22 +1532,32 @@ async def map_disease_drug_landscape(
             "approved_drugs": approved[:10],
             "phase_3_drugs": phase3[:10],
             "phase_1_2_drugs": phase12[:10],
-            "total_indication_entries": len(chembl_drugs),
+            "total_indication_entries": total_indications,
+            "retrieved_indication_entries": retrieved_indications,
+            "page_limit": 20,
         },
         "target_landscape": {
             "top_targets": top_targets[:10],
             "druggable_targets": druggable_targets[:5],
-            "total_associated_targets": len(top_targets),
+            "total_associated_targets": total_targets,
+            "retrieved_associated_targets": retrieved_targets,
+            "page_limit": 20,
         },
         "competitive_intelligence": {
-            "approved_count": len(approved),
-            "pipeline_count": len(phase3) + len(phase12),
-            "druggable_target_count": len(druggable_targets),
-            "investability": _investability_rating(
-                approved_count=len(approved),
-                pipeline_count=len(phase3) + len(phase12),
-                druggable_targets=len(druggable_targets),
+            "approved_count": len(approved) if retrieved_indications is not None else None,
+            "pipeline_count": (
+                len(phase3) + len(phase12) if retrieved_indications is not None else None
             ),
+            "druggable_target_count": (
+                len(druggable_targets) if retrieved_targets is not None else None
+            ),
+            "investability": investability,
+            "count_scope": "Retrieved source page only, not a verified whole-database count.",
+        },
+        "data_sources_status": {
+            "mondo": mondo_status,
+            "open_targets": ot_status,
+            "chembl_indications": chembl_status,
         },
         "data_sources": {
             "mondo": "https://www.ebi.ac.uk/ols4/ontologies/mondo",
@@ -1426,7 +1565,7 @@ async def map_disease_drug_landscape(
             "chembl": "https://www.ebi.ac.uk/chembl/",
         },
         "provenance": _provenance(
-            open_targets="26.03",
+            open_targets="OT-platform-live-release-unverified",
             chembl="v37",
         ),
     }
@@ -1724,6 +1863,15 @@ async def find_drug_repurposing_candidates(
             "disease_mondo_id": mid,
             "candidates": [],
             "message": "No Open Targets associations found for this disease.",
+            "candidate_count": 0,
+            "data_sources_status": {"open_targets": "no_data", "chembl": "skipped"},
+            "evidence_completeness": {
+                "targets_considered": 0,
+                "chembl_lookups_assessed": 0,
+                "chembl_lookups_failed": 0,
+                "targets_without_uniprot": 0,
+                "partial": False,
+            },
         }
 
     # Step 2: Find drugs for each target (parallel, bounded)
@@ -1731,22 +1879,23 @@ async def find_drug_repurposing_candidates(
 
     async def _get_drugs_for_target(
         target: Any,
-    ) -> tuple[Any, list[dict[str, Any]]]:
+    ) -> tuple[Any, list[dict[str, Any]], str]:
         async with semaphore:
             uid = (
                 target.uniprot_id if hasattr(target, "uniprot_id") else target.get("uniprot_id", "")
             )
             if not uid:
-                return target, []
+                return target, [], "skipped"
             try:
                 drugs = await _chembl().find_repurposable_drugs(
                     uid,
                     max_phase=params.min_phase,
                     limit=5,
                 )
-                return target, drugs
-            except Exception:
-                return target, []
+                return target, drugs, "ok" if drugs else "no_data"
+            except Exception as exc:
+                log.warning("chembl.repurposing.failed", uniprot_id=uid, exc=str(exc))
+                return target, [], "failed"
 
     drug_results = await asyncio.gather(
         *[_get_drugs_for_target(t) for t in ot_targets],
@@ -1756,21 +1905,48 @@ async def find_drug_repurposing_candidates(
     # Step 3: Build candidate list
     candidates: list[dict[str, Any]] = []
     seen_drug_ids: set[str] = set()
+    lookup_statuses: list[str] = []
+    invalid_drug_records = 0
 
     for result in drug_results:
         if isinstance(result, BaseException):
+            lookup_statuses.append("failed")
             continue
-        target, drugs = result
+        target, drugs, lookup_status = result
+        lookup_statuses.append(lookup_status)
         target_dict = target.to_dict() if hasattr(target, "to_dict") else target
         ot_score = target_dict.get("overall_score", 0.0)
 
-        for drug in drugs:
-            drug_id = drug.get("molecule_chembl_id", "")
+        for candidate_record in drugs:
+            drug: Any = candidate_record
+            if not isinstance(drug, dict):
+                invalid_drug_records += 1
+                continue
+            drug_id = drug.get("molecule_chembl_id")
+            if not isinstance(drug_id, str) or not drug_id:
+                invalid_drug_records += 1
+                continue
             if drug_id in seen_drug_ids:
                 continue
+            raw_phase = drug.get("max_phase")
+            if raw_phase is None or isinstance(raw_phase, bool):
+                invalid_drug_records += 1
+                continue
+            try:
+                measured_phase = float(raw_phase)
+            except (TypeError, ValueError, OverflowError):
+                invalid_drug_records += 1
+                continue
+            if (
+                not math.isfinite(measured_phase)
+                or not params.min_phase <= measured_phase <= 4
+                or drug.get("max_phase_known", True) is not True
+            ):
+                invalid_drug_records += 1
+                continue
             seen_drug_ids.add(drug_id)
-            phase = int(drug.get("max_phase") or 0)
-            composite_score = round(ot_score * (phase / 4.0), 4)
+            phase = int(measured_phase) if measured_phase.is_integer() else measured_phase
+            composite_score = round(ot_score * (measured_phase / 4.0), 4)
             candidates.append(
                 {
                     "molecule_chembl_id": drug_id,
@@ -1788,12 +1964,34 @@ async def find_drug_repurposing_candidates(
             )
 
     candidates.sort(key=lambda c: c["composite_repurposing_score"], reverse=True)
+    failed_lookups = lookup_statuses.count("failed")
+    assessed_lookups = lookup_statuses.count("ok") + lookup_statuses.count("no_data")
+    skipped_lookups = lookup_statuses.count("skipped")
+    if failed_lookups and assessed_lookups:
+        chembl_status = "partial"
+    elif failed_lookups:
+        chembl_status = "failed"
+    elif assessed_lookups:
+        chembl_status = "ok" if "ok" in lookup_statuses else "no_data"
+    else:
+        chembl_status = "skipped"
+    if invalid_drug_records and chembl_status == "ok":
+        chembl_status = "partial"
 
-    return {
+    report = {
         "disease_mondo_id": mid,
         "min_phase": params.min_phase,
         "candidates": candidates[:20],
         "candidate_count": len(candidates),
+        "data_sources_status": {"open_targets": "ok", "chembl": chembl_status},
+        "evidence_completeness": {
+            "targets_considered": len(ot_targets),
+            "chembl_lookups_assessed": assessed_lookups,
+            "chembl_lookups_failed": failed_lookups,
+            "targets_without_uniprot": skipped_lookups,
+            "invalid_or_unassessed_drug_records": invalid_drug_records,
+            "partial": bool(failed_lookups or skipped_lookups or invalid_drug_records),
+        },
         "methodology": (
             "Composite score = (Open Targets evidence score × clinical phase / 4). "
             "Higher scores indicate stronger genetic evidence + more advanced clinical precedent. "
@@ -1803,8 +2001,22 @@ async def find_drug_repurposing_candidates(
             "open_targets": "https://platform.opentargets.org",
             "chembl": "https://www.ebi.ac.uk/chembl/",
         },
-        "provenance": _provenance(open_targets="26.03", chembl="v37"),
+        "provenance": _provenance(open_targets="OT-platform-live-release-unverified", chembl="v37"),
     }
+    warnings: list[str] = []
+    if failed_lookups:
+        warnings.append(
+            f"ChEMBL retrieval failed for {failed_lookups} target(s). "
+            "The candidate list is incomplete; absence of candidates is not evidence of no drugs."
+        )
+    if invalid_drug_records:
+        warnings.append(
+            f"{invalid_drug_records} candidate record(s) lacked verified molecule identity "
+            "or valid observed clinical phase and were not scored."
+        )
+    if warnings:
+        report["message"] = " ".join(warnings)
+    return report
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -1851,7 +2063,9 @@ def _tier_explanation(tier: str) -> str:
     )
 
 
-def _druggability_actionability(tier: str, drug_count: int, tractability_labels: list[str]) -> str:
+def _druggability_actionability(
+    tier: str, drug_count: int | None, tractability_labels: list[str]
+) -> str:
     if tier == "HOT":
         if _has_small_molecule_tractability(tractability_labels):
             basis = f"{drug_count} known drug(s) + small-molecule tractability label(s)"
@@ -1878,7 +2092,7 @@ def _narrative_summary(
     *,
     sym: str,
     tier: str,
-    drug_count: int,
+    drug_count: int | None,
     diseases: list[dict[str, Any]],
     constraint: dict[str, Any],
 ) -> str:
@@ -1886,10 +2100,17 @@ def _narrative_summary(
     loeuf = constraint.get("loeuf")
     constraint_desc = ""
     if loeuf is not None:
-        constraint_desc = f"The gene is {'highly constrained (LoF intolerant, LOEUF=' + f'{loeuf:.3f}' + ')' if loeuf < 0.35 else 'moderately constrained' if loeuf < 0.6 else 'tolerant to LoF'}. "
+        constraint_desc = (
+            f"Gene-level LOEUF={loeuf:.3f}; this is not a clinical phenotype or safety inference. "
+        )
+    count_description = (
+        f"{drug_count} source-reported drug or clinical-candidate record(s)"
+        if drug_count is not None
+        else "an unavailable drug-precedent count"
+    )
     return (
         f"{sym} has a local {tier.lower()} target-priority heuristic and "
-        f"{drug_count} retrieved clinical compound record(s). "
+        f"{count_description}. "
         f"Top associated diseases: {disease_names or 'not determined'}. "
         f"{constraint_desc}"
         "This is an unvalidated research synthesis; inspect each source status "

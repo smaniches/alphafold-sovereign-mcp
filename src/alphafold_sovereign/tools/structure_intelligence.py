@@ -51,6 +51,7 @@ from alphafold_sovereign.clients.alphafold import (
     _prediction_sequence,
 )
 from alphafold_sovereign.clients.ensembl import EnsemblClient
+from alphafold_sovereign.domain.druggability import validated_plddt
 from alphafold_sovereign.domain.uniprot import UNIPROT_ISOFORM_PATTERN
 from alphafold_sovereign.server.app import mcp
 
@@ -199,10 +200,12 @@ async def _fetch_af_plddt(uniprot_id: str) -> dict[str, Any] | None:
     if not isinstance(meta, dict) or not _prediction_model_id(meta):
         return None
 
+    mean_plddt, plddt_status = validated_plddt(meta.get("globalMetricValue"))
     result: dict[str, Any] = {
         "uniprot_id": uniprot_id,
         "model_entity_id": _prediction_model_id(meta),
-        "mean_plddt": meta.get("globalMetricValue"),
+        "mean_plddt": mean_plddt,
+        "plddt_status": plddt_status,
         "model_url": meta.get("pdbUrl", ""),
         "sequence_length": len(_prediction_sequence(meta)),
         "model_uniprot_accession": meta.get("uniprotAccession"),
@@ -564,7 +567,9 @@ async def analyze_structural_confidence(
     if not result:
         return _no_structure_response(uid)
 
-    plddt = result.get("mean_plddt")
+    plddt, plddt_status = validated_plddt(result.get("mean_plddt"))
+    if plddt_status == "missing" and result.get("plddt_status") == "invalid_response":
+        plddt_status = "invalid_response"
     confidence_tier = _plddt_tier(plddt)
     domain_boundaries = result.get("domain_boundaries", [])
 
@@ -572,6 +577,7 @@ async def analyze_structural_confidence(
         "uniprot_id": uid,
         "mean_plddt": round(plddt, 2) if plddt is not None else None,
         "confidence_tier": confidence_tier,
+        "plddt_status": plddt_status,
         "confidence_tier_explanation": _plddt_tier_explanation(confidence_tier),
         "sequence_length": result.get("sequence_length"),
         "model_entity_id": result.get("model_entity_id"),
@@ -604,9 +610,13 @@ async def analyze_structural_confidence(
                 "of residues that are intrinsically ordered."
             ),
             "structural_suitability": (
-                "HIGHER MODEL CONFIDENCE: validate pockets and ligand binding independently"
-                if (plddt or 0) >= 70
-                else "CAUTION: low confidence may indicate disorder or an uncertain prediction"
+                "NOT_ASSESSED: mean pLDDT is unavailable; model confidence cannot be categorized."
+                if plddt is None
+                else (
+                    "HIGHER MODEL CONFIDENCE: validate pockets and ligand binding independently"
+                    if plddt >= 70
+                    else "CAUTION: low confidence may indicate disorder or an uncertain prediction"
+                )
             ),
         },
         "model_url": result.get("model_url", ""),
@@ -938,9 +948,9 @@ async def score_binding_pocket_geometry(
 
     Each pocket reports a radius of gyration (compactness of the pocket
     residues), a centroid offset (distance of the pocket centroid from
-    the structure centroid; larger means more peripheral — a
-    only a geometric offset, not measured solvent accessibility, cavity
-    validity, or ligand binding), a mean pLDDT, and a heuristic score.
+    the structure centroid; larger means more peripheral), mean pLDDT,
+    and an uncalibrated geometry score. Centroid offset does not measure
+    solvent exposure, cavity validity, or ligand binding.
     The druggability index runs 0 to 100 and is the sum of four equally
     weighted 0 to 25 sub-scores: residue count, radius of gyration, mean
     pLDDT, and centroid offset.
@@ -1029,8 +1039,11 @@ async def detect_intrinsically_disordered(
     it is NOT independent evidence that a region is disordered.
 
     Returns model-local residue indices, observed PDB chain/residue identifiers,
-    and heuristic linker/terminal/long-segment labels. A terminal label is
-    relative to the modeled chain or fragment, not necessarily the full protein.
+    and positional descriptions of low-pLDDT runs. These labels describe
+    model geometry, not validated linkers, tails, disorder or function.
+    Legacy idr_fraction and disordered_residue_count remain deprecated numeric
+    aliases of low-pLDDT measurements, NOT validated intrinsic-disorder assays.
+    Prefer low_plddt_* fields for scientific interpretation.
     PDB numbering is not mapped to full-length UniProt via SIFTS here.
 
     This implementation is a reproducible screening heuristic, not a validated
@@ -1072,8 +1085,8 @@ async def detect_intrinsically_disordered(
             "sequence_length": 0,
             "error": "No valid C-alpha residue confidence records in the selected model.",
         }
-    disordered_residues = sum(1 for p in per_residue_plddt if p < 50)
-    idr_fraction = disordered_residues / total_residues if total_residues > 0 else 0.0
+    low_plddt_count = sum(1 for p in per_residue_plddt if p < 50)
+    low_plddt_fraction = low_plddt_count / total_residues
 
     return {
         "uniprot_id": uid,
@@ -1090,11 +1103,21 @@ async def detect_intrinsically_disordered(
             "Neither index is a verified UniProt or PDB/SIFTS residue mapping. "
             "Terminal and whole-protein labels only describe the modeled segment."
         ),
-        "idr_fraction": round(idr_fraction, 4),
-        "disordered_residue_count": disordered_residues,
+        # Deprecated numeric aliases of low-pLDDT, not observed disorder.
+        "idr_fraction": round(low_plddt_fraction, 4),
+        "disordered_residue_count": low_plddt_count,
         "is_idr_protein": None,
         "idr_segments": idr_segments,
         "idr_classification": "NOT_ASSESSED: model confidence is not an IDR assay.",
+        "low_plddt_cutoff": 50.0,
+        "low_plddt_fraction": round(low_plddt_fraction, 4),
+        "low_plddt_residue_count": low_plddt_count,
+        "low_plddt_segments": idr_segments,
+        "segment_evidence_note": (
+            "Segments are modeled C-alpha runs with pLDDT < 50. "
+            "Their type is positional only; they are not proven intrinsically "
+            "disordered residues, linkers or biomolecular mechanisms."
+        ),
         "clinical_implications": None,
         "drug_target_potential": None,
         "reference": "Ruff KM & Pappu RV (2021) J Mol Biol 433:167208. doi:10.1016/j.jmb.2021.167208",
@@ -1156,7 +1179,7 @@ async def get_protein_structure(
         return _no_structure_response(uid)
 
     sequence = _prediction_sequence(meta)
-    global_metric = meta.get("globalMetricValue")
+    global_metric, plddt_status = validated_plddt(meta.get("globalMetricValue"))
     result: dict[str, Any] = {
         "uniprot_id": uid,
         "structure_available": True,
@@ -1169,9 +1192,8 @@ async def get_protein_structure(
         "description": meta.get("uniprotDescription", ""),
         "sequence_length": len(sequence),
         "sequence": sequence,
-        "mean_plddt": (
-            round(float(global_metric), 2) if isinstance(global_metric, (int, float)) else None
-        ),
+        "mean_plddt": round(global_metric, 2) if global_metric is not None else None,
+        "plddt_status": plddt_status,
         "model_version": meta.get("latestVersion"),
         "model_created": meta.get("modelCreatedDate", ""),
         "model_chain_id": meta.get("chainId", ""),
@@ -1340,8 +1362,8 @@ def _pocket_subscores(pocket: dict[str, Any]) -> dict[str, float]:
     plddt: float = pocket.get("mean_plddt", 0.0)
     centroid_offset: float = pocket.get("centroid_offset_angstrom", 0.0)
 
-    # Ideal pocket: compact, confident, of ligand-binding size, and offset toward
-    # the periphery (a solvent-accessible cleft rather than a dead-central cavity).
+    # Uncalibrated geometry prior: size, compactness, model confidence, offset.
+    # None of these establishes a real cavity, solvent access or ligand binding.
     return {
         "residue_count": min(1.0, n_res / POCKET_IDEAL_RESIDUES) * POCKET_SUBSCORE_MAX,
         "radius_of_gyration": max(
@@ -1458,14 +1480,16 @@ def _detect_idr_segments(
 def _classify_idr_segment(
     start: int, end: int, length: int, mean_plddt: float, total: int
 ) -> dict[str, Any]:
-    if start == 1:
-        kind = "N-terminal tail"
+    if start == 1 and end == total:
+        kind = "Entire modeled span: low confidence"
+    elif start == 1:
+        kind = "Model N-terminal low-confidence region"
     elif end == total:
-        kind = "C-terminal tail"
+        kind = "Model C-terminal low-confidence region"
     elif length < 20:
-        kind = "Linker"
+        kind = "Short internal low-confidence region"
     else:
-        kind = "Long IDR"
+        kind = "Long internal low-confidence region"
     return {
         "start": start,
         "end": end,
@@ -1479,6 +1503,7 @@ def _classify_idr_segment(
 
 
 def _plddt_tier(plddt: float | None) -> str:
+    plddt, _ = validated_plddt(plddt)
     if plddt is None:
         return "UNKNOWN"
     if plddt >= 90:

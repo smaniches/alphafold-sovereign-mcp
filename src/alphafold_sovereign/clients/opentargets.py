@@ -13,6 +13,7 @@ Reference:
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 import structlog
@@ -21,6 +22,20 @@ from alphafold_sovereign.clients._base import BaseAsyncClient, UpstreamConfig
 from alphafold_sovereign.domain.disease import TargetEvidenceScore
 
 logger = structlog.get_logger(__name__)
+
+
+def _observed_score(value: Any) -> float:
+    """Only explicit valid Open Targets scores are scientific observations."""
+    if value is None or isinstance(value, bool):
+        raise ValueError("Open Targets score is missing or invalid")
+    try:
+        score = float(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError("Open Targets score is not numeric") from exc
+    if not math.isfinite(score) or not 0 <= score <= 1:
+        raise ValueError("Open Targets score must be finite and between 0 and 1")
+    return score
+
 
 _OT_CONFIG = UpstreamConfig(
     base_url="https://api.platform.opentargets.org",
@@ -98,9 +113,21 @@ query TargetDrugs($ensemblId: String!) {
 """
 
 _UNIPROT_TO_ENSEMBL_QUERY = """
-query UniProtToEnsembl($uniprotId: String!) {
-  search(queryString: $uniprotId, entityNames: ["target"]) {
-    hits { id entity name }
+query MapTargetIdentity($q: String!) {
+  mapIds(queryTerms: [$q], entityNames: ["target"]) {
+    mappings {
+      hits {
+        id
+        name
+        object {
+          ... on Target {
+            id
+            approvedSymbol
+            proteinIds { id source }
+          }
+        }
+      }
+    }
   }
 }
 """
@@ -165,6 +192,7 @@ class OpenTargetsClient(BaseAsyncClient):
 
         Returns:
             List of ``TargetEvidenceScore`` sorted by overall score descending.
+            Missing datatype components remain None rather than measured zero.
         """
         limit = max(1, min(limit, 200))
         data = await self._graphql(
@@ -198,6 +226,7 @@ class OpenTargetsClient(BaseAsyncClient):
 
         Returns:
             List of ``TargetEvidenceScore`` sorted by overall score descending.
+            Missing datatype components remain None rather than measured zero.
         """
         limit = max(1, min(limit, 200))
         # Open Targets keys disease records on underscore-form CURIEs
@@ -218,7 +247,10 @@ class OpenTargetsClient(BaseAsyncClient):
             ensembl = target.get("id", "")
             symbol = target.get("approvedSymbol", "")
             uniprot = self._extract_uniprot(target.get("proteinIds", []))
-            tractable = any(t.get("value", False) for t in (target.get("tractability") or []))
+            tractability = target.get("tractability")
+            tractable: bool | None = None
+            if isinstance(tractability, list):
+                tractable = any(t.get("value") is True for t in tractability)
             dt = self._datatype_scores(row.get("datatypeScores", []))
             scores.append(
                 TargetEvidenceScore(
@@ -227,14 +259,14 @@ class OpenTargetsClient(BaseAsyncClient):
                     uniprot_id=uniprot,
                     disease_mondo_id=_to_curie(disease_id),
                     disease_name=disease_name,
-                    overall_score=float(row.get("score", 0.0)),
-                    genetic_association=dt.get("genetic_association", 0.0),
-                    somatic_mutation=dt.get("somatic_mutation", 0.0),
-                    known_drug=dt.get("known_drug", 0.0),
-                    affected_pathway=dt.get("affected_pathway", 0.0),
-                    literature=dt.get("literature", 0.0),
-                    animal_model=dt.get("animal_model", 0.0),
-                    rna_expression=dt.get("rna_expression", 0.0),
+                    overall_score=_observed_score(row.get("score")),
+                    genetic_association=dt.get("genetic_association"),
+                    somatic_mutation=dt.get("somatic_mutation"),
+                    known_drug=dt.get("known_drug"),
+                    affected_pathway=dt.get("affected_pathway"),
+                    literature=dt.get("literature"),
+                    animal_model=dt.get("animal_model"),
+                    rna_expression=dt.get("rna_expression"),
                     tractable=tractable,
                 )
             )
@@ -259,8 +291,15 @@ class OpenTargetsClient(BaseAsyncClient):
             {"ensemblId": ensembl_id},
         )
         target = data.get("target") or {}
+        candidates = target.get("drugAndClinicalCandidates") or {}
+        # A missing target/field is not an observed count of zero.
+        count = candidates.get("count")
+        if count is not None and (
+            not isinstance(count, int) or isinstance(count, bool) or count < 0
+        ):
+            raise ValueError("Open Targets drug count must be a nonnegative integer")
         return {
-            "drug_count": (target.get("drugAndClinicalCandidates") or {}).get("count", 0),
+            "drug_count": count,
             "tractability_labels": [
                 t.get("label", "") for t in (target.get("tractability") or []) if t.get("value")
             ],
@@ -271,30 +310,60 @@ class OpenTargetsClient(BaseAsyncClient):
     # ------------------------------------------------------------------
 
     async def resolve_target(self, query: str) -> dict[str, str]:
-        """Resolve a UniProt accession or gene symbol to an Open Targets target.
+        """Resolve an exact UniProt accession or approved gene symbol to a target.
 
-        Open Targets keys all target data on Ensembl gene IDs. This helper
-        uses the Open Targets full-text search index (which indexes gene
-        symbols, names, and UniProt cross-references) to map a UniProt
-        accession or symbol to its Ensembl gene ID and approved symbol.
-
-        Args:
-            query: UniProt accession (e.g. ``'P01116'``) or gene symbol.
-
-        Returns:
-            Dict with ``ensembl_id`` and ``symbol``; empty dict if no
-            target hit is found.
+        Open Targets free-text search ranks plausible candidates; its first hit
+        is not proof of identity. Use the documented identifier mapping service
+        and verify accession protein cross-references or exact approved symbols.
+        Refuse ambiguous mappings rather than guessing.
         """
+        key = query.strip().upper()
         data = await self._graphql(
             self._GQL_PATH,
             _UNIPROT_TO_ENSEMBL_QUERY,
-            {"uniprotId": query},
+            {"q": key},
         )
-        hits = (data.get("search") or {}).get("hits") or []
+        mapped = data.get("mapIds")
+        mappings = mapped.get("mappings") if isinstance(mapped, dict) else None
+        if not isinstance(mappings, list) or len(mappings) != 1:
+            raise ValueError("Open Targets mapIds response is missing a valid mapping")
+        entry = mappings[0]
+        hits = entry.get("hits") if isinstance(entry, dict) else None
+        if not isinstance(hits, list):
+            raise ValueError("Open Targets mapIds hits must be a list")
+
+        # Check the approved-symbol and protein-accession namespaces together.
+        # A valid approved gene symbol may resemble a UniProt accession.
+        candidates: dict[str, str] = {}
         for hit in hits:
-            if hit.get("entity") == "target" and hit.get("id"):
-                return {"ensembl_id": hit["id"], "symbol": hit.get("name", "")}
-        return {}
+            if not isinstance(hit, dict):
+                raise ValueError("Open Targets target mapping contains a malformed hit")
+            target = hit.get("object")
+            if not isinstance(target, dict):
+                continue
+            ensembl = target.get("id")
+            symbol = target.get("approvedSymbol")
+            if (
+                not isinstance(ensembl, str)
+                or not ensembl.startswith("ENSG")
+                or hit.get("id") != ensembl
+                or not isinstance(symbol, str)
+            ):
+                continue
+            protein_ids = target.get("proteinIds")
+            accession_match = isinstance(protein_ids, list) and any(
+                isinstance(p, dict) and p.get("id") == key for p in protein_ids
+            )
+            symbol_match = symbol.casefold() == key.casefold()
+            if accession_match or symbol_match:
+                candidates[ensembl] = symbol
+
+        if len(candidates) > 1:
+            raise ValueError("Open Targets target mapping is ambiguous")
+        if not candidates:
+            return {}
+        ensembl_id, symbol = next(iter(candidates.items()))
+        return {"ensembl_id": ensembl_id, "symbol": symbol}
 
     async def resolve_disease_efo(self, query: str) -> str:
         """Resolve only one exact EFO name or ID, never a relevance-ranked guess.
@@ -332,7 +401,14 @@ class OpenTargetsClient(BaseAsyncClient):
 
     @staticmethod
     def _datatype_scores(rows: list[dict[str, Any]]) -> dict[str, float]:
-        return {r["id"]: float(r.get("score", 0.0)) for r in rows}
+        if not isinstance(rows, list):
+            raise ValueError("Open Targets datatypeScores must be an array")
+        result: dict[str, float] = {}
+        for row in rows:
+            if not isinstance(row, dict) or not isinstance(row.get("id"), str):
+                raise ValueError("Open Targets datatype score has invalid identity")
+            result[row["id"]] = _observed_score(row.get("score"))
+        return result
 
     @staticmethod
     def _row_to_score(
@@ -349,12 +425,12 @@ class OpenTargetsClient(BaseAsyncClient):
             uniprot_id=uniprot_id,
             disease_mondo_id=_to_curie(disease.get("id", "")),
             disease_name=disease.get("name", ""),
-            overall_score=float(row.get("score", 0.0)),
-            genetic_association=dt.get("genetic_association", 0.0),
-            somatic_mutation=dt.get("somatic_mutation", 0.0),
-            known_drug=dt.get("known_drug", 0.0),
-            affected_pathway=dt.get("affected_pathway", 0.0),
-            literature=dt.get("literature", 0.0),
-            animal_model=dt.get("animal_model", 0.0),
-            rna_expression=dt.get("rna_expression", 0.0),
+            overall_score=_observed_score(row.get("score")),
+            genetic_association=dt.get("genetic_association"),
+            somatic_mutation=dt.get("somatic_mutation"),
+            known_drug=dt.get("known_drug"),
+            affected_pathway=dt.get("affected_pathway"),
+            literature=dt.get("literature"),
+            animal_model=dt.get("animal_model"),
+            rna_expression=dt.get("rna_expression"),
         )

@@ -17,7 +17,7 @@ expectation of what this project is and is not.
 | Offline unit tests | Passing | `uv run pytest tests/` on every PR; CI matrix across Python 3.10–3.13 |
 | Line + branch coverage | 100% on shipped surface | `nox -s cov`; enforced by `--cov-fail-under=100` |
 | Static analysis | Clean | `ruff check`, `mypy --strict`, `bandit` on every PR |
-| Security scanning | Clean | CodeQL `security-extended` on every push; no open findings |
+| Security scanning | Automated PR checks passing on verified commits | CodeQL `security-extended` runs in CI; repository-wide open security alerts require a separate Security-tab check |
 | Release provenance | Sigstore signature bundles + CycloneDX SBOM attached; SLSA L3 generated in CI | `release.yml` (its final job dispatches `verify-published-release.yml` after publishing); `scripts/replicate.sh` recomputes the PyPI wheel and sdist SHA-256 digests and runs `cosign verify-blob` on their Sigstore bundles (and, from 1.4.7, the signed SBOM bundles) against the `release.yml@refs/tags/<tag>` workflow identity |
 | Integration tests (live APIs) | Not run in CI | Tests mock upstreams via `respx`; AFDB's renamed fields and isoform selection have regression fixtures, not independent live-API verification |
 | Scientific validation | Not performed | ACMG mapping and druggability tier are unreviewed by domain experts |

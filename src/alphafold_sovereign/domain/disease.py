@@ -157,9 +157,17 @@ class PhenotypeAssociation:
         }
 
 
+def _round_optional(value: float | None) -> float | None:
+    return round(value, 4) if value is not None else None
+
+
 @dataclass(frozen=True, slots=True)
 class TargetEvidenceScore:
-    """Open Targets association score between a target and a disease."""
+    """Open Targets association with optional source-reported evidence components.
+
+    Missing component scores, drug counts and tractability are unknown rather
+    than measured zero or observed false; a real reported zero is preserved.
+    """
 
     target_ensembl_id: str
     target_gene_symbol: str
@@ -168,15 +176,15 @@ class TargetEvidenceScore:
     disease_name: str
     overall_score: float
     """0.0–1.0 composite score."""
-    genetic_association: float = 0.0
-    somatic_mutation: float = 0.0
-    known_drug: float = 0.0
-    affected_pathway: float = 0.0
-    literature: float = 0.0
-    animal_model: float = 0.0
-    rna_expression: float = 0.0
-    drug_count: int = 0
-    tractable: bool = False
+    genetic_association: float | None = None
+    somatic_mutation: float | None = None
+    known_drug: float | None = None
+    affected_pathway: float | None = None
+    literature: float | None = None
+    animal_model: float | None = None
+    rna_expression: float | None = None
+    drug_count: int | None = None
+    tractable: bool | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -187,13 +195,13 @@ class TargetEvidenceScore:
             "disease_name": self.disease_name,
             "overall_score": round(self.overall_score, 4),
             "evidence_scores": {
-                "genetic_association": round(self.genetic_association, 4),
-                "somatic_mutation": round(self.somatic_mutation, 4),
-                "known_drug": round(self.known_drug, 4),
-                "affected_pathway": round(self.affected_pathway, 4),
-                "literature": round(self.literature, 4),
-                "animal_model": round(self.animal_model, 4),
-                "rna_expression": round(self.rna_expression, 4),
+                "genetic_association": _round_optional(self.genetic_association),
+                "somatic_mutation": _round_optional(self.somatic_mutation),
+                "known_drug": _round_optional(self.known_drug),
+                "affected_pathway": _round_optional(self.affected_pathway),
+                "literature": _round_optional(self.literature),
+                "animal_model": _round_optional(self.animal_model),
+                "rna_expression": _round_optional(self.rna_expression),
             },
             "drug_count": self.drug_count,
             "tractable": self.tractable,

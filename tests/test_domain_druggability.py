@@ -13,6 +13,7 @@ from alphafold_sovereign.domain.druggability import (
     score_normalized,
     score_target_druggability,
     tier_for_score,
+    validated_plddt,
 )
 
 
@@ -210,3 +211,38 @@ def test_components_report_inputs() -> None:
     assert ">=0.35" in a.components["loeuf_safety"]["input"]
     assert "<70" in a.components["plddt"]["input"]
     assert a.components["drug_precedent"]["input"] == "drug_count=0"
+
+
+@pytest.mark.parametrize(
+    ("raw", "observed", "status"),
+    [
+        (None, None, "missing"),
+        (0, 0.0, "ok"),
+        (70, 70.0, "ok"),
+        (100.0, 100.0, "ok"),
+        (-1.0, None, "invalid_response"),
+        (100.01, None, "invalid_response"),
+        (float("nan"), None, "invalid_response"),
+        (float("inf"), None, "invalid_response"),
+        (float("-inf"), None, "invalid_response"),
+        (True, None, "invalid_response"),
+        ("85", None, "invalid_response"),
+    ],
+)
+def test_validated_plddt_preserves_valid_measurements_and_rejects_invalid(
+    raw: object, observed: float | None, status: str
+) -> None:
+    assert validated_plddt(raw) == (observed, status)
+
+
+@pytest.mark.parametrize("raw", [-1.0, 101.0, float("nan"), float("inf"), True, "95"])
+def test_scoring_refuses_malformed_plddt(raw: object) -> None:
+    assessed = score_target_druggability(
+        drug_count=0,
+        tractability_labels=[],
+        loeuf=None,
+        plddt_mean=raw,  # type: ignore[arg-type]
+    )
+    assert assessed.total_score == 0
+    assert assessed.components["plddt"] == {"contribution": 0, "input": "invalid_response"}
+    assert assessed.signals_missing == ("structure_plddt", "constraint_loeuf")

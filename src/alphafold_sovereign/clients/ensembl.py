@@ -16,6 +16,7 @@ Reference:
 
 from __future__ import annotations
 
+import math
 import re
 from typing import Any
 
@@ -52,6 +53,21 @@ def _first_uniprot(value: Any) -> str:
     if isinstance(value, list) and value:
         value = value[0]
     return value if isinstance(value, str) else ""
+
+
+def _optional_percent_identity(value: Any) -> float | None:
+    """Preserve missing ortholog identity as unknown, not 0 percent."""
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        raise ValueError("Ensembl perc_id: invalid boolean")
+    try:
+        identity = float(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError("Ensembl perc_id: invalid numeric value") from exc
+    if not math.isfinite(identity) or not 0 <= identity <= 100:
+        raise ValueError("Ensembl perc_id: invalid percent identity")
+    return identity
 
 
 class EnsemblClient(BaseAsyncClient):
@@ -286,7 +302,8 @@ class EnsemblClient(BaseAsyncClient):
             List of ortholog dicts with keys:
             ``species``, ``gene_id``, ``gene_name``, ``type``
             (``'ortholog_one2one'``, ``'ortholog_one2many'``, etc.),
-            ``subtype``, ``dn_ds``, ``identity``.
+            ``subtype``, ``dn_ds``, ``identity``. Identity is None when
+            Ensembl reports no percent identity; invalid values fail closed.
         """
         lookup = await self.gene_lookup(gene_symbol)
         if not lookup.get("found"):
@@ -320,7 +337,7 @@ class EnsemblClient(BaseAsyncClient):
                         "type": hom.get("type", ""),
                         "subtype": hom.get("subtype", ""),
                         "dn_ds": hom.get("dn_ds"),
-                        "identity": float(target.get("perc_id", 0.0) or 0.0),
+                        "identity": _optional_percent_identity(target.get("perc_id")),
                     }
                 )
                 if len(results) >= limit:

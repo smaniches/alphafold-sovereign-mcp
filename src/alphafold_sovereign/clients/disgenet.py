@@ -23,6 +23,7 @@ Authentication:
 
 from __future__ import annotations
 
+import math
 import os
 from typing import Any
 
@@ -31,6 +32,52 @@ import structlog
 from alphafold_sovereign.clients._base import BaseAsyncClient, UpstreamConfig
 
 logger = structlog.get_logger(__name__)
+
+
+def _source_number(value: Any, field: str, *, maximum: float | None = None) -> float:
+    """Parse a source-reported number without inventing missing values.
+
+    Reject booleans, missing/invalid, non-finite, negative and out-of-range
+    values. A real upstream zero remains exactly zero.
+    """
+    if value is None or isinstance(value, bool):
+        raise ValueError(f"DisGeNET {field}: missing or invalid numeric value")
+    try:
+        number = float(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(f"DisGeNET {field}: invalid numeric value") from exc
+    if not math.isfinite(number) or number < 0 or (maximum is not None and number > maximum):
+        raise ValueError(f"DisGeNET {field}: out-of-range numeric value")
+    return number
+
+
+def _optional_number(value: Any, field: str, *, maximum: float | None = None) -> float | None:
+    if value is None:
+        return None
+    return _source_number(value, field, maximum=maximum)
+
+
+def _optional_count(value: Any, field: str) -> int | None:
+    number = _optional_number(value, field)
+    if number is None:
+        return None
+    if not number.is_integer():
+        raise ValueError(f"DisGeNET {field}: count must be an integer")
+    return int(number)
+
+
+def _source_items(data: Any) -> list[Any]:
+    """Do not report malformed upstream data as a legitimate empty result."""
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict):
+        if not data:
+            return []
+        items = data.get("payload")
+        if isinstance(items, list):
+            return items
+    raise ValueError("DisGeNET response: invalid payload, expected a list")
+
 
 _DISGENET_CONFIG = UpstreamConfig(
     base_url="https://api.disgenet.com",
@@ -93,7 +140,8 @@ class DisGeNETClient(BaseAsyncClient):
             List of GDA dicts with keys:
             ``gene_symbol``, ``disease_id``, ``disease_name``, ``score``,
             ``n_pmids``, ``n_snps``, ``source``, ``disease_class``,
-            ``disease_semantictype``.
+            ``disease_semantictype``. Missing optional counts are ``None``;
+            missing/malformed scores are not fabricated as zero.
         """
         params: dict[str, Any] = {
             "gene_symbol": gene_symbol,
@@ -111,16 +159,11 @@ class DisGeNETClient(BaseAsyncClient):
             raise
 
         results: list[dict[str, Any]] = []
-        _d: Any = data
-        _items = (
-            _d
-            if isinstance(_d, list)
-            else (_d.get("payload") if isinstance(_d, dict) else []) or []
-        )
+        _items = _source_items(data)
         for item in _items:
             if not isinstance(item, dict):
                 continue
-            score = float(item.get("score", 0.0) or 0.0)
+            score = _source_number(item.get("score"), "association score", maximum=1.0)
             if score < min_score:
                 continue
             results.append(
@@ -129,8 +172,8 @@ class DisGeNETClient(BaseAsyncClient):
                     "disease_id": item.get("disease_id", ""),
                     "disease_name": item.get("disease_name", ""),
                     "score": round(score, 4),
-                    "n_pmids": item.get("n_pmids", 0) or 0,
-                    "n_snps": item.get("n_snps", 0) or 0,
+                    "n_pmids": _optional_count(item.get("n_pmids"), "n_pmids"),
+                    "n_snps": _optional_count(item.get("n_snps"), "n_snps"),
                     "source": item.get("source", ""),
                     "disease_class": item.get("disease_class", []),
                     "disease_semantictype": item.get("disease_semantictype", []),
@@ -178,16 +221,11 @@ class DisGeNETClient(BaseAsyncClient):
             raise
 
         results: list[dict[str, Any]] = []
-        _d: Any = data
-        _items = (
-            _d
-            if isinstance(_d, list)
-            else (_d.get("payload") if isinstance(_d, dict) else []) or []
-        )
+        _items = _source_items(data)
         for item in _items:
             if not isinstance(item, dict):
                 continue
-            score = float(item.get("score", 0.0) or 0.0)
+            score = _source_number(item.get("score"), "association score", maximum=1.0)
             if score < min_score:
                 continue
             results.append(
@@ -197,7 +235,7 @@ class DisGeNETClient(BaseAsyncClient):
                     "disease_id": item.get("disease_id", disease_id),
                     "disease_name": item.get("disease_name", ""),
                     "score": round(score, 4),
-                    "n_pmids": item.get("n_pmids", 0) or 0,
+                    "n_pmids": _optional_count(item.get("n_pmids"), "n_pmids"),
                     "source": item.get("source", ""),
                 }
             )
@@ -223,6 +261,7 @@ class DisGeNETClient(BaseAsyncClient):
             List of VDA dicts with keys:
             ``variant_id``, ``disease_id``, ``disease_name``, ``score``,
             ``n_pmids``, ``p_value``, ``odds_ratio``, ``beta``.
+            Source score is mandatory; missing/invalid values raise.
         """
         params: dict[str, Any] = {
             "variant_id": variant_id,
@@ -239,12 +278,7 @@ class DisGeNETClient(BaseAsyncClient):
             raise
 
         results: list[dict[str, Any]] = []
-        _d: Any = data
-        _items = (
-            _d
-            if isinstance(_d, list)
-            else (_d.get("payload") if isinstance(_d, dict) else []) or []
-        )
+        _items = _source_items(data)
         for item in _items:
             if not isinstance(item, dict):
                 continue
@@ -253,8 +287,10 @@ class DisGeNETClient(BaseAsyncClient):
                     "variant_id": item.get("variant_id", variant_id),
                     "disease_id": item.get("disease_id", ""),
                     "disease_name": item.get("disease_name", ""),
-                    "score": round(float(item.get("score", 0.0) or 0.0), 4),
-                    "n_pmids": item.get("n_pmids", 0) or 0,
+                    "score": round(
+                        _source_number(item.get("score"), "variant score", maximum=1.0), 4
+                    ),
+                    "n_pmids": _optional_count(item.get("n_pmids"), "n_pmids"),
                     "p_value": item.get("p_value"),
                     "odds_ratio": item.get("odds_ratio"),
                     "beta": item.get("beta"),
@@ -287,7 +323,8 @@ class DisGeNETClient(BaseAsyncClient):
         Returns:
             List of enrichment results with keys:
             ``disease_id``, ``disease_name``, ``p_value``, ``fdr``,
-            ``expected``, ``observed``, ``ratio``.
+            ``expected``, ``observed``, ``ratio``. Missing optional measures
+            remain ``None``; zero-valued p-values and FDRs are preserved.
         """
         if not gene_symbols:
             return []
@@ -307,16 +344,11 @@ class DisGeNETClient(BaseAsyncClient):
             raise
 
         results: list[dict[str, Any]] = []
-        _d: Any = data
-        _items = (
-            _d
-            if isinstance(_d, list)
-            else (_d.get("payload") if isinstance(_d, dict) else []) or []
-        )
+        _items = _source_items(data)
         for item in _items:
             if not isinstance(item, dict):
                 continue
-            pval = float(item.get("p_value", 1.0) or 1.0)
+            pval = _source_number(item.get("p_value"), "p_value", maximum=1.0)
             if pval > pvalue_threshold:
                 continue
             results.append(
@@ -324,10 +356,10 @@ class DisGeNETClient(BaseAsyncClient):
                     "disease_id": item.get("disease_id", ""),
                     "disease_name": item.get("disease_name", ""),
                     "p_value": pval,
-                    "fdr": float(item.get("fdr", 1.0) or 1.0),
-                    "expected": float(item.get("expected", 0.0) or 0.0),
-                    "observed": int(item.get("observed", 0) or 0),
-                    "ratio": float(item.get("ratio", 0.0) or 0.0),
+                    "fdr": _optional_number(item.get("fdr"), "fdr", maximum=1.0),
+                    "expected": _optional_number(item.get("expected"), "expected"),
+                    "observed": _optional_count(item.get("observed"), "observed"),
+                    "ratio": _optional_number(item.get("ratio"), "ratio"),
                 }
             )
         return sorted(results, key=lambda x: x["p_value"])[:limit]

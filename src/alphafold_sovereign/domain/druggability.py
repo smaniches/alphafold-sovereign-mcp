@@ -32,15 +32,15 @@ The four signals
   (ChEMBL, with an Open Targets fallback). The single strongest signal:
   an existing drug is direct proof the target is engageable.
 * **Tractability** — an Open Targets small-molecule tractability label.
-* **Structural confidence** — mean AlphaFold pLDDT; a confident model implies
-  analysable binding pockets.
-* **Population constraint** — gnomAD LOEUF; a highly constrained (essential)
-  gene may carry on-target toxicity risk when inhibited, so it *lowers* the
-  score.
+* **Structural confidence** — mean AlphaFold pLDDT is a modeling-confidence
+  proxy; it does not establish a binding pocket or ligandability.
+* **Population constraint** — gnomAD LOEUF; an author-selected score penalty
+  for LoF depletion, not an inference of essentiality or inhibitor toxicity.
 """
 
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import dataclass
 from typing import Any
@@ -58,27 +58,27 @@ TRACTABILITY_WEIGHT = 2
 """A small-molecule tractability label is present."""
 
 PLDDT_WEIGHT = 1
-"""Mean pLDDT at or above ``PLDDT_CONFIDENT_MIN`` (analysable pockets)."""
+"""Model-confidence feature; does not validate any binding pocket."""
 
 LOEUF_SAFETY_PENALTY = -1
-"""Gene LOEUF below ``LOEUF_CONSTRAINED_MAX`` (essential → toxicity risk)."""
+"""Exploratory gene constraint penalty; not a clinical toxicity finding."""
 
 # ── Signal thresholds ────────────────────────────────────────────────────────
 DRUG_PRECEDENT_STRONG_COUNT = 3
 """Distinct-drug count at which precedent is treated as strong."""
 
 PLDDT_CONFIDENT_MIN = 70.0
-"""Mean pLDDT at/above which a structure is confident enough for pocket work.
+"""Author-selected threshold for a pLDDT modeling-confidence feature.
 
-Matches the AlphaFold "high confidence" band (Jumper et al., Nature 2021;
-Tunyasuvunakool et al., Nature 2021): pLDDT ≥ 70 → backbone generally reliable.
+This does not establish pocket existence, accessibility, ligand binding,
+or therapeutic target validity.
 """
 
 LOEUF_CONSTRAINED_MAX = 0.35
-"""LOEUF below which a gene is treated as loss-of-function intolerant.
+"""Gene-level LoF-constraint threshold used for exploratory scoring.
 
-The gnomAD LOEUF < 0.35 threshold for "constrained" follows Karczewski et al.,
-Nature 2020 (gnomAD v2 constraint), reused here for gnomAD v4 LOEUF values.
+This does not establish essentiality, clinical toxicity, or a validated
+safety threshold for therapeutic inhibition.
 """
 
 # ── Tier cut-offs on the additive score (descending) ─────────────────────────
@@ -225,6 +225,22 @@ class DruggabilityAssessment:
         }
 
 
+def validated_plddt(value: object) -> tuple[float | None, str]:
+    """Preserve measured pLDDT [0, 100]; never impute malformed values.
+
+    Return (observed_value, source_status), separating missing measurements
+    from invalid measurements. Reject booleans and untrusted numeric strings.
+    """
+    if value is None:
+        return None, "missing"
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None, "invalid_response"
+    observed = float(value)
+    if not math.isfinite(observed) or not 0.0 <= observed <= 100.0:
+        return None, "invalid_response"
+    return observed, "ok"
+
+
 def score_target_druggability(
     *,
     drug_count: int,
@@ -247,6 +263,7 @@ def score_target_druggability(
         confidence, and borderline flag).
     """
     components: dict[str, dict[str, Any]] = {}
+    plddt_mean, plddt_status = validated_plddt(plddt_mean)
 
     # Drug precedent is the strongest signal.
     if drug_count >= DRUG_PRECEDENT_STRONG_COUNT:
@@ -273,7 +290,7 @@ def score_target_druggability(
         "input": "small_molecule label present" if has_tractability else "no small_molecule label",
     }
 
-    # pLDDT ≥ threshold → confident structure → analysable binding pockets.
+    # Heuristic model-confidence feature, not proof of ligand-binding pockets.
     if plddt_mean is not None and plddt_mean >= PLDDT_CONFIDENT_MIN:
         plddt_contrib = PLDDT_WEIGHT
         components["plddt"] = {
@@ -288,14 +305,17 @@ def score_target_druggability(
         }
     else:
         plddt_contrib = 0
-        components["plddt"] = {"contribution": 0, "input": "not_available"}
+        components["plddt"] = {
+            "contribution": 0,
+            "input": "invalid_response" if plddt_status == "invalid_response" else "not_available",
+        }
 
-    # LOEUF: highly constrained genes may cause toxicity on inhibition.
+    # Exploratory gene-constraint penalty, not measured on-target toxicity.
     if loeuf is not None and loeuf < LOEUF_CONSTRAINED_MAX:
         loeuf_contrib = LOEUF_SAFETY_PENALTY
         components["loeuf_safety"] = {
             "contribution": LOEUF_SAFETY_PENALTY,
-            "input": f"loeuf={loeuf:.3f}, <{LOEUF_CONSTRAINED_MAX} — safety concern",
+            "input": f"loeuf={loeuf:.3f}, <{LOEUF_CONSTRAINED_MAX} — gene constraint proxy",
         }
     else:
         loeuf_contrib = 0

@@ -199,6 +199,23 @@ def test_target_evidence_score_to_dict() -> None:
 
 
 @pytest.mark.unit
+def test_target_evidence_missing_components_are_unassessed() -> None:
+    score = TargetEvidenceScore(
+        target_ensembl_id="ENSG1",
+        target_gene_symbol="SYNTH",
+        uniprot_id="",
+        disease_mondo_id="MONDO:1",
+        disease_name="Synthetic",
+        overall_score=0.0,
+    )
+    result = score.to_dict()
+    assert result["overall_score"] == 0.0
+    assert all(v is None for v in result["evidence_scores"].values())
+    assert result["drug_count"] is None
+    assert result["tractable"] is None
+
+
+@pytest.mark.unit
 def test_population_frequency_missing_homozygote_count_is_unknown() -> None:
     pf = PopulationFrequency(
         population="afr", allele_count=0, allele_number=100, allele_frequency=0
