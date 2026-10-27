@@ -132,10 +132,9 @@ nav:
       - Knowledge-graph tools: tools/knowledge-graph.md
   - Examples:
       - Overview: examples/index.md
-      - "Variant triage (BRCA1)": examples/01-variant-triage.md
-      - "Target characterisation (EGFR)": examples/02-target-characterization.md
-      - "Drug discovery (Imatinib)": examples/03-drug-discovery.md
-      - "Golden examples (CI-diffed)": examples/golden.md
+      - "Variant evidence retrieval": examples/01-variant-triage.md
+      - "Target evidence retrieval": examples/02-target-characterization.md
+      - "Disease and drug source retrieval": examples/03-drug-discovery.md
   - AlphaFold DB compatibility: afdb-compatibility.md
   - Architecture: architecture.md
   - Quality:

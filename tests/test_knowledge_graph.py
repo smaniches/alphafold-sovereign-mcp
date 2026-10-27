@@ -466,3 +466,76 @@ async def test_get_knowledge_graph_switches_on_new_path(tmp_path: Path) -> None:
     if kg_module._KG_SINGLETON is not None:
         await kg_module._KG_SINGLETON.close()
         kg_module._KG_SINGLETON = None
+
+
+# ── Explicit relationship writes (no automatic biomedical seed) ──────────────
+
+
+@pytest.mark.unit
+async def test_explicit_relationship_writes_and_updates(akg: KnowledgeGraph) -> None:
+    """Preserve SQLite association writers after retiring the illustrative seed.
+
+    Identifiers are synthetic; no biological relationships are asserted.
+    """
+    protein = "P99999"
+    variant = "SYNTH:c.1A>G"
+    disease = "MONDO:9999999"
+    drug = "CHEMBL999999"
+    await akg.store_protein(uniprot_id=protein, gene_symbol="SYNTH")
+    await akg.store_variant(hgvs=variant, gene_symbol="SYNTH")
+    await akg.store_disease(mondo_id=disease, name="Synthetic condition")
+    await akg.store_drug(chembl_id=drug, pref_name="Synthetic molecule")
+
+    await akg.store_protein_disease(
+        uniprot_id=protein,
+        mondo_id=disease,
+        source="synthetic_test",
+        score=0.2,
+        genetic_assoc=0.1,
+        known_drug=0.0,
+        n_pmids=0,
+    )
+    await akg.store_protein_drug(
+        uniprot_id=protein,
+        chembl_id=drug,
+        activity_type="synthetic_test",
+        target_chembl_id="CHEMBL_TARGET_FAKE",
+        value_nm=10.0,
+        mechanism="synthetic_fixture",
+    )
+    await akg.store_variant_disease(
+        hgvs=variant,
+        mondo_id=disease,
+        source="synthetic_test",
+        score=0.3,
+        p_value=0.05,
+    )
+
+    for sql in (
+        "SELECT COUNT(*) AS n FROM protein_disease",
+        "SELECT COUNT(*) AS n FROM protein_drug",
+        "SELECT COUNT(*) AS n FROM variant_disease",
+    ):
+        result = await akg.fetch(sql, [])
+        assert result[0]["n"] == 1
+
+    # Explicit conflict updates change evidence but do not duplicate rows.
+    await akg.store_protein_disease(
+        uniprot_id=protein, mondo_id=disease, source="synthetic_test", score=0.8
+    )
+    await akg.store_protein_drug(
+        uniprot_id=protein,
+        chembl_id=drug,
+        activity_type="synthetic_test",
+        mechanism="updated_synthetic_fixture",
+    )
+    await akg.store_variant_disease(
+        hgvs=variant, mondo_id=disease, source="synthetic_test", score=0.6
+    )
+    protein_disease = await akg.fetch("SELECT score FROM protein_disease", [])
+    protein_drug = await akg.fetch("SELECT mechanism FROM protein_drug", [])
+    variant_disease = await akg.fetch("SELECT score FROM variant_disease", [])
+    assert protein_disease[0]["score"] == 0.8
+    assert protein_drug[0]["mechanism"] == "updated_synthetic_fixture"
+    assert variant_disease[0]["score"] == 0.6
+    assert (await akg.fetch("PRAGMA foreign_key_check", [])) == []

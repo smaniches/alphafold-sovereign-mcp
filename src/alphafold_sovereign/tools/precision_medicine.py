@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import asyncio
 import datetime
+import math
 import re
 from typing import TYPE_CHECKING, Any, Literal, cast
 
@@ -141,8 +142,10 @@ class VariantClinicalReportInput(BaseModel):
     hgvs: str = Field(
         ...,
         description=(
-            "HGVS expression — gene-relative (preferred): 'BRCA1:c.181T>G'; "
-            "or RefSeq-based: 'NM_007294.3:c.181T>G'."
+            "HGVS expression. Gene-relative 'BRCA1:c.181T>G' is candidate "
+            "discovery only; a versioned transcript such as "
+            "'NM_007294.4:c.181T>G' permits exact transcript-text matching, "
+            "not an independent clinical allele validation."
         ),
         examples=["BRCA1:c.181T>G", "TP53:p.Arg248Trp"],
         min_length=5,
@@ -234,7 +237,11 @@ class ACMGVariantInput(BaseModel):
 
     hgvs: str = Field(
         ...,
-        description="HGVS expression for classification, e.g. 'BRCA1:c.181T>G'.",
+        description=(
+            "HGVS expression for unassessed evidence review. Gene-relative "
+            "terms can find unverified ClinVar candidates; include a versioned "
+            "RefSeq transcript for exact transcript-text matching."
+        ),
         min_length=5,
     )
     inheritance_pattern: Literal["AD", "AR", "XL", "Unknown"] = Field(
@@ -335,38 +342,74 @@ def _protein_variant_from_vep(consequence: dict[str, Any]) -> str | None:
 
 
 async def _alphamissense_for_variant(
-    gene_symbol: str | None, vep_results: list[dict[str, Any]]
+    gene_symbol: str | None,
+    vep_results: list[dict[str, Any]],
+    *,
+    source_status: dict[str, str] | None = None,
 ) -> float | None:
-    """Resolve the AlphaMissense pathogenicity score for a variant.
+    """Look up a VEP-mapped AlphaMissense score without conflating failure and absence.
 
-    Builds the substitution key from the canonical VEP consequence, reads
-    the SwissProt accession that Ensembl VEP attaches to that same
-    consequence, and looks the substitution up in the AlphaFold DB
-    AlphaMissense annotations. Returns ``None`` when the variant is not a
-    single-residue missense substitution, the canonical consequence
-    carries no SwissProt accession, or AlphaFold DB has no annotation for
-    it.
-
-    ``gene_symbol`` is retained for log context only; the UniProt
-    accession is resolved from the VEP consequence itself, so this
-    function no longer requires a parseable gene symbol. End-to-end
-    resolution for a RefSeq-form HGVS then depends only on Ensembl VEP
-    accepting that HGVS string and returning a canonical missense
-    consequence carrying a SwissProt accession.
+    The optional status sink is additive: existing score-only callers continue
+    receiving a float or None. An absent score is not evidence of benignity.
     """
+
+    def _mark(state: str) -> None:
+        if source_status is not None:
+            source_status["alphamissense"] = state
+
     canonical = next((tc for tc in vep_results if tc.get("canonical")), {})
     protein_variant = _protein_variant_from_vep(canonical)
     if not protein_variant:
+        vep_state = None if source_status is None else source_status.get("ensembl_vep")
+        if vep_state == "failed":
+            _mark("skipped_upstream_failed")
+        elif vep_state == "invalid_response":
+            _mark("skipped_upstream_invalid")
+        elif vep_state == "no_data":
+            _mark("skipped_no_vep_data")
+        elif not canonical:
+            _mark("skipped_no_canonical")
+        elif "missense_variant" in (canonical.get("consequence_terms") or []):
+            _mark("skipped_incomplete_mapping")
+        else:
+            _mark("skipped_not_applicable")
         return None
-    uniprot_id = (canonical.get("swissprot") or "").split(".")[0]
+
+    swissprot = canonical.get("swissprot")
+    if swissprot is None or swissprot == "":
+        _mark("skipped_no_swissprot")
+        return None
+    if not isinstance(swissprot, str):
+        _mark("invalid_response")
+        return None
+    uniprot_id = swissprot.split(".")[0]
     if not uniprot_id:
+        _mark("invalid_response")
         return None
+
     try:
-        record = await _alphafold().alphamissense_score(uniprot_id, protein_variant)
+        record: object = await _alphafold().alphamissense_score(uniprot_id, protein_variant)
     except Exception as exc:
         logger.warning("alphamissense.failed", gene=gene_symbol, exc=str(exc))
+        _mark("failed")
         return None
-    return record.get("am_pathogenicity") if record else None
+
+    if record is None:
+        _mark("no_data")
+        return None
+    if not isinstance(record, dict):
+        _mark("invalid_response")
+        return None
+    raw_score: object = record.get("am_pathogenicity")
+    if not isinstance(raw_score, (int, float)) or isinstance(raw_score, bool):
+        _mark("invalid_response")
+        return None
+    score = float(raw_score)
+    if not math.isfinite(score) or not 0.0 <= score <= 1.0:
+        _mark("invalid_response")
+        return None
+    _mark("ok")
+    return score
 
 
 def _gnomad_to_acmg(af: float | None) -> dict[str, str]:
@@ -454,6 +497,65 @@ def _druggability_tier(
 # ── Tool 1: Full clinical variant report ─────────────────────────────────────
 
 
+def _report_gene_from_sources(
+    hgvs: str, vep_rows: list[dict[str, Any]], clinvar_rows: list[dict[str, Any]]
+) -> str | None:
+    """Resolve a report gene only from query context or compatible source evidence."""
+    gene = EnsemblClient.parse_gene_from_hgvs(hgvs)
+    if gene:
+        return gene
+
+    symbols: set[str] = set()
+    reference = re.match(
+        r"^((?:NM|NR|XM|XR)_\d+\.\d+)(?:\(([A-Za-z0-9-]+)\))?:[cnr]\.",
+        hgvs,
+        flags=re.IGNORECASE,
+    )
+    queried_transcript = reference.group(1).upper() if reference else ""
+    if reference and reference.group(2):
+        symbols.add(reference.group(2).upper())
+
+    for row in clinvar_rows:
+        symbol = row.get("gene_symbol")
+        if row.get("exact_change_match") is True and isinstance(symbol, str) and symbol.strip():
+            symbols.add(symbol.strip().upper())
+
+    for row in vep_rows:
+        symbol = row.get("gene_symbol")
+        if not queried_transcript or not isinstance(symbol, str) or not symbol.strip():
+            continue
+        hgvsc = row.get("hgvsc")
+        transcript_id = row.get("transcript_id")
+        refseq_ids = row.get("refseq_transcript_ids")
+        matches_hgvsc = (
+            isinstance(hgvsc, str) and hgvsc.partition(":")[0].upper() == queried_transcript
+        )
+        matches_transcript = (
+            isinstance(transcript_id, str) and transcript_id.upper() == queried_transcript
+        )
+        # RefSeq xrefs are aligned transcript references; their accession AND
+        # version must agree. Do not infer allelic or sequence equivalence.
+        matches_refseq = isinstance(refseq_ids, list) and any(
+            isinstance(value, str) and value.upper() == queried_transcript for value in refseq_ids
+        )
+        if matches_hgvsc or matches_transcript or matches_refseq:
+            symbols.add(symbol.strip().upper())
+
+    # An overlapping-gene VEP consequence does not override an exact
+    # transcript match. True conflicting evidence for the same queried
+    # transcript still requires abstention.
+    return next(iter(symbols)) if len(symbols) == 1 else None
+
+
+def _gnomad_result_status(payload: dict[str, Any], availability_field: str) -> str:
+    """Respect gnomAD's explicit negative flags even in nonempty responses."""
+    if not payload or payload.get(availability_field) is False:
+        return "no_data"
+    if availability_field == "found" and payload.get("global_af") is None:
+        return "no_data"  # Identity is not measured frequency evidence.
+    return "ok"
+
+
 @mcp.tool(
     annotations={
         "title": "Generate Precision Medicine Variant Report",
@@ -485,7 +587,9 @@ async def generate_variant_clinical_report(
     variant-specific three-dimensional structural impact.
 
     Input fields:
-        params.hgvs: HGVS expression (gene-relative preferred).
+        params.hgvs: HGVS expression. Gene-relative expressions discover
+            candidate records; clinical source identity requires an exact
+            versioned-transcript expression.
         params.include_population_breakdown: Include per-ancestry gnomAD data.
         params.include_drug_context: Include drugs acting on the gene product.
         params.include_literature_evidence: Query PDBe at an explicitly supplied
@@ -498,40 +602,39 @@ async def generate_variant_clinical_report(
 
     source_status: dict[str, str] = {}
 
-    # ── Step 1: Parse gene symbol ────────────────────────────────────────────
-    gene_symbol = EnsemblClient.parse_gene_from_hgvs(hgvs)
-
-    # ── Step 2: Parallel evidence gathering ──────────────────────────────────
+    # ── Step 1: Parallel evidence gathering ──────────────────────────────────
     vep_task = _ensembl().vep_hgvs(hgvs, canonical=True)
     clinvar_task = _clinvar().search_by_hgvs(hgvs)
 
     gathered: list[Any] = await asyncio.gather(vep_task, clinvar_task, return_exceptions=True)
-    vep_raw, clinvar_raw = gathered[0], gathered[1]
-    vep_results: list[dict[str, Any]] = []
-    clinvar_results: list[dict[str, Any]] = []
-    # gather(return_exceptions=True) yields each result or a BaseException;
-    # checking BaseException (not Exception) is intentional so a captured
-    # CancelledError is treated as a failed source, not misread as result data.
-    if isinstance(vep_raw, BaseException):
-        log.warning("vep.failed", exc=str(vep_raw))
-        source_status["ensembl_vep"] = "failed"
-    else:
-        vep_results = vep_raw
-        source_status["ensembl_vep"] = "ok"
-    if isinstance(clinvar_raw, BaseException):
-        log.warning("clinvar.failed", exc=str(clinvar_raw))
-        source_status["clinvar"] = "failed"
-    else:
-        clinvar_results = clinvar_raw
-        source_status["clinvar"] = "ok"
+
+    # A malformed or null upstream response is not an empty biological result.
+    def _checked_rows(source: str, raw: Any) -> list[dict[str, Any]]:
+        if isinstance(raw, BaseException):
+            log.warning("source.failed", source=source, exc=str(raw))
+            source_status[source] = "failed"
+            return []
+        if not isinstance(raw, list) or not all(isinstance(row, dict) for row in raw):
+            source_status[source] = "invalid_response"
+            return []
+        source_status[source] = "ok" if raw else "no_data"
+        return raw
+
+    vep_results = _checked_rows("ensembl_vep", gathered[0])
+    clinvar_results = _checked_rows("clinvar", gathered[1])
+    gene_symbol = _report_gene_from_sources(hgvs, vep_results, clinvar_results)
 
     # ── Step 3: gnomAD variant ID construction ───────────────────────────────
     gnomad_data: dict[str, Any] = {}
     gnomad_id = _build_gnomad_id(hgvs, vep_results)
     if gnomad_id:
         try:
-            gnomad_data = await _gnomad().variant_frequencies(gnomad_id)
-            source_status["gnomad"] = "ok"
+            variant_response: object = await _gnomad().variant_frequencies(gnomad_id)
+            if isinstance(variant_response, dict):
+                gnomad_data = variant_response
+                source_status["gnomad"] = _gnomad_result_status(variant_response, "found")
+            else:
+                source_status["gnomad"] = "invalid_response"
         except Exception as exc:
             log.warning("gnomad.failed", exc=str(exc))
             source_status["gnomad"] = "failed"
@@ -540,11 +643,20 @@ async def generate_variant_clinical_report(
 
     # ── Step 4: Gene-level constraint ────────────────────────────────────────
     gene_constraint: dict[str, Any] = {}
+    source_status["gnomad_constraint"] = "skipped"
     if gene_symbol:
         try:
-            gene_constraint = await _gnomad().gene_constraint(gene_symbol)
+            constraint_response: object = await _gnomad().gene_constraint(gene_symbol)
+            if isinstance(constraint_response, dict):
+                gene_constraint = constraint_response
+                source_status["gnomad_constraint"] = _gnomad_result_status(
+                    constraint_response, "constraint_available"
+                )
+            else:
+                source_status["gnomad_constraint"] = "invalid_response"
         except Exception as exc:
             log.warning("gnomad.constraint.failed", exc=str(exc))
+            source_status["gnomad_constraint"] = "failed"
 
     # ── Step 5: Disease context ───────────────────────────────────────────────
     ot_diseases: list[dict[str, Any]] = []
@@ -552,8 +664,17 @@ async def generate_variant_clinical_report(
     if gene_symbol:
         gene_lookup_failed = False
         try:
-            gene_info = await _ensembl().gene_lookup(gene_symbol)
-            ensembl_id = gene_info.get("ensembl_gene_id", "")
+            gene_info: object = await _ensembl().gene_lookup(gene_symbol)
+            if isinstance(gene_info, dict):
+                ensembl_id = gene_info.get("ensembl_gene_id") or ""
+                if not isinstance(ensembl_id, str):
+                    ensembl_id = ""
+                    source_status["ensembl_gene_lookup"] = "invalid_response"
+                else:
+                    source_status["ensembl_gene_lookup"] = "ok" if ensembl_id else "no_data"
+            else:
+                ensembl_id = ""
+                source_status["ensembl_gene_lookup"] = "invalid_response"
         except Exception as exc:
             log.warning("ensembl.gene_lookup.failed", exc=str(exc))
             ensembl_id = ""
@@ -573,20 +694,19 @@ async def generate_variant_clinical_report(
             tasks.append(_empty_list())
 
         results = await asyncio.gather(*tasks, return_exceptions=True)
-        if not isinstance(results[0], BaseException):
-            disgenet_assocs = results[0]
-            source_status["disgenet"] = "ok"
-        else:
-            source_status["disgenet"] = "failed"
+        disgenet_assocs = _checked_rows("disgenet", results[0])
         if not ensembl_id:
             source_status["open_targets"] = (
                 "skipped_upstream_failed" if gene_lookup_failed else "skipped_no_gene_id"
             )
-        elif len(results) > 1 and not isinstance(results[1], BaseException):
-            ot_diseases = [s.to_dict() if hasattr(s, "to_dict") else s for s in results[1]]
-            source_status["open_targets"] = "ok"
         else:
-            source_status["open_targets"] = "failed"
+            raw_ot: Any = results[1]
+            if isinstance(raw_ot, list):
+                try:
+                    raw_ot = [row.to_dict() if hasattr(row, "to_dict") else row for row in raw_ot]
+                except Exception as exc:
+                    raw_ot = exc
+            ot_diseases = _checked_rows("open_targets", raw_ot)
     else:
         source_status["disgenet"] = "skipped"
         source_status["open_targets"] = "skipped"
@@ -595,30 +715,33 @@ async def generate_variant_clinical_report(
     drug_candidates: list[dict[str, Any]] = []
     if params.include_drug_context and gene_symbol:
         try:
-            gene_info_for_drugs = await _ensembl().gene_lookup(gene_symbol)
-            uniprot_ids = gene_info_for_drugs.get("uniprot_ids", [])
-            if uniprot_ids:
-                drug_candidates = await _chembl().find_repurposable_drugs(
-                    uniprot_ids[0], max_phase=2
-                )
-                source_status["chembl"] = "ok"
+            gene_info_for_drugs: object = await _ensembl().gene_lookup(gene_symbol)
+            if not isinstance(gene_info_for_drugs, dict):
+                source_status["chembl"] = "invalid_response"
             else:
-                source_status["chembl"] = "no_data"
+                uniprot_ids = gene_info_for_drugs.get("uniprot_ids", [])
+                if not isinstance(uniprot_ids, list) or not all(
+                    isinstance(accession, str) for accession in uniprot_ids
+                ):
+                    source_status["chembl"] = "invalid_response"
+                elif uniprot_ids:
+                    drug_response: object = await _chembl().find_repurposable_drugs(
+                        uniprot_ids[0], max_phase=2
+                    )
+                    drug_candidates = _checked_rows("chembl", drug_response)
+                else:
+                    source_status["chembl"] = "no_data"
         except Exception as exc:
             log.warning("drugs.failed", exc=str(exc))
             source_status["chembl"] = "failed"
-    elif not params.include_drug_context:
-        source_status["chembl"] = "skipped"
     else:
         source_status["chembl"] = "skipped"
 
     # ── Step 7: Consolidate ClinVar ───────────────────────────────────────────
-    # A non-exact top hit (correct record absent from ClinVar, or a nearby
-    # variant returned instead) must not be reported as if it were the queried
-    # variant's own classification; exact_change_match defaults True so
-    # get_variant()/search_gene() results (which never set it) still apply.
+    # search_by_hgvs stamps verified identity explicitly. An absent flag is
+    # not proof: never attribute a record's classification by default.
     clinvar_record: dict[str, Any] | None = None
-    if clinvar_results and clinvar_results[0].get("exact_change_match", True):
+    if clinvar_results and clinvar_results[0].get("exact_change_match") is True:
         clinvar_record = clinvar_results[0]
 
     clinvar_class = (clinvar_record or {}).get(
@@ -629,8 +752,8 @@ async def generate_variant_clinical_report(
     am_score: float | None = await _alphamissense_for_variant(
         gene_symbol,
         vep_results,
+        source_status=source_status,
     )
-    source_status["alphamissense"] = "ok" if am_score is not None else "no_data"
 
     # ── Step 9: Draft ACMG criteria ───────────────────────────────────────────
     acmg_criteria: dict[str, str] = {}
@@ -678,6 +801,12 @@ async def generate_variant_clinical_report(
             "review_status": (clinvar_record or {}).get("review_status", ""),
             "conditions": (clinvar_record or {}).get("conditions", []),
             "variation_id": (clinvar_record or {}).get("variation_id", ""),
+            "identity_status": "exact_transcript" if clinvar_record is not None else "unverified",
+            "unverified_candidates": [
+                {"variation_id": row.get("variation_id", ""), "name": row.get("name", "")}
+                for row in clinvar_results
+                if row.get("candidate_change_match") is True
+            ][:3],
         },
         "population_genetics": {
             "global_af": gnomad_data.get("global_af"),
@@ -1375,22 +1504,44 @@ async def classify_variant_acmg(
 
     vep_task = _ensembl().vep_hgvs(hgvs, canonical=True)
     clinvar_task = _clinvar().search_by_hgvs(hgvs)
-    gene_symbol = EnsemblClient.parse_gene_from_hgvs(hgvs)
-
     gathered: list[Any] = await asyncio.gather(vep_task, clinvar_task, return_exceptions=True)
     vep_raw, clinvar_raw = gathered[0], gathered[1]
-    vep_results: list[dict[str, Any]] = [] if isinstance(vep_raw, BaseException) else vep_raw
-    clinvar_results: list[dict[str, Any]] = (
-        [] if isinstance(clinvar_raw, BaseException) else clinvar_raw
-    )
+    source_status: dict[str, str] = {}
+
+    def _checked_rows(name: str, raw: Any) -> list[dict[str, Any]]:
+        if isinstance(raw, BaseException):
+            source_status[name] = "failed"
+            return []
+        if not isinstance(raw, list) or not all(isinstance(row, dict) for row in raw):
+            source_status[name] = "invalid_response"
+            return []
+        source_status[name] = "ok" if raw else "no_data"
+        return raw
+
+    vep_results = _checked_rows("ensembl_vep", vep_raw)
+    clinvar_results = _checked_rows("clinvar", clinvar_raw)
+    gene_symbol = _report_gene_from_sources(hgvs, vep_results, clinvar_results)
+    if clinvar_results and not any(r.get("exact_change_match") is True for r in clinvar_results):
+        source_status["clinvar"] = (
+            "candidate_only"
+            if any(r.get("candidate_change_match") is True for r in clinvar_results)
+            else "no_verified_match"
+        )
 
     # gnomAD
     gnomad_data: dict[str, Any] = {}
     gnomad_id = _build_gnomad_id(hgvs, vep_results)
+    source_status["gnomad_variant"] = "skipped"
     if gnomad_id:
         try:
-            gnomad_data = await _gnomad().variant_frequencies(gnomad_id)
+            variant_response: object = await _gnomad().variant_frequencies(gnomad_id)
+            if isinstance(variant_response, dict):
+                gnomad_data = variant_response
+                source_status["gnomad_variant"] = _gnomad_result_status(variant_response, "found")
+            else:
+                source_status["gnomad_variant"] = "invalid_response"
         except Exception as exc:
+            source_status["gnomad_variant"] = "failed"
             logger.warning(
                 "gnomad.variant_frequencies.failed",
                 exc=str(exc),
@@ -1399,10 +1550,19 @@ async def classify_variant_acmg(
 
     # Gene constraint (for PVS1 context)
     gene_constraint: dict[str, Any] = {}
+    source_status["gnomad_constraint"] = "skipped"
     if gene_symbol:
         try:
-            gene_constraint = await _gnomad().gene_constraint(gene_symbol)
+            constraint_response: object = await _gnomad().gene_constraint(gene_symbol)
+            if isinstance(constraint_response, dict):
+                gene_constraint = constraint_response
+                source_status["gnomad_constraint"] = _gnomad_result_status(
+                    constraint_response, "constraint_available"
+                )
+            else:
+                source_status["gnomad_constraint"] = "invalid_response"
         except Exception as exc:
+            source_status["gnomad_constraint"] = "failed"
             logger.warning(
                 "gnomad.gene_constraint.failed",
                 exc=str(exc),
@@ -1412,13 +1572,14 @@ async def classify_variant_acmg(
     am_score: float | None = await _alphamissense_for_variant(
         gene_symbol,
         vep_results,
+        source_status=source_status,
     )
     global_af: float | None = gnomad_data.get("global_af")
     # See generate_variant_clinical_report: a non-exact top hit must not be
     # reported as the queried variant's own ClinVar classification.
     clinvar_record = (
         clinvar_results[0]
-        if clinvar_results and clinvar_results[0].get("exact_change_match", True)
+        if clinvar_results and clinvar_results[0].get("exact_change_match") is True
         else None
     )
     clinvar_class = (clinvar_record or {}).get(
@@ -1478,7 +1639,16 @@ async def classify_variant_acmg(
             "classification": clinvar_class,
             "review_status": (clinvar_record or {}).get("review_status", ""),
             "variation_id": (clinvar_record or {}).get("variation_id", ""),
-            "interpretation": "External source classification; not counted as ACMG evidence.",
+            "identity_status": "exact_transcript" if clinvar_record is not None else "unverified",
+            "unverified_candidates": [
+                {"variation_id": row.get("variation_id", ""), "name": row.get("name", "")}
+                for row in clinvar_results
+                if row.get("candidate_change_match") is True
+            ][:3],
+            "interpretation": (
+                "External source classification, only when versioned-transcript text "
+                "matches; unverified candidates are not counted as ACMG evidence."
+            ),
         },
         "criteria_met": {},
         "criteria_not_met": [],
@@ -1488,6 +1658,7 @@ async def classify_variant_acmg(
             "benign_evidence_count": 0,
             "unreviewed_computational_signals": len(candidate_signals),
         },
+        "data_sources_status": source_status,
         "disclaimer": (
             "This tool does not classify a variant or establish ACMG/AMP criteria. "
             "All computed signals are unreviewed and disease mechanism evidence is absent. "
@@ -1643,9 +1814,12 @@ def _build_gnomad_id(hgvs: str, vep_results: list[dict[str, Any]]) -> str | None
     """Attempt to build a gnomAD variant ID from VEP result mappings."""
     for hit in vep_results:
         # VEP top-level hit contains seq_region_name, start, and allele_string
-        chrom = str(hit.get("seq_region_name", "")).lstrip("chr")
+        chrom_raw = hit.get("seq_region_name")
         pos = hit.get("start")
-        allele_str = hit.get("allele_string", "")
+        allele_str = hit.get("allele_string")
+        if not isinstance(chrom_raw, str) or not isinstance(allele_str, str):
+            continue
+        chrom = chrom_raw.removeprefix("chr")
         if chrom and pos and "/" in allele_str:
             ref, _, alt = allele_str.partition("/")
             if ref and alt and ref != "-" and alt != "-":
@@ -1683,20 +1857,20 @@ def _druggability_actionability(tier: str, drug_count: int, tractability_labels:
             basis = f"{drug_count} known drug(s) + small-molecule tractability label(s)"
         else:
             basis = f"{drug_count} known drug(s) on drug precedent alone (no small-molecule tractability label)"
-        return f"Target is HOT: {basis}. Prioritise for lead optimisation or repurposing screen."
+        return f"Research heuristic HOT: {basis}. Independently verify target engagement and indication."
     if tier == "WARM":
         return (
-            f"Target is WARM: limited clinical precedent ({drug_count} drugs). "
-            "Recommend structural analysis + FBDD/SBDD campaign."
+            f"Research heuristic WARM: {drug_count} reported compound(s). "
+            "No independent clinical or binding validation is implied."
         )
     if tier == "COLD":
         return (
-            "Target is COLD: no strong drug precedent. "
-            "Consider phenotypic screen, allosteric site search, or PROTAC approach."
+            "Research heuristic COLD: limited retrieved drug precedent. "
+            "This is not evidence of absent therapeutic potential."
         )
     return (
-        "Target has no current evidence of druggability. "
-        "Consider pathway-level intervention or indirect targeting strategy."
+        "NOT_DRUGGABLE is an uncalibrated heuristic label, not a conclusion "
+        "that the target cannot be drugged; check source coverage."
     )
 
 
@@ -1714,10 +1888,12 @@ def _narrative_summary(
     if loeuf is not None:
         constraint_desc = f"The gene is {'highly constrained (LoF intolerant, LOEUF=' + f'{loeuf:.3f}' + ')' if loeuf < 0.35 else 'moderately constrained' if loeuf < 0.6 else 'tolerant to LoF'}. "
     return (
-        f"{sym} is a {tier.lower()}-priority drug target with {drug_count} known clinical compound(s). "
+        f"{sym} has a local {tier.lower()} target-priority heuristic and "
+        f"{drug_count} retrieved clinical compound record(s). "
         f"Top associated diseases: {disease_names or 'not determined'}. "
         f"{constraint_desc}"
-        f"This dossier was synthesized in real-time from Open Targets, DisGeNET, ChEMBL, gnomAD, ClinVar, and Ensembl."
+        "This is an unvalidated research synthesis; inspect each source status "
+        "and record identity before relying on the reported evidence."
     )
 
 
@@ -1801,13 +1977,9 @@ def _investability_rating(
     *, approved_count: int, pipeline_count: int, druggable_targets: int
 ) -> str:
     if approved_count >= 3 and druggable_targets >= 5:
-        return "HIGH — well-validated therapeutic area with multiple approved agents and druggable targets."
+        return "HIGH — heuristic source-count category, not clinical validation."
     if approved_count >= 1 or pipeline_count >= 3:
-        return "MEDIUM — emerging therapeutic area with clinical validation."
+        return "MEDIUM — heuristic source-count category, not clinical validation."
     if druggable_targets >= 2:
-        return (
-            "EARLY — biologically validated but limited clinical precedent; high-risk/high-reward."
-        )
-    return (
-        "EXPLORATORY — limited evidence; suitable for academic or phenotypic discovery programmes."
-    )
+        return "EARLY — heuristic source-count category; no independent biological validation."
+    return "EXPLORATORY — limited retrieved evidence; absent records are not evidence of absence."

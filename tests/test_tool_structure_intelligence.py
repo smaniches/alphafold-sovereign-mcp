@@ -17,14 +17,12 @@ from alphafold_sovereign.tools.structure_intelligence import (
     MultiProteinInput,
     StructureRetrievalInput,
     UniProtInput,
-    _classify_idr_protein,
     _classify_idr_segment,
     _compute_tda_fingerprint,
     _cross_reactivity_risk,
     _detect_domain_boundaries,
     _detect_idr_segments,
     _drift_interpretation,
-    _estimate_ordered_fraction,
     _extract_plddt_from_pdb,
     _extract_plddt_residue_records,
     _fallback_tda_fingerprint,
@@ -34,7 +32,6 @@ from alphafold_sovereign.tools.structure_intelligence import (
     _find_most_similar_pair,
     _fingerprint_distance,
     _geometric_pocket_detection,
-    _idr_clinical_implications,
     _interpret_tda,
     _parse_ca_coords_from_pdb,
     _parse_pdb_full,
@@ -118,13 +115,6 @@ def test_plddt_tier(score: float | None, expected: str) -> None:
 def test_plddt_tier_explanation(tier: str) -> None:
     out = _plddt_tier_explanation(tier)
     assert isinstance(out, str)
-
-
-def test_estimate_ordered_fraction() -> None:
-    assert _estimate_ordered_fraction(None) is None
-    assert _estimate_ordered_fraction(80) == 0.6
-    assert _estimate_ordered_fraction(50) == 0.0
-    assert _estimate_ordered_fraction(100) == 1.0
 
 
 def test_interpret_tda_multi_domain() -> None:
@@ -392,46 +382,6 @@ def test_classify_idr_segment_branches() -> None:
     assert seg["segment_type"] == "Long IDR"
 
 
-def test_classify_idr_protein_fully_disordered() -> None:
-    assert "IDP" in _classify_idr_protein(0.8, [])
-
-
-def test_classify_idr_protein_partial() -> None:
-    out = _classify_idr_protein(0.5, [])
-    assert "Partially disordered" in out
-
-
-def test_classify_idr_protein_long_idrs_with_low_fraction() -> None:
-    """Even with low fraction, long IDRs trigger partial."""
-    out = _classify_idr_protein(
-        0.1, [{"segment_type": "Long IDR", "start": 1, "end": 30, "length": 30}]
-    )
-    assert "Partially disordered" in out
-
-
-def test_classify_idr_protein_ordered() -> None:
-    out = _classify_idr_protein(0.1, [])
-    assert "ordered" in out.lower()
-
-
-def test_idr_clinical_implications_full() -> None:
-    out = _idr_clinical_implications(
-        0.5,
-        [
-            {"segment_type": "N-terminal tail", "start": 1, "end": 30, "length": 30},
-            {"segment_type": "Long IDR", "start": 50, "end": 100, "length": 50},
-        ],
-    )
-    assert any("High IDR fraction" in i for i in out)
-    assert any("Terminal IDR" in i for i in out)
-    assert any("phase separation" in i for i in out)
-
-
-def test_idr_clinical_implications_none() -> None:
-    out = _idr_clinical_implications(0.1, [])
-    assert any("No significant" in i for i in out)
-
-
 def test_find_high_pae_pairs() -> None:
     pae = np.zeros((30, 30))
     pae[5, 25] = 20.0
@@ -629,6 +579,17 @@ def test_find_most_similar_pair() -> None:
     out = _find_most_similar_pair(["a", "b"], [[0, 0.5], [0.5, 0]])
     assert out is not None
     assert out["protein_a"] == "a"
+
+
+@pytest.mark.parametrize("distance", [0.0, 0.5, 1.4142135623730951, 2.0])
+def test_uncalibrated_topology_has_no_similarity_percentage(distance: float) -> None:
+    """L2 feature distance is not a calibrated biological similarity percentage."""
+    out = _find_most_similar_pair(["a", "b"], [[0.0, distance], [distance, 0.0]])
+    assert out is not None
+    assert out["protein_a"] == "a"
+    assert out["protein_b"] == "b"
+    assert out["distance"] == distance
+    assert out["similarity_pct"] is None
 
 
 def test_find_most_similar_pair_multiple() -> None:
@@ -1358,7 +1319,8 @@ async def test_detect_intrinsically_disordered_ordered(
     monkeypatch.setattr(si, "_fetch_af_plddt", fake_plddt)
     monkeypatch.setattr(si, "_fetch_af_structure", fake_struct)
     out = await detect_intrinsically_disordered(UniProtInput(uniprot_id="P12345"))
-    assert out["is_idr_protein"] is False
+    assert out["is_idr_protein"] is None
+    assert out["idr_classification"].startswith("NOT_ASSESSED")
 
 
 async def test_detect_intrinsically_disordered_disordered(
@@ -1373,7 +1335,8 @@ async def test_detect_intrinsically_disordered_disordered(
     monkeypatch.setattr(si, "_fetch_af_plddt", fake_plddt)
     monkeypatch.setattr(si, "_fetch_af_structure", fake_struct)
     out = await detect_intrinsically_disordered(UniProtInput(uniprot_id="P12345"))
-    assert out["is_idr_protein"] is True
+    assert out["is_idr_protein"] is None
+    assert out["idr_classification"].startswith("NOT_ASSESSED")
 
 
 async def test_detect_idr_returns_pdb_identifiers_without_claiming_uniprot_mapping(

@@ -14,5 +14,6 @@ earlier API/output contract. They are not maintained as current tool outputs.
 Use an installed current package to reproduce live results. Source records,
 confidence estimates, and model predictions retain their upstream meaning.
 
-For deterministic offline coverage, see [Golden fixtures](golden.md).
+For deterministic offline coverage, see the fabricated responses in
+[`tests/test_synthetic_variant_pipeline.py`](https://github.com/smaniches/alphafold-sovereign-mcp/blob/main/tests/test_synthetic_variant_pipeline.py).
 For client configuration, see [Installation](../installation.md).

@@ -124,8 +124,10 @@ def test_seed_kg_at_startup_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
     stdio._seed_kg_at_startup()  # returns before constructing KnowledgeGraph
 
 
-def test_seed_kg_at_startup_seeds(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
-    """Startup seeding populates the on-disk database."""
+def test_seed_kg_at_startup_does_not_insert_examples(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+) -> None:
+    """Startup initializes SQLite but must not insert illustrative biology."""
     import sqlite3
 
     monkeypatch.delenv("AFSMCP_DISABLE_KG_SEED", raising=False)
@@ -137,7 +139,7 @@ def test_seed_kg_at_startup_seeds(monkeypatch: pytest.MonkeyPatch, tmp_path: Any
         count = conn.execute("SELECT COUNT(*) FROM proteins").fetchone()[0]
     finally:
         conn.close()
-    assert count >= 5
+    assert count == 0
 
 
 def test_seed_kg_at_startup_swallows_errors(monkeypatch: pytest.MonkeyPatch) -> None:

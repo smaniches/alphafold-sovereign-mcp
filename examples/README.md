@@ -15,9 +15,16 @@ not the current contract. Re-query live upstreams for current evidence;
 the source's classification or prediction is not a new Topologica
 scientific observation.
 
-For reproducible offline regression tests, see [golden fixtures](golden/).
-These retain hashed recorded upstream responses and test what the code
-returns, not clinical correctness.
+For reproducible offline behavior tests, see
+[`tests/test_synthetic_variant_pipeline.py`](../tests/test_synthetic_variant_pipeline.py).
+Those tests use fabricated source responses rather than real clinical cases.
+
+The [July 2026 historical HTTP response captures](https://github.com/smaniches/alphafold-sovereign-mcp/tree/5813ceab61a41e9e8fab43e215eb48e9eacf8c57/examples/golden)
+remain accessible in the pre-correction Git history for provenance and
+retrospective debugging. Their `expected.json` outputs predate corrected
+variant-identity rules and are **not** current expected outputs or clinical
+validation. Each recorded DisGeNET request returned HTTP 401, so the
+captures also do not demonstrate successful retrieval from every source.
 
 ## Run
 

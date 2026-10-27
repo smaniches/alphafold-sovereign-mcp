@@ -40,6 +40,7 @@ def test_parse_gene_from_hgvs(hgvs: str, expected: str | None) -> None:
 def test_parse_tc_minimal_dict() -> None:
     parsed = EnsemblClient._parse_tc({})
     assert parsed["transcript_id"] == ""
+    assert parsed["refseq_transcript_ids"] == []
     assert parsed["consequence_terms"] == []
     assert parsed["sift_score"] is None
     assert parsed["cadd_phred"] is None
@@ -63,6 +64,7 @@ def test_parse_tc_full_payload() -> None:
         "codons": "GCC/GCG",
         "hgvsp": "ENSP1:p.A1B",
         "hgvsc": "ENST1:c.1A>B",
+        "refseq_transcript_ids": ["NM_007294.4"],
         "exon": "5/24",
         "intron": "",
         "sift_score": 0.04,
@@ -77,6 +79,7 @@ def test_parse_tc_full_payload() -> None:
     }
     parsed = EnsemblClient._parse_tc(tc)
     assert parsed["canonical"] is True
+    assert parsed["refseq_transcript_ids"] == ["NM_007294.4"]
     assert parsed["protein_start"] == 61
     assert parsed["swissprot"] == "P38398.280"
     assert parsed["cadd_phred"] == 27.3
@@ -145,6 +148,7 @@ async def test_vep_hgvs_parses_transcript_consequences(
                             "transcript_id": "ENST1",
                             "gene_symbol": "BRCA1",
                             "consequence_terms": ["missense_variant"],
+                            "refseq_transcript_ids": ["NM_007294.4"],
                             "canonical": 1,
                         }
                     ],
@@ -156,6 +160,7 @@ async def test_vep_hgvs_parses_transcript_consequences(
         rows = await client.vep_hgvs("BRCA1:c.181T>G")
     assert len(rows) == 1
     assert rows[0]["gene_symbol"] == "BRCA1"
+    assert rows[0]["refseq_transcript_ids"] == ["NM_007294.4"]
     assert rows[0]["canonical"] is True
 
 

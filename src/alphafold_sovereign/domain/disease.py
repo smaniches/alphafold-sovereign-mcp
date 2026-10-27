@@ -209,7 +209,7 @@ class PopulationFrequency:
     allele_count: int
     allele_number: int
     allele_frequency: float
-    homozygote_count: int = 0
+    homozygote_count: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -273,21 +273,8 @@ class VariantReport:
     data_version: str = ""
 
     def pathogenicity_tier(self) -> str:
-        """Aggregate tier: HIGH / MEDIUM / LOW / UNKNOWN."""
-        if self.clinvar_classification in (
-            PathogenicityClass.PATHOGENIC,
-            PathogenicityClass.LIKELY_PATHOGENIC,
-        ):
-            return "HIGH"
-        if self.alphamissense_score is not None and self.alphamissense_score >= 0.564:
-            return "HIGH"
-        if self.clinvar_classification == PathogenicityClass.BENIGN:
-            return "LOW"
-        if self.alphamissense_score is not None and self.alphamissense_score <= 0.34:
-            return "LOW"
-        if self.clinvar_classification == PathogenicityClass.UNCERTAIN:
-            return "MEDIUM"
-        return "UNKNOWN"
+        """Compatibility label: raw ClinVar and model outputs stay separate."""
+        return "NOT_ASSESSED"
 
     def to_dict(self) -> dict[str, Any]:
         return {
