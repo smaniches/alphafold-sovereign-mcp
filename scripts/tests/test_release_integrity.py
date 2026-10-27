@@ -185,6 +185,92 @@ class ReleaseIntegrityTests(unittest.TestCase):
                         self.dist, "v1.5.5", data, require_present=True
                     )
 
+    def test_partial_pypi_publish_stages_only_missing_file(self) -> None:
+        for remote_kind, missing in (
+            ("bdist_wheel", self.sdist),
+            ("sdist", self.wheel),
+        ):
+            with self.subTest(remote_kind=remote_kind):
+                data = self.pypi_metadata()
+                data["urls"] = [
+                    item for item in data["urls"] if item["packagetype"] == remote_kind
+                ]
+                to_publish = release_assets.missing_pypi_distributions(
+                    self.dist, "v1.5.5", data, require_present=False
+                )
+                self.assertEqual([path.name for path in to_publish], [missing.name])
+                staging = self.root / f"stage-{remote_kind}"
+                release_assets.stage_pypi_distributions(to_publish, staging)
+                self.assertEqual(
+                    {path.name for path in staging.iterdir()}, {missing.name}
+                )
+                self.assertEqual(
+                    release_assets.sha256(staging / missing.name),
+                    release_assets.sha256(missing),
+                )
+                with self.assertRaisesRegex(ValueError, "pair incomplete"):
+                    release_assets.check_pypi(
+                        self.dist, "v1.5.5", data, require_present=True
+                    )
+
+    def test_unpublished_pypi_stages_both_and_complete_stages_neither(self) -> None:
+        for name, metadata, expected in (
+            ("unpublished", None, {self.wheel.name, self.sdist.name}),
+            ("complete", self.pypi_metadata(), set()),
+        ):
+            with self.subTest(name=name):
+                missing = release_assets.missing_pypi_distributions(
+                    self.dist, "v1.5.5", metadata, require_present=False
+                )
+                stage = self.root / f"stage-{name}"
+                release_assets.stage_pypi_distributions(missing, stage)
+                self.assertEqual({path.name for path in stage.iterdir()}, expected)
+
+    def test_partial_pypi_rejects_mismatches_before_staging(self) -> None:
+        for changed, expected_error in (
+            ("sha256", "SHA-256 mismatch"),
+            ("filename", "unknown PyPI artifact"),
+            ("packagetype", "incorrect PyPI artifact type"),
+            ("version", "wrong PyPI project/version"),
+        ):
+            with self.subTest(changed=changed):
+                data = self.pypi_metadata()
+                data["urls"] = data["urls"][:1]
+                if changed == "sha256":
+                    data["urls"][0]["digests"]["sha256"] = "0" * 64
+                elif changed == "filename":
+                    data["urls"][0]["filename"] = "unexpected.whl"
+                elif changed == "packagetype":
+                    data["urls"][0]["packagetype"] = "sdist"
+                else:
+                    data["info"]["version"] = "9.9.9"
+                with self.assertRaisesRegex(ValueError, expected_error):
+                    release_assets.missing_pypi_distributions(
+                        self.dist, "v1.5.5", data, require_present=False
+                    )
+
+    def test_partial_pypi_rejects_duplicates_and_preexisting_staging(self) -> None:
+        data = self.pypi_metadata()
+        data["urls"] = [data["urls"][0], dict(data["urls"][0])]
+        with self.assertRaisesRegex(ValueError, "duplicate PyPI artifact"):
+            release_assets.missing_pypi_distributions(
+                self.dist, "v1.5.5", data, require_present=False
+            )
+        stage = self.root / "existing-staging"
+        stage.mkdir()
+        with self.assertRaisesRegex(ValueError, "staging path already exists"):
+            release_assets.stage_pypi_distributions([self.wheel], stage)
+
+    def test_pypi_workflow_publishes_only_verified_missing_distributions(self) -> None:
+        workflow = (
+            Path(__file__).resolve().parents[2] / ".github" / "workflows" / "release.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("--stage-missing dist-to-publish/", workflow)
+        self.assertIn("packages-dir: dist-to-publish/", workflow)
+        self.assertNotIn("packages-dir: dist/", workflow)
+        self.assertIn("if: steps.existing.outputs.present == 'false'", workflow)
+
+
     def github_files(self) -> dict[str, Path]:
         sboms = self.root / "sboms"
         sboms.mkdir(exist_ok=True)

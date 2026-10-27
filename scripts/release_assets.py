@@ -12,6 +12,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -61,7 +62,14 @@ def request_json(url: str, token: str | None = None) -> dict | None:
         raise ValueError(f"publication lookup HTTP {error.code}: {url}") from error
 
 
-def check_pypi(dist: Path, tag: str, metadata: dict | None, require_present: bool) -> bool:
+def missing_pypi_distributions(
+    dist: Path, tag: str, metadata: dict | None, require_present: bool
+) -> list[Path]:
+    """Verify every existing PyPI artifact; return only verified-missing files.
+
+    A partial release is recoverable, but an unknown, wrongly typed, or
+    digest-mismatched artifact must fail closed before any publication.
+    """
     files = distributions(dist)
     (name, version), _ = wheel_identity(dist)
     expected_version = package_version(tag)
@@ -78,43 +86,70 @@ def check_pypi(dist: Path, tag: str, metadata: dict | None, require_present: boo
     )
     if metadata is None:
         require(not require_present, "expected PyPI release is not published")
-        return False
+        return [files[filename] for filename in sorted(files)]
     require(isinstance(metadata, dict), "invalid PyPI response")
     info = metadata.get("info", {})
     require(
-        normalized(info.get("name", "")) == name and info.get("version") == version,
+        isinstance(info, dict)
+        and normalized(info.get("name", "")) == name
+        and info.get("version") == version,
         "wrong PyPI project/version",
     )
     urls = metadata.get("urls")
     require(
-        isinstance(urls, list) and len(urls) == 2,
-        "PyPI must contain exactly one wheel and one sdist",
+        isinstance(urls, list) and len(urls) <= len(files),
+        "unexpected number of PyPI artifacts",
     )
-    remote: dict[str, str] = {}
-    categories: set[str] = set()
+    seen: dict[str, str] = {}
+    seen_types: set[str] = set()
     for item in urls:
         require(isinstance(item, dict), "invalid PyPI artifact")
         filename, category = item.get("filename"), item.get("packagetype")
         require(
-            isinstance(filename, str) and category in ("bdist_wheel", "sdist"),
-            "unexpected PyPI artifact",
+            isinstance(filename, str) and filename in files,
+            "unknown PyPI artifact",
         )
-        require(filename not in remote, "duplicate PyPI artifact")
-        digests = item.get("digests")
-        require(isinstance(digests, dict), "missing PyPI digest")
-        remote[filename] = digests.get("sha256")
-        categories.add(category)
-    require(
-        categories == {"bdist_wheel", "sdist"},
-        "PyPI wheel/sdist pair incomplete",
-    )
-    require(remote.keys() == files.keys(), "PyPI filename mismatch")
-    for filename, path in files.items():
+        required_type = "bdist_wheel" if filename.endswith(".whl") else "sdist"
+        require(category == required_type, f"incorrect PyPI artifact type: {filename}")
         require(
-            remote[filename] == sha256(path),
+            filename not in seen and category not in seen_types,
+            "duplicate PyPI artifact",
+        )
+        digests = item.get("digests")
+        require(
+            isinstance(digests, dict) and isinstance(digests.get("sha256"), str),
+            "missing PyPI digest",
+        )
+        seen[filename] = digests["sha256"]
+        seen_types.add(category)
+    for filename, digest in seen.items():
+        require(
+            digest == sha256(files[filename]),
             f"PyPI SHA-256 mismatch: {filename}",
         )
-    return True
+    missing = [files[filename] for filename in sorted(files) if filename not in seen]
+    require(not require_present or not missing, "PyPI wheel/sdist pair incomplete")
+    return missing
+
+
+def check_pypi(dist: Path, tag: str, metadata: dict | None, require_present: bool) -> bool:
+    return not missing_pypi_distributions(dist, tag, metadata, require_present)
+
+
+def stage_pypi_distributions(missing: list[Path], stage: Path) -> None:
+    """Stage ONLY the missing immutable files for trusted publication."""
+    require(
+        not stage.exists() and not stage.is_symlink(),
+        f"PyPI staging path already exists: {stage}",
+    )
+    stage.mkdir()
+    for source in missing:
+        target = stage / source.name
+        shutil.copyfile(source, target)
+        require(
+            sha256(target) == sha256(source),
+            f"staged PyPI artifact digest mismatch: {source.name}",
+        )
 
 
 def release_paths(dist: Path, sboms: Path) -> dict[str, Path]:
@@ -267,6 +302,7 @@ def main() -> int:
     pypi.add_argument("tag")
     pypi.add_argument("--require-present", action="store_true")
     pypi.add_argument("--github-output", type=Path)
+    pypi.add_argument("--stage-missing", type=Path)
     github = actions.add_parser("github")
     github.add_argument("dist", type=Path)
     github.add_argument("sboms", type=Path)
@@ -286,15 +322,19 @@ def main() -> int:
         if args.action == "pypi":
             version = package_version(args.tag)
             url = f"https://pypi.org/pypi/alphafold-sovereign-mcp/{version}/json"
-            # An already-published release must match immediately.
-            # Only post-upload 404 propagation is retried.
+            # Poll only incomplete propagation during post-publication readback.
+            # Any existing filename, identity, or digest mismatch fails immediately.
             for attempt in range(12 if args.require_present else 1):
                 metadata = request_json(url)
-                if metadata is not None or not args.require_present:
+                missing = missing_pypi_distributions(args.dist, args.tag, metadata, False)
+                if not args.require_present or not missing:
                     break
                 if attempt < 11:
                     time.sleep(10)
             present = check_pypi(args.dist, args.tag, metadata, args.require_present)
+            if args.stage_missing is not None:
+                require(not args.require_present, "cannot stage files during PyPI readback")
+                stage_pypi_distributions(missing, args.stage_missing)
             if args.github_output is not None:
                 with args.github_output.open("a", encoding="utf-8") as output:
                     output.write(f"present={str(present).lower()}\n")

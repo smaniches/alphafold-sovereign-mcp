@@ -233,12 +233,12 @@ jobs:
         id: existing
         env:
           TAG: ${{ needs.resolve_release.outputs.tag }}
-        run: python3 scripts/release_assets.py pypi dist/ "$TAG" --github-output "$GITHUB_OUTPUT"
+        run: python3 scripts/release_assets.py pypi dist/ "$TAG" --stage-missing dist-to-publish/ --github-output "$GITHUB_OUTPUT"
       - name: Publish wheel and source archive once
         if: steps.existing.outputs.present == 'false'
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
         with:
-          packages-dir: dist/
+          packages-dir: dist-to-publish/
       - name: Independently read back exact PyPI digests
         env:
           TAG: ${{ needs.resolve_release.outputs.tag }}
