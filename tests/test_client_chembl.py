@@ -920,7 +920,25 @@ async def test_get_molecule_fractional_phase_not_called_preclinical(
         drug = await client._get_molecule("CHEMBL_H")
     assert drug is not None
     assert drug["max_phase_known"] is True
-    assert drug["max_phase_label"] == "Phase 0.5"
+    assert drug["max_phase_label"] == "Early Phase I"
+
+
+async def test_approved_drugs_early_phase_one_is_clinical_precedent(
+    respx_mock: respx.MockRouter,
+) -> None:
+    """ChEMBL 0.5 is a clinical candidate in Early Phase 1 trials: it belongs to
+    the approved-plus-clinical scope and is excluded from approved-only."""
+    _mechanism_and_molecules(respx_mock, {"CHEMBL_E": 0.5})
+    async with ChEMBLClient() as client:
+        clinical = await client.approved_drugs(
+            "CHEMBL_T", include_clinical=True, require_complete=True
+        )
+        assert [d["molecule_chembl_id"] for d in clinical] == ["CHEMBL_E"]
+        assert clinical[0]["max_phase_label"] == "Early Phase I"
+        approved_only = await client.approved_drugs(
+            "CHEMBL_T", include_clinical=False, require_complete=True
+        )
+        assert approved_only == []
 
 
 async def test_get_molecule_mismatched_identity_rejected(

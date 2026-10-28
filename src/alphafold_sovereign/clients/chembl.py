@@ -133,7 +133,7 @@ def _raise_molecule_failure(results: list[Any]) -> None:
             raise result
 
 
-def _verify_placeable_phases(results: list[Any], min_phase: int) -> None:
+def _verify_placeable_phases(results: list[Any], min_phase: float) -> None:
     """Refuse a stage-scoped count that an unknown clinical phase cannot satisfy.
 
     ChEMBL assigns ``max_phase`` -1 to a drug or clinical candidate whose
@@ -360,7 +360,8 @@ class ChEMBLClient(BaseAsyncClient):
 
         Args:
             target_chembl_id: ChEMBL target ID.
-            include_clinical: If ``True``, include Phase I–III (not just approved).
+            include_clinical: If ``True``, include clinical candidates from Early
+                Phase 1 (ChEMBL 0.5) through Phase III, not just approved drugs.
             require_complete: Reject partial molecule retrieval, truncated
                 results, or invalid development-stage metadata. Required when
                 computing counts or candidate lists that imply completeness.
@@ -373,7 +374,9 @@ class ChEMBLClient(BaseAsyncClient):
             ``mechanism``, ``oral``, ``parenteral``, ``topical``,
             ``black_box_warning``, ``molecule_type``.
         """
-        min_phase = 1 if include_clinical else 4
+        # ChEMBL documents 0.5 as a clinical candidate in Early Phase 1 trials,
+        # so the approved-plus-clinical scope starts there, not at Phase 1.
+        min_phase = 0.5 if include_clinical else 4
 
         # Get mechanism of action entries for this target, following the
         # offset pagination that ChEMBL reports in ``page_meta`` so a heavily
@@ -680,11 +683,12 @@ class ChEMBLClient(BaseAsyncClient):
         phase_known = _valid_phase(raw_phase)
         phase_label = "Unknown"
         if phase_known:
-            phase_label = (
-                _MAX_PHASE.get(int(phase), f"Phase {phase:g}")
-                if phase.is_integer()
-                else f"Phase {phase:g}"
-            )
+            # The only documented non-integer stage is 0.5 (_valid_phase rejects
+            # any other fraction), ChEMBL's Early Phase 1.
+            if phase.is_integer():
+                phase_label = _MAX_PHASE.get(int(phase), f"Phase {phase:g}")
+            else:
+                phase_label = "Early Phase I"
         return {
             "molecule_chembl_id": data.get("molecule_chembl_id", chembl_id),
             "pref_name": data.get("pref_name") or "",

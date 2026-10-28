@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from alphafold_sovereign.clients.alphafold import AlphaFoldPredictionSchemaError
 from alphafold_sovereign.clients.opentargets import AmbiguousTargetError
 from alphafold_sovereign.domain.disease import DiseaseRecord, PathogenicityClass
 from alphafold_sovereign.tools import precision_medicine as pm
@@ -3563,6 +3564,37 @@ async def test_dossier_alphafold_gene_is_an_independent_identity_witness(
     )
     assert out["target"]["identity_verified"] is False
     assert out["target"]["identity_sources"] == []
+
+
+async def test_alphafold_schema_error_is_invalid_response_not_failed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A malformed prediction record is rejected content, not a failed request."""
+    mocks = _patch_clients(monkeypatch)
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value={"chembl_id": "TGT"})
+    mocks["chembl"].approved_drugs = AsyncMock(
+        return_value=[{"molecule_chembl_id": "CHEMBL1", "max_phase": 4}]
+    )
+    mocks["alphafold"].get_prediction = AsyncMock(
+        side_effect=AlphaFoldPredictionSchemaError("AlphaFold DB prediction response malformed")
+    )
+    out = await assess_target_druggability(DruggabilityInput(uniprot_id="P38398"))
+    assert out["data_sources_status"]["alphafold_plddt"] == "invalid_response"
+    assert out["evidence"]["plddt_mean"] is None
+
+    dossier_mocks = _patch_dossier_clients(monkeypatch)
+    dossier_mocks["chembl"].target_by_uniprot = AsyncMock(return_value={"chembl_id": "TGT"})
+    dossier_mocks["chembl"].approved_drugs = AsyncMock(
+        return_value=[{"molecule_chembl_id": "CHEMBL1", "max_phase": 4}]
+    )
+    dossier_mocks["alphafold"].get_prediction = AsyncMock(
+        side_effect=AlphaFoldPredictionSchemaError("AlphaFold DB prediction response malformed")
+    )
+    out = await synthesize_protein_dossier(
+        ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="brief")
+    )
+    assert out["data_sources_status"]["alphafold_plddt"] == "invalid_response"
+    assert out["target"]["identity_sources"] == ["open_targets"]
 
 
 async def test_dossier_unavailable_count_message_reports_count_status(

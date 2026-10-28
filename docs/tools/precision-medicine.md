@@ -26,7 +26,9 @@ both observed counts are always reported so the difference is auditable.
 mechanism-of-action record on the *single-protein* ChEMBL target that
 carries the requested UniProt accession, at or above the requested
 development stage (`drug_precedent_scope` is `approved_only` when
-`include_clinical_stage=False`, otherwise `approved_and_clinical`). The
+`include_clinical_stage=False`, otherwise `approved_and_clinical`, which
+starts at ChEMBL's Early Phase 1 (`max_phase` 0.5) because ChEMBL defines
+it as a clinical candidate in Early Phase 1 trials). The
 mechanism list is paginated and verified against ChEMBL's reported total;
 a target with more than 200 distinct mechanism-linked molecules is refused
 rather than truncated. ChEMBL often records a mechanism on a protein

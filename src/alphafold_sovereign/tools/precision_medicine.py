@@ -186,7 +186,10 @@ class DruggabilityInput(BaseModel):
     )
     include_clinical_stage: bool = Field(
         default=True,
-        description="Include Phase I–III compounds in addition to approved drugs.",
+        description=(
+            "Include clinical-stage compounds (ChEMBL Early Phase 1 through Phase III) "
+            "in addition to approved drugs."
+        ),
     )
 
 
@@ -984,7 +987,7 @@ async def assess_target_druggability(
 
     Input fields:
         params.uniprot_id: UniProt accession.
-        params.include_clinical_stage: Include Phase I–III in drug count.
+        params.include_clinical_stage: Include Early Phase 1 through Phase III in drug count.
     """
     uid = params.uniprot_id
     log = logger.bind(uniprot_id=uid, tool="assess_target_druggability")
@@ -1083,6 +1086,10 @@ async def assess_target_druggability(
             plddt_mean, plddt_status = validated_plddt(af_meta.get("globalMetricValue"))
         else:
             plddt_status = "invalid_response"
+    except ValueError as exc:
+        # The client rejects a malformed prediction record with ValueError.
+        plddt_status = "invalid_response"
+        log.warning("plddt.invalid", exc=str(exc))
     except Exception as exc:
         plddt_status = "failed"
         log.warning("plddt.failed", exc=str(exc))
@@ -1249,6 +1256,10 @@ async def synthesize_protein_dossier(
             af_gene = raw_gene.strip() if isinstance(raw_gene, str) else ""
         else:
             dossier_plddt_status = "invalid_response"
+    except ValueError as exc:
+        # The client rejects a malformed prediction record with ValueError.
+        dossier_plddt_status = "invalid_response"
+        log.warning("alphafold.plddt.invalid", exc=str(exc), uniprot_id=uid)
     except Exception as exc:
         dossier_plddt_status = "failed"
         log.warning(
