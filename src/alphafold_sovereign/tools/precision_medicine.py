@@ -1050,8 +1050,14 @@ async def assess_target_druggability(
             f"(chembl={chembl_status}, open_targets={ot_status}). "
             "No tier was assigned."
         )
+    # OT counts target-disease clinical rows, potentially repeating a
+    # molecule across indications. No identity list means we can only
+    # credit evidence of presence, not >=3 distinct molecules.
+    scoring_drug_count = (
+        drug_count if chembl_observed_count is not None else min(drug_count, 1)
+    )
     tier, rationale, scoring = _druggability_tier(
-        drug_count=drug_count,
+        drug_count=scoring_drug_count,
         tractability_labels=tractability_labels,
         loeuf=loeuf,
         plddt_mean=plddt_mean,
@@ -1069,6 +1075,7 @@ async def assess_target_druggability(
         },
         "evidence": {
             "drug_count": drug_count,
+            "drug_precedent_scoring_count": scoring_drug_count,
             "drug_count_source": (
                 "chembl_mechanism_distinct_molecules"
                 if chembl_observed_count is not None
@@ -1300,8 +1307,11 @@ async def synthesize_protein_dossier(
             f"open_targets={source_status['ot_tractability']}). "
             "No dossier tier was assigned."
         )
+    scoring_drug_count = (
+        drug_count if chembl_observed_count is not None else min(drug_count, 1)
+    )
     tier, rationale, dossier_scoring = _druggability_tier(
-        drug_count=drug_count,
+        drug_count=scoring_drug_count,
         tractability_labels=ot_tract.get("tractability_labels", []),
         loeuf=constraint.get("loeuf"),
         plddt_mean=dossier_plddt,
@@ -1341,6 +1351,7 @@ async def synthesize_protein_dossier(
             "tier": tier,
             "rationale": rationale,
             "drug_count": drug_count,
+            "drug_precedent_scoring_count": scoring_drug_count,
             "drug_count_source": (
                 "chembl_mechanism_distinct_molecules"
                 if chembl_observed_count is not None

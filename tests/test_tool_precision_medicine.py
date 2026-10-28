@@ -2941,3 +2941,35 @@ async def test_dossier_uses_distinct_molecule_count_when_sources_both_positive(
     assert dossier["druggability"]["drug_count"] == 1
     assert dossier["druggability"]["open_targets_clinical_row_count"] == 5
     assert dossier["druggability"]["drug_count_source"] == "chembl_mechanism_distinct_molecules"
+
+
+async def test_open_targets_rows_do_not_count_as_distinct_drugs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Several disease-linked rows need not represent several molecules."""
+    mocks = _patch_clients(monkeypatch)
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value=None)
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(
+        return_value={"drug_count": 6, "tractability_labels": []}
+    )
+    mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
+    result = await assess_target_druggability(DruggabilityInput(uniprot_id="P38398"))
+    assert result["evidence"]["drug_count"] == 6
+    assert result["evidence"]["drug_precedent_scoring_count"] == 1
+    assert result["druggability_tier"] == "WARM"
+
+
+async def test_dossier_open_targets_rows_are_presence_only_for_scoring(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_dossier_clients(monkeypatch)
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value=None)
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(
+        return_value={"drug_count": 7, "tractability_labels": []}
+    )
+    result = await synthesize_protein_dossier(
+        ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="brief")
+    )
+    assert result["druggability"]["drug_count"] == 7
+    assert result["druggability"]["drug_precedent_scoring_count"] == 1
+    assert result["druggability"]["tier"] == "WARM"
