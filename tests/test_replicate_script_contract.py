@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -57,12 +58,15 @@ def test_replicate_verifies_sigstore_bundle_against_exact_artifact_and_tag() -> 
     assert "refs/heads/main" not in text
 
 
-def test_release_signs_and_uploads_sbom_bundles() -> None:
+def test_release_signs_only_missing_bundles_and_never_clobbers_assets() -> None:
     text = RELEASE.read_text(encoding="utf-8")
 
     assert "sboms/sbom.cyclonedx.json sboms/sbom.spdx.json" in text
-    assert 'cosign sign-blob --yes "$f" --bundle "${f}.sigstore"' in text
-    assert "sboms/*.sigstore" in text
+    assert "scripts/release_assets.py sign dist/ sboms/ release-plan.json" in text
+    assert "scripts/release_assets.py paths dist/ sboms/ release-plan.json" in text
+    assert 'gh release upload "$TAG" "${assets[@]}"' in text
+    assert "--clobber" not in text
+    assert "release-readback.json" in text
 
 
 def test_replicate_authenticates_new_sboms_and_documents_legacy_boundary() -> None:
@@ -105,3 +109,43 @@ def test_replicate_never_uses_pypi_metadata_as_slsa_subject() -> None:
     assert "slsa-verifier verify-artifact" in text
     assert '"$WHEEL_PATH"' in text
     assert "/tmp/pypi_meta.json" not in text
+
+
+def test_historical_spdx_cutover_does_not_rewrite_published_assets() -> None:
+    """Execute the actual inline version policy, including malformed versions."""
+    text = SCRIPT.read_text(encoding="utf-8")
+    assert 'STRICT_SPDX_FIRST_RELEASE="1.5.8"' in text
+    marker = 'SPDX_VALIDATION_MODE="$(python3 - "$VERSION" "$STRICT_SPDX_FIRST_RELEASE" <<\'PY\'\n'
+    policy = text.split(marker, 1)[1].split('\nPY\n)"', 1)[0]
+    for version, expected in [
+        ("1.4.7", "historical"),
+        ("1.5.5", "historical"),
+        ("1.5.6", "historical"),
+        ("1.5.7", "historical"),
+        ("1.5.8", "strict"),
+        ("1.5.8rc1", "strict"),
+        ("1.6.0", "strict"),
+    ]:
+        result = subprocess.run(
+            [sys.executable, "-", version, "1.5.8"],
+            input=policy,
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+        assert result.stdout.strip() == expected
+    invalid = subprocess.run(
+        [sys.executable, "-", "not-a-version", "1.5.8"],
+        input=policy,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert invalid.returncode != 0
+
+
+def test_historical_spdx_never_claims_full_dependency_parity() -> None:
+    text = SCRIPT.read_text(encoding="utf-8")
+    assert "historical SPDX dependency-graph parity NOT established" in text
+    assert "installed-wheel package/dependency parity NOT established" in text
+    assert '"$REPO_ROOT/scripts/release_spdx.py" verify "$CYCLONE" "$SPDX" "$WHEEL_PATH"' in text
