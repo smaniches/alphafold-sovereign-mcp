@@ -1786,6 +1786,46 @@ async def test_synthesize_protein_dossier_resolve_exception(
     mocks["opentargets"].drug_count_and_tractability.assert_not_called()
 
 
+async def test_synthesize_protein_dossier_unmapped_accession_skips_open_targets(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An accession Open Targets does not map is skipped, never queried with an empty ID."""
+    mocks = _patch_dossier_clients(monkeypatch)
+    mocks["opentargets"].resolve_target = AsyncMock(return_value={})
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value={"chembl_id": "TGT"})
+    mocks["chembl"].approved_drugs = AsyncMock(
+        return_value=[{"molecule_chembl_id": "CHEMBL1", "max_phase": 4}]
+    )
+    out = await synthesize_protein_dossier(
+        ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="brief")
+    )
+    assert out["data_sources_status"]["ot_diseases"] == "skipped"
+    assert out["data_sources_status"]["ot_tractability"] == "skipped"
+    assert out["data_sources_status"]["open_targets_drug_count"] == "skipped"
+    assert out["target"]["identity_verified"] is False
+    mocks["opentargets"].associated_diseases.assert_not_called()
+    mocks["opentargets"].drug_count_and_tractability.assert_not_called()
+
+
+async def test_synthesize_protein_dossier_explicit_negative_lookups_are_no_data(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_dossier_clients(monkeypatch)
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value={"chembl_id": "TGT"})
+    mocks["chembl"].approved_drugs = AsyncMock(
+        return_value=[{"molecule_chembl_id": "CHEMBL1", "max_phase": 4}]
+    )
+    mocks["ensembl"].gene_lookup = AsyncMock(return_value={"gene_symbol": "BRCA1", "found": False})
+    mocks["gnomad"].gene_constraint = AsyncMock(
+        return_value={"gene_symbol": "BRCA1", "constraint_available": False}
+    )
+    out = await synthesize_protein_dossier(
+        ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="brief")
+    )
+    assert out["data_sources_status"]["ensembl_gene"] == "no_data"
+    assert out["data_sources_status"]["gene_constraint"] == "no_data"
+
+
 async def test_synthesize_protein_dossier_resolve_validation_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -2051,6 +2091,9 @@ async def test_map_disease_drug_landscape_mesh_fallback(
     mondo_result.efo_ids = ()
     mocks["mondo"].lookup = AsyncMock(return_value=mondo_result)
     mocks["opentargets"].associated_targets = AsyncMock(return_value=[])
+    # The EFO search succeeds but finds nothing; a failing search is a
+    # separate case (test_map_disease_landscape_failed_efo_resolver_is_not_observed_zero).
+    mocks["opentargets"].resolve_disease_efo = AsyncMock(return_value="")
     mocks["chembl"].drug_indications = AsyncMock(return_value=[])
 
     out = await map_disease_drug_landscape(
@@ -2061,6 +2104,29 @@ async def test_map_disease_drug_landscape_mesh_fallback(
     assert out["data_sources_status"]["chembl_indications"] == "no_data"
     assert out["competitive_intelligence"]["approved_count"] == 0
     assert mocks["chembl"].drug_indications.await_args.kwargs["mesh_heading"] == "some disease"
+
+
+async def test_map_disease_landscape_failed_efo_resolver_is_not_observed_zero(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failed EFO lookup leaves an empty MONDO-keyed target page unobserved."""
+    mocks = _patch_clients(monkeypatch)
+    mondo_result = MagicMock(spec=DiseaseRecord)
+    mondo_result.name = "some disease"
+    mondo_result.efo_ids = ()
+    mocks["mondo"].lookup = AsyncMock(return_value=mondo_result)
+    mocks["opentargets"].associated_targets = AsyncMock(return_value=[])
+    mocks["opentargets"].resolve_disease_efo = AsyncMock(side_effect=RuntimeError("search down"))
+    mocks["chembl"].drug_indications = AsyncMock(return_value=[])
+
+    out = await map_disease_drug_landscape(
+        DiseaseDrugLandscapeInput(disease_mondo_id="MONDO:0007254")
+    )
+    assert out["data_sources_status"]["open_targets"] == "failed"
+    assert out["target_landscape"]["retrieved_associated_targets"] is None
+    assert out["competitive_intelligence"]["investability"].startswith("NOT_ASSESSED")
+    # ChEMBL still falls back to the MeSH heading and is reported independently.
+    assert out["data_sources_status"]["chembl_indications"] == "no_data"
 
 
 async def test_map_disease_landscape_caps_are_not_reported_as_global_totals(

@@ -68,7 +68,10 @@ Open Targets difference is never treated as a contradiction: the sources
 differ in target granularity and stage scope by construction.
 
 `data_sources_status.open_targets_drug_count` is `skipped` only when Open
-Targets maps no target to the accession. A failed or malformed
+Targets maps no target to the accession; the dossier then does not query
+the Open Targets sources at all and reports them as `skipped` too. Ensembl
+and gnomAD lookups that return an explicit negative (`found: false`,
+`constraint_available: false`) are reported as `no_data`, not `ok`. A failed or malformed
 UniProt-to-Ensembl resolution is reported as `failed` or
 `invalid_response`, and the dossier's Open Targets sources inherit that
 status rather than being queried with an empty identifier. For ChEMBL,
@@ -78,7 +81,11 @@ identifier mismatch); a failed molecule request during a strict count is
 reported as `failed`, as for any other request failure. A molecule
 `max_phase` counts as observed only when it is one of ChEMBL's documented
 stages (4, 3, 2, 1, 0.5, -1, or the legacy preclinical 0); any other
-number is treated as malformed content. `find_drug_repurposing_candidates`
+number is treated as malformed content. ChEMBL assigns -1 to a drug or
+clinical candidate whose clinical phase it cannot place: such a molecule
+is included in an approved-plus-clinical count (label "Clinical phase
+unknown") but makes an approved-only strict count unassessable, because it
+cannot be placed above or below the approval threshold. `find_drug_repurposing_candidates`
 applies the same split per target: `chembl_lookups_failed` counts request
 failures and `chembl_lookups_invalid` counts rejected source content, and
 either makes the candidate list incomplete.

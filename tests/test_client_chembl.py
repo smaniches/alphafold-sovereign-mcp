@@ -661,7 +661,7 @@ async def test_get_molecule_exception_returns_none(respx_mock: respx.MockRouter)
 
 
 async def test_get_molecule_known_phase_label(respx_mock: respx.MockRouter) -> None:
-    """A max_phase=-1 (Withdrawn) must look up in _MAX_PHASE."""
+    """A max_phase=-1 (clinical phase unknown) must look up in _MAX_PHASE."""
     respx_mock.get("https://www.ebi.ac.uk/chembl/api/data/molecule/CHEMBL_W.json").mock(
         return_value=httpx.Response(
             200,
@@ -675,7 +675,7 @@ async def test_get_molecule_known_phase_label(respx_mock: respx.MockRouter) -> N
     async with ChEMBLClient() as client:
         mol = await client._get_molecule("CHEMBL_W")
     assert mol is not None
-    assert mol["max_phase_label"] == "Withdrawn"
+    assert mol["max_phase_label"] == "Clinical phase unknown"
 
 
 async def test_get_molecule_unknown_phase_label(respx_mock: respx.MockRouter) -> None:
@@ -702,7 +702,7 @@ async def test_get_molecule_unknown_phase_label(respx_mock: respx.MockRouter) ->
         ("0.5", 0.5),  # Early Phase 1
         (4, 4.0),  # legacy integer form
         (3.0, 3.0),  # native float
-        (-1, -1.0),  # Withdrawn sentinel
+        (-1, -1.0),  # clinical phase unknown
         (None, 0.0),  # null
         ("", 0.0),  # blank string
         ("n/a", 0.0),  # unparseable
@@ -784,6 +784,62 @@ def test_valid_phase_rejects_missing_invalid_or_out_of_range(raw: Any) -> None:
 @pytest.mark.parametrize("raw", [-1, 0, 0.5, "2.0", 4.0])
 def test_valid_phase_preserves_observed_chembl_stages(raw: Any) -> None:
     assert _valid_phase(raw) is True
+
+
+def _mechanism_and_molecules(respx_mock: respx.MockRouter, phases: dict[str, Any]) -> None:
+    respx_mock.get("https://www.ebi.ac.uk/chembl/api/data/mechanism.json").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "mechanisms": [{"molecule_chembl_id": cid} for cid in phases],
+                "page_meta": {"total_count": len(phases)},
+            },
+        )
+    )
+    for cid, phase in phases.items():
+        respx_mock.get(f"https://www.ebi.ac.uk/chembl/api/data/molecule/{cid}.json").mock(
+            return_value=httpx.Response(200, json={"molecule_chembl_id": cid, "max_phase": phase})
+        )
+
+
+async def test_approved_drugs_unknown_clinical_phase_counts_as_clinical_only(
+    respx_mock: respx.MockRouter,
+) -> None:
+    """max_phase -1 is a drug or clinical candidate whose stage ChEMBL cannot place."""
+    _mechanism_and_molecules(respx_mock, {"CHEMBL_A": 4, "CHEMBL_U": -1})
+    async with ChEMBLClient() as client:
+        clinical = await client.approved_drugs(
+            "CHEMBL_T", include_clinical=True, require_complete=True
+        )
+        assert [d["molecule_chembl_id"] for d in clinical] == ["CHEMBL_A", "CHEMBL_U"]
+        assert clinical[1]["max_phase_label"] == "Clinical phase unknown"
+        # Best effort: the unplaceable molecule is left out of an approved-only list.
+        approved = await client.approved_drugs("CHEMBL_T", include_clinical=False)
+        assert [d["molecule_chembl_id"] for d in approved] == ["CHEMBL_A"]
+        # Strict: an approved-only count cannot be exact with an unplaceable molecule.
+        with pytest.raises(ValueError, match="clinical phase unknown"):
+            await client.approved_drugs("CHEMBL_T", include_clinical=False, require_complete=True)
+
+
+async def test_approved_drugs_strict_rejects_non_object_molecule_envelope(
+    respx_mock: respx.MockRouter,
+) -> None:
+    respx_mock.get("https://www.ebi.ac.uk/chembl/api/data/mechanism.json").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "mechanisms": [{"molecule_chembl_id": "CHEMBL_A"}],
+                "page_meta": {"total_count": 1},
+            },
+        )
+    )
+    respx_mock.get("https://www.ebi.ac.uk/chembl/api/data/molecule/CHEMBL_A.json").mock(
+        return_value=httpx.Response(200, json=[{"molecule_chembl_id": "CHEMBL_A"}])
+    )
+    async with ChEMBLClient() as client:
+        assert await client.approved_drugs("CHEMBL_T") == []
+        with pytest.raises(ValueError, match="not an object"):
+            await client.approved_drugs("CHEMBL_T", require_complete=True)
 
 
 async def test_approved_drugs_strict_rejects_undocumented_phase(

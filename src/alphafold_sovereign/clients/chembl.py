@@ -42,7 +42,7 @@ _MAX_PHASE: dict[int, str] = {
     2: "Phase II",
     1: "Phase I",
     0: "Preclinical",
-    -1: "Withdrawn",
+    -1: "Clinical phase unknown",
 }
 
 
@@ -120,16 +120,33 @@ def _page_total(page_meta: Any) -> int:
     return total_count
 
 
-def _raise_request_failure(results: list[Any]) -> None:
-    """Re-raise the first request failure among gathered molecule lookups.
+def _raise_molecule_failure(results: list[Any]) -> None:
+    """Re-raise the first failure among gathered molecule lookups.
 
-    A ValueError is the client's own verdict on malformed molecule metadata
-    and is left for the completeness check; anything else is a failed
-    request and must not be reported as invalid source content.
+    A ValueError is the client's own verdict on malformed molecule content
+    (identifier mismatch, non-object envelope); anything else is a failed
+    request. Either is re-raised as itself so callers can classify it,
+    rather than being folded into the generic completeness error.
     """
     for result in results:
-        if isinstance(result, BaseException) and not isinstance(result, ValueError):
+        if isinstance(result, BaseException):
             raise result
+
+
+def _verify_placeable_phases(results: list[Any], min_phase: int) -> None:
+    """Refuse a stage-scoped count that an unknown clinical phase cannot satisfy.
+
+    ChEMBL assigns ``max_phase`` -1 to a drug or clinical candidate whose
+    clinical phase it cannot place. Such a molecule has reached the clinic,
+    so it belongs in an approved-plus-clinical count, but it cannot be
+    placed above or below an approved-only threshold.
+    """
+    if min_phase <= 1:
+        return
+    if any(
+        isinstance(drug, dict) and _coerce_phase(drug.get("max_phase")) == -1 for drug in results
+    ):
+        raise ValueError("ChEMBL molecule clinical phase unknown: approved-only count not assessed")
 
 
 def _verify_complete_mechanisms(mechanisms: list[Any], page_meta: Any, unique_ids: int) -> None:
@@ -413,7 +430,8 @@ class ChEMBLClient(BaseAsyncClient):
             return_exceptions=True,
         )
         if require_complete:
-            _raise_request_failure(molecule_results)
+            _raise_molecule_failure(molecule_results)
+            _verify_placeable_phases(molecule_results, min_phase)
         incomplete = any(
             drug is None
             or isinstance(drug, BaseException)
@@ -432,7 +450,7 @@ class ChEMBLClient(BaseAsyncClient):
             if not drug.get("max_phase_known", True) or drug.get("max_phase_label") == "Unknown":
                 continue
             max_phase = _coerce_phase(drug.get("max_phase"))
-            if max_phase < min_phase:
+            if max_phase < min_phase and not (max_phase == -1 and min_phase <= 1):
                 continue
             mechs = [
                 m.get("mechanism_of_action", "")
@@ -637,6 +655,8 @@ class ChEMBLClient(BaseAsyncClient):
             f"{self._API_ROOT}/molecule/{chembl_id}.json",
             params={"format": "json"},
         )
+        if not isinstance(data, dict):
+            raise ValueError("ChEMBL molecule response is not an object")
         identity = data.get("molecule_chembl_id")
         if identity is not None and identity != chembl_id:
             raise ValueError("ChEMBL molecule response identifier mismatch")

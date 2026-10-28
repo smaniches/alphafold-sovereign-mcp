@@ -573,6 +573,26 @@ async def _unresolved(exc: Exception) -> Any:
     raise exc
 
 
+class _Skipped:
+    """Marker for a source intentionally not queried (no identifier to query with)."""
+
+
+_SKIPPED = _Skipped()
+
+
+async def _skipped() -> _Skipped:
+    return _SKIPPED
+
+
+def _ot_source_task(coro_factory: Any, ensembl_id: str, error: Exception | None) -> Any:
+    """Open Targets dossier source: inherit a resolution failure, skip an unmapped accession."""
+    if error is not None:
+        return _unresolved(error)
+    if not ensembl_id:
+        return _skipped()
+    return coro_factory(ensembl_id)
+
+
 def _gnomad_result_status(payload: dict[str, Any], availability_field: str) -> str:
     """Respect gnomAD's explicit negative flags even in nonempty responses."""
     if not payload or payload.get(availability_field) is False:
@@ -1221,12 +1241,14 @@ async def synthesize_protein_dossier(
     # When resolution failed, the Open Targets sources inherit that failure
     # instead of being queried with an empty identifier and read as no data.
     tasks: dict[str, Any] = {
-        "ot_diseases": _opentargets().associated_diseases(ensembl_id, limit=10)
-        if ot_resolve_error is None
-        else _unresolved(ot_resolve_error),
-        "ot_tractability": _opentargets().drug_count_and_tractability(ensembl_id)
-        if ot_resolve_error is None
-        else _unresolved(ot_resolve_error),
+        "ot_diseases": _ot_source_task(
+            lambda eid: _opentargets().associated_diseases(eid, limit=10),
+            ensembl_id,
+            ot_resolve_error,
+        ),
+        "ot_tractability": _ot_source_task(
+            _opentargets().drug_count_and_tractability, ensembl_id, ot_resolve_error
+        ),
         "disgenet": _disgenet().gene_disease_associations(sym, min_score=0.1, limit=10),
         "gene_constraint": _gnomad().gene_constraint(sym),
         "clinvar_variants": _clinvar().search_gene(sym, limit=5),
@@ -1239,12 +1261,20 @@ async def synthesize_protein_dossier(
     def _source_state(value: Any) -> str:
         # Clients raise ValueError for malformed source content; transport
         # and upstream errors are everything else.
+        if value is _SKIPPED:
+            return "skipped"
         if isinstance(value, ValueError):
             return "invalid_response"
         if isinstance(value, BaseException):
             return "failed"
         if not isinstance(value, (dict, list)):
             return "invalid_response"
+        # Ensembl and gnomAD report a successful negative lookup with an
+        # explicit availability flag inside a nonempty sentinel dictionary.
+        if isinstance(value, dict) and any(
+            value.get(flag) is False for flag in ("found", "constraint_available")
+        ):
+            return "no_data"
         return "ok" if value else "no_data"
 
     source_status = {key: _source_state(value) for key, value in zip(tasks.keys(), gathered)}
@@ -1337,7 +1367,7 @@ async def synthesize_protein_dossier(
     )
     # The gathered source state says the request succeeded; the count status
     # says whether an observed count came back with it.
-    if source_status["ot_tractability"] in {"failed", "invalid_response"}:
+    if source_status["ot_tractability"] in {"failed", "invalid_response", "skipped"}:
         ot_count_status = source_status["ot_tractability"]
     elif ot_observed_count is not None:
         ot_count_status = "ok"
@@ -1537,10 +1567,12 @@ async def map_disease_drug_landscape(
     # Many MONDO terms carry no direct EFO cross-reference (e.g. the broad
     # "breast cancer" node). Resolve one via Open Targets full-text search so
     # the disease still reaches ChEMBL's EFO-keyed drug indications.
+    efo_resolve_error: Exception | None = None
     if not efo_curie and disease_name:
         try:
             efo_curie = await _opentargets().resolve_disease_efo(disease_name)
         except Exception as exc:
+            efo_resolve_error = exc
             log.warning("opentargets.disease_search.failed", exc=str(exc))
 
     # When the MONDO ID yields no Open Targets associations, retry via the
@@ -1555,6 +1587,10 @@ async def map_disease_drug_landscape(
             # MONDO-keyed page must not be reported as a measured zero.
             ot_targets = exc
             log.warning("opentargets.efo_fallback.failed", exc=str(exc))
+    elif efo_resolve_error is not None and not ot_targets:
+        # The EFO retry could not even be attempted: an empty MONDO-keyed page
+        # is unobserved, not a measured zero.
+        ot_targets = efo_resolve_error
 
     if isinstance(ot_targets, ValueError):
         ot_status = "invalid_response"  # the client rejected the source content
