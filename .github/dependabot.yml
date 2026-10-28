@@ -31,18 +31,13 @@ updates:
       time: "09:00"
       timezone: UTC
     open-pull-requests-limit: 5
-    # Dependabot's universal uv update tries unsupported major versions
-    # across Python 3.10-3.13. The checked-in lock already keeps safe,
-    # compatible Python-3.10 variants, while newer versions serve 3.11+.
-    # Revisit after upstream closes the Python 3.10 compatibility gap.
-    # Keep reviewing security advisories manually while these are ignored.
+    # Defer only the incompatible Pillow 13 major line while docs[imaging]
+    # supports Python 3.10. The current uv.lock independently resolves
+    # virtualenv 20.36.1 on 3.10 and 21.14.13 on 3.11+; do not globally
+    # ignore virtualenv 21, which would suppress otherwise safe updates.
+    # Review security advisories manually and remove this exception when
+    # the supported Python range permits Pillow 13.
     ignore:
-      # virtualenv 21.14.13 requires filelock >=3.24.2, conflicting with
-      # the pre-advisory filelock==3.20.3 safety pin on Python 3.10.
-      - dependency-name: virtualenv
-        versions: ["21.*"]
-      # Pillow 13 requires Python >=3.11; docs[imaging] on Python 3.10
-      # continues to resolve to Pillow 12.3.0 in the published lock.
       - dependency-name: pillow
         versions: ["13.*"]
     labels:
