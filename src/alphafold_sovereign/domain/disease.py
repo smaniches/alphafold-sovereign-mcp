@@ -170,10 +170,12 @@ class TargetEvidenceScore:
     ``evidence_datatypes_reported`` records exactly which datatypes the
     source listed. ``overall_score`` must always be reported by the source.
 
-    ``drug_count`` and ``tractable`` are ``None`` when the source supplied no
-    record: this client never queries a per-association drug count, so the
-    previous constant ``0`` was fabricated, and ``tractable`` is unknown when
-    the target carries no tractability assessment.
+    ``drug_count`` is the target's source-reported
+    ``drugAndClinicalCandidates.count`` (drug records at every clinical
+    stage) and ``tractable`` is true when any Open Targets tractability
+    bucket is set, both queried alongside the association. Either is
+    ``None`` only when the source response omits the field; neither is ever
+    imputed as ``0`` or ``False``.
     """
 
     target_ensembl_id: str

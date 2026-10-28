@@ -37,6 +37,28 @@ def _observed_score(value: Any) -> float:
     return score
 
 
+def _observed_drug_count(target: dict[str, Any]) -> int | None:
+    """Source-reported ``drugAndClinicalCandidates.count``; ``None`` when absent.
+
+    The count spans every clinical stage (approved, investigational,
+    withdrawn); a missing field is unknown, never zero, and a malformed one
+    is rejected rather than coerced.
+    """
+    candidates = target.get("drugAndClinicalCandidates") or {}
+    count = candidates.get("count")
+    if count is not None and (not isinstance(count, int) or isinstance(count, bool) or count < 0):
+        raise ValueError("Open Targets drug count must be a nonnegative integer")
+    return count
+
+
+def _observed_tractable(target: dict[str, Any]) -> bool | None:
+    """True when any tractability bucket is set; ``None`` when no list was reported."""
+    tractability = target.get("tractability")
+    if not isinstance(tractability, list):
+        return None
+    return any(isinstance(t, dict) and t.get("value") is True for t in tractability)
+
+
 _OT_CONFIG = UpstreamConfig(
     base_url="https://api.platform.opentargets.org",
     calls_per_second=5.0,
@@ -53,6 +75,12 @@ query AssociatedDiseases($ensemblId: String!, $page: Pagination!) {
     id
     approvedSymbol
     proteinIds { id source }
+    drugAndClinicalCandidates { count }
+    tractability {
+      label
+      modality
+      value
+    }
     associatedDiseases(page: $page) {
       rows {
         disease {
@@ -81,6 +109,7 @@ query DiseaseTargets($efoId: String!, $page: Pagination!) {
           id
           approvedSymbol
           proteinIds { id source }
+          drugAndClinicalCandidates { count }
           tractability {
             label
             modality
@@ -204,8 +233,15 @@ class OpenTargetsClient(BaseAsyncClient):
         target = data.get("target") or {}
         symbol: str = target.get("approvedSymbol", "")
         uniprot_id = self._extract_uniprot(target.get("proteinIds", []))
+        drug_count = _observed_drug_count(target)
+        tractable = _observed_tractable(target)
         rows = target.get("associatedDiseases", {}).get("rows", [])
-        return [self._row_to_score(r, ensembl_id, symbol, uniprot_id) for r in rows]
+        return [
+            self._row_to_score(
+                r, ensembl_id, symbol, uniprot_id, drug_count=drug_count, tractable=tractable
+            )
+            for r in rows
+        ]
 
     # ------------------------------------------------------------------
     # Disease → targets
@@ -249,10 +285,6 @@ class OpenTargetsClient(BaseAsyncClient):
             ensembl = target.get("id", "")
             symbol = target.get("approvedSymbol", "")
             uniprot = self._extract_uniprot(target.get("proteinIds", []))
-            tractability = target.get("tractability")
-            tractable: bool | None = None
-            if isinstance(tractability, list):
-                tractable = any(t.get("value") is True for t in tractability)
             dt = self._datatype_scores(row.get("datatypeScores", []))
             scores.append(
                 TargetEvidenceScore(
@@ -269,7 +301,8 @@ class OpenTargetsClient(BaseAsyncClient):
                     literature=dt.get("literature", 0.0),
                     animal_model=dt.get("animal_model", 0.0),
                     rna_expression=dt.get("rna_expression", 0.0),
-                    tractable=tractable,
+                    drug_count=_observed_drug_count(target),
+                    tractable=_observed_tractable(target),
                     evidence_datatypes_reported=tuple(dt),
                 )
             )
@@ -294,15 +327,9 @@ class OpenTargetsClient(BaseAsyncClient):
             {"ensemblId": ensembl_id},
         )
         target = data.get("target") or {}
-        candidates = target.get("drugAndClinicalCandidates") or {}
         # A missing target/field is not an observed count of zero.
-        count = candidates.get("count")
-        if count is not None and (
-            not isinstance(count, int) or isinstance(count, bool) or count < 0
-        ):
-            raise ValueError("Open Targets drug count must be a nonnegative integer")
         return {
-            "drug_count": count,
+            "drug_count": _observed_drug_count(target),
             "tractability_labels": [
                 t.get("label", "") for t in (target.get("tractability") or []) if t.get("value")
             ],
@@ -419,6 +446,9 @@ class OpenTargetsClient(BaseAsyncClient):
         ensembl_id: str,
         symbol: str,
         uniprot_id: str,
+        *,
+        drug_count: int | None = None,
+        tractable: bool | None = None,
     ) -> TargetEvidenceScore:
         disease = row.get("disease", {})
         dt = OpenTargetsClient._datatype_scores(row.get("datatypeScores", []))
@@ -436,5 +466,7 @@ class OpenTargetsClient(BaseAsyncClient):
             literature=dt.get("literature", 0.0),
             animal_model=dt.get("animal_model", 0.0),
             rna_expression=dt.get("rna_expression", 0.0),
+            drug_count=drug_count,
+            tractable=tractable,
             evidence_datatypes_reported=tuple(dt),
         )

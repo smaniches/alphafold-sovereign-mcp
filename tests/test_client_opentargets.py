@@ -196,6 +196,107 @@ async def test_associated_diseases_full_flow(
     assert scores[0].overall_score == 0.9
 
 
+async def test_associated_diseases_reports_observed_drug_count_and_tractability(
+    respx_mock: respx.MockRouter,
+) -> None:
+    """Existing-client contract: successful rows carry an int and a bool.
+
+    Both values are requested in the same query (live 2026-10-28: BRCA1 has
+    0 drug records and 28 tractability entries), never imputed.
+    """
+    route = respx_mock.post(_GQL_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "data": {
+                    "target": {
+                        "id": "ENSG00000012048",
+                        "approvedSymbol": "BRCA1",
+                        "proteinIds": [{"id": "P38398", "source": "uniprot_swissprot"}],
+                        "drugAndClinicalCandidates": {"count": 0},
+                        "tractability": [
+                            {"label": "Approved Drug", "modality": "SM", "value": False},
+                            {"label": "Small Molecule Binder", "modality": "SM", "value": True},
+                        ],
+                        "associatedDiseases": {
+                            "rows": [
+                                {
+                                    "disease": {"id": "MONDO_0007254", "name": "breast cancer"},
+                                    "score": 0.844,
+                                    "datatypeScores": [{"id": "literature", "score": 0.6}],
+                                }
+                            ]
+                        },
+                    }
+                }
+            },
+        ),
+    )
+    async with OpenTargetsClient() as client:
+        scores = await client.associated_diseases("ENSG00000012048")
+    public = scores[0].to_dict()
+    assert public["drug_count"] == 0 and isinstance(public["drug_count"], int)
+    assert public["tractable"] is True
+    body = route.calls.last.request.content.decode()
+    assert "drugAndClinicalCandidates { count }" in body
+    assert "tractability" in body
+
+
+async def test_associated_diseases_missing_fields_stay_unknown(
+    respx_mock: respx.MockRouter,
+) -> None:
+    """Scientific missingness: an omitted source field is null, not 0/False."""
+    respx_mock.post(_GQL_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "data": {
+                    "target": {
+                        "id": "ENSG1",
+                        "approvedSymbol": "X",
+                        "proteinIds": [],
+                        "associatedDiseases": {
+                            "rows": [
+                                {
+                                    "disease": {"id": "MONDO_1", "name": "d"},
+                                    "score": 0.1,
+                                    "datatypeScores": [],
+                                }
+                            ]
+                        },
+                    }
+                }
+            },
+        ),
+    )
+    async with OpenTargetsClient() as client:
+        scores = await client.associated_diseases("ENSG1")
+    assert scores[0].drug_count is None
+    assert scores[0].tractable is None
+
+
+async def test_associated_diseases_rejects_malformed_drug_count(
+    respx_mock: respx.MockRouter,
+) -> None:
+    respx_mock.post(_GQL_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "data": {
+                    "target": {
+                        "id": "ENSG1",
+                        "drugAndClinicalCandidates": {"count": -3},
+                        "associatedDiseases": {"rows": []},
+                    }
+                }
+            },
+        ),
+    )
+    async with OpenTargetsClient() as client:
+        with pytest.raises(ValueError, match="nonnegative integer"):
+            await client.associated_diseases("ENSG1")
+
+
 async def test_associated_diseases_no_target_data(
     respx_mock: respx.MockRouter,
 ) -> None:
@@ -256,6 +357,7 @@ async def test_associated_targets_full_flow(respx_mock: respx.MockRouter) -> Non
                                         "proteinIds": [
                                             {"id": "P04637", "source": "uniprot_swissprot"}
                                         ],
+                                        "drugAndClinicalCandidates": {"count": 9},
                                         "tractability": [
                                             {"label": "high_quality_pocket", "value": True}
                                         ],
@@ -295,7 +397,11 @@ async def test_associated_targets_full_flow(respx_mock: respx.MockRouter) -> Non
     # Sorted desc by overall_score
     assert scores[0].overall_score == 0.95
     assert scores[0].tractable is True
+    # Existing-client contract: the observed count is an int on the row.
+    assert scores[0].drug_count == 9
+    # Source omitted both fields for the second target: unknown, not 0/False.
     assert scores[1].tractable is None
+    assert scores[1].drug_count is None
 
 
 async def test_associated_targets_disease_null(respx_mock: respx.MockRouter) -> None:
