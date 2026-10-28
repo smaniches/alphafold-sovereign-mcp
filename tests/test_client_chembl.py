@@ -15,6 +15,7 @@ import httpx
 import pytest
 import respx
 
+from alphafold_sovereign.clients._base import UpstreamError
 from alphafold_sovereign.clients.chembl import (
     ChEMBLClient,
     _bioactivity_nm,
@@ -844,6 +845,28 @@ async def test_approved_drugs_best_effort_retained_but_strict_counts_fail_closed
     async with ChEMBLClient() as client:
         partial = await client.approved_drugs("CHEMBL_T")
         assert [x["molecule_chembl_id"] for x in partial] == ["CHEMBL_A"]
+        # A failed molecule request is a request failure in strict mode, not
+        # malformed metadata: it must not be reported as ValueError.
+        with pytest.raises(UpstreamError):
+            await client.approved_drugs("CHEMBL_T", require_complete=True)
+
+
+async def test_approved_drugs_strict_reports_unknown_phase_as_invalid(
+    respx_mock: respx.MockRouter,
+) -> None:
+    respx_mock.get("https://www.ebi.ac.uk/chembl/api/data/mechanism.json").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "mechanisms": [{"molecule_chembl_id": "CHEMBL_A"}],
+                "page_meta": {"total_count": 1},
+            },
+        )
+    )
+    respx_mock.get("https://www.ebi.ac.uk/chembl/api/data/molecule/CHEMBL_A.json").mock(
+        return_value=httpx.Response(200, json={"molecule_chembl_id": "CHEMBL_A", "max_phase": "x"})
+    )
+    async with ChEMBLClient() as client:
         with pytest.raises(ValueError, match="incomplete"):
             await client.approved_drugs("CHEMBL_T", require_complete=True)
 

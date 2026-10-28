@@ -71,7 +71,11 @@ differ in target granularity and stage scope by construction.
 Targets maps no target to the accession. A failed or malformed
 UniProt-to-Ensembl resolution is reported as `failed` or
 `invalid_response`, and the dossier's Open Targets sources inherit that
-status rather than being queried with an empty identifier.
+status rather than being queried with an empty identifier. For ChEMBL,
+`invalid_response` means the client rejected the content it received
+(ambiguous target, unverifiable pagination, unknown molecule phase,
+identifier mismatch); a failed molecule request during a strict count is
+reported as `failed`, as for any other request failure.
 
 A protein dossier also checks the supplied gene symbol against the
 resolved UniProt-to-Ensembl target gene symbol when mapping evidence is

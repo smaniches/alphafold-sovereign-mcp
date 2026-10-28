@@ -111,6 +111,18 @@ def _page_total(page_meta: Any) -> int:
     return total_count
 
 
+def _raise_request_failure(results: list[Any]) -> None:
+    """Re-raise the first request failure among gathered molecule lookups.
+
+    A ValueError is the client's own verdict on malformed molecule metadata
+    and is left for the completeness check; anything else is a failed
+    request and must not be reported as invalid source content.
+    """
+    for result in results:
+        if isinstance(result, BaseException) and not isinstance(result, ValueError):
+            raise result
+
+
 def _verify_complete_mechanisms(mechanisms: list[Any], page_meta: Any, unique_ids: int) -> None:
     """Refuse counts when the paginated, identified upstream sample is incomplete."""
     if unique_ids > MAX_MECHANISM_MOLECULES:
@@ -382,12 +394,17 @@ class ChEMBLClient(BaseAsyncClient):
         if not chembl_ids:
             return []
 
-        # Batch-fetch compound info in parallel
+        # Batch-fetch compound info in parallel. Best-effort callers tolerate
+        # a failed molecule request (None); a strict count must surface it as
+        # the request failure it is, not as malformed molecule metadata.
         target_ids = chembl_ids[:MAX_MECHANISM_MOLECULES]
+        fetch = self._fetch_molecule if require_complete else self._get_molecule
         molecule_results = await asyncio.gather(
-            *[self._get_molecule(cid) for cid in target_ids],
+            *[fetch(cid) for cid in target_ids],
             return_exceptions=True,
         )
+        if require_complete:
+            _raise_request_failure(molecule_results)
         incomplete = any(
             drug is None
             or isinstance(drug, BaseException)
@@ -596,14 +613,21 @@ class ChEMBLClient(BaseAsyncClient):
     # ------------------------------------------------------------------
 
     async def _get_molecule(self, chembl_id: str) -> dict[str, Any] | None:
+        """Best-effort molecule lookup: a failed request is None, not an error."""
         try:
-            data = await self._get(
-                f"{self._API_ROOT}/molecule/{chembl_id}.json",
-                params={"format": "json"},
-            )
+            return await self._fetch_molecule(chembl_id)
+        except ValueError:
+            raise
         except Exception as exc:
             logger.warning("chembl.molecule.failed", chembl_id=chembl_id, exc=str(exc))
             return None
+
+    async def _fetch_molecule(self, chembl_id: str) -> dict[str, Any]:
+        """Molecule lookup that propagates request failures to the caller."""
+        data = await self._get(
+            f"{self._API_ROOT}/molecule/{chembl_id}.json",
+            params={"format": "json"},
+        )
         identity = data.get("molecule_chembl_id")
         if identity is not None and identity != chembl_id:
             raise ValueError("ChEMBL molecule response identifier mismatch")
