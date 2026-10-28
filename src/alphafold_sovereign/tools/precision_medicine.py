@@ -1541,6 +1541,11 @@ async def map_disease_drug_landscape(
     )
     druggable_targets = [t for t in target_rows if t.get("tractable")]
     retrieved_targets = len(ot_targets) if isinstance(ot_targets, list) else None
+    # A row whose tractability is unknown (``None``) is not an observed
+    # non-tractable target; the tractable count is unassessed in that case.
+    tractability_assessed = retrieved_targets is not None and all(
+        isinstance(t.get("tractable"), bool) for t in target_rows
+    )
     retrieved_indications = len(chembl_drugs) if chembl_status in {"ok", "no_data"} else None
     total_targets = (
         retrieved_targets if retrieved_targets is not None and retrieved_targets < 20 else None
@@ -1550,7 +1555,9 @@ async def map_disease_drug_landscape(
         if retrieved_indications is not None and retrieved_indications < 20
         else None
     )
-    counts_assessable = total_targets is not None and total_indications is not None
+    counts_assessable = (
+        total_targets is not None and total_indications is not None and tractability_assessed
+    )
     investability = (
         _investability_rating(
             approved_count=len(approved),
@@ -1586,9 +1593,7 @@ async def map_disease_drug_landscape(
             "pipeline_count": (
                 len(phase3) + len(phase12) if retrieved_indications is not None else None
             ),
-            "druggable_target_count": (
-                len(druggable_targets) if retrieved_targets is not None else None
-            ),
+            "druggable_target_count": len(druggable_targets) if tractability_assessed else None,
             "investability": investability,
             "count_scope": "Retrieved source page only, not a verified whole-database count.",
         },

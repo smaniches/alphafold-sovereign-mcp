@@ -91,7 +91,10 @@ page. When the MONDO-keyed Open Targets lookup returns no targets and the
 EFO-keyed retry fails, the target list is reported as `failed`, the
 target-derived counts are `null` and the investability summary is
 `NOT_ASSESSED`; an empty first page followed by a failed retry is never an
-observed zero.
+observed zero. Likewise, if any retrieved target row carries no
+tractability assessment (`tractable: null`), `druggable_target_count` is
+`null` and investability is `NOT_ASSESSED`, because an unknown
+tractability is not an observed non-tractable target.
 
 ## AlphaMissense evidence status
 

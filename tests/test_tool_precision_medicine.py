@@ -1919,6 +1919,36 @@ async def test_map_disease_landscape_failed_efo_fallback_is_not_observed_zero(
     assert out["competitive_intelligence"]["approved_count"] == 1
 
 
+async def test_map_disease_landscape_unknown_tractability_is_unassessed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A row with ``tractable: None`` is not an observed non-tractable target."""
+    mocks = _patch_clients(monkeypatch)
+    record = MagicMock(spec=DiseaseRecord)
+    record.name = "disease"
+    record.efo_ids = ("EFO:0000339",)
+    mocks["mondo"].lookup = AsyncMock(return_value=record)
+    mocks["opentargets"].associated_targets = AsyncMock(
+        return_value=[
+            {"target_gene_symbol": "G1", "tractable": True},
+            {"target_gene_symbol": "G2", "tractable": None},
+        ]
+    )
+    mocks["chembl"].drug_indications = AsyncMock(
+        return_value=[{"max_phase_for_indication": "4.0", "molecule_chembl_id": "C1"}]
+    )
+    mocks["chembl"].molecule_names = AsyncMock(return_value={"C1": "Known"})
+    out = await map_disease_drug_landscape(
+        DiseaseDrugLandscapeInput(disease_mondo_id="MONDO:0007254")
+    )
+    assert out["target_landscape"]["retrieved_associated_targets"] == 2
+    assert out["target_landscape"]["total_associated_targets"] == 2
+    assert out["competitive_intelligence"]["druggable_target_count"] is None
+    assert out["competitive_intelligence"]["investability"].startswith("NOT_ASSESSED")
+    assert out["competitive_intelligence"]["approved_count"] == 1
+    assert out["data_sources_status"]["open_targets"] == "ok"
+
+
 async def test_map_disease_drug_landscape_mesh_fallback(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
