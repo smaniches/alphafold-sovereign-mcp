@@ -91,7 +91,15 @@ page. When the MONDO-keyed Open Targets lookup returns no targets and the
 EFO-keyed retry fails, the target list is reported as `failed`, the
 target-derived counts are `null` and the investability summary is
 `NOT_ASSESSED`; an empty first page followed by a failed retry is never an
-observed zero. Likewise, if any retrieved target row carries no
+observed zero. A ChEMBL `drug_indication` response without the documented
+list (for example an error envelope with HTTP 200) is `invalid_response`,
+not an observed empty page. Indication rows are bucketed by ChEMBL's
+reported `max_phase_for_ind` (live ChEMBL 37, 2026-10-28: `4`, `3`, `2`,
+`1`, `0.5` for early phase 1, and `-1` for a clinical phase ChEMBL cannot
+assign); `0.5` counts as early clinical pipeline. A retrieved row with
+`-1` or a missing phase is reported in `unassigned_phase_entries`, and
+`approved_count`, `pipeline_count` and investability are withheld because
+the page's stage composition is not supported. Likewise, if any retrieved target row carries no
 tractability assessment (`tractable: null`), `druggable_target_count` is
 `null` and investability is `NOT_ASSESSED`, because an unknown
 tractability is not an observed non-tractable target.

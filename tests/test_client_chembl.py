@@ -434,6 +434,27 @@ async def test_drug_indications_by_mesh(respx_mock: respx.MockRouter) -> None:
     assert results == []
 
 
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"error": "upstream data unavailable"},
+        {"drug_indications": None},
+        {"drug_indications": {"molecule_chembl_id": "C1"}},
+        {"drug_indications": [None]},
+    ],
+)
+async def test_drug_indications_rejects_malformed_envelope(
+    respx_mock: respx.MockRouter, body: dict[str, Any]
+) -> None:
+    """A 200 response without the documented list is not an empty page."""
+    respx_mock.get("https://www.ebi.ac.uk/chembl/api/data/drug_indication.json").mock(
+        return_value=httpx.Response(200, json=body)
+    )
+    async with ChEMBLClient() as client:
+        with pytest.raises(ValueError, match="missing a valid list"):
+            await client.drug_indications(efo_id="EFO:0000305")
+
+
 async def test_drug_indications_missing_required() -> None:
     async with ChEMBLClient() as client:
         with pytest.raises(ValueError):

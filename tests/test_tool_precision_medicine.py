@@ -2024,13 +2024,99 @@ async def test_landscape_counts_tractable_targets_beyond_top_ten(
 
 
 def test_indication_phase_coercion() -> None:
+    """Observed ChEMBL phase values are preserved; unknown is None, never 0."""
     from alphafold_sovereign.tools.precision_medicine import _indication_phase
 
     assert _indication_phase({"max_phase_for_indication": "4.0"}) == 4
     assert _indication_phase({"max_phase_for_indication": 3}) == 3
-    assert _indication_phase({"max_phase_for_indication": None}) == 0
-    assert _indication_phase({"max_phase_for_indication": "n/a"}) == 0
-    assert _indication_phase({}) == 0
+    # Live ChEMBL 37 conventions: 0.5 is early phase 1, -1 is "phase unknown".
+    assert _indication_phase({"max_phase_for_indication": "0.5"}) == 0.5
+    assert _indication_phase({"max_phase_for_indication": "-1.0"}) == -1
+    for raw in (None, "n/a", "nan", "inf", True, "7.0", 0):
+        assert _indication_phase({"max_phase_for_indication": raw}) is None, raw
+    assert _indication_phase({}) is None
+
+
+@pytest.mark.parametrize("raw_phase", [None, "-1.0", "n/a"])
+async def test_map_disease_landscape_withholds_counts_for_unassigned_phase(
+    monkeypatch: pytest.MonkeyPatch, raw_phase: Any
+) -> None:
+    """A retrieved row whose phase cannot be bucketed makes the counts unsupported."""
+    mocks = _patch_clients(monkeypatch)
+    record = MagicMock(spec=DiseaseRecord)
+    record.name = "disease"
+    record.efo_ids = ("EFO:0000339",)
+    mocks["mondo"].lookup = AsyncMock(return_value=record)
+    mocks["opentargets"].associated_targets = AsyncMock(
+        return_value=[{"target_gene_symbol": "G1", "tractable": True}]
+    )
+    mocks["chembl"].drug_indications = AsyncMock(
+        return_value=[
+            {"max_phase_for_indication": "4.0", "molecule_chembl_id": "C1"},
+            {"max_phase_for_indication": raw_phase, "molecule_chembl_id": "C2"},
+        ]
+    )
+    mocks["chembl"].molecule_names = AsyncMock(return_value={})
+    out = await map_disease_drug_landscape(
+        DiseaseDrugLandscapeInput(disease_mondo_id="MONDO:0007254")
+    )
+    assert out["data_sources_status"]["chembl_indications"] == "ok"
+    assert out["drug_landscape"]["retrieved_indication_entries"] == 2
+    assert out["drug_landscape"]["unassigned_phase_entries"] == 1
+    # The approved row is still listed; only the aggregate claims are withheld.
+    assert [d["molecule_chembl_id"] for d in out["drug_landscape"]["approved_drugs"]] == ["C1"]
+    assert out["competitive_intelligence"]["approved_count"] is None
+    assert out["competitive_intelligence"]["pipeline_count"] is None
+    assert out["competitive_intelligence"]["investability"].startswith("NOT_ASSESSED")
+
+
+async def test_map_disease_landscape_early_phase_one_is_pipeline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_clients(monkeypatch)
+    record = MagicMock(spec=DiseaseRecord)
+    record.name = "disease"
+    record.efo_ids = ("EFO:0000339",)
+    mocks["mondo"].lookup = AsyncMock(return_value=record)
+    mocks["opentargets"].associated_targets = AsyncMock(
+        return_value=[{"target_gene_symbol": "G1", "tractable": True}]
+    )
+    mocks["chembl"].drug_indications = AsyncMock(
+        return_value=[{"max_phase_for_indication": "0.5", "molecule_chembl_id": "C1"}]
+    )
+    mocks["chembl"].molecule_names = AsyncMock(return_value={})
+    out = await map_disease_drug_landscape(
+        DiseaseDrugLandscapeInput(disease_mondo_id="MONDO:0007254")
+    )
+    assert [d["molecule_chembl_id"] for d in out["drug_landscape"]["phase_1_2_drugs"]] == ["C1"]
+    assert out["drug_landscape"]["unassigned_phase_entries"] == 0
+    assert out["competitive_intelligence"]["approved_count"] == 0
+    assert out["competitive_intelligence"]["pipeline_count"] == 1
+    assert not out["competitive_intelligence"]["investability"].startswith("NOT_ASSESSED")
+
+
+async def test_map_disease_landscape_malformed_chembl_envelope_is_invalid_response(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_clients(monkeypatch)
+    record = MagicMock(spec=DiseaseRecord)
+    record.name = "disease"
+    record.efo_ids = ("EFO:0000339",)
+    mocks["mondo"].lookup = AsyncMock(return_value=record)
+    mocks["opentargets"].associated_targets = AsyncMock(
+        return_value=[{"target_gene_symbol": "G1", "tractable": True}]
+    )
+    mocks["chembl"].drug_indications = AsyncMock(
+        side_effect=ValueError("ChEMBL drug_indication response missing a valid list")
+    )
+    out = await map_disease_drug_landscape(
+        DiseaseDrugLandscapeInput(disease_mondo_id="MONDO:0007254")
+    )
+    assert out["data_sources_status"]["chembl_indications"] == "invalid_response"
+    assert out["drug_landscape"]["retrieved_indication_entries"] is None
+    assert out["drug_landscape"]["unassigned_phase_entries"] is None
+    assert out["competitive_intelligence"]["approved_count"] is None
+    assert out["competitive_intelligence"]["investability"].startswith("NOT_ASSESSED")
 
 
 # ---------------------------------------------------------------------------

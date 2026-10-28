@@ -1524,14 +1524,25 @@ async def map_disease_drug_landscape(
         elif disease_name:
             chembl_drugs = await _chembl().drug_indications(mesh_heading=disease_name, limit=20)
             chembl_status = "ok" if chembl_drugs else "no_data"
+    except ValueError as exc:
+        # The client rejects a malformed response envelope; that is not an
+        # observed empty indication page.
+        chembl_status = "invalid_response"
+        log.warning("chembl.indications.invalid", exc=str(exc))
     except Exception as exc:
         chembl_status = "failed"
         log.warning("chembl.indications.failed", exc=str(exc))
 
-    # Classify drugs by phase
-    approved = [d for d in chembl_drugs if _indication_phase(d) >= 4]
-    phase3 = [d for d in chembl_drugs if _indication_phase(d) == 3]
-    phase12 = [d for d in chembl_drugs if _indication_phase(d) in (1, 2)]
+    # Classify drugs by ChEMBL's documented max_phase_for_ind values: 4
+    # approved, 3, 2, 1, 0.5 (early phase 1). A source value of -1 (clinical
+    # phase unknown) or a missing/unparseable value cannot be bucketed, so the
+    # phase-derived counts below are withheld whenever such a row is present.
+    phases = [_indication_phase(d) for d in chembl_drugs]
+    approved = [d for d, p in zip(chembl_drugs, phases) if p == 4]
+    phase3 = [d for d, p in zip(chembl_drugs, phases) if p == 3]
+    phase12 = [d for d, p in zip(chembl_drugs, phases) if p in (0.5, 1, 2)]
+    unassigned_phase = sum(1 for p in phases if p not in (0.5, 1, 2, 3, 4))
+    phases_assessed = chembl_status in {"ok", "no_data"} and unassigned_phase == 0
 
     # The drug-indication endpoint returns molecule IDs but not names; backfill
     # preferred names for the entries we surface in one bulk request.
@@ -1565,7 +1576,10 @@ async def map_disease_drug_landscape(
         else None
     )
     counts_assessable = (
-        total_targets is not None and total_indications is not None and tractability_assessed
+        total_targets is not None
+        and total_indications is not None
+        and tractability_assessed
+        and phases_assessed
     )
     investability = (
         _investability_rating(
@@ -1588,6 +1602,9 @@ async def map_disease_drug_landscape(
             "phase_1_2_drugs": phase12[:10],
             "total_indication_entries": total_indications,
             "retrieved_indication_entries": retrieved_indications,
+            "unassigned_phase_entries": unassigned_phase
+            if retrieved_indications is not None
+            else None,
             "page_limit": 20,
         },
         "target_landscape": {
@@ -1598,10 +1615,8 @@ async def map_disease_drug_landscape(
             "page_limit": 20,
         },
         "competitive_intelligence": {
-            "approved_count": len(approved) if retrieved_indications is not None else None,
-            "pipeline_count": (
-                len(phase3) + len(phase12) if retrieved_indications is not None else None
-            ),
+            "approved_count": len(approved) if phases_assessed else None,
+            "pipeline_count": len(phase3) + len(phase12) if phases_assessed else None,
             "druggable_target_count": len(druggable_targets) if tractability_assessed else None,
             "investability": investability,
             "count_scope": "Retrieved source page only, not a verified whole-database count.",
@@ -2239,16 +2254,29 @@ def _criteria_not_met(criteria: dict[str, dict[str, Any]]) -> list[str]:
     return [c for c in all_codes if c not in criteria]
 
 
-def _indication_phase(drug: dict[str, Any]) -> int:
-    """Coerce a ChEMBL ``max_phase_for_indication`` to an integer phase.
+_INDICATION_PHASES = frozenset({-1.0, 0.5, 1.0, 2.0, 3.0, 4.0})
+"""Observed ChEMBL ``max_phase_for_ind`` values (ChEMBL 37, probed 2026-10-28).
 
-    ChEMBL returns this field as a string (e.g. ``'4.0'``); blank/unknown
-    values collapse to ``0``.
+``-1`` is ChEMBL's marker for a clinical phase it cannot assign; ``0.5`` is
+early phase 1. ChEMBL serves the field as a decimal string (``'4.0'``).
+"""
+
+
+def _indication_phase(drug: dict[str, Any]) -> float | None:
+    """Return the source-reported ``max_phase_for_indication`` or ``None``.
+
+    ``None`` means the phase is missing or unparseable; a reported ``-1`` is
+    returned as is so callers can distinguish ChEMBL's "clinical phase
+    unknown" from an absent value. Neither is ever read as phase 0.
     """
+    raw = drug.get("max_phase_for_indication")
+    if raw is None or isinstance(raw, bool):
+        return None
     try:
-        return int(float(drug.get("max_phase_for_indication")))  # type: ignore[arg-type]
-    except (TypeError, ValueError):
-        return 0
+        phase = float(raw)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return phase if phase in _INDICATION_PHASES else None
 
 
 def _investability_rating(

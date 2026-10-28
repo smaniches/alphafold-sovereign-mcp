@@ -462,6 +462,11 @@ class ChEMBLClient(BaseAsyncClient):
             f"{self._API_ROOT}/drug_indication.json",
             params=params,
         )
+        # A 200 response without the documented list (for example an error
+        # envelope) is malformed, not an observed empty indication page.
+        rows = data.get("drug_indications")
+        if not isinstance(rows, list) or not all(isinstance(i, dict) for i in rows):
+            raise ValueError("ChEMBL drug_indication response missing a valid list")
         return [
             {
                 "molecule_chembl_id": i.get("molecule_chembl_id", ""),
@@ -472,7 +477,7 @@ class ChEMBLClient(BaseAsyncClient):
                 "mesh_id": i.get("mesh_id", ""),
                 "mesh_heading": i.get("mesh_heading", ""),
             }
-            for i in data.get("drug_indications", [])
+            for i in rows
         ]
 
     async def molecule_names(self, chembl_ids: list[str]) -> dict[str, str]:

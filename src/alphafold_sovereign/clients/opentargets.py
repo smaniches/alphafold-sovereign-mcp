@@ -44,7 +44,11 @@ def _observed_drug_count(target: dict[str, Any]) -> int | None:
     withdrawn); a missing field is unknown, never zero, and a malformed one
     is rejected rather than coerced.
     """
-    candidates = target.get("drugAndClinicalCandidates") or {}
+    candidates = target.get("drugAndClinicalCandidates")
+    if candidates is None:
+        return None
+    if not isinstance(candidates, dict):
+        raise ValueError("Open Targets drugAndClinicalCandidates must be an object")
     count = candidates.get("count")
     if count is not None and (not isinstance(count, int) or isinstance(count, bool) or count < 0):
         raise ValueError("Open Targets drug count must be a nonnegative integer")

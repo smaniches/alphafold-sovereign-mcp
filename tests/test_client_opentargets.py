@@ -15,6 +15,7 @@ import respx
 from alphafold_sovereign.clients._base import UpstreamError
 from alphafold_sovereign.clients.opentargets import (
     OpenTargetsClient,
+    _observed_drug_count,
     _observed_score,
     _observed_tractable,
     _to_curie,
@@ -476,6 +477,20 @@ def test_observed_tractable_incomplete_list_is_unknown(tractability: list[Any]) 
 )
 def test_observed_tractable_validated_list(tractability: list[Any], expected: bool) -> None:
     assert _observed_tractable({"tractability": tractability}) is expected
+
+
+@pytest.mark.parametrize("container", [[], False, 0, "", "abc", 5, [1], ["count"]])
+def test_observed_drug_count_rejects_malformed_container(container: Any) -> None:
+    """Only an omitted/null field is unavailable; any non-object is malformed."""
+    with pytest.raises(ValueError, match="must be an object"):
+        _observed_drug_count({"drugAndClinicalCandidates": container})
+
+
+def test_observed_drug_count_null_is_unknown_and_zero_is_observed() -> None:
+    assert _observed_drug_count({}) is None
+    assert _observed_drug_count({"drugAndClinicalCandidates": None}) is None
+    assert _observed_drug_count({"drugAndClinicalCandidates": {"count": 0}}) == 0
+    assert _observed_drug_count({"drugAndClinicalCandidates": {}}) is None
 
 
 async def test_drug_count_and_tractability_rejects_malformed_list(
