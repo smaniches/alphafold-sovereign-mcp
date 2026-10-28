@@ -536,7 +536,7 @@ def _patch_clients(monkeypatch: pytest.MonkeyPatch) -> dict[str, MagicMock]:
     # assess_target_druggability and synthesize_protein_dossier resolve the
     # UniProt accession to an Ensembl target before any other Open Targets call.
     mocks["opentargets"].resolve_target = AsyncMock(
-        return_value={"ensembl_id": "ENSG_TEST", "symbol": "TESTGENE"}
+        return_value={"ensembl_id": "ENSG_TEST", "symbol": "BRCA1"}
     )
     # AlphaMissense lookups default to "no annotation"; tests that exercise
     # the AlphaMissense path override this with a concrete record.
@@ -1214,7 +1214,7 @@ async def test_assess_target_druggability_no_chembl_no_ot(
 async def test_assess_target_druggability_no_drug_count_from_chembl(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """If chembl approved_drugs returns empty, drug_count should fall back to OT."""
+    """Disagreeing source presence must not be silently laundered into a tier."""
     mocks = _patch_clients(monkeypatch)
     mocks["chembl"].target_by_uniprot = AsyncMock(
         return_value={"chembl_id": "CHEMBL_TGT", "pref_name": "X"}
@@ -1225,8 +1225,8 @@ async def test_assess_target_druggability_no_drug_count_from_chembl(
     )
     mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
 
-    out = await assess_target_druggability(DruggabilityInput(uniprot_id="P38398"))
-    assert out["evidence"]["drug_count"] == 3
+    with pytest.raises(ValueError, match="evidence discordant"):
+        await assess_target_druggability(DruggabilityInput(uniprot_id="P38398"))
 
 
 async def test_assess_target_druggability_gnomad_constraint_exception(
@@ -2878,3 +2878,68 @@ async def test_druggability_valid_open_targets_survives_incomplete_chembl(
     assert out["druggability_tier"] != "NOT_ASSESSED"
     assert out["data_sources_status"]["chembl_drug_count"] == "failed"
     assert out["data_sources_status"]["open_targets_drug_count"] == "ok"
+
+
+async def test_assess_target_druggability_preserves_observed_chembl_zero(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A verified zero is not falsy missing evidence."""
+    mocks = _patch_clients(monkeypatch)
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value={"chembl_id": "TGT"})
+    mocks["chembl"].approved_drugs = AsyncMock(return_value=[])
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(
+        return_value={"drug_count": 0, "tractability_labels": []}
+    )
+    mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
+    result = await assess_target_druggability(DruggabilityInput(uniprot_id="P38398"))
+    assert result["evidence"]["drug_count"] == 0
+    assert result["evidence"]["drug_count_source"] == "chembl_mechanism_distinct_molecules"
+    assert result["evidence"]["open_targets_clinical_row_count"] == 0
+
+
+async def test_dossier_rejects_mismatched_gene_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_dossier_clients(monkeypatch)
+    mocks["opentargets"].resolve_target = AsyncMock(
+        return_value={"ensembl_id": "ENSG_TP53", "symbol": "TP53"}
+    )
+    with pytest.raises(ValueError, match="identity mismatch"):
+        await synthesize_protein_dossier(
+            ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="brief")
+        )
+    mocks["opentargets"].associated_diseases.assert_not_awaited()
+
+
+async def test_dossier_rejects_discordant_drug_presence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_dossier_clients(monkeypatch)
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value={"chembl_id": "TGT"})
+    mocks["chembl"].approved_drugs = AsyncMock(return_value=[])
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(
+        return_value={"drug_count": 3, "tractability_labels": []}
+    )
+    with pytest.raises(ValueError, match="evidence discordant"):
+        await synthesize_protein_dossier(
+            ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="brief")
+        )
+
+
+async def test_dossier_uses_distinct_molecule_count_when_sources_both_positive(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_dossier_clients(monkeypatch)
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value={"chembl_id": "TGT"})
+    mocks["chembl"].approved_drugs = AsyncMock(
+        return_value=[{"molecule_chembl_id": "CHEMBL1"}]
+    )
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(
+        return_value={"drug_count": 5, "tractability_labels": []}
+    )
+    dossier = await synthesize_protein_dossier(
+        ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="brief")
+    )
+    assert dossier["druggability"]["drug_count"] == 1
+    assert dossier["druggability"]["open_targets_clinical_row_count"] == 5
+    assert dossier["druggability"]["drug_count_source"] == "chembl_mechanism_distinct_molecules"

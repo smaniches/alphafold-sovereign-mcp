@@ -955,6 +955,8 @@ async def assess_target_druggability(
     )
 
     drug_count: int | None = None
+    chembl_observed_count: int | None = None
+    ot_observed_count: int | None = None
     tractability_labels: list[str] = []
     approved_drugs: list[dict[str, Any]] = []
     chembl_status = "failed" if isinstance(chembl_target, BaseException) else "no_data"
@@ -968,6 +970,7 @@ async def assess_target_druggability(
                 require_complete=True,
             )
             drug_count = len(approved_drugs)
+            chembl_observed_count = drug_count
             chembl_status = "ok"
         except Exception as exc:
             chembl_status = "failed"
@@ -993,13 +996,27 @@ async def assess_target_druggability(
             ot_count = ot_tractability.get("drug_count")
             if isinstance(ot_count, int) and not isinstance(ot_count, bool) and ot_count >= 0:
                 ot_status = "ok"
-                if not drug_count:
+                ot_observed_count = ot_count
+                if drug_count is None:
                     drug_count = ot_count
             elif ot_count is not None:
                 ot_status = "invalid_response"
         except Exception as exc:
             ot_status = "failed"
             log.warning("ot.tractability.failed", exc=str(exc))
+
+    # ChEMBL counts distinct mechanism-linked molecules; Open Targets counts
+    # clinical target-disease-drug rows. Do not turn contradictory presence
+    # versus absence into a confident target tier.
+    if (
+        chembl_observed_count is not None
+        and ot_observed_count is not None
+        and (chembl_observed_count == 0) != (ot_observed_count == 0)
+    ):
+        raise ValueError(
+            "Druggability evidence discordant: ChEMBL and Open Targets disagree "
+            "about presence of drug precedent. No tier was assigned."
+        )
 
     # gnomAD constraint (keyed on the HGNC gene symbol resolved above)
     gene_constraint: dict[str, Any] = {}
@@ -1052,6 +1069,13 @@ async def assess_target_druggability(
         },
         "evidence": {
             "drug_count": drug_count,
+            "drug_count_source": (
+                "chembl_mechanism_distinct_molecules"
+                if chembl_observed_count is not None
+                else "open_targets_clinical_target_disease_rows"
+            ),
+            "chembl_mechanism_molecule_count": chembl_observed_count,
+            "open_targets_clinical_row_count": ot_observed_count,
             "tractability_labels": tractability_labels,
             "plddt_mean": plddt_mean,
             "gene_constraint": {
@@ -1146,6 +1170,12 @@ async def synthesize_protein_dossier(
     except Exception as exc:
         log.warning("ot.resolve.failed", exc=str(exc))
     ensembl_id = ot_resolved.get("ensembl_id", "")
+    mapped_symbol = ot_resolved.get("symbol", "")
+    if mapped_symbol and mapped_symbol.casefold() != sym.casefold():
+        raise ValueError(
+            "Protein dossier target identity mismatch: supplied gene_symbol "
+            "does not agree with the UniProt-to-Ensembl mapping."
+        )
 
     # Parallel evidence gathering
     tasks: dict[str, Any] = {
@@ -1242,12 +1272,29 @@ async def synthesize_protein_dossier(
     # Missing retrieval is not an observed drug count of zero.
     ot_count = ot_tract.get("drug_count")
     drug_count: int | None
-    if isinstance(ot_count, int) and not isinstance(ot_count, bool) and ot_count >= 0:
-        drug_count = ot_count
-    elif chembl_drug_status == "ok":
-        drug_count = len(drugs)
-    else:
-        drug_count = None
+    chembl_observed_count = len(drugs) if chembl_drug_status == "ok" else None
+    ot_observed_count = (
+        ot_count
+        if isinstance(ot_count, int) and not isinstance(ot_count, bool) and ot_count >= 0
+        else None
+    )
+    if (
+        chembl_observed_count is not None
+        and ot_observed_count is not None
+        and (chembl_observed_count == 0) != (ot_observed_count == 0)
+    ):
+        raise ValueError(
+            "Protein dossier druggability evidence discordant: ChEMBL and "
+            "Open Targets disagree about presence of drug precedent. "
+            "No dossier tier was assigned."
+        )
+    # Prefer the observed, distinct ChEMBL molecule count. Open Targets
+    # supplies clinical target-disease rows, not necessarily unique drugs.
+    drug_count = (
+        chembl_observed_count
+        if chembl_observed_count is not None
+        else ot_observed_count
+    )
 
     # Keep the established successful tier schema; fail on unavailable evidence.
     if drug_count is None:
@@ -1298,6 +1345,13 @@ async def synthesize_protein_dossier(
             "tier": tier,
             "rationale": rationale,
             "drug_count": drug_count,
+            "drug_count_source": (
+                "chembl_mechanism_distinct_molecules"
+                if chembl_observed_count is not None
+                else "open_targets_clinical_target_disease_rows"
+            ),
+            "chembl_mechanism_molecule_count": chembl_observed_count,
+            "open_targets_clinical_row_count": ot_observed_count,
             "tractability_labels": ot_tract.get("tractability_labels", []),
             "confidence": dossier_scoring["confidence"] if dossier_scoring else None,
             "borderline": dossier_scoring["borderline"] if dossier_scoring else None,
