@@ -2932,6 +2932,33 @@ async def test_find_drug_repurposing_rejects_unassessed_phase_without_zero_imput
     assert "were not scored" in out["message"]
 
 
+async def test_find_drug_repurposing_unplaceable_phase_is_unassessed_not_no_data(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A target whose only candidate has an unknown clinical phase is partial, not empty."""
+    mocks = _patch_clients(monkeypatch)
+    mocks["opentargets"].associated_targets = AsyncMock(
+        return_value=[{"overall_score": 0.8, "target_gene_symbol": "G", "uniprot_id": "P1"}]
+    )
+    mocks["chembl"].find_repurposable_drugs = AsyncMock(
+        return_value=[
+            {
+                "molecule_chembl_id": "CHEMBL_U",
+                "max_phase": -1,
+                "max_phase_known": True,
+                "max_phase_label": "Clinical phase unknown",
+            }
+        ]
+    )
+    out = await find_drug_repurposing_candidates(
+        DrugRepurposingInput(disease_mondo_id="MONDO:0007254", min_phase=2)
+    )
+    assert out["candidates"] == []
+    assert out["evidence_completeness"]["invalid_or_unassessed_drug_records"] == 1
+    assert out["evidence_completeness"]["partial"] is True
+    assert out["data_sources_status"]["chembl"] == "partial"
+
+
 async def test_find_drug_repurposing_dedup(monkeypatch: pytest.MonkeyPatch) -> None:
     """Same drug ID across targets should be deduplicated."""
     mocks = _patch_clients(monkeypatch)

@@ -629,10 +629,19 @@ class ChEMBLClient(BaseAsyncClient):
             return []
 
         target_id = target["chembl_id"]
+        include_clinical = max_phase < 4
         drugs = await self.approved_drugs(
-            target_id, include_clinical=(max_phase < 4), require_complete=True
+            target_id, include_clinical=include_clinical, require_complete=True
         )
-        repurposable = [d for d in drugs if _coerce_phase(d.get("max_phase")) >= max_phase]
+        # A clinical candidate whose phase ChEMBL cannot place (-1) cannot be
+        # compared with a clinical threshold; it is passed through for the
+        # caller to report as unassessed rather than silently dropped.
+        repurposable = [
+            d
+            for d in drugs
+            if _coerce_phase(d.get("max_phase")) >= max_phase
+            or (include_clinical and _coerce_phase(d.get("max_phase")) == -1)
+        ]
         return repurposable[:limit]
 
     # ------------------------------------------------------------------

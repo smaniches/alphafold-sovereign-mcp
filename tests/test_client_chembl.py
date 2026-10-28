@@ -647,6 +647,35 @@ async def test_find_repurposable_drugs_clinical_phase(respx_mock: respx.MockRout
     assert results[0]["molecule_chembl_id"] == "CHEMBL_Y"
 
 
+async def test_find_repurposable_drugs_passes_unplaceable_phase_through(
+    respx_mock: respx.MockRouter,
+) -> None:
+    """A -1 clinical candidate is not silently dropped at a clinical threshold."""
+    respx_mock.get("https://www.ebi.ac.uk/chembl/api/data/target.json").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "targets": [
+                    {
+                        "target_chembl_id": "CHEMBL_T",
+                        "target_type": "SINGLE PROTEIN",
+                        "target_components": [{"accession": "P38398"}],
+                    }
+                ],
+                "page_meta": {"total_count": 1},
+            },
+        ),
+    )
+    _mechanism_and_molecules(respx_mock, {"CHEMBL_U": -1})
+    async with ChEMBLClient() as client:
+        results = await client.find_repurposable_drugs("P38398", max_phase=2)
+        assert [d["molecule_chembl_id"] for d in results] == ["CHEMBL_U"]
+        assert results[0]["max_phase_label"] == "Clinical phase unknown"
+        # An approved-only request cannot place it and refuses to count.
+        with pytest.raises(ValueError, match="clinical phase unknown"):
+            await client.find_repurposable_drugs("P38398", max_phase=4)
+
+
 # ---------------------------------------------------------------------------
 # _get_molecule directly
 # ---------------------------------------------------------------------------
