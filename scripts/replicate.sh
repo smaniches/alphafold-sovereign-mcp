@@ -44,6 +44,9 @@ PKG_NAME="alphafold-sovereign-mcp"
 REPO="smaniches/alphafold-sovereign-mcp"
 GHCR_IMAGE="ghcr.io/smaniches/alphafold-sovereign-mcp"
 SIGNED_SBOM_FIRST_RELEASE="1.4.7"
+# v1.5.7 was the last published scan-generated SPDX before the corrective
+# installed-wheel SPDX format; these signed historical assets are immutable.
+STRICT_SPDX_FIRST_RELEASE="1.5.8"
 VERSION="${VERSION:-latest}"
 VERIFY_IMAGE=false
 
@@ -305,6 +308,32 @@ jq -e '
 ' "$SPDX" >/dev/null || fail "SPDX release asset is missing required SPDX document structure"
 pass "SPDX SBOM has the required SPDX document structure"
 
+# Preserve published, signed scan-generated SPDX files without asserting
+# package/graph parity they never guaranteed. New releases must carry strict
+# installed-wheel parity; never mutate prior GitHub/PyPI assets to make a test pass.
+SPDX_VALIDATION_MODE="$(python3 - "$VERSION" "$STRICT_SPDX_FIRST_RELEASE" <<'PY'
+import re
+import sys
+
+
+def core(value: str) -> tuple[int, int, int]:
+    match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)(?:(?:a|b|rc)\d+)?", value)
+    if match is None:
+        raise SystemExit("invalid PyPI release version for SPDX validation")
+    return tuple(int(part) for part in match.groups())
+
+
+print("strict" if core(sys.argv[1]) >= core(sys.argv[2]) else "historical")
+PY
+)" || fail "could not determine SPDX validation floor"
+if [[ "$SPDX_VALIDATION_MODE" == "strict" ]]; then
+  python3 "$REPO_ROOT/scripts/release_spdx.py" verify "$CYCLONE" "$SPDX" "$WHEEL_PATH" \
+    || fail "SPDX dependency inventory disagrees with wheel/CycloneDX"
+  pass "SPDX root identity, wheel SHA-256, package closure and dependencies verified"
+else
+  warn "Historical signed SPDX $VERSION: structure and publisher verified; installed-wheel package/dependency parity NOT established"
+fi
+
 echo ""
 echo "Step 5: SLSA provenance (when attached to the GitHub Release)"
 PROVENANCE="$TMP_ROOT/alphafold-sovereign-mcp.intoto.jsonl"
@@ -356,7 +385,9 @@ fi
 
 echo ""
 if [[ "$LEGACY_SBOM_AUTH" == "true" ]]; then
-  warn "Supply-chain verification complete with documented legacy SBOM-authentication boundary for ${PKG_NAME} ${VERSION}."
+  warn "Release digests checked; historical ${PKG_NAME} ${VERSION} lacks authenticated SBOM assets and strict SPDX parity."
+elif [[ "$SPDX_VALIDATION_MODE" == "historical" ]]; then
+  warn "Release digests and Sigstore verified for ${PKG_NAME} ${VERSION}; historical SPDX dependency-graph parity NOT established."
 else
-  pass "Supply-chain verification complete for ${PKG_NAME} ${VERSION}."
+  pass "Supply-chain verification complete for ${PKG_NAME} ${VERSION}, including strict SPDX dependency parity."
 fi

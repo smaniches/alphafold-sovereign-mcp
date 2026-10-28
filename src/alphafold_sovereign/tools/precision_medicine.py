@@ -1290,11 +1290,7 @@ async def synthesize_protein_dossier(
         )
     # Prefer the observed, distinct ChEMBL molecule count. Open Targets
     # supplies clinical target-disease rows, not necessarily unique drugs.
-    drug_count = (
-        chembl_observed_count
-        if chembl_observed_count is not None
-        else ot_observed_count
-    )
+    drug_count = chembl_observed_count if chembl_observed_count is not None else ot_observed_count
 
     # Keep the established successful tier schema; fail on unavailable evidence.
     if drug_count is None:

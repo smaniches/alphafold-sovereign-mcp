@@ -2931,9 +2931,7 @@ async def test_dossier_uses_distinct_molecule_count_when_sources_both_positive(
 ) -> None:
     mocks = _patch_dossier_clients(monkeypatch)
     mocks["chembl"].target_by_uniprot = AsyncMock(return_value={"chembl_id": "TGT"})
-    mocks["chembl"].approved_drugs = AsyncMock(
-        return_value=[{"molecule_chembl_id": "CHEMBL1"}]
-    )
+    mocks["chembl"].approved_drugs = AsyncMock(return_value=[{"molecule_chembl_id": "CHEMBL1"}])
     mocks["opentargets"].drug_count_and_tractability = AsyncMock(
         return_value={"drug_count": 5, "tractability_labels": []}
     )
