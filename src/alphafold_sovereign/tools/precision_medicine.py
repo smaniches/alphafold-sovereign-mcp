@@ -549,6 +549,30 @@ def _report_gene_from_sources(
     return next(iter(symbols)) if len(symbols) == 1 else None
 
 
+async def _resolve_open_targets(uniprot_id: str) -> tuple[dict[str, str], Exception | None]:
+    """Resolve a UniProt accession to an Open Targets target, keeping the failure.
+
+    Returns the mapping (empty when Open Targets has no target for the
+    accession) and the resolution exception, if any, so callers can report
+    an outage or malformed response rather than an intentional skip.
+    """
+    try:
+        return await _opentargets().resolve_target(uniprot_id), None
+    except Exception as exc:
+        logger.warning("ot.resolve.failed", uniprot_id=uniprot_id, exc=str(exc))
+        return {}, exc
+
+
+def _failure_status(exc: BaseException) -> str:
+    """Clients raise ValueError for malformed source content; the rest is a failed request."""
+    return "invalid_response" if isinstance(exc, ValueError) else "failed"
+
+
+async def _unresolved(exc: Exception) -> Any:
+    """Stand in for a source call that could not be made because resolution failed."""
+    raise exc
+
+
 def _gnomad_result_status(payload: dict[str, Any], availability_field: str) -> str:
     """Respect gnomAD's explicit negative flags even in nonempty responses."""
     if not payload or payload.get(availability_field) is False:
@@ -987,17 +1011,20 @@ async def assess_target_druggability(
 
     # Resolve UniProt accession -> Open Targets target (Ensembl ID + symbol).
     # Open Targets keys all target data on Ensembl gene IDs, not UniProt IDs.
-    ot_resolved: dict[str, str] = {}
-    try:
-        ot_resolved = await _opentargets().resolve_target(uid)
-    except Exception as exc:
-        log.warning("ot.resolve.failed", exc=str(exc))
+    ot_resolved, ot_resolve_error = await _resolve_open_targets(uid)
     ensembl_id = ot_resolved.get("ensembl_id", "")
     gene_symbol = ot_resolved.get("symbol", "")
 
-    # Open Targets tractability (keyed on the resolved Ensembl gene ID)
+    # Open Targets tractability (keyed on the resolved Ensembl gene ID). A
+    # resolution outage or malformed mapping response is reported as such;
+    # "skipped" is reserved for an accession Open Targets does not map.
     ot_tractability: dict[str, Any] = {}
-    ot_status = "skipped" if not ensembl_id else "no_data"
+    if ot_resolve_error is not None:
+        ot_status = _failure_status(ot_resolve_error)
+    elif not ensembl_id:
+        ot_status = "skipped"
+    else:
+        ot_status = "no_data"
     if ensembl_id:
         try:
             ot_tractability = await _opentargets().drug_count_and_tractability(ensembl_id)
@@ -1171,11 +1198,7 @@ async def synthesize_protein_dossier(
 
     # Open Targets keys target data on Ensembl gene IDs. Resolve the
     # UniProt accession to an Ensembl ID before the parallel fan-out.
-    ot_resolved: dict[str, str] = {}
-    try:
-        ot_resolved = await _opentargets().resolve_target(uid)
-    except Exception as exc:
-        log.warning("ot.resolve.failed", exc=str(exc))
+    ot_resolved, ot_resolve_error = await _resolve_open_targets(uid)
     ensembl_id = ot_resolved.get("ensembl_id", "")
     mapped_symbol = ot_resolved.get("symbol", "")
     if mapped_symbol and mapped_symbol.casefold() != sym.casefold():
@@ -1185,9 +1208,15 @@ async def synthesize_protein_dossier(
         )
 
     # Parallel evidence gathering
+    # When resolution failed, the Open Targets sources inherit that failure
+    # instead of being queried with an empty identifier and read as no data.
     tasks: dict[str, Any] = {
-        "ot_diseases": _opentargets().associated_diseases(ensembl_id, limit=10),
-        "ot_tractability": _opentargets().drug_count_and_tractability(ensembl_id),
+        "ot_diseases": _opentargets().associated_diseases(ensembl_id, limit=10)
+        if ot_resolve_error is None
+        else _unresolved(ot_resolve_error),
+        "ot_tractability": _opentargets().drug_count_and_tractability(ensembl_id)
+        if ot_resolve_error is None
+        else _unresolved(ot_resolve_error),
         "disgenet": _disgenet().gene_disease_associations(sym, min_score=0.1, limit=10),
         "gene_constraint": _gnomad().gene_constraint(sym),
         "clinvar_variants": _clinvar().search_gene(sym, limit=5),

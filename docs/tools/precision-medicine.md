@@ -67,6 +67,12 @@ as follows:
 Open Targets difference is never treated as a contradiction: the sources
 differ in target granularity and stage scope by construction.
 
+`data_sources_status.open_targets_drug_count` is `skipped` only when Open
+Targets maps no target to the accession. A failed or malformed
+UniProt-to-Ensembl resolution is reported as `failed` or
+`invalid_response`, and the dossier's Open Targets sources inherit that
+status rather than being queried with an empty identifier.
+
 A protein dossier also checks the supplied gene symbol against the
 resolved UniProt-to-Ensembl target gene symbol when mapping evidence is
 available. A mismatch prevents multi-gene evidence synthesis. Resolution

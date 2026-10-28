@@ -1340,6 +1340,37 @@ async def test_assess_target_druggability_resolve_exception(
     out = await assess_target_druggability(DruggabilityInput(uniprot_id="P38398"))
     assert out["evidence"]["drug_count"] == 2
     assert out["evidence"]["gene_constraint"]["loeuf"] is None
+    # A resolution outage is a failure, not an intentional skip.
+    assert out["data_sources_status"]["open_targets_drug_count"] == "failed"
+    mocks["opentargets"].drug_count_and_tractability.assert_not_called()
+
+
+async def test_assess_target_druggability_resolve_validation_error_is_invalid_response(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_clients(monkeypatch)
+    mocks["opentargets"].resolve_target = AsyncMock(
+        side_effect=ValueError("Open Targets mapIds response malformed")
+    )
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value={"chembl_id": "CHEMBL_TGT"})
+    mocks["chembl"].approved_drugs = AsyncMock(
+        return_value=[{"molecule_chembl_id": "CHEMBL1", "max_phase": 4}]
+    )
+    out = await assess_target_druggability(DruggabilityInput(uniprot_id="P38398"))
+    assert out["data_sources_status"]["open_targets_drug_count"] == "invalid_response"
+
+
+async def test_assess_target_druggability_unmapped_accession_is_skipped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_clients(monkeypatch)
+    mocks["opentargets"].resolve_target = AsyncMock(return_value={})
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value={"chembl_id": "CHEMBL_TGT"})
+    mocks["chembl"].approved_drugs = AsyncMock(
+        return_value=[{"molecule_chembl_id": "CHEMBL1", "max_phase": 4}]
+    )
+    out = await assess_target_druggability(DruggabilityInput(uniprot_id="P38398"))
+    assert out["data_sources_status"]["open_targets_drug_count"] == "skipped"
 
 
 async def test_assess_target_druggability_plddt_non_dict(
@@ -1734,12 +1765,46 @@ async def test_synthesize_protein_dossier_resolve_exception(
     mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
     mocks["clinvar"].search_gene = AsyncMock(return_value=[])
     mocks["ensembl"].gene_lookup = AsyncMock(return_value={})
-    mocks["chembl"].target_by_uniprot = AsyncMock(return_value=None)
+    # The previous version of this test completed only because Open Targets
+    # was queried with an empty identifier and returned a fabricated zero.
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value={"chembl_id": "TGT"})
+    mocks["chembl"].approved_drugs = AsyncMock(
+        return_value=[{"molecule_chembl_id": "CHEMBL1", "max_phase": 4}]
+    )
 
     out = await synthesize_protein_dossier(
         ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1")
     )
     assert out["target"]["gene_symbol"] == "BRCA1"
+    # Open Targets sources inherit the resolution failure; they are not
+    # queried with an empty identifier and then read as no data.
+    assert out["data_sources_status"]["ot_diseases"] == "failed"
+    assert out["data_sources_status"]["ot_tractability"] == "failed"
+    assert out["data_sources_status"]["open_targets_drug_count"] == "failed"
+    mocks["opentargets"].associated_diseases.assert_not_called()
+    mocks["opentargets"].drug_count_and_tractability.assert_not_called()
+
+
+async def test_synthesize_protein_dossier_resolve_validation_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_clients(monkeypatch)
+    mocks["opentargets"].resolve_target = AsyncMock(
+        side_effect=ValueError("Open Targets mapIds response malformed")
+    )
+    mocks["disgenet"].gene_disease_associations = AsyncMock(return_value=[])
+    mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
+    mocks["clinvar"].search_gene = AsyncMock(return_value=[])
+    mocks["ensembl"].gene_lookup = AsyncMock(return_value={})
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value={"chembl_id": "TGT"})
+    mocks["chembl"].approved_drugs = AsyncMock(
+        return_value=[{"molecule_chembl_id": "CHEMBL1", "max_phase": 4}]
+    )
+    out = await synthesize_protein_dossier(
+        ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="brief")
+    )
+    assert out["data_sources_status"]["ot_diseases"] == "invalid_response"
+    assert out["data_sources_status"]["open_targets_drug_count"] == "invalid_response"
 
 
 # ---------------------------------------------------------------------------
