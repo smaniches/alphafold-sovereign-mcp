@@ -774,7 +774,9 @@ async def test_bioactivities_invalid_upstream_value_is_not_silently_accepted(
             await client.bioactivities("CHEMBL_TARGET")
 
 
-@pytest.mark.parametrize("raw", [None, True, False, "bad", float("nan"), -2, 5])
+@pytest.mark.parametrize(
+    "raw", [None, True, False, "bad", float("nan"), -2, 5, 3.7, 1.5, "0.25", -0.5]
+)
 def test_valid_phase_rejects_missing_invalid_or_out_of_range(raw: Any) -> None:
     assert _valid_phase(raw) is False
 
@@ -782,6 +784,28 @@ def test_valid_phase_rejects_missing_invalid_or_out_of_range(raw: Any) -> None:
 @pytest.mark.parametrize("raw", [-1, 0, 0.5, "2.0", 4.0])
 def test_valid_phase_preserves_observed_chembl_stages(raw: Any) -> None:
     assert _valid_phase(raw) is True
+
+
+async def test_approved_drugs_strict_rejects_undocumented_phase(
+    respx_mock: respx.MockRouter,
+) -> None:
+    """A finite but undocumented stage such as 3.7 is malformed, not a phase."""
+    respx_mock.get("https://www.ebi.ac.uk/chembl/api/data/mechanism.json").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "mechanisms": [{"molecule_chembl_id": "CHEMBL_A"}],
+                "page_meta": {"total_count": 1},
+            },
+        )
+    )
+    respx_mock.get("https://www.ebi.ac.uk/chembl/api/data/molecule/CHEMBL_A.json").mock(
+        return_value=httpx.Response(200, json={"molecule_chembl_id": "CHEMBL_A", "max_phase": 3.7})
+    )
+    async with ChEMBLClient() as client:
+        assert await client.approved_drugs("CHEMBL_T", include_clinical=True) == []
+        with pytest.raises(ValueError, match="incomplete"):
+            await client.approved_drugs("CHEMBL_T", include_clinical=True, require_complete=True)
 
 
 async def test_get_molecule_missing_phase_does_not_fabricate_preclinical_label(

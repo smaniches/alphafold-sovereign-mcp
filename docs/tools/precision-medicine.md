@@ -75,7 +75,13 @@ status rather than being queried with an empty identifier. For ChEMBL,
 `invalid_response` means the client rejected the content it received
 (ambiguous target, unverifiable pagination, unknown molecule phase,
 identifier mismatch); a failed molecule request during a strict count is
-reported as `failed`, as for any other request failure.
+reported as `failed`, as for any other request failure. A molecule
+`max_phase` counts as observed only when it is one of ChEMBL's documented
+stages (4, 3, 2, 1, 0.5, -1, or the legacy preclinical 0); any other
+number is treated as malformed content. `find_drug_repurposing_candidates`
+applies the same split per target: `chembl_lookups_failed` counts request
+failures and `chembl_lookups_invalid` counts rejected source content, and
+either makes the candidate list incomplete.
 
 A protein dossier also checks the supplied gene symbol against the
 resolved UniProt-to-Ensembl target gene symbol when mapping evidence is

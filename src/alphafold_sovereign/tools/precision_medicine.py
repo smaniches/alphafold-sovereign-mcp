@@ -2007,6 +2007,11 @@ async def find_drug_repurposing_candidates(
                     limit=5,
                 )
                 return target, drugs, "ok" if drugs else "no_data"
+            except ValueError as exc:
+                # The client rejects ambiguous targets, unverifiable pagination
+                # and malformed molecule content with ValueError.
+                log.warning("chembl.repurposing.invalid", uniprot_id=uid, exc=str(exc))
+                return target, [], "invalid_response"
             except Exception as exc:
                 log.warning("chembl.repurposing.failed", uniprot_id=uid, exc=str(exc))
                 return target, [], "failed"
@@ -2079,12 +2084,15 @@ async def find_drug_repurposing_candidates(
 
     candidates.sort(key=lambda c: c["composite_repurposing_score"], reverse=True)
     failed_lookups = lookup_statuses.count("failed")
+    invalid_lookups = lookup_statuses.count("invalid_response")
     assessed_lookups = lookup_statuses.count("ok") + lookup_statuses.count("no_data")
     skipped_lookups = lookup_statuses.count("skipped")
-    if failed_lookups and assessed_lookups:
+    if (failed_lookups or invalid_lookups) and assessed_lookups:
         chembl_status = "partial"
     elif failed_lookups:
         chembl_status = "failed"
+    elif invalid_lookups:
+        chembl_status = "invalid_response"
     elif assessed_lookups:
         chembl_status = "ok" if "ok" in lookup_statuses else "no_data"
     else:
@@ -2102,9 +2110,12 @@ async def find_drug_repurposing_candidates(
             "targets_considered": len(ot_targets),
             "chembl_lookups_assessed": assessed_lookups,
             "chembl_lookups_failed": failed_lookups,
+            "chembl_lookups_invalid": invalid_lookups,
             "targets_without_uniprot": skipped_lookups,
             "invalid_or_unassessed_drug_records": invalid_drug_records,
-            "partial": bool(failed_lookups or skipped_lookups or invalid_drug_records),
+            "partial": bool(
+                failed_lookups or invalid_lookups or skipped_lookups or invalid_drug_records
+            ),
         },
         "methodology": (
             "Composite score = (Open Targets evidence score × clinical phase / 4). "
@@ -2122,6 +2133,12 @@ async def find_drug_repurposing_candidates(
         warnings.append(
             f"ChEMBL retrieval failed for {failed_lookups} target(s). "
             "The candidate list is incomplete; absence of candidates is not evidence of no drugs."
+        )
+    if invalid_lookups:
+        warnings.append(
+            f"ChEMBL returned content that could not be validated for {invalid_lookups} "
+            "target(s). The candidate list is incomplete; absence of candidates is not "
+            "evidence of no drugs."
         )
     if invalid_drug_records:
         warnings.append(

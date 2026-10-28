@@ -2691,6 +2691,60 @@ async def test_find_drug_repurposing_chembl_exception(
     assert "incomplete" in out["message"]
 
 
+async def test_find_drug_repurposing_invalid_chembl_content_is_invalid_response(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_clients(monkeypatch)
+    target = MagicMock()
+    target.uniprot_id = "P12345"
+    target.to_dict.return_value = {
+        "overall_score": 0.5,
+        "target_gene_symbol": "X",
+        "uniprot_id": "P12345",
+    }
+    mocks["opentargets"].associated_targets = AsyncMock(return_value=[target])
+    mocks["chembl"].find_repurposable_drugs = AsyncMock(
+        side_effect=ValueError("ChEMBL UniProt accession has ambiguous individual protein targets")
+    )
+
+    out = await find_drug_repurposing_candidates(
+        DrugRepurposingInput(disease_mondo_id="MONDO:0007254")
+    )
+    assert out["candidates"] == []
+    assert out["data_sources_status"]["chembl"] == "invalid_response"
+    assert out["evidence_completeness"]["chembl_lookups_failed"] == 0
+    assert out["evidence_completeness"]["chembl_lookups_invalid"] == 1
+    assert out["evidence_completeness"]["partial"] is True
+    assert "could not be validated" in out["message"]
+
+
+async def test_find_drug_repurposing_invalid_and_assessed_lookups_are_partial(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_clients(monkeypatch)
+    targets = []
+    for uid in ("P11111", "P22222"):
+        target = MagicMock()
+        target.uniprot_id = uid
+        target.to_dict.return_value = {
+            "overall_score": 0.5,
+            "target_gene_symbol": "X",
+            "uniprot_id": uid,
+        }
+        targets.append(target)
+    mocks["opentargets"].associated_targets = AsyncMock(return_value=targets)
+    mocks["chembl"].find_repurposable_drugs = AsyncMock(
+        side_effect=[ValueError("ChEMBL mechanism pagination incomplete"), []]
+    )
+
+    out = await find_drug_repurposing_candidates(
+        DrugRepurposingInput(disease_mondo_id="MONDO:0007254")
+    )
+    assert out["data_sources_status"]["chembl"] == "partial"
+    assert out["evidence_completeness"]["chembl_lookups_invalid"] == 1
+    assert out["evidence_completeness"]["chembl_lookups_assessed"] == 1
+
+
 async def test_find_drug_repurposing_empty_chembl_response_is_observed_no_data(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

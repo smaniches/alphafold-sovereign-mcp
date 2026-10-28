@@ -78,15 +78,24 @@ def _bioactivity_nm(value: Any) -> float | None:
     return measured
 
 
+_MOLECULE_PHASES = frozenset({-1.0, 0.0, 0.5, 1.0, 2.0, 3.0, 4.0})
+"""Documented ChEMBL ``max_phase`` categories.
+
+4 approved, 3/2/1 clinical, 0.5 early phase 1, -1 clinical phase unknown;
+0 is the pre-ChEMBL 33 preclinical encoding (current releases serve null).
+Any other number is schema drift or malformed content, not a stage.
+"""
+
+
 def _valid_phase(value: Any) -> bool:
-    """Only observed finite ChEMBL development phases can support drug counts."""
+    """Only a documented ChEMBL development phase can support drug counts."""
     if value is None or isinstance(value, bool):
         return False
     try:
         phase = float(value)
     except (TypeError, ValueError, OverflowError):
         return False
-    return math.isfinite(phase) and -1 <= phase <= 4
+    return phase in _MOLECULE_PHASES
 
 
 MAX_MECHANISM_MOLECULES = 200
