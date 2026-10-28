@@ -959,7 +959,14 @@ async def assess_target_druggability(
     ot_observed_count: int | None = None
     tractability_labels: list[str] = []
     approved_drugs: list[dict[str, Any]] = []
-    chembl_status = "failed" if isinstance(chembl_target, BaseException) else "no_data"
+    # A ValueError is the client's verdict that the ChEMBL response could not
+    # be validated (ambiguous or malformed); anything else is a failed request.
+    if isinstance(chembl_target, ValueError):
+        chembl_status = "invalid_response"
+    elif isinstance(chembl_target, BaseException):
+        chembl_status = "failed"
+    else:
+        chembl_status = "no_data"
 
     if isinstance(chembl_target, dict) and chembl_target.get("chembl_id"):
         target_id = chembl_target["chembl_id"]
@@ -971,9 +978,12 @@ async def assess_target_druggability(
             )
             chembl_observed_count = len(approved_drugs)
             chembl_status = "ok"
+        except ValueError as exc:
+            chembl_status = "invalid_response"
+            log.warning("chembl.drugs.invalid", exc=str(exc))
         except Exception as exc:
             chembl_status = "failed"
-            log.warning("chembl.drugs.incomplete", exc=str(exc))
+            log.warning("chembl.drugs.failed", exc=str(exc))
 
     # Resolve UniProt accession -> Open Targets target (Ensembl ID + symbol).
     # Open Targets keys all target data on Ensembl gene IDs, not UniProt IDs.
@@ -1213,6 +1223,9 @@ async def synthesize_protein_dossier(
             chembl_target = target_result
         elif target_result is not None:
             chembl_drug_status = "invalid_response"
+    except ValueError as exc:
+        chembl_drug_status = "invalid_response"
+        log.warning("chembl.target.invalid", uniprot_id=uid, exc=str(exc))
     except Exception as exc:
         chembl_drug_status = "failed"
         log.warning("chembl.target.failed", uniprot_id=uid, exc=str(exc))
@@ -1224,6 +1237,9 @@ async def synthesize_protein_dossier(
                     target_id, include_clinical=True, require_complete=True
                 )
                 chembl_drug_status = "ok"
+            except ValueError as exc:
+                chembl_drug_status = "invalid_response"
+                log.warning("chembl.approved_drugs.invalid", exc=str(exc), target_id=target_id)
             except Exception as exc:
                 chembl_drug_status = "failed"
                 log.warning(
@@ -1567,17 +1583,17 @@ async def map_disease_drug_landscape(
         isinstance(t.get("tractable"), bool) for t in target_rows
     )
     retrieved_indications = len(chembl_drugs) if chembl_status in {"ok", "no_data"} else None
-    total_targets = (
-        retrieved_targets if retrieved_targets is not None and retrieved_targets < 20 else None
+    # A page shorter than the request limit is the complete source result; a
+    # full page may be truncated, so its count is a lower bound. The numeric
+    # total_* fields keep the retrieved count (the published contract) and the
+    # *_page_complete flags say whether that count is a verified total.
+    target_page_complete = retrieved_targets < 20 if retrieved_targets is not None else None
+    indication_page_complete = (
+        retrieved_indications < 20 if retrieved_indications is not None else None
     )
-    total_indications = (
-        retrieved_indications
-        if retrieved_indications is not None and retrieved_indications < 20
-        else None
-    )
-    counts_assessable = (
-        total_targets is not None
-        and total_indications is not None
+    counts_assessable = bool(
+        target_page_complete
+        and indication_page_complete
         and tractability_assessed
         and phases_assessed
     )
@@ -1600,7 +1616,8 @@ async def map_disease_drug_landscape(
             "approved_drugs": approved[:10],
             "phase_3_drugs": phase3[:10],
             "phase_1_2_drugs": phase12[:10],
-            "total_indication_entries": total_indications,
+            "total_indication_entries": retrieved_indications,
+            "indication_page_complete": indication_page_complete,
             "retrieved_indication_entries": retrieved_indications,
             "unassigned_phase_entries": unassigned_phase
             if retrieved_indications is not None
@@ -1610,7 +1627,8 @@ async def map_disease_drug_landscape(
         "target_landscape": {
             "top_targets": top_targets[:10],
             "druggable_targets": druggable_targets[:5],
-            "total_associated_targets": total_targets,
+            "total_associated_targets": retrieved_targets,
+            "target_page_complete": target_page_complete,
             "retrieved_associated_targets": retrieved_targets,
             "page_limit": 20,
         },

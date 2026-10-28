@@ -1782,7 +1782,9 @@ async def test_map_disease_drug_landscape_success(
     assert out["disease"]["name"] == "chronic myeloid leukemia"
     assert out["competitive_intelligence"]["approved_count"] == 1
     assert out["drug_landscape"]["total_indication_entries"] == 4
+    assert out["drug_landscape"]["indication_page_complete"] is True
     assert out["target_landscape"]["total_associated_targets"] == 1
+    assert out["target_landscape"]["target_page_complete"] is True
     assert "open_targets=OT-platform-live-release-unverified" in out["provenance"]
     assert out["data_sources_status"] == {
         "mondo": "ok",
@@ -1830,7 +1832,9 @@ async def test_map_disease_drug_landscape_chembl_exception(
     )
     assert out["drug_landscape"]["approved_drugs"] == []
     assert out["drug_landscape"]["total_indication_entries"] is None
+    assert out["drug_landscape"]["indication_page_complete"] is None
     assert out["target_landscape"]["total_associated_targets"] is None
+    assert out["target_landscape"]["target_page_complete"] is None
     assert out["data_sources_status"]["open_targets"] == "failed"
     assert out["data_sources_status"]["chembl_indications"] == "failed"
     assert out["competitive_intelligence"]["approved_count"] is None
@@ -1991,9 +1995,13 @@ async def test_map_disease_landscape_caps_are_not_reported_as_global_totals(
     out = await map_disease_drug_landscape(
         DiseaseDrugLandscapeInput(disease_mondo_id="MONDO:0007254")
     )
-    assert out["drug_landscape"]["total_indication_entries"] is None
+    # The published numeric fields keep the retrieved count; the completeness
+    # flags say it is a lower bound, so nothing is assessed from it.
+    assert out["drug_landscape"]["total_indication_entries"] == 20
+    assert out["drug_landscape"]["indication_page_complete"] is False
     assert out["drug_landscape"]["retrieved_indication_entries"] == 20
-    assert out["target_landscape"]["total_associated_targets"] is None
+    assert out["target_landscape"]["total_associated_targets"] == 20
+    assert out["target_landscape"]["target_page_complete"] is False
     assert out["target_landscape"]["retrieved_associated_targets"] == 20
     assert out["competitive_intelligence"]["investability"].startswith("NOT_ASSESSED")
     assert out["competitive_intelligence"]["approved_count"] == 20
@@ -3027,6 +3035,42 @@ async def test_dossier_client_validation_errors_are_invalid_response(
     assert out["data_sources_status"]["disgenet"] == "invalid_response"
 
 
+async def test_assess_target_druggability_chembl_validation_error_is_invalid_response(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An ambiguous or malformed ChEMBL target response is not a failed request."""
+    mocks = _patch_clients(monkeypatch)
+    mocks["chembl"].target_by_uniprot = AsyncMock(
+        side_effect=ValueError("ChEMBL UniProt accession has ambiguous individual protein targets")
+    )
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(return_value={})
+    with pytest.raises(ValueError, match="chembl=invalid_response, open_targets=no_data"):
+        await assess_target_druggability(DruggabilityInput(uniprot_id="P38398"))
+
+
+async def test_dossier_chembl_validation_errors_are_invalid_response(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_dossier_clients(monkeypatch)
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(return_value={"drug_count": 0})
+    mocks["chembl"].target_by_uniprot = AsyncMock(
+        side_effect=ValueError("ChEMBL target lookup pagination cannot be verified")
+    )
+    out = await synthesize_protein_dossier(
+        ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="brief")
+    )
+    assert out["data_sources_status"]["chembl_drugs"] == "invalid_response"
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value={"chembl_id": "TGT"})
+    mocks["chembl"].approved_drugs = AsyncMock(
+        side_effect=ValueError("ChEMBL mechanism pagination incomplete")
+    )
+    out = await synthesize_protein_dossier(
+        ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="brief")
+    )
+    assert out["data_sources_status"]["chembl_drugs"] == "invalid_response"
+    assert out["druggability"]["drug_count_source"] == "open_targets_drug_and_clinical_candidates"
+
+
 async def test_assess_target_druggability_chembl_failure_not_drug_absence(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -3113,9 +3157,20 @@ async def test_druggability_incomplete_chembl_molecule_lookup_never_counts_as_ze
         side_effect=ValueError("ChEMBL molecule metadata incomplete")
     )
     mocks["opentargets"].drug_count_and_tractability = AsyncMock(return_value={})
-    with pytest.raises(ValueError, match="chembl=failed, open_targets=no_data"):
+    with pytest.raises(ValueError, match="chembl=invalid_response, open_targets=no_data"):
         await assess_target_druggability(DruggabilityInput(uniprot_id="P38398"))
     assert mocks["chembl"].approved_drugs.await_args.kwargs["require_complete"] is True
+
+
+async def test_druggability_chembl_molecule_request_failure_is_failed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_clients(monkeypatch)
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value={"chembl_id": "CHEMBL_TARGET"})
+    mocks["chembl"].approved_drugs = AsyncMock(side_effect=RuntimeError("timeout"))
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(return_value={})
+    with pytest.raises(ValueError, match="chembl=failed, open_targets=no_data"):
+        await assess_target_druggability(DruggabilityInput(uniprot_id="P38398"))
 
 
 async def test_druggability_valid_open_targets_survives_incomplete_chembl(
@@ -3132,7 +3187,7 @@ async def test_druggability_valid_open_targets_survives_incomplete_chembl(
     out = await assess_target_druggability(DruggabilityInput(uniprot_id="P38398"))
     assert out["evidence"]["drug_count"] == 3
     assert out["druggability_tier"] != "NOT_ASSESSED"
-    assert out["data_sources_status"]["chembl_drug_count"] == "failed"
+    assert out["data_sources_status"]["chembl_drug_count"] == "invalid_response"
     assert out["data_sources_status"]["open_targets_drug_count"] == "ok"
 
 

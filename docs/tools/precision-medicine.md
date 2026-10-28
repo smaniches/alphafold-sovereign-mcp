@@ -87,7 +87,12 @@ client. A later schema change must be re-recorded, not assumed.
 ## Disease-landscape counts
 
 `map_disease_drug_landscape` reports counts only for the retrieved source
-page. When the MONDO-keyed Open Targets lookup returns no targets and the
+page. `total_indication_entries` and `total_associated_targets` keep their
+published numeric value, the retrieved page count; the companion
+`indication_page_complete` and `target_page_complete` flags state whether
+that count is a verified source total (a page shorter than the 20-row
+request) or only a lower bound. Aggregate counts and investability are
+assessed only from complete pages. When the MONDO-keyed Open Targets lookup returns no targets and the
 EFO-keyed retry fails, the target list is reported as `failed`, the
 target-derived counts are `null` and the investability summary is
 `NOT_ASSESSED`; an empty first page followed by a failed retry is never an
