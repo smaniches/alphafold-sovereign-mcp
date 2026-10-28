@@ -666,11 +666,15 @@ async def test_find_repurposable_drugs_passes_unplaceable_phase_through(
             },
         ),
     )
-    _mechanism_and_molecules(respx_mock, {"CHEMBL_U": -1})
+    phases: dict[str, Any] = {f"CHEMBL_{i}": 4 for i in range(5)}
+    phases["CHEMBL_U"] = -1
+    _mechanism_and_molecules(respx_mock, phases)
     async with ChEMBLClient() as client:
-        results = await client.find_repurposable_drugs("P38398", max_phase=2)
-        assert [d["molecule_chembl_id"] for d in results] == ["CHEMBL_U"]
-        assert results[0]["max_phase_label"] == "Clinical phase unknown"
+        results = await client.find_repurposable_drugs("P38398", max_phase=2, limit=5)
+        # The candidate limit never truncates the unplaceable molecule away.
+        assert len(results) == 6
+        assert results[-1]["molecule_chembl_id"] == "CHEMBL_U"
+        assert results[-1]["max_phase_label"] == "Clinical phase unknown"
         # An approved-only request cannot place it and refuses to count.
         with pytest.raises(ValueError, match="clinical phase unknown"):
             await client.find_repurposable_drugs("P38398", max_phase=4)

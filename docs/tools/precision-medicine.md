@@ -88,7 +88,8 @@ unknown") but makes an approved-only strict count unassessable, because it
 cannot be placed above or below the approval threshold. In
 `find_drug_repurposing_candidates` such a molecule is passed through to the
 report and counted in `invalid_or_unassessed_drug_records` (the result is
-`partial`) rather than being dropped at the phase threshold. `find_drug_repurposing_candidates`
+`partial`) rather than being dropped at the phase threshold or truncated
+away by the per-target candidate limit. `find_drug_repurposing_candidates`
 applies the same split per target: `chembl_lookups_failed` counts request
 failures and `chembl_lookups_invalid` counts rejected source content, and
 either makes the candidate list incomplete.

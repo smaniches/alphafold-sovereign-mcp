@@ -619,10 +619,14 @@ class ChEMBLClient(BaseAsyncClient):
             activity_threshold_nm: Accepted for API stability but **not
                 applied**: candidates come from mechanism records, which carry
                 no potency value. Use :meth:`bioactivities` for IC50/Ki filtering.
-            limit: Maximum drugs to return.
+            limit: Maximum placeable candidates to return. Molecules whose
+                clinical phase ChEMBL cannot place (``max_phase`` -1) are
+                appended after the limit rather than counted against it, so
+                a caller can always report them as unassessed.
 
         Returns:
-            List of drug repurposing candidates sorted by phase descending.
+            List of drug repurposing candidates sorted by phase descending,
+            followed by any unplaceable clinical candidates.
         """
         target = await self.target_by_uniprot(uniprot_id)
         if not target:
@@ -635,14 +639,15 @@ class ChEMBLClient(BaseAsyncClient):
         )
         # A clinical candidate whose phase ChEMBL cannot place (-1) cannot be
         # compared with a clinical threshold; it is passed through for the
-        # caller to report as unassessed rather than silently dropped.
-        repurposable = [
-            d
-            for d in drugs
-            if _coerce_phase(d.get("max_phase")) >= max_phase
-            or (include_clinical and _coerce_phase(d.get("max_phase")) == -1)
-        ]
-        return repurposable[:limit]
+        # caller to report as unassessed rather than silently dropped, and it
+        # is never truncated away by the candidate limit.
+        repurposable = [d for d in drugs if _coerce_phase(d.get("max_phase")) >= max_phase]
+        unplaceable = (
+            [d for d in drugs if _coerce_phase(d.get("max_phase")) == -1]
+            if include_clinical
+            else []
+        )
+        return repurposable[:limit] + unplaceable
 
     # ------------------------------------------------------------------
     # Helpers

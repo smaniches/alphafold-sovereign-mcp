@@ -2959,6 +2959,34 @@ async def test_find_drug_repurposing_unplaceable_phase_is_unassessed_not_no_data
     assert out["data_sources_status"]["chembl"] == "partial"
 
 
+async def test_find_drug_repurposing_unplaceable_phase_survives_candidate_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Five placeable candidates plus one unknown-phase molecule: still partial."""
+    mocks = _patch_clients(monkeypatch)
+    mocks["opentargets"].associated_targets = AsyncMock(
+        return_value=[{"overall_score": 0.8, "target_gene_symbol": "G", "uniprot_id": "P1"}]
+    )
+    placeable = [{"molecule_chembl_id": f"CHEMBL_{i}", "max_phase": 4} for i in range(5)]
+    unplaceable = {
+        "molecule_chembl_id": "CHEMBL_U",
+        "max_phase": -1,
+        "max_phase_known": True,
+        "max_phase_label": "Clinical phase unknown",
+    }
+    # What the client now returns for limit=5: the limited candidates plus
+    # the unplaceable molecule appended after the limit.
+    mocks["chembl"].find_repurposable_drugs = AsyncMock(return_value=[*placeable, unplaceable])
+    out = await find_drug_repurposing_candidates(
+        DrugRepurposingInput(disease_mondo_id="MONDO:0007254", min_phase=2)
+    )
+    assert mocks["chembl"].find_repurposable_drugs.await_args.kwargs["limit"] == 5
+    assert out["candidate_count"] == 5
+    assert out["evidence_completeness"]["invalid_or_unassessed_drug_records"] == 1
+    assert out["evidence_completeness"]["partial"] is True
+    assert out["data_sources_status"]["chembl"] == "partial"
+
+
 async def test_find_drug_repurposing_dedup(monkeypatch: pytest.MonkeyPatch) -> None:
     """Same drug ID across targets should be deduplicated."""
     mocks = _patch_clients(monkeypatch)
