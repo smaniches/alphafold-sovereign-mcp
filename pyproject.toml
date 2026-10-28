@@ -81,6 +81,12 @@ dependencies = [
     # pip-audit. Keep the floor in published Requires-Dist so downstream
     # resolvers cannot legally select a vulnerable transitive version.
     "pyjwt[crypto]>=2.15.0",
+    # Security floor on a transitive of `fastmcp` (fastmcp-slim permits older
+    # Authlib releases). Authlib 1.7.2 is affected by the October 2026 advisory
+    # set (CVE-2026-96760, CVE-2026-114614..114620); 1.9.1 is the first release
+    # that closes the full set reported by pip-audit and OSV. Authlib is
+    # reachable at runtime through fastmcp.server.auth.oauth_proxy.
+    "authlib>=1.9.1",
 ]
 
 [project.optional-dependencies]
@@ -137,6 +143,9 @@ security = [
     # This dependency belongs to cachecontrol[filecache] in the scanner.
     "filelock>=4.2.1; python_version >= '3.11'",
     "filelock==3.20.3; python_version < '3.11'",
+    # CVE-2026-114613 affects msgpack < 1.2.3 (cachecontrol[filecache] in the
+    # scanner); scoped to the audit environment like filelock above.
+    "msgpack>=1.2.3",
     # pip-audit depends on requests -> urllib3. Keep the advisory fix scoped
     # to the audit environment rather than adding urllib3 to normal runtime.
     "urllib3>=2.8.0",
