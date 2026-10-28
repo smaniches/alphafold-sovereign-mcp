@@ -998,6 +998,11 @@ async def assess_target_druggability(
                 ot_observed_count = ot_count
             elif ot_count is not None:
                 ot_status = "invalid_response"
+        except ValueError as exc:
+            # The client rejects malformed source content with ValueError;
+            # that is an invalid response, not a failed request.
+            ot_status = "invalid_response"
+            log.warning("ot.tractability.invalid", exc=str(exc))
         except Exception as exc:
             ot_status = "failed"
             log.warning("ot.tractability.failed", exc=str(exc))
@@ -1183,6 +1188,10 @@ async def synthesize_protein_dossier(
 
     # Keep upstream failures distinguishable from valid empty source results.
     def _source_state(value: Any) -> str:
+        # Clients raise ValueError for malformed source content; transport
+        # and upstream errors are everything else.
+        if isinstance(value, ValueError):
+            return "invalid_response"
         if isinstance(value, BaseException):
             return "failed"
         if not isinstance(value, (dict, list)):

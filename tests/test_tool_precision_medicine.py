@@ -2907,6 +2907,40 @@ async def test_assess_target_druggability_malformed_ot_count_is_not_zero(
         await assess_target_druggability(DruggabilityInput(uniprot_id="P38398"))
 
 
+async def test_assess_target_druggability_client_validation_error_is_invalid_response(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A ValueError from the client is malformed content, not a failed request."""
+    mocks = _patch_clients(monkeypatch)
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value=None)
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(
+        side_effect=ValueError("Open Targets drug count must be a nonnegative integer")
+    )
+    with pytest.raises(ValueError, match="chembl=no_data, open_targets=invalid_response"):
+        await assess_target_druggability(DruggabilityInput(uniprot_id="P38398"))
+
+
+async def test_dossier_client_validation_errors_are_invalid_response(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_dossier_clients(monkeypatch)
+    mocks["disgenet"].gene_disease_associations = AsyncMock(
+        side_effect=ValueError("DisGeNET association score: missing or invalid numeric value")
+    )
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(
+        side_effect=ValueError("Open Targets tractability list is malformed")
+    )
+    with pytest.raises(ValueError, match="open_targets=invalid_response"):
+        await synthesize_protein_dossier(
+            ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="brief")
+        )
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(return_value={"drug_count": 0})
+    out = await synthesize_protein_dossier(
+        ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="brief")
+    )
+    assert out["data_sources_status"]["disgenet"] == "invalid_response"
+
+
 async def test_assess_target_druggability_chembl_failure_not_drug_absence(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

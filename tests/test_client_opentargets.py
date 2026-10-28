@@ -13,7 +13,12 @@ import pytest
 import respx
 
 from alphafold_sovereign.clients._base import UpstreamError
-from alphafold_sovereign.clients.opentargets import OpenTargetsClient, _observed_score, _to_curie
+from alphafold_sovereign.clients.opentargets import (
+    OpenTargetsClient,
+    _observed_score,
+    _observed_tractable,
+    _to_curie,
+)
 
 _GQL_URL = "https://api.platform.opentargets.org/api/v4/graphql"
 
@@ -454,6 +459,44 @@ async def test_drug_count_and_tractability(respx_mock: respx.MockRouter) -> None
         info = await client.drug_count_and_tractability("ENSG1")
     assert info["drug_count"] == 5
     assert info["tractability_labels"] == ["A"]
+
+
+@pytest.mark.parametrize(
+    "tractability",
+    [[{"value": None}], [{}], [None], [{"label": "A", "value": "yes"}], [{"value": True}, {}]],
+)
+def test_observed_tractable_incomplete_list_is_unknown(tractability: list[Any]) -> None:
+    """A bucket without a boolean is not an observed negative assessment."""
+    assert _observed_tractable({"tractability": tractability}) is None
+
+
+@pytest.mark.parametrize(
+    ("tractability", "expected"),
+    [([], False), ([{"value": False}], False), ([{"value": False}, {"value": True}], True)],
+)
+def test_observed_tractable_validated_list(tractability: list[Any], expected: bool) -> None:
+    assert _observed_tractable({"tractability": tractability}) is expected
+
+
+async def test_drug_count_and_tractability_rejects_malformed_list(
+    respx_mock: respx.MockRouter,
+) -> None:
+    respx_mock.post(_GQL_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "data": {
+                    "target": {
+                        "drugAndClinicalCandidates": {"count": 2},
+                        "tractability": [{"label": "A", "value": True}, {"label": "B"}],
+                    }
+                }
+            },
+        ),
+    )
+    async with OpenTargetsClient() as client:
+        with pytest.raises(ValueError, match="tractability list is malformed"):
+            await client.drug_count_and_tractability("ENSG1")
 
 
 async def test_drug_count_and_tractability_no_target(

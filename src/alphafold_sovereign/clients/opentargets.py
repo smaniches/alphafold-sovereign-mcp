@@ -51,12 +51,27 @@ def _observed_drug_count(target: dict[str, Any]) -> int | None:
     return count
 
 
-def _observed_tractable(target: dict[str, Any]) -> bool | None:
-    """True when any tractability bucket is set; ``None`` when no list was reported."""
+def _tractability_buckets(target: dict[str, Any]) -> list[dict[str, Any]] | None:
+    """Return the tractability buckets only when every bucket carries a boolean.
+
+    ``None`` means the assessment is unknown: the list is absent, or a bucket
+    lacks a boolean ``value`` (``[{"value": null}]``, ``[{}]``, ``[null]``).
+    An incomplete list is never read as an observed negative.
+    """
     tractability = target.get("tractability")
     if not isinstance(tractability, list):
         return None
-    return any(isinstance(t, dict) and t.get("value") is True for t in tractability)
+    if not all(isinstance(t, dict) and isinstance(t.get("value"), bool) for t in tractability):
+        return None
+    return tractability
+
+
+def _observed_tractable(target: dict[str, Any]) -> bool | None:
+    """True when any validated tractability bucket is set; ``None`` when unknown."""
+    buckets = _tractability_buckets(target)
+    if buckets is None:
+        return None
+    return any(t["value"] for t in buckets)
 
 
 _OT_CONFIG = UpstreamConfig(
@@ -327,12 +342,15 @@ class OpenTargetsClient(BaseAsyncClient):
             {"ensemblId": ensembl_id},
         )
         target = data.get("target") or {}
-        # A missing target/field is not an observed count of zero.
+        # A missing target/field is not an observed count of zero, and a
+        # tractability list with a non-boolean bucket is malformed, not a set
+        # of negative assessments.
+        buckets = _tractability_buckets(target)
+        if buckets is None and target.get("tractability") is not None:
+            raise ValueError("Open Targets tractability list is malformed")
         return {
             "drug_count": _observed_drug_count(target),
-            "tractability_labels": [
-                t.get("label", "") for t in (target.get("tractability") or []) if t.get("value")
-            ],
+            "tractability_labels": [t.get("label", "") for t in buckets or [] if t["value"]],
         }
 
     # ------------------------------------------------------------------
