@@ -24,6 +24,15 @@ from alphafold_sovereign.domain.disease import TargetEvidenceScore
 logger = structlog.get_logger(__name__)
 
 
+class AmbiguousTargetError(ValueError):
+    """More than one Open Targets target exactly matches the queried identifier.
+
+    A subclass of ValueError (the client's malformed-content signal) so
+    existing handlers keep classifying it as an invalid response, while
+    callers that must establish identity can refuse to proceed on it.
+    """
+
+
 def _observed_score(value: Any) -> float:
     """Only explicit valid Open Targets scores are scientific observations."""
     if value is None or isinstance(value, bool):
@@ -411,7 +420,7 @@ class OpenTargetsClient(BaseAsyncClient):
                 candidates[ensembl] = symbol
 
         if len(candidates) > 1:
-            raise ValueError("Open Targets target mapping is ambiguous")
+            raise AmbiguousTargetError("Open Targets target mapping is ambiguous")
         if not candidates:
             return {}
         ensembl_id, symbol = next(iter(candidates.items()))

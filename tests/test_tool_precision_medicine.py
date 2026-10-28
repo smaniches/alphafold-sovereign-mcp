@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from alphafold_sovereign.clients.opentargets import AmbiguousTargetError
 from alphafold_sovereign.domain.disease import DiseaseRecord, PathogenicityClass
 from alphafold_sovereign.tools import precision_medicine as pm
 from alphafold_sovereign.tools.precision_medicine import (
@@ -1958,6 +1959,28 @@ async def test_map_disease_drug_landscape_ot_efo_fallback(
     assert mocks["opentargets"].associated_targets.await_args.args[0] == "EFO_0000339"
 
 
+async def test_map_disease_landscape_rejected_open_targets_content_is_invalid_response(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_clients(monkeypatch)
+    mondo_result = MagicMock()
+    mondo_result.name = "Breast cancer"
+    mondo_result.efo_ids = ["EFO:0000305"]
+    mocks["mondo"].lookup = AsyncMock(return_value=mondo_result)
+    mocks["opentargets"].associated_targets = AsyncMock(
+        side_effect=ValueError("Open Targets score is missing or invalid")
+    )
+    mocks["chembl"].drug_indications = AsyncMock(return_value=[])
+    mocks["chembl"].molecule_names = AsyncMock(return_value={})
+
+    out = await map_disease_drug_landscape(
+        DiseaseDrugLandscapeInput(disease_mondo_id="MONDO:0007254")
+    )
+    assert out["data_sources_status"]["open_targets"] == "invalid_response"
+    assert out["target_landscape"]["retrieved_associated_targets"] is None
+    assert out["competitive_intelligence"]["investability"].startswith("NOT_ASSESSED")
+
+
 async def test_map_disease_landscape_failed_efo_fallback_is_not_observed_zero(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -3326,6 +3349,60 @@ async def test_assess_target_druggability_preserves_observed_chembl_zero(
     assert result["evidence"]["drug_count_source"] == "chembl_mechanism_distinct_molecules"
     assert result["evidence"]["open_targets_drug_candidate_count"] == 0
     assert result["evidence"]["drug_precedent_scope"] == "approved_and_clinical"
+
+
+async def test_dossier_refuses_ambiguous_target_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_dossier_clients(monkeypatch)
+    mocks["opentargets"].resolve_target = AsyncMock(
+        side_effect=AmbiguousTargetError("Open Targets target mapping is ambiguous")
+    )
+    with pytest.raises(ValueError, match="could not be established"):
+        await synthesize_protein_dossier(
+            ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="brief")
+        )
+    mocks["opentargets"].associated_diseases.assert_not_awaited()
+    mocks["chembl"].target_by_uniprot.assert_not_awaited()
+
+
+async def test_dossier_reports_identity_verification(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_dossier_clients(monkeypatch)
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value={"chembl_id": "TGT"})
+    mocks["chembl"].approved_drugs = AsyncMock(
+        return_value=[{"molecule_chembl_id": "CHEMBL1", "max_phase": 4}]
+    )
+    out = await synthesize_protein_dossier(
+        ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="brief")
+    )
+    assert out["target"]["identity_verified"] is True
+    # A malformed (non-ambiguous) mapping response leaves identity unverified
+    # and is reported, rather than aborting the dossier or being guessed.
+    mocks["opentargets"].resolve_target = AsyncMock(
+        side_effect=ValueError("Open Targets mapIds hits must be a list")
+    )
+    out = await synthesize_protein_dossier(
+        ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="brief")
+    )
+    assert out["target"]["identity_verified"] is False
+    assert out["data_sources_status"]["ot_diseases"] == "invalid_response"
+
+
+async def test_dossier_unavailable_count_message_reports_count_status(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A successful Open Targets request without a count is no_data, not ok."""
+    mocks = _patch_dossier_clients(monkeypatch)
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(
+        return_value={"drug_count": None, "tractability_labels": []}
+    )
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value=None)
+    with pytest.raises(ValueError, match="chembl=no_data, open_targets=no_data"):
+        await synthesize_protein_dossier(
+            ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="brief")
+        )
 
 
 async def test_dossier_rejects_mismatched_gene_identity(

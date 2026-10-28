@@ -49,7 +49,7 @@ from alphafold_sovereign.clients.disgenet import DisGeNETClient
 from alphafold_sovereign.clients.ensembl import EnsemblClient
 from alphafold_sovereign.clients.gnomad import GnomADClient
 from alphafold_sovereign.clients.mondo import MONDOClient
-from alphafold_sovereign.clients.opentargets import OpenTargetsClient
+from alphafold_sovereign.clients.opentargets import AmbiguousTargetError, OpenTargetsClient
 from alphafold_sovereign.clients.pdbe_literature import PDBeLiteratureClient
 from alphafold_sovereign.domain.disease import PathogenicityClass
 from alphafold_sovereign.domain.druggability import (
@@ -1199,6 +1199,13 @@ async def synthesize_protein_dossier(
     # Open Targets keys target data on Ensembl gene IDs. Resolve the
     # UniProt accession to an Ensembl ID before the parallel fan-out.
     ot_resolved, ot_resolve_error = await _resolve_open_targets(uid)
+    if isinstance(ot_resolve_error, AmbiguousTargetError):
+        # The accession maps to more than one target: identity cannot be
+        # established, so multi-source synthesis must not proceed on a guess.
+        raise ValueError(
+            "Protein dossier target identity could not be established: the "
+            "UniProt-to-Ensembl mapping is ambiguous."
+        ) from ot_resolve_error
     ensembl_id = ot_resolved.get("ensembl_id", "")
     mapped_symbol = ot_resolved.get("symbol", "")
     if mapped_symbol and mapped_symbol.casefold() != sym.casefold():
@@ -1206,6 +1213,9 @@ async def synthesize_protein_dossier(
             "Protein dossier target identity mismatch: supplied gene_symbol "
             "does not agree with the UniProt-to-Ensembl mapping."
         )
+    # True only when Open Targets mapped the accession to the supplied symbol;
+    # an unavailable or malformed mapping leaves the identity unverified.
+    identity_verified = bool(mapped_symbol)
 
     # Parallel evidence gathering
     # When resolution failed, the Open Targets sources inherit that failure
@@ -1325,6 +1335,16 @@ async def synthesize_protein_dossier(
         if isinstance(ot_count, int) and not isinstance(ot_count, bool) and ot_count >= 0
         else None
     )
+    # The gathered source state says the request succeeded; the count status
+    # says whether an observed count came back with it.
+    if source_status["ot_tractability"] in {"failed", "invalid_response"}:
+        ot_count_status = source_status["ot_tractability"]
+    elif ot_observed_count is not None:
+        ot_count_status = "ok"
+    elif ot_count is not None:
+        ot_count_status = "invalid_response"
+    else:
+        ot_count_status = "no_data"
     precedent = resolve_drug_precedent(
         chembl_count=chembl_observed_count,
         open_targets_count=ot_observed_count,
@@ -1335,8 +1355,7 @@ async def synthesize_protein_dossier(
     if precedent is None:
         raise ValueError(
             "Protein dossier druggability unavailable: no observed drug count "
-            f"(chembl={chembl_drug_status}, "
-            f"open_targets={source_status['ot_tractability']}). "
+            f"(chembl={chembl_drug_status}, open_targets={ot_count_status}). "
             "No dossier tier was assigned."
         )
     drug_count = precedent.drug_count
@@ -1375,6 +1394,7 @@ async def synthesize_protein_dossier(
         "target": {
             "uniprot_id": uid,
             "gene_symbol": sym,
+            "identity_verified": identity_verified,
             "ensembl_gene_id": ensembl_gene.get("ensembl_gene_id", ""),
             "description": ensembl_gene.get("description", ""),
         },
@@ -1427,14 +1447,6 @@ async def synthesize_protein_dossier(
     if params.depth == "comprehensive":
         dossier["cross_species_orthologs"] = orthologs
 
-    if source_status["ot_tractability"] in {"failed", "invalid_response"}:
-        ot_count_status = source_status["ot_tractability"]
-    elif isinstance(ot_count, int) and not isinstance(ot_count, bool) and ot_count >= 0:
-        ot_count_status = "ok"
-    elif ot_count is not None:
-        ot_count_status = "invalid_response"
-    else:
-        ot_count_status = "no_data"
     dossier["data_sources_status"] = {
         **source_status,
         "chembl_drugs": chembl_drug_status,
@@ -1544,7 +1556,9 @@ async def map_disease_drug_landscape(
             ot_targets = exc
             log.warning("opentargets.efo_fallback.failed", exc=str(exc))
 
-    if isinstance(ot_targets, BaseException):
+    if isinstance(ot_targets, ValueError):
+        ot_status = "invalid_response"  # the client rejected the source content
+    elif isinstance(ot_targets, BaseException):
         ot_status = "failed"
     elif ot_targets:
         ot_status = "ok"

@@ -85,9 +85,13 @@ either makes the candidate list incomplete.
 
 A protein dossier also checks the supplied gene symbol against the
 resolved UniProt-to-Ensembl target gene symbol when mapping evidence is
-available. A mismatch prevents multi-gene evidence synthesis. Resolution
-failures do not establish a matching biological identity and should be
-evaluated separately.
+available. A mismatch prevents multi-gene evidence synthesis, and so does
+an ambiguous mapping (more than one Open Targets target matches the
+accession exactly). `target.identity_verified` is `true` only when Open
+Targets mapped the accession to the supplied symbol; a failed or malformed
+mapping response leaves it `false`, the Open Targets sources report that
+failure, and the symbol-keyed sources (DisGeNET, gnomAD, ClinVar, Ensembl)
+rest on the caller's assertion that the symbol belongs to the accession.
 
 ## Recorded Open Targets identifier mapping
 
