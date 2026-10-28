@@ -125,7 +125,7 @@ docs = [
     # Python 3.10-compatible mkdocstrings 1.0.4 still calls it without md.
     # mkdocstrings 1.0.7 fixes the API but drops Python 3.10. Retain the
     # last compatible pymdown release until the whole 3.10 docs path is safe.
-    "pymdown-extensions>=10.0,<12.2",
+    "pymdown-extensions>=10.0,<12.4",
     # mkdocs-material's dependency tree includes requests -> urllib3.
     # Keep the patched floor scoped to docs rather than normal runtime.
     "urllib3>=2.8.0",
