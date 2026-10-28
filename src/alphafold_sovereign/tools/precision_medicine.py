@@ -1701,6 +1701,14 @@ async def map_disease_drug_landscape(
         and tractability_assessed
         and phases_assessed
     )
+    # The aggregate counts below are page-scoped lower bounds whenever their
+    # rows are classifiable; only this flag (and investability) require both
+    # pages to be complete. Unknown when either page could not be retrieved.
+    counts_complete = (
+        None
+        if target_page_complete is None or indication_page_complete is None
+        else counts_assessable
+    )
     investability = (
         _investability_rating(
             approved_count=len(approved),
@@ -1740,8 +1748,12 @@ async def map_disease_drug_landscape(
             "approved_count": len(approved) if phases_assessed else None,
             "pipeline_count": len(phase3) + len(phase12) if phases_assessed else None,
             "druggable_target_count": len(druggable_targets) if tractability_assessed else None,
+            "counts_complete": counts_complete,
             "investability": investability,
-            "count_scope": "Retrieved source page only, not a verified whole-database count.",
+            "count_scope": (
+                "Retrieved source pages only (page_limit 20 per source); a count from an "
+                "incomplete page is a lower bound, not a whole-database total."
+            ),
         },
         "data_sources_status": {
             "mondo": mondo_status,

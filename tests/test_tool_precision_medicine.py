@@ -1892,6 +1892,7 @@ async def test_map_disease_drug_landscape_success(
     assert out["drug_landscape"]["indication_page_complete"] is True
     assert out["target_landscape"]["total_associated_targets"] == 1
     assert out["target_landscape"]["target_page_complete"] is True
+    assert out["competitive_intelligence"]["counts_complete"] is True
     assert "open_targets=OT-platform-live-release-unverified" in out["provenance"]
     assert out["data_sources_status"] == {
         "mondo": "ok",
@@ -1942,6 +1943,7 @@ async def test_map_disease_drug_landscape_chembl_exception(
     assert out["drug_landscape"]["indication_page_complete"] is None
     assert out["target_landscape"]["total_associated_targets"] is None
     assert out["target_landscape"]["target_page_complete"] is None
+    assert out["competitive_intelligence"]["counts_complete"] is None
     assert out["data_sources_status"]["open_targets"] == "failed"
     assert out["data_sources_status"]["chembl_indications"] == "failed"
     assert out["competitive_intelligence"]["approved_count"] is None
@@ -2160,6 +2162,7 @@ async def test_map_disease_landscape_caps_are_not_reported_as_global_totals(
     assert out["target_landscape"]["retrieved_associated_targets"] == 20
     assert out["competitive_intelligence"]["investability"].startswith("NOT_ASSESSED")
     assert out["competitive_intelligence"]["approved_count"] == 20
+    assert out["competitive_intelligence"]["counts_complete"] is False
 
 
 async def test_landscape_counts_tractable_targets_beyond_top_ten(
@@ -3595,6 +3598,28 @@ async def test_alphafold_schema_error_is_invalid_response_not_failed(
     )
     assert out["data_sources_status"]["alphafold_plddt"] == "invalid_response"
     assert out["target"]["identity_sources"] == ["open_targets"]
+
+
+async def test_dossier_conflicting_alphafold_label_is_no_identity_witness(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A prediction record labelled with a different accession is rejected by the
+    client (empty record), so it can neither verify nor refute identity."""
+    mocks = _patch_dossier_clients(monkeypatch)
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value={"chembl_id": "TGT"})
+    mocks["chembl"].approved_drugs = AsyncMock(
+        return_value=[{"molecule_chembl_id": "CHEMBL1", "max_phase": 4}]
+    )
+    mocks["opentargets"].resolve_target = AsyncMock(side_effect=RuntimeError("ot down"))
+    # What AlphaFoldClient.get_prediction returns for a labelled, conflicting
+    # record set (pinned by test_get_prediction_rejects_mismatched_labelled_isoform).
+    mocks["alphafold"].get_prediction = AsyncMock(return_value={})
+    out = await synthesize_protein_dossier(
+        ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="brief")
+    )
+    assert out["target"]["identity_verified"] is False
+    assert out["target"]["identity_sources"] == []
+    assert out["data_sources_status"]["alphafold_plddt"] == "missing"
 
 
 async def test_dossier_unavailable_count_message_reports_count_status(
