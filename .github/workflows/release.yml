@@ -99,7 +99,7 @@ jobs:
             echo "::error::build checkout drift: expected $EXPECTED_SHA, got $actual_sha"
             exit 1
           fi
-      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
           # Exact uv pin for the AF-03 release path — the version the
           # GitHub-runner Release Path Proof executed with. Keep in lockstep
@@ -178,7 +178,7 @@ jobs:
         with:
           name: dist
           path: dist/
-      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
           # Exact uv pin for the AF-03 release path — the version the
           # GitHub-runner Release Path Proof executed with. Keep in lockstep
@@ -236,7 +236,7 @@ jobs:
         run: python3 scripts/release_assets.py pypi dist/ "$TAG" --stage-missing dist-to-publish/ --github-output "$GITHUB_OUTPUT"
       - name: Publish wheel and source archive once
         if: steps.existing.outputs.present == 'false'
-        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
+        uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # release/v1
         with:
           packages-dir: dist-to-publish/
       - name: Independently read back exact PyPI digests
