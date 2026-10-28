@@ -1053,9 +1053,7 @@ async def assess_target_druggability(
     # OT counts target-disease clinical rows, potentially repeating a
     # molecule across indications. No identity list means we can only
     # credit evidence of presence, not >=3 distinct molecules.
-    scoring_drug_count = (
-        drug_count if chembl_observed_count is not None else min(drug_count, 1)
-    )
+    scoring_drug_count = drug_count if chembl_observed_count is not None else min(drug_count, 1)
     tier, rationale, scoring = _druggability_tier(
         drug_count=scoring_drug_count,
         tractability_labels=tractability_labels,
@@ -1307,9 +1305,7 @@ async def synthesize_protein_dossier(
             f"open_targets={source_status['ot_tractability']}). "
             "No dossier tier was assigned."
         )
-    scoring_drug_count = (
-        drug_count if chembl_observed_count is not None else min(drug_count, 1)
-    )
+    scoring_drug_count = drug_count if chembl_observed_count is not None else min(drug_count, 1)
     tier, rationale, dossier_scoring = _druggability_tier(
         drug_count=scoring_drug_count,
         tractability_labels=ot_tract.get("tractability_labels", []),
