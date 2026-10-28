@@ -3499,6 +3499,7 @@ async def test_dossier_reports_identity_verification(
         ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="brief")
     )
     assert out["target"]["identity_verified"] is True
+    assert out["target"]["identity_sources"] == ["open_targets"]
     # A malformed (non-ambiguous) mapping response leaves identity unverified
     # and is reported, rather than aborting the dossier or being guessed.
     mocks["opentargets"].resolve_target = AsyncMock(
@@ -3509,6 +3510,59 @@ async def test_dossier_reports_identity_verification(
     )
     assert out["target"]["identity_verified"] is False
     assert out["data_sources_status"]["ot_diseases"] == "invalid_response"
+
+
+async def test_dossier_alphafold_gene_is_an_independent_identity_witness(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The AlphaFold DB record names the accession's gene; it verifies identity
+    when Open Targets cannot, and a disagreement aborts the dossier."""
+    mocks = _patch_dossier_clients(monkeypatch)
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value={"chembl_id": "TGT"})
+    mocks["chembl"].approved_drugs = AsyncMock(
+        return_value=[{"molecule_chembl_id": "CHEMBL1", "max_phase": 4}]
+    )
+    mocks["opentargets"].resolve_target = AsyncMock(side_effect=RuntimeError("ot down"))
+    mocks["alphafold"].get_prediction = AsyncMock(
+        return_value={"entryId": "AF-P38398-F1", "globalMetricValue": 85.0, "gene": "BRCA1"}
+    )
+    out = await synthesize_protein_dossier(
+        ProteinDossierInput(uniprot_id="P38398", gene_symbol="brca1", depth="brief")
+    )
+    assert out["target"]["identity_verified"] is True
+    assert out["target"]["identity_sources"] == ["alphafold_db"]
+
+    # Both witnesses available and agreeing.
+    mocks["opentargets"].resolve_target = AsyncMock(
+        return_value={"ensembl_id": "ENSG00000012048", "symbol": "BRCA1"}
+    )
+    out = await synthesize_protein_dossier(
+        ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="brief")
+    )
+    assert out["target"]["identity_sources"] == ["open_targets", "alphafold_db"]
+
+    # Accession P04637 is TP53: a caller asserting BRCA1 is refused even with
+    # Open Targets unavailable, before any symbol-keyed source is fused.
+    mocks["opentargets"].resolve_target = AsyncMock(side_effect=RuntimeError("ot down"))
+    mocks["alphafold"].get_prediction = AsyncMock(
+        return_value={"entryId": "AF-P04637-F1", "globalMetricValue": 70.0, "gene": "TP53"}
+    )
+    fused_before = mocks["disgenet"].gene_disease_associations.await_count
+    with pytest.raises(ValueError, match="AlphaFold DB record"):
+        await synthesize_protein_dossier(
+            ProteinDossierInput(uniprot_id="P04637", gene_symbol="BRCA1", depth="brief")
+        )
+    assert mocks["disgenet"].gene_disease_associations.await_count == fused_before
+
+    # A record without a gene name is no witness: unverified, not refused.
+    mocks["alphafold"].get_prediction = AsyncMock(
+        return_value={"entryId": "AF-P04637-F1", "globalMetricValue": 70.0, "gene": None}
+    )
+    out = await synthesize_protein_dossier(
+        ProteinDossierInput(uniprot_id="P04637", gene_symbol="BRCA1", depth="brief")
+    )
+    assert out["target"]["identity_verified"] is False
+    assert out["target"]["identity_sources"] == []
 
 
 async def test_dossier_unavailable_count_message_reports_count_status(

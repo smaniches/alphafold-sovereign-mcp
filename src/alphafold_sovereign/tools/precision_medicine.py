@@ -1233,9 +1233,39 @@ async def synthesize_protein_dossier(
             "Protein dossier target identity mismatch: supplied gene_symbol "
             "does not agree with the UniProt-to-Ensembl mapping."
         )
-    # True only when Open Targets mapped the accession to the supplied symbol;
-    # an unavailable or malformed mapping leaves the identity unverified.
-    identity_verified = bool(mapped_symbol)
+    identity_sources: list[str] = ["open_targets"] if mapped_symbol else []
+
+    # AlphaFold confidence must be a valid measured [0, 100] value. The same
+    # record names the accession's gene, a second accession-keyed identity
+    # witness that is available even when Open Targets is not.
+    dossier_plddt: float | None = None
+    dossier_plddt_status = "missing"
+    af_gene = ""
+    try:
+        af_meta: Any = await _alphafold().get_prediction(uid)
+        if isinstance(af_meta, dict):
+            dossier_plddt, dossier_plddt_status = validated_plddt(af_meta.get("globalMetricValue"))
+            raw_gene = af_meta.get("gene")
+            af_gene = raw_gene.strip() if isinstance(raw_gene, str) else ""
+        else:
+            dossier_plddt_status = "invalid_response"
+    except Exception as exc:
+        dossier_plddt_status = "failed"
+        log.warning(
+            "alphafold.plddt.failed",
+            exc=str(exc),
+            uniprot_id=uid,
+        )
+    if af_gene:
+        if af_gene.casefold() != sym.casefold():
+            raise ValueError(
+                "Protein dossier target identity mismatch: supplied gene_symbol "
+                "does not agree with the AlphaFold DB record for the accession."
+            )
+        identity_sources.append("alphafold_db")
+    # True only when an accession-keyed source confirmed the supplied symbol;
+    # with no witness available the identity rests on the caller's assertion.
+    identity_verified = bool(identity_sources)
 
     # Parallel evidence gathering
     # When resolution failed, the Open Targets sources inherit that failure
@@ -1338,23 +1368,6 @@ async def synthesize_protein_dossier(
     clinvar_vars = results.get("clinvar_variants") or []
     ensembl_gene = results.get("ensembl_gene") or {}
 
-    # AlphaFold confidence must be a valid measured [0, 100] value.
-    dossier_plddt: float | None = None
-    dossier_plddt_status = "missing"
-    try:
-        af_meta: Any = await _alphafold().get_prediction(uid)
-        if isinstance(af_meta, dict):
-            dossier_plddt, dossier_plddt_status = validated_plddt(af_meta.get("globalMetricValue"))
-        else:
-            dossier_plddt_status = "invalid_response"
-    except Exception as exc:
-        dossier_plddt_status = "failed"
-        log.warning(
-            "alphafold.plddt.failed",
-            exc=str(exc),
-            uniprot_id=uid,
-        )
-
     # Missing retrieval is not an observed drug count of zero. The dossier
     # always requests approved plus clinical ChEMBL molecules, so the
     # all-stage Open Targets record count is scope-comparable here.
@@ -1425,6 +1438,7 @@ async def synthesize_protein_dossier(
             "uniprot_id": uid,
             "gene_symbol": sym,
             "identity_verified": identity_verified,
+            "identity_sources": identity_sources,
             "ensembl_gene_id": ensembl_gene.get("ensembl_gene_id", ""),
             "description": ensembl_gene.get("description", ""),
         },

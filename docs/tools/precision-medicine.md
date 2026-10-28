@@ -98,11 +98,16 @@ A protein dossier also checks the supplied gene symbol against the
 resolved UniProt-to-Ensembl target gene symbol when mapping evidence is
 available. A mismatch prevents multi-gene evidence synthesis, and so does
 an ambiguous mapping (more than one Open Targets target matches the
-accession exactly). `target.identity_verified` is `true` only when Open
-Targets mapped the accession to the supplied symbol; a failed or malformed
-mapping response leaves it `false`, the Open Targets sources report that
-failure, and the symbol-keyed sources (DisGeNET, gnomAD, ClinVar, Ensembl)
-rest on the caller's assertion that the symbol belongs to the accession.
+accession exactly). Two accession-keyed witnesses are consulted: the Open
+Targets mapping and the gene name on the AlphaFold DB prediction record
+(live 2026-10-28: P38398 BRCA1, P04637 TP53, P14867 GABRA1, P00533 EGFR).
+A disagreement from either witness aborts the dossier.
+`target.identity_verified` is `true` when at least one witness confirmed
+the supplied symbol, and `target.identity_sources` lists which. With no
+witness available (both sources failed or the record carries no gene
+name) it is `false`, and the symbol-keyed sources (DisGeNET, gnomAD,
+ClinVar, Ensembl) rest on the caller's assertion that the symbol belongs
+to the accession.
 
 ## Recorded Open Targets identifier mapping
 
