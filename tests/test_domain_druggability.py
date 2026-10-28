@@ -10,9 +10,11 @@ from alphafold_sovereign.domain.druggability import (
     SIGNAL_TOTAL,
     DruggabilityAssessment,
     has_small_molecule_tractability,
+    resolve_drug_precedent,
     score_normalized,
     score_target_druggability,
     tier_for_score,
+    validated_plddt,
 )
 
 
@@ -210,3 +212,84 @@ def test_components_report_inputs() -> None:
     assert ">=0.35" in a.components["loeuf_safety"]["input"]
     assert "<70" in a.components["plddt"]["input"]
     assert a.components["drug_precedent"]["input"] == "drug_count=0"
+
+
+@pytest.mark.parametrize(
+    ("raw", "observed", "status"),
+    [
+        (None, None, "missing"),
+        (0, 0.0, "ok"),
+        (70, 70.0, "ok"),
+        (100.0, 100.0, "ok"),
+        (-1.0, None, "invalid_response"),
+        (100.01, None, "invalid_response"),
+        (float("nan"), None, "invalid_response"),
+        (float("inf"), None, "invalid_response"),
+        (float("-inf"), None, "invalid_response"),
+        (True, None, "invalid_response"),
+        ("85", None, "invalid_response"),
+    ],
+)
+def test_validated_plddt_preserves_valid_measurements_and_rejects_invalid(
+    raw: object, observed: float | None, status: str
+) -> None:
+    assert validated_plddt(raw) == (observed, status)
+
+
+@pytest.mark.parametrize("raw", [-1.0, 101.0, float("nan"), float("inf"), True, "95"])
+def test_scoring_refuses_malformed_plddt(raw: object) -> None:
+    assessed = score_target_druggability(
+        drug_count=0,
+        tractability_labels=[],
+        loeuf=None,
+        plddt_mean=raw,  # type: ignore[arg-type]
+    )
+    assert assessed.total_score == 0
+    assert assessed.components["plddt"] == {"contribution": 0, "input": "invalid_response"}
+    assert assessed.signals_missing == ("structure_plddt", "constraint_loeuf")
+
+
+# ── resolve_drug_precedent: scope-aware source selection ─────────────────────
+@pytest.mark.parametrize(
+    ("chembl", "ot", "include_clinical", "expected"),
+    [
+        # Positive ChEMBL count in the requested scope always wins.
+        (5, 82, True, (5, 5, "chembl_mechanism_distinct_molecules")),
+        (2, 0, True, (2, 2, "chembl_mechanism_distinct_molecules")),
+        (1, None, False, (1, 1, "chembl_mechanism_distinct_molecules")),
+        # Live GABRA1 (2026-10-28): 1 ChEMBL single-subunit mechanism, 76 Open
+        # Targets records; with approved-only scope ChEMBL is 0 and stays
+        # authoritative because the Open Targets count spans every stage.
+        (0, 76, False, (0, 0, "chembl_mechanism_distinct_molecules")),
+        # Same target, approved plus clinical: scope-comparable presence.
+        (0, 76, True, (76, 1, "open_targets_drug_and_clinical_candidates")),
+        # Both observed zero (live BRCA1): ChEMBL's exact-scope zero.
+        (0, 0, True, (0, 0, "chembl_mechanism_distinct_molecules")),
+        (0, 0, False, (0, 0, "chembl_mechanism_distinct_molecules")),
+        # ChEMBL unavailable: Open Targets presence only in comparable scope.
+        (None, 9, True, (9, 1, "open_targets_drug_and_clinical_candidates")),
+        # An all-stage zero bounds the approved-only scope (live B3GAT1).
+        (None, 0, False, (0, 0, "open_targets_drug_and_clinical_candidates")),
+        (None, 0, True, (0, 0, "open_targets_drug_and_clinical_candidates")),
+        # ChEMBL observed zero with Open Targets unavailable.
+        (0, None, True, (0, 0, "chembl_mechanism_distinct_molecules")),
+        # No observed count in the requested scope: unavailable, never zero.
+        (None, 9, False, None),
+        (None, None, True, None),
+        (None, None, False, None),
+    ],
+)
+def test_resolve_drug_precedent(
+    chembl: int | None,
+    ot: int | None,
+    include_clinical: bool,
+    expected: tuple[int, int, str] | None,
+) -> None:
+    result = resolve_drug_precedent(
+        chembl_count=chembl, open_targets_count=ot, include_clinical=include_clinical
+    )
+    if expected is None:
+        assert result is None
+    else:
+        assert result is not None
+        assert (result.drug_count, result.scoring_count, result.source) == expected

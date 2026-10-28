@@ -9,6 +9,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from alphafold_sovereign.clients.alphafold import AlphaFoldPredictionSchemaError
+from alphafold_sovereign.clients.opentargets import AmbiguousTargetError
 from alphafold_sovereign.domain.disease import DiseaseRecord, PathogenicityClass
 from alphafold_sovereign.tools import precision_medicine as pm
 from alphafold_sovereign.tools.precision_medicine import (
@@ -380,7 +382,8 @@ def test_narrative_summary_constrained() -> None:
         constraint={"loeuf": 0.2},
     )
     assert "BRCA1" in out
-    assert "highly constrained" in out
+    assert "Gene-level LOEUF=0.200" in out
+    assert "not a clinical phenotype" in out
 
 
 def test_narrative_summary_moderate_loeuf() -> None:
@@ -391,7 +394,7 @@ def test_narrative_summary_moderate_loeuf() -> None:
         diseases=[],
         constraint={"loeuf": 0.5},
     )
-    assert "moderately constrained" in out
+    assert "Gene-level LOEUF=0.500" in out
 
 
 def test_narrative_summary_tolerant_loeuf() -> None:
@@ -402,7 +405,7 @@ def test_narrative_summary_tolerant_loeuf() -> None:
         diseases=[],
         constraint={"loeuf": 0.9},
     )
-    assert "tolerant" in out
+    assert "Gene-level LOEUF=0.900" in out
 
 
 def test_narrative_summary_no_constraint() -> None:
@@ -535,7 +538,7 @@ def _patch_clients(monkeypatch: pytest.MonkeyPatch) -> dict[str, MagicMock]:
     # assess_target_druggability and synthesize_protein_dossier resolve the
     # UniProt accession to an Ensembl target before any other Open Targets call.
     mocks["opentargets"].resolve_target = AsyncMock(
-        return_value={"ensembl_id": "ENSG_TEST", "symbol": "TESTGENE"}
+        return_value={"ensembl_id": "ENSG_TEST", "symbol": "BRCA1"}
     )
     # AlphaMissense lookups default to "no annotation"; tests that exercise
     # the AlphaMissense path override this with a concrete record.
@@ -1184,6 +1187,7 @@ async def test_assess_target_druggability_full(monkeypatch: pytest.MonkeyPatch) 
     out = await assess_target_druggability(DruggabilityInput(uniprot_id="P38398"))
     assert out["druggability_tier"] in {"HOT", "WARM"}
     assert out["evidence"]["drug_count"] == 4
+    assert "open_targets=OT-platform-live-release-unverified" in out["provenance"]
     # The 'Small molecule' label credits the tier, so the display must agree with it.
     assert out["tractability_assessment"]["small_molecule"] is True
     # Enriched, auditable scoring breakdown is surfaced.
@@ -1205,15 +1209,20 @@ async def test_assess_target_druggability_no_chembl_no_ot(
     mocks["gnomad"].gene_constraint = AsyncMock(side_effect=RuntimeError("g fail"))
     mocks["alphafold"].get_prediction = AsyncMock(side_effect=RuntimeError("af fail"))
 
-    out = await assess_target_druggability(DruggabilityInput(uniprot_id="P38398"))
-    assert out["druggability_tier"] == "NOT_DRUGGABLE"
-    assert out["evidence"]["drug_count"] == 0
+    with pytest.raises(ValueError, match="open_targets=failed"):
+        await assess_target_druggability(DruggabilityInput(uniprot_id="P38398"))
 
 
 async def test_assess_target_druggability_no_drug_count_from_chembl(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """If chembl approved_drugs returns empty, drug_count should fall back to OT."""
+    """A ChEMBL single-protein zero beside Open Targets records is a scope gap.
+
+    Live 2026-10-28: GABRA1 has one ChEMBL mechanism on the alpha-1 subunit
+    (benzodiazepine mechanisms sit on the GABA-A complex target) but 76 Open
+    Targets drug records. That is not a contradiction to abstain on; with the
+    comparable approved-plus-clinical scope the records count as presence.
+    """
     mocks = _patch_clients(monkeypatch)
     mocks["chembl"].target_by_uniprot = AsyncMock(
         return_value={"chembl_id": "CHEMBL_TGT", "pref_name": "X"}
@@ -1225,7 +1234,77 @@ async def test_assess_target_druggability_no_drug_count_from_chembl(
     mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
 
     out = await assess_target_druggability(DruggabilityInput(uniprot_id="P38398"))
-    assert out["evidence"]["drug_count"] == 3
+    evidence = out["evidence"]
+    assert evidence["drug_count"] == 3
+    assert evidence["drug_precedent_scoring_count"] == 1
+    assert evidence["drug_count_source"] == "open_targets_drug_and_clinical_candidates"
+    assert evidence["drug_precedent_scope"] == "approved_and_clinical"
+    assert evidence["chembl_mechanism_molecule_count"] == 0
+    assert evidence["open_targets_drug_candidate_count"] == 3
+    assert out["data_sources_status"]["chembl_drug_count"] == "ok"
+    assert out["druggability_tier"] == "WARM"
+
+
+async def test_approved_only_scope_keeps_chembl_zero_authoritative(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Approved-only: clinical-stage Open Targets records cannot override."""
+    mocks = _patch_clients(monkeypatch)
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value={"chembl_id": "CHEMBL1962"})
+    mocks["chembl"].approved_drugs = AsyncMock(return_value=[])
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(
+        return_value={"tractability_labels": [], "drug_count": 76}
+    )
+    mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
+
+    out = await assess_target_druggability(
+        DruggabilityInput(uniprot_id="P14867", include_clinical_stage=False)
+    )
+    assert mocks["chembl"].approved_drugs.await_args.kwargs["include_clinical"] is False
+    evidence = out["evidence"]
+    assert evidence["drug_count"] == 0
+    assert evidence["drug_precedent_scoring_count"] == 0
+    assert evidence["drug_count_source"] == "chembl_mechanism_distinct_molecules"
+    assert evidence["drug_precedent_scope"] == "approved_only"
+    # Both observed counts stay visible so the scope difference is auditable.
+    assert evidence["chembl_mechanism_molecule_count"] == 0
+    assert evidence["open_targets_drug_candidate_count"] == 76
+    assert out["data_sources_status"]["open_targets_drug_count"] == "ok"
+    assert out["scoring_breakdown"]["components"]["drug_precedent"]["contribution"] == 0
+
+
+async def test_approved_only_scope_without_chembl_cannot_use_clinical_records(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_clients(monkeypatch)
+    mocks["chembl"].target_by_uniprot = AsyncMock(side_effect=RuntimeError("chembl down"))
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(
+        return_value={"tractability_labels": [], "drug_count": 9}
+    )
+    with pytest.raises(ValueError, match="approved_only; chembl=failed, open_targets=ok"):
+        await assess_target_druggability(
+            DruggabilityInput(uniprot_id="P04637", include_clinical_stage=False)
+        )
+
+
+async def test_approved_only_scope_accepts_open_targets_all_stage_zero(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Live B3GAT1: no ChEMBL target record and zero Open Targets records."""
+    mocks = _patch_clients(monkeypatch)
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value=None)
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(
+        return_value={"tractability_labels": [], "drug_count": 0}
+    )
+    mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
+    out = await assess_target_druggability(
+        DruggabilityInput(uniprot_id="Q9P2W7", include_clinical_stage=False)
+    )
+    evidence = out["evidence"]
+    assert evidence["drug_count"] == 0
+    assert evidence["drug_count_source"] == "open_targets_drug_and_clinical_candidates"
+    assert evidence["chembl_mechanism_molecule_count"] is None
+    assert out["data_sources_status"]["chembl_drug_count"] == "no_data"
 
 
 async def test_assess_target_druggability_gnomad_constraint_exception(
@@ -1263,6 +1342,37 @@ async def test_assess_target_druggability_resolve_exception(
     out = await assess_target_druggability(DruggabilityInput(uniprot_id="P38398"))
     assert out["evidence"]["drug_count"] == 2
     assert out["evidence"]["gene_constraint"]["loeuf"] is None
+    # A resolution outage is a failure, not an intentional skip.
+    assert out["data_sources_status"]["open_targets_drug_count"] == "failed"
+    mocks["opentargets"].drug_count_and_tractability.assert_not_called()
+
+
+async def test_assess_target_druggability_resolve_validation_error_is_invalid_response(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_clients(monkeypatch)
+    mocks["opentargets"].resolve_target = AsyncMock(
+        side_effect=ValueError("Open Targets mapIds response malformed")
+    )
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value={"chembl_id": "CHEMBL_TGT"})
+    mocks["chembl"].approved_drugs = AsyncMock(
+        return_value=[{"molecule_chembl_id": "CHEMBL1", "max_phase": 4}]
+    )
+    out = await assess_target_druggability(DruggabilityInput(uniprot_id="P38398"))
+    assert out["data_sources_status"]["open_targets_drug_count"] == "invalid_response"
+
+
+async def test_assess_target_druggability_unmapped_accession_is_skipped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_clients(monkeypatch)
+    mocks["opentargets"].resolve_target = AsyncMock(return_value={})
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value={"chembl_id": "CHEMBL_TGT"})
+    mocks["chembl"].approved_drugs = AsyncMock(
+        return_value=[{"molecule_chembl_id": "CHEMBL1", "max_phase": 4}]
+    )
+    out = await assess_target_druggability(DruggabilityInput(uniprot_id="P38398"))
+    assert out["data_sources_status"]["open_targets_drug_count"] == "skipped"
 
 
 async def test_assess_target_druggability_plddt_non_dict(
@@ -1271,10 +1381,50 @@ async def test_assess_target_druggability_plddt_non_dict(
     """get_prediction returns non-dict (e.g. list) → plddt stays None."""
     mocks = _patch_clients(monkeypatch)
     mocks["chembl"].target_by_uniprot = AsyncMock(return_value=None)
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(return_value={"drug_count": 0})
     mocks["alphafold"].get_prediction = AsyncMock(return_value=[])
 
     out = await assess_target_druggability(DruggabilityInput(uniprot_id="P38398"))
     assert out["evidence"]["plddt_mean"] is None
+
+
+@pytest.mark.parametrize("bad_plddt", [101.0, -1.0, float("nan"), float("inf"), True, "95"])
+async def test_druggability_invalid_plddt_is_unassessed(
+    monkeypatch: pytest.MonkeyPatch, bad_plddt: object
+) -> None:
+    mocks = _patch_clients(monkeypatch)
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value=None)
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(
+        return_value={"drug_count": 0, "tractability_labels": []}
+    )
+    mocks["alphafold"].get_prediction = AsyncMock(return_value={"globalMetricValue": bad_plddt})
+    result = await assess_target_druggability(DruggabilityInput(uniprot_id="P38398"))
+    assert result["evidence"]["plddt_mean"] is None
+    assert result["data_sources_status"]["alphafold_plddt"] == "invalid_response"
+    assert result["scoring_breakdown"]["components"]["plddt"]["contribution"] == 0
+    assert "structure_plddt" in result["scoring_breakdown"]["signals"]["missing"]
+
+
+async def test_dossier_invalid_plddt_does_not_inflate_score(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_clients(monkeypatch)
+    mocks["alphafold"].get_prediction = AsyncMock(return_value={"globalMetricValue": 999.0})
+    mocks["opentargets"].associated_diseases = AsyncMock(return_value=[])
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(
+        return_value={"drug_count": 0, "tractability_labels": []}
+    )
+    mocks["disgenet"].gene_disease_associations = AsyncMock(return_value=[])
+    mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
+    mocks["clinvar"].search_gene = AsyncMock(return_value=[])
+    mocks["ensembl"].gene_lookup = AsyncMock(return_value={})
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value=None)
+    result = await synthesize_protein_dossier(
+        ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="brief")
+    )
+    assert result["data_sources_status"]["alphafold_plddt"] == "invalid_response"
+    assert result["druggability"]["tier"] == "NOT_DRUGGABLE"
+    assert "structure_plddt" in result["druggability"]["signals"]["missing"]
 
 
 # ---------------------------------------------------------------------------
@@ -1340,12 +1490,13 @@ async def test_synthesize_protein_dossier_comprehensive(
     assert drug["signals"]["total"] == 4
     assert "borderline" in drug
     assert "score_normalized" in drug
+    assert "open_targets=OT-platform-live-release-unverified" in out["provenance"]
 
 
 async def test_synthesize_protein_dossier_brief(monkeypatch: pytest.MonkeyPatch) -> None:
     mocks = _patch_clients(monkeypatch)
     mocks["opentargets"].associated_diseases = AsyncMock(return_value=[])
-    mocks["opentargets"].drug_count_and_tractability = AsyncMock(return_value={})
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(return_value={"drug_count": 0})
     mocks["disgenet"].gene_disease_associations = AsyncMock(return_value=[])
     mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
     mocks["clinvar"].search_gene = AsyncMock(return_value=[])
@@ -1372,10 +1523,10 @@ async def test_synthesize_protein_dossier_with_exceptions(
     mocks["chembl"].target_by_uniprot = AsyncMock(return_value=None)
     mocks["alphafold"].get_prediction = AsyncMock(side_effect=RuntimeError("e"))
 
-    out = await synthesize_protein_dossier(
-        ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="standard")
-    )
-    assert out["disease_associations"] == []
+    with pytest.raises(ValueError, match="open_targets=failed"):
+        await synthesize_protein_dossier(
+            ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="standard")
+        )
 
 
 async def test_synthesize_protein_dossier_plddt_non_dict(
@@ -1384,7 +1535,7 @@ async def test_synthesize_protein_dossier_plddt_non_dict(
     """get_prediction returns non-dict → dossier_plddt stays None."""
     mocks = _patch_clients(monkeypatch)
     mocks["opentargets"].associated_diseases = AsyncMock(return_value=[])
-    mocks["opentargets"].drug_count_and_tractability = AsyncMock(return_value={})
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(return_value={"drug_count": 0})
     mocks["disgenet"].gene_disease_associations = AsyncMock(return_value=[])
     mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
     mocks["clinvar"].search_gene = AsyncMock(return_value=[])
@@ -1395,7 +1546,9 @@ async def test_synthesize_protein_dossier_plddt_non_dict(
     out = await synthesize_protein_dossier(
         ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="standard")
     )
-    assert out["druggability"]["tier"] in {"NOT_DRUGGABLE", "COLD", "WARM", "HOT"}
+    assert out["druggability"]["drug_count"] == 0
+    assert out["data_sources_status"]["alphafold_plddt"] == "invalid_response"
+    assert "structure_plddt" in out["druggability"]["signals"]["missing"]
 
 
 async def test_synthesize_protein_dossier_chembl_target_no_id(
@@ -1404,7 +1557,7 @@ async def test_synthesize_protein_dossier_chembl_target_no_id(
     """ChEMBL target dict missing chembl_id → no drug lookup."""
     mocks = _patch_clients(monkeypatch)
     mocks["opentargets"].associated_diseases = AsyncMock(return_value=[])
-    mocks["opentargets"].drug_count_and_tractability = AsyncMock(return_value={})
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(return_value={"drug_count": 0})
     mocks["disgenet"].gene_disease_associations = AsyncMock(return_value=[])
     mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
     mocks["clinvar"].search_gene = AsyncMock(return_value=[])
@@ -1417,12 +1570,44 @@ async def test_synthesize_protein_dossier_chembl_target_no_id(
     assert out["approved_drugs"] == []
 
 
+@pytest.mark.parametrize(
+    ("ot_response", "expected_status"),
+    [
+        (RuntimeError("synthetic Open Targets outage"), "failed"),
+        ({"drug_count": "not-a-count", "tractability_labels": []}, "invalid_response"),
+    ],
+)
+async def test_dossier_retains_ot_source_state_when_chembl_has_observed_count(
+    monkeypatch: pytest.MonkeyPatch, ot_response: Any, expected_status: str
+) -> None:
+    """ChEMBL evidence permits a tier without laundering failed OT evidence."""
+    mocks = _patch_clients(monkeypatch)
+    mocks["opentargets"].associated_diseases = AsyncMock(return_value=[])
+    if isinstance(ot_response, BaseException):
+        mocks["opentargets"].drug_count_and_tractability = AsyncMock(side_effect=ot_response)
+    else:
+        mocks["opentargets"].drug_count_and_tractability = AsyncMock(return_value=ot_response)
+    mocks["disgenet"].gene_disease_associations = AsyncMock(return_value=[])
+    mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
+    mocks["clinvar"].search_gene = AsyncMock(return_value=[])
+    mocks["ensembl"].gene_lookup = AsyncMock(return_value={})
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value={"chembl_id": "CHEMBL_TGT"})
+    mocks["chembl"].approved_drugs = AsyncMock(return_value=[])
+
+    dossier = await synthesize_protein_dossier(
+        ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="brief")
+    )
+    assert dossier["druggability"]["drug_count"] == 0
+    assert dossier["data_sources_status"]["chembl_drugs"] == "ok"
+    assert dossier["data_sources_status"]["open_targets_drug_count"] == expected_status
+
+
 async def test_synthesize_protein_dossier_drugs_exception(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     mocks = _patch_clients(monkeypatch)
     mocks["opentargets"].associated_diseases = AsyncMock(return_value=[])
-    mocks["opentargets"].drug_count_and_tractability = AsyncMock(return_value={})
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(return_value={"drug_count": 0})
     mocks["disgenet"].gene_disease_associations = AsyncMock(return_value=[])
     mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
     mocks["clinvar"].search_gene = AsyncMock(return_value=[])
@@ -1434,6 +1619,48 @@ async def test_synthesize_protein_dossier_drugs_exception(
         ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="standard")
     )
     assert out["approved_drugs"] == []
+
+
+async def test_dossier_chembl_target_failure_preserves_other_sources(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_clients(monkeypatch)
+    mocks["opentargets"].associated_diseases = AsyncMock(return_value=[])
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(
+        return_value={"drug_count": 2, "tractability_labels": []}
+    )
+    mocks["disgenet"].gene_disease_associations = AsyncMock(return_value=[])
+    mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
+    mocks["clinvar"].search_gene = AsyncMock(return_value=[])
+    mocks["ensembl"].gene_lookup = AsyncMock(return_value={})
+    mocks["chembl"].target_by_uniprot = AsyncMock(side_effect=RuntimeError("unavailable"))
+
+    out = await synthesize_protein_dossier(
+        ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="standard")
+    )
+    assert out["data_sources_status"]["chembl_drugs"] == "failed"
+    assert out["data_sources_status"]["ot_tractability"] == "ok"
+    assert out["druggability"]["drug_count"] == 2
+    assert out["approved_drugs"] == []
+
+
+async def test_dossier_malformed_chembl_target_is_not_no_data(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_clients(monkeypatch)
+    mocks["opentargets"].associated_diseases = AsyncMock(return_value=[])
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(return_value={"drug_count": 0})
+    mocks["disgenet"].gene_disease_associations = AsyncMock(return_value=[])
+    mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
+    mocks["clinvar"].search_gene = AsyncMock(return_value=[])
+    mocks["ensembl"].gene_lookup = AsyncMock(return_value={})
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value=["bad target response"])
+
+    out = await synthesize_protein_dossier(
+        ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="brief")
+    )
+    assert out["data_sources_status"]["chembl_drugs"] == "invalid_response"
+    assert out["druggability"]["drug_count"] == 0
 
 
 async def test_synthesize_protein_dossier_disgenet_overlapping(
@@ -1448,7 +1675,7 @@ async def test_synthesize_protein_dossier_disgenet_overlapping(
         "overall_score": 0.8,
     }
     mocks["opentargets"].associated_diseases = AsyncMock(return_value=[ot_score])
-    mocks["opentargets"].drug_count_and_tractability = AsyncMock(return_value={})
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(return_value={"drug_count": 0})
     mocks["disgenet"].gene_disease_associations = AsyncMock(
         return_value=[
             {"disease_name": "", "score": 0.5},  # empty name skipped
@@ -1476,7 +1703,7 @@ async def test_synthesize_protein_dossier_skip_empty_ot_names(
     empty_score = MagicMock()
     empty_score.to_dict.return_value = {"disease_name": "", "overall_score": 0.5}
     mocks["opentargets"].associated_diseases = AsyncMock(return_value=[empty_score])
-    mocks["opentargets"].drug_count_and_tractability = AsyncMock(return_value={})
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(return_value={"drug_count": 0})
     mocks["disgenet"].gene_disease_associations = AsyncMock(return_value=[])
     mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
     mocks["clinvar"].search_gene = AsyncMock(return_value=[])
@@ -1495,7 +1722,7 @@ async def test_synthesize_protein_dossier_target_no_chembl_id(
     """chembl_target dict has chembl_id='' → no drug lookup attempted."""
     mocks = _patch_clients(monkeypatch)
     mocks["opentargets"].associated_diseases = AsyncMock(return_value=[])
-    mocks["opentargets"].drug_count_and_tractability = AsyncMock(return_value={})
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(return_value={"drug_count": 0})
     mocks["disgenet"].gene_disease_associations = AsyncMock(return_value=[])
     mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
     mocks["clinvar"].search_gene = AsyncMock(return_value=[])
@@ -1514,7 +1741,7 @@ async def test_synthesize_protein_dossier_orthologs_exception(
 ) -> None:
     mocks = _patch_clients(monkeypatch)
     mocks["opentargets"].associated_diseases = AsyncMock(return_value=[])
-    mocks["opentargets"].drug_count_and_tractability = AsyncMock(return_value={})
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(return_value={"drug_count": 0})
     mocks["disgenet"].gene_disease_associations = AsyncMock(return_value=[])
     mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
     mocks["clinvar"].search_gene = AsyncMock(return_value=[])
@@ -1535,17 +1762,91 @@ async def test_synthesize_protein_dossier_resolve_exception(
     mocks = _patch_clients(monkeypatch)
     mocks["opentargets"].resolve_target = AsyncMock(side_effect=RuntimeError("resolve fail"))
     mocks["opentargets"].associated_diseases = AsyncMock(return_value=[])
-    mocks["opentargets"].drug_count_and_tractability = AsyncMock(return_value={})
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(return_value={"drug_count": 0})
     mocks["disgenet"].gene_disease_associations = AsyncMock(return_value=[])
     mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
     mocks["clinvar"].search_gene = AsyncMock(return_value=[])
     mocks["ensembl"].gene_lookup = AsyncMock(return_value={})
-    mocks["chembl"].target_by_uniprot = AsyncMock(return_value=None)
+    # The previous version of this test completed only because Open Targets
+    # was queried with an empty identifier and returned a fabricated zero.
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value={"chembl_id": "TGT"})
+    mocks["chembl"].approved_drugs = AsyncMock(
+        return_value=[{"molecule_chembl_id": "CHEMBL1", "max_phase": 4}]
+    )
 
     out = await synthesize_protein_dossier(
         ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1")
     )
     assert out["target"]["gene_symbol"] == "BRCA1"
+    # Open Targets sources inherit the resolution failure; they are not
+    # queried with an empty identifier and then read as no data.
+    assert out["data_sources_status"]["ot_diseases"] == "failed"
+    assert out["data_sources_status"]["ot_tractability"] == "failed"
+    assert out["data_sources_status"]["open_targets_drug_count"] == "failed"
+    mocks["opentargets"].associated_diseases.assert_not_called()
+    mocks["opentargets"].drug_count_and_tractability.assert_not_called()
+
+
+async def test_synthesize_protein_dossier_unmapped_accession_skips_open_targets(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An accession Open Targets does not map is skipped, never queried with an empty ID."""
+    mocks = _patch_dossier_clients(monkeypatch)
+    mocks["opentargets"].resolve_target = AsyncMock(return_value={})
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value={"chembl_id": "TGT"})
+    mocks["chembl"].approved_drugs = AsyncMock(
+        return_value=[{"molecule_chembl_id": "CHEMBL1", "max_phase": 4}]
+    )
+    out = await synthesize_protein_dossier(
+        ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="brief")
+    )
+    assert out["data_sources_status"]["ot_diseases"] == "skipped"
+    assert out["data_sources_status"]["ot_tractability"] == "skipped"
+    assert out["data_sources_status"]["open_targets_drug_count"] == "skipped"
+    assert out["target"]["identity_verified"] is False
+    mocks["opentargets"].associated_diseases.assert_not_called()
+    mocks["opentargets"].drug_count_and_tractability.assert_not_called()
+
+
+async def test_synthesize_protein_dossier_explicit_negative_lookups_are_no_data(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_dossier_clients(monkeypatch)
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value={"chembl_id": "TGT"})
+    mocks["chembl"].approved_drugs = AsyncMock(
+        return_value=[{"molecule_chembl_id": "CHEMBL1", "max_phase": 4}]
+    )
+    mocks["ensembl"].gene_lookup = AsyncMock(return_value={"gene_symbol": "BRCA1", "found": False})
+    mocks["gnomad"].gene_constraint = AsyncMock(
+        return_value={"gene_symbol": "BRCA1", "constraint_available": False}
+    )
+    out = await synthesize_protein_dossier(
+        ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="brief")
+    )
+    assert out["data_sources_status"]["ensembl_gene"] == "no_data"
+    assert out["data_sources_status"]["gene_constraint"] == "no_data"
+
+
+async def test_synthesize_protein_dossier_resolve_validation_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_clients(monkeypatch)
+    mocks["opentargets"].resolve_target = AsyncMock(
+        side_effect=ValueError("Open Targets mapIds response malformed")
+    )
+    mocks["disgenet"].gene_disease_associations = AsyncMock(return_value=[])
+    mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
+    mocks["clinvar"].search_gene = AsyncMock(return_value=[])
+    mocks["ensembl"].gene_lookup = AsyncMock(return_value={})
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value={"chembl_id": "TGT"})
+    mocks["chembl"].approved_drugs = AsyncMock(
+        return_value=[{"molecule_chembl_id": "CHEMBL1", "max_phase": 4}]
+    )
+    out = await synthesize_protein_dossier(
+        ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="brief")
+    )
+    assert out["data_sources_status"]["ot_diseases"] == "invalid_response"
+    assert out["data_sources_status"]["open_targets_drug_count"] == "invalid_response"
 
 
 # ---------------------------------------------------------------------------
@@ -1587,6 +1888,17 @@ async def test_map_disease_drug_landscape_success(
     # D3 regression: the human-readable label, not the raw MONDO CURIE.
     assert out["disease"]["name"] == "chronic myeloid leukemia"
     assert out["competitive_intelligence"]["approved_count"] == 1
+    assert out["drug_landscape"]["total_indication_entries"] == 4
+    assert out["drug_landscape"]["indication_page_complete"] is True
+    assert out["target_landscape"]["total_associated_targets"] == 1
+    assert out["target_landscape"]["target_page_complete"] is True
+    assert out["competitive_intelligence"]["counts_complete"] is True
+    assert "open_targets=OT-platform-live-release-unverified" in out["provenance"]
+    assert out["data_sources_status"] == {
+        "mondo": "ok",
+        "open_targets": "ok",
+        "chembl_indications": "ok",
+    }
     # ChEMBL was queried by the EFO cross-reference, not the MONDO ID.
     assert mocks["chembl"].drug_indications.await_args.kwargs["efo_id"] == "EFO:0000339"
     # Drug names are backfilled from the bulk molecule lookup.
@@ -1605,6 +1917,10 @@ async def test_map_disease_drug_landscape_mondo_exception(
         DiseaseDrugLandscapeInput(disease_mondo_id="MONDO:0007254")
     )
     assert out["disease"]["name"] == ""
+    assert out["data_sources_status"]["mondo"] == "failed"
+    assert out["data_sources_status"]["chembl_indications"] == "skipped"
+    assert out["competitive_intelligence"]["approved_count"] is None
+    assert out["competitive_intelligence"]["investability"].startswith("NOT_ASSESSED")
 
 
 async def test_map_disease_drug_landscape_chembl_exception(
@@ -1623,6 +1939,38 @@ async def test_map_disease_drug_landscape_chembl_exception(
         DiseaseDrugLandscapeInput(disease_mondo_id="MONDO:0007254")
     )
     assert out["drug_landscape"]["approved_drugs"] == []
+    assert out["drug_landscape"]["total_indication_entries"] is None
+    assert out["drug_landscape"]["indication_page_complete"] is None
+    assert out["target_landscape"]["total_associated_targets"] is None
+    assert out["target_landscape"]["target_page_complete"] is None
+    assert out["competitive_intelligence"]["counts_complete"] is None
+    assert out["data_sources_status"]["open_targets"] == "failed"
+    assert out["data_sources_status"]["chembl_indications"] == "failed"
+    assert out["competitive_intelligence"]["approved_count"] is None
+    assert out["competitive_intelligence"]["investability"].startswith("NOT_ASSESSED")
+
+
+async def test_map_disease_landscape_failed_targets_preserve_observed_drugs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_clients(monkeypatch)
+    record = MagicMock(spec=DiseaseRecord)
+    record.name = "disease"
+    record.efo_ids = ("EFO:0000339",)
+    mocks["mondo"].lookup = AsyncMock(return_value=record)
+    mocks["opentargets"].associated_targets = AsyncMock(side_effect=RuntimeError("unavailable"))
+    mocks["chembl"].drug_indications = AsyncMock(
+        return_value=[{"max_phase_for_indication": "4.0", "molecule_chembl_id": "C1"}]
+    )
+    mocks["chembl"].molecule_names = AsyncMock(return_value={"C1": "Known"})
+    out = await map_disease_drug_landscape(
+        DiseaseDrugLandscapeInput(disease_mondo_id="MONDO:0007254")
+    )
+    assert out["data_sources_status"]["open_targets"] == "failed"
+    assert out["data_sources_status"]["chembl_indications"] == "ok"
+    assert out["competitive_intelligence"]["approved_count"] == 1
+    assert out["competitive_intelligence"]["druggable_target_count"] is None
+    assert out["competitive_intelligence"]["investability"].startswith("NOT_ASSESSED")
 
 
 async def test_map_disease_drug_landscape_ot_efo_fallback(
@@ -1646,8 +1994,94 @@ async def test_map_disease_drug_landscape_ot_efo_fallback(
         DiseaseDrugLandscapeInput(disease_mondo_id="MONDO:0011996")
     )
     assert len(out["target_landscape"]["top_targets"]) == 1
+    assert out["data_sources_status"]["open_targets"] == "ok"
+    assert out["data_sources_status"]["chembl_indications"] == "no_data"
+    assert out["competitive_intelligence"]["approved_count"] == 0
+    assert out["drug_landscape"]["total_indication_entries"] == 0
     # The fallback queried Open Targets with the underscore-form EFO ID.
     assert mocks["opentargets"].associated_targets.await_args.args[0] == "EFO_0000339"
+
+
+async def test_map_disease_landscape_rejected_open_targets_content_is_invalid_response(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_clients(monkeypatch)
+    mondo_result = MagicMock()
+    mondo_result.name = "Breast cancer"
+    mondo_result.efo_ids = ["EFO:0000305"]
+    mocks["mondo"].lookup = AsyncMock(return_value=mondo_result)
+    mocks["opentargets"].associated_targets = AsyncMock(
+        side_effect=ValueError("Open Targets score is missing or invalid")
+    )
+    mocks["chembl"].drug_indications = AsyncMock(return_value=[])
+    mocks["chembl"].molecule_names = AsyncMock(return_value={})
+
+    out = await map_disease_drug_landscape(
+        DiseaseDrugLandscapeInput(disease_mondo_id="MONDO:0007254")
+    )
+    assert out["data_sources_status"]["open_targets"] == "invalid_response"
+    assert out["target_landscape"]["retrieved_associated_targets"] is None
+    assert out["competitive_intelligence"]["investability"].startswith("NOT_ASSESSED")
+
+
+async def test_map_disease_landscape_failed_efo_fallback_is_not_observed_zero(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An empty MONDO page followed by a failed EFO retry is unavailable evidence."""
+    mocks = _patch_clients(monkeypatch)
+    mondo_result = MagicMock(spec=DiseaseRecord)
+    mondo_result.name = "chronic myeloid leukemia"
+    mondo_result.efo_ids = ("EFO:0000339",)
+    mocks["mondo"].lookup = AsyncMock(return_value=mondo_result)
+    mocks["opentargets"].associated_targets = AsyncMock(
+        side_effect=[[], RuntimeError("open targets unavailable")]
+    )
+    mocks["chembl"].drug_indications = AsyncMock(
+        return_value=[{"max_phase_for_indication": "4.0", "molecule_chembl_id": "C1"}]
+    )
+    mocks["chembl"].molecule_names = AsyncMock(return_value={"C1": "Imatinib"})
+
+    out = await map_disease_drug_landscape(
+        DiseaseDrugLandscapeInput(disease_mondo_id="MONDO:0011996")
+    )
+    assert out["data_sources_status"]["open_targets"] == "failed"
+    assert out["target_landscape"]["top_targets"] == []
+    assert out["target_landscape"]["retrieved_associated_targets"] is None
+    assert out["target_landscape"]["total_associated_targets"] is None
+    assert out["competitive_intelligence"]["druggable_target_count"] is None
+    assert out["competitive_intelligence"]["investability"].startswith("NOT_ASSESSED")
+    # The complete ChEMBL page is still reported on its own.
+    assert out["competitive_intelligence"]["approved_count"] == 1
+
+
+async def test_map_disease_landscape_unknown_tractability_is_unassessed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A row with ``tractable: None`` is not an observed non-tractable target."""
+    mocks = _patch_clients(monkeypatch)
+    record = MagicMock(spec=DiseaseRecord)
+    record.name = "disease"
+    record.efo_ids = ("EFO:0000339",)
+    mocks["mondo"].lookup = AsyncMock(return_value=record)
+    mocks["opentargets"].associated_targets = AsyncMock(
+        return_value=[
+            {"target_gene_symbol": "G1", "tractable": True},
+            {"target_gene_symbol": "G2", "tractable": None},
+        ]
+    )
+    mocks["chembl"].drug_indications = AsyncMock(
+        return_value=[{"max_phase_for_indication": "4.0", "molecule_chembl_id": "C1"}]
+    )
+    mocks["chembl"].molecule_names = AsyncMock(return_value={"C1": "Known"})
+    out = await map_disease_drug_landscape(
+        DiseaseDrugLandscapeInput(disease_mondo_id="MONDO:0007254")
+    )
+    assert out["target_landscape"]["retrieved_associated_targets"] == 2
+    assert out["target_landscape"]["total_associated_targets"] == 2
+    assert out["competitive_intelligence"]["druggable_target_count"] is None
+    assert out["competitive_intelligence"]["investability"].startswith("NOT_ASSESSED")
+    assert out["competitive_intelligence"]["approved_count"] == 1
+    assert out["data_sources_status"]["open_targets"] == "ok"
 
 
 async def test_map_disease_drug_landscape_mesh_fallback(
@@ -1660,23 +2094,195 @@ async def test_map_disease_drug_landscape_mesh_fallback(
     mondo_result.efo_ids = ()
     mocks["mondo"].lookup = AsyncMock(return_value=mondo_result)
     mocks["opentargets"].associated_targets = AsyncMock(return_value=[])
+    # The EFO search succeeds but finds nothing; a failing search is a
+    # separate case (test_map_disease_landscape_failed_efo_resolver_is_not_observed_zero).
+    mocks["opentargets"].resolve_disease_efo = AsyncMock(return_value="")
     mocks["chembl"].drug_indications = AsyncMock(return_value=[])
 
     out = await map_disease_drug_landscape(
         DiseaseDrugLandscapeInput(disease_mondo_id="MONDO:0007254")
     )
     assert out["drug_landscape"]["approved_drugs"] == []
+    assert out["data_sources_status"]["open_targets"] == "no_data"
+    assert out["data_sources_status"]["chembl_indications"] == "no_data"
+    assert out["competitive_intelligence"]["approved_count"] == 0
     assert mocks["chembl"].drug_indications.await_args.kwargs["mesh_heading"] == "some disease"
 
 
+async def test_map_disease_landscape_failed_efo_resolver_is_not_observed_zero(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failed EFO lookup leaves an empty MONDO-keyed target page unobserved."""
+    mocks = _patch_clients(monkeypatch)
+    mondo_result = MagicMock(spec=DiseaseRecord)
+    mondo_result.name = "some disease"
+    mondo_result.efo_ids = ()
+    mocks["mondo"].lookup = AsyncMock(return_value=mondo_result)
+    mocks["opentargets"].associated_targets = AsyncMock(return_value=[])
+    mocks["opentargets"].resolve_disease_efo = AsyncMock(side_effect=RuntimeError("search down"))
+    mocks["chembl"].drug_indications = AsyncMock(return_value=[])
+
+    out = await map_disease_drug_landscape(
+        DiseaseDrugLandscapeInput(disease_mondo_id="MONDO:0007254")
+    )
+    assert out["data_sources_status"]["open_targets"] == "failed"
+    assert out["target_landscape"]["retrieved_associated_targets"] is None
+    assert out["competitive_intelligence"]["investability"].startswith("NOT_ASSESSED")
+    # ChEMBL still falls back to the MeSH heading and is reported independently.
+    assert out["data_sources_status"]["chembl_indications"] == "no_data"
+
+
+async def test_map_disease_landscape_caps_are_not_reported_as_global_totals(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_clients(monkeypatch)
+    record = MagicMock(spec=DiseaseRecord)
+    record.name = "disease"
+    record.efo_ids = ("EFO:0000339",)
+    mocks["mondo"].lookup = AsyncMock(return_value=record)
+    mocks["opentargets"].associated_targets = AsyncMock(
+        return_value=[{"target_gene_symbol": f"G{i}", "tractable": True} for i in range(20)]
+    )
+    mocks["chembl"].drug_indications = AsyncMock(
+        return_value=[
+            {"molecule_chembl_id": f"C{i}", "max_phase_for_indication": "4.0"} for i in range(20)
+        ]
+    )
+    mocks["chembl"].molecule_names = AsyncMock(return_value={})
+    out = await map_disease_drug_landscape(
+        DiseaseDrugLandscapeInput(disease_mondo_id="MONDO:0007254")
+    )
+    # The published numeric fields keep the retrieved count; the completeness
+    # flags say it is a lower bound, so nothing is assessed from it.
+    assert out["drug_landscape"]["total_indication_entries"] == 20
+    assert out["drug_landscape"]["indication_page_complete"] is False
+    assert out["drug_landscape"]["retrieved_indication_entries"] == 20
+    assert out["target_landscape"]["total_associated_targets"] == 20
+    assert out["target_landscape"]["target_page_complete"] is False
+    assert out["target_landscape"]["retrieved_associated_targets"] == 20
+    assert out["competitive_intelligence"]["investability"].startswith("NOT_ASSESSED")
+    assert out["competitive_intelligence"]["approved_count"] == 20
+    assert out["competitive_intelligence"]["counts_complete"] is False
+
+
+async def test_landscape_counts_tractable_targets_beyond_top_ten(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_clients(monkeypatch)
+    record = MagicMock(spec=DiseaseRecord)
+    record.name = "synthetic disease"
+    record.efo_ids = ()
+    mocks["mondo"].lookup = AsyncMock(return_value=record)
+    mocks["opentargets"].associated_targets = AsyncMock(
+        return_value=[
+            {"target_gene_symbol": f"G{i}", "tractable": i in (11, 12)} for i in range(15)
+        ]
+    )
+    mocks["chembl"].drug_indications = AsyncMock(return_value=[])
+    out = await map_disease_drug_landscape(
+        DiseaseDrugLandscapeInput(disease_mondo_id="MONDO:0007254")
+    )
+    assert out["target_landscape"]["retrieved_associated_targets"] == 15
+    assert len(out["target_landscape"]["top_targets"]) == 10
+    assert out["competitive_intelligence"]["druggable_target_count"] == 2
+    assert len(out["target_landscape"]["druggable_targets"]) == 2
+    assert out["competitive_intelligence"]["investability"].startswith("EARLY")
+
+
 def test_indication_phase_coercion() -> None:
+    """Observed ChEMBL phase values are preserved; unknown is None, never 0."""
     from alphafold_sovereign.tools.precision_medicine import _indication_phase
 
     assert _indication_phase({"max_phase_for_indication": "4.0"}) == 4
     assert _indication_phase({"max_phase_for_indication": 3}) == 3
-    assert _indication_phase({"max_phase_for_indication": None}) == 0
-    assert _indication_phase({"max_phase_for_indication": "n/a"}) == 0
-    assert _indication_phase({}) == 0
+    # Live ChEMBL 37 conventions: 0.5 is early phase 1, -1 is "phase unknown".
+    assert _indication_phase({"max_phase_for_indication": "0.5"}) == 0.5
+    assert _indication_phase({"max_phase_for_indication": "-1.0"}) == -1
+    for raw in (None, "n/a", "nan", "inf", True, "7.0", 0):
+        assert _indication_phase({"max_phase_for_indication": raw}) is None, raw
+    assert _indication_phase({}) is None
+
+
+@pytest.mark.parametrize("raw_phase", [None, "-1.0", "n/a"])
+async def test_map_disease_landscape_withholds_counts_for_unassigned_phase(
+    monkeypatch: pytest.MonkeyPatch, raw_phase: Any
+) -> None:
+    """A retrieved row whose phase cannot be bucketed makes the counts unsupported."""
+    mocks = _patch_clients(monkeypatch)
+    record = MagicMock(spec=DiseaseRecord)
+    record.name = "disease"
+    record.efo_ids = ("EFO:0000339",)
+    mocks["mondo"].lookup = AsyncMock(return_value=record)
+    mocks["opentargets"].associated_targets = AsyncMock(
+        return_value=[{"target_gene_symbol": "G1", "tractable": True}]
+    )
+    mocks["chembl"].drug_indications = AsyncMock(
+        return_value=[
+            {"max_phase_for_indication": "4.0", "molecule_chembl_id": "C1"},
+            {"max_phase_for_indication": raw_phase, "molecule_chembl_id": "C2"},
+        ]
+    )
+    mocks["chembl"].molecule_names = AsyncMock(return_value={})
+    out = await map_disease_drug_landscape(
+        DiseaseDrugLandscapeInput(disease_mondo_id="MONDO:0007254")
+    )
+    assert out["data_sources_status"]["chembl_indications"] == "ok"
+    assert out["drug_landscape"]["retrieved_indication_entries"] == 2
+    assert out["drug_landscape"]["unassigned_phase_entries"] == 1
+    # The approved row is still listed; only the aggregate claims are withheld.
+    assert [d["molecule_chembl_id"] for d in out["drug_landscape"]["approved_drugs"]] == ["C1"]
+    assert out["competitive_intelligence"]["approved_count"] is None
+    assert out["competitive_intelligence"]["pipeline_count"] is None
+    assert out["competitive_intelligence"]["investability"].startswith("NOT_ASSESSED")
+
+
+async def test_map_disease_landscape_early_phase_one_is_pipeline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_clients(monkeypatch)
+    record = MagicMock(spec=DiseaseRecord)
+    record.name = "disease"
+    record.efo_ids = ("EFO:0000339",)
+    mocks["mondo"].lookup = AsyncMock(return_value=record)
+    mocks["opentargets"].associated_targets = AsyncMock(
+        return_value=[{"target_gene_symbol": "G1", "tractable": True}]
+    )
+    mocks["chembl"].drug_indications = AsyncMock(
+        return_value=[{"max_phase_for_indication": "0.5", "molecule_chembl_id": "C1"}]
+    )
+    mocks["chembl"].molecule_names = AsyncMock(return_value={})
+    out = await map_disease_drug_landscape(
+        DiseaseDrugLandscapeInput(disease_mondo_id="MONDO:0007254")
+    )
+    assert [d["molecule_chembl_id"] for d in out["drug_landscape"]["phase_1_2_drugs"]] == ["C1"]
+    assert out["drug_landscape"]["unassigned_phase_entries"] == 0
+    assert out["competitive_intelligence"]["approved_count"] == 0
+    assert out["competitive_intelligence"]["pipeline_count"] == 1
+    assert not out["competitive_intelligence"]["investability"].startswith("NOT_ASSESSED")
+
+
+async def test_map_disease_landscape_malformed_chembl_envelope_is_invalid_response(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_clients(monkeypatch)
+    record = MagicMock(spec=DiseaseRecord)
+    record.name = "disease"
+    record.efo_ids = ("EFO:0000339",)
+    mocks["mondo"].lookup = AsyncMock(return_value=record)
+    mocks["opentargets"].associated_targets = AsyncMock(
+        return_value=[{"target_gene_symbol": "G1", "tractable": True}]
+    )
+    mocks["chembl"].drug_indications = AsyncMock(
+        side_effect=ValueError("ChEMBL drug_indication response missing a valid list")
+    )
+    out = await map_disease_drug_landscape(
+        DiseaseDrugLandscapeInput(disease_mondo_id="MONDO:0007254")
+    )
+    assert out["data_sources_status"]["chembl_indications"] == "invalid_response"
+    assert out["drug_landscape"]["retrieved_indication_entries"] is None
+    assert out["drug_landscape"]["unassigned_phase_entries"] is None
+    assert out["competitive_intelligence"]["approved_count"] is None
+    assert out["competitive_intelligence"]["investability"].startswith("NOT_ASSESSED")
 
 
 # ---------------------------------------------------------------------------
@@ -2117,6 +2723,9 @@ async def test_find_drug_repurposing_candidates_success(
         DrugRepurposingInput(disease_mondo_id="MONDO:0007254")
     )
     assert out["candidate_count"] >= 1
+    assert "open_targets=OT-platform-live-release-unverified" in out["provenance"]
+    assert out["data_sources_status"]["chembl"] == "ok"
+    assert out["evidence_completeness"]["partial"] is False
 
 
 async def test_find_drug_repurposing_no_targets(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -2126,6 +2735,7 @@ async def test_find_drug_repurposing_no_targets(monkeypatch: pytest.MonkeyPatch)
         DrugRepurposingInput(disease_mondo_id="MONDO:0007254")
     )
     assert out["candidates"] == []
+    assert out["data_sources_status"] == {"open_targets": "no_data", "chembl": "skipped"}
 
 
 async def test_find_drug_repurposing_target_no_uniprot(
@@ -2146,6 +2756,8 @@ async def test_find_drug_repurposing_target_no_uniprot(
         DrugRepurposingInput(disease_mondo_id="MONDO:0007254")
     )
     assert out["candidates"] == []
+    assert out["data_sources_status"]["chembl"] == "skipped"
+    assert out["evidence_completeness"]["targets_without_uniprot"] == 1
 
 
 async def test_find_drug_repurposing_chembl_exception(
@@ -2166,6 +2778,217 @@ async def test_find_drug_repurposing_chembl_exception(
         DrugRepurposingInput(disease_mondo_id="MONDO:0007254")
     )
     assert out["candidates"] == []
+    assert out["data_sources_status"]["chembl"] == "failed"
+    assert out["evidence_completeness"]["partial"] is True
+    assert out["evidence_completeness"]["chembl_lookups_failed"] == 1
+    assert "incomplete" in out["message"]
+
+
+async def test_find_drug_repurposing_invalid_chembl_content_is_invalid_response(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_clients(monkeypatch)
+    target = MagicMock()
+    target.uniprot_id = "P12345"
+    target.to_dict.return_value = {
+        "overall_score": 0.5,
+        "target_gene_symbol": "X",
+        "uniprot_id": "P12345",
+    }
+    mocks["opentargets"].associated_targets = AsyncMock(return_value=[target])
+    mocks["chembl"].find_repurposable_drugs = AsyncMock(
+        side_effect=ValueError("ChEMBL UniProt accession has ambiguous individual protein targets")
+    )
+
+    out = await find_drug_repurposing_candidates(
+        DrugRepurposingInput(disease_mondo_id="MONDO:0007254")
+    )
+    assert out["candidates"] == []
+    assert out["data_sources_status"]["chembl"] == "invalid_response"
+    assert out["evidence_completeness"]["chembl_lookups_failed"] == 0
+    assert out["evidence_completeness"]["chembl_lookups_invalid"] == 1
+    assert out["evidence_completeness"]["partial"] is True
+    assert "could not be validated" in out["message"]
+
+
+async def test_find_drug_repurposing_invalid_and_assessed_lookups_are_partial(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_clients(monkeypatch)
+    targets = []
+    for uid in ("P11111", "P22222"):
+        target = MagicMock()
+        target.uniprot_id = uid
+        target.to_dict.return_value = {
+            "overall_score": 0.5,
+            "target_gene_symbol": "X",
+            "uniprot_id": uid,
+        }
+        targets.append(target)
+    mocks["opentargets"].associated_targets = AsyncMock(return_value=targets)
+    mocks["chembl"].find_repurposable_drugs = AsyncMock(
+        side_effect=[ValueError("ChEMBL mechanism pagination incomplete"), []]
+    )
+
+    out = await find_drug_repurposing_candidates(
+        DrugRepurposingInput(disease_mondo_id="MONDO:0007254")
+    )
+    assert out["data_sources_status"]["chembl"] == "partial"
+    assert out["evidence_completeness"]["chembl_lookups_invalid"] == 1
+    assert out["evidence_completeness"]["chembl_lookups_assessed"] == 1
+
+
+async def test_find_drug_repurposing_empty_chembl_response_is_observed_no_data(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_clients(monkeypatch)
+    target = {
+        "overall_score": 0.5,
+        "target_gene_symbol": "X",
+        "uniprot_id": "P12345",
+    }
+    mocks["opentargets"].associated_targets = AsyncMock(return_value=[target])
+    mocks["chembl"].find_repurposable_drugs = AsyncMock(return_value=[])
+
+    out = await find_drug_repurposing_candidates(
+        DrugRepurposingInput(disease_mondo_id="MONDO:0007254")
+    )
+    assert out["candidate_count"] == 0
+    assert out["data_sources_status"]["chembl"] == "no_data"
+    assert out["evidence_completeness"]["partial"] is False
+
+
+async def test_find_drug_repurposing_partial_failure_preserves_observed_candidates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_clients(monkeypatch)
+    targets = [
+        {"overall_score": 0.8, "target_gene_symbol": "G1", "uniprot_id": "P1"},
+        {"overall_score": 0.7, "target_gene_symbol": "G2", "uniprot_id": "P2"},
+    ]
+    mocks["opentargets"].associated_targets = AsyncMock(return_value=targets)
+
+    async def lookup(uniprot_id: str, **kwargs: Any) -> list[dict[str, Any]]:
+        if uniprot_id == "P2":
+            raise RuntimeError("unavailable")
+        return [{"molecule_chembl_id": "C1", "max_phase": 4}]
+
+    mocks["chembl"].find_repurposable_drugs = AsyncMock(side_effect=lookup)
+    out = await find_drug_repurposing_candidates(
+        DrugRepurposingInput(disease_mondo_id="MONDO:0007254")
+    )
+    assert out["candidate_count"] == 1
+    assert out["data_sources_status"]["chembl"] == "partial"
+    assert out["evidence_completeness"]["chembl_lookups_assessed"] == 1
+    assert out["evidence_completeness"]["chembl_lookups_failed"] == 1
+
+
+async def test_find_drug_repurposing_preserves_fractional_clinical_phase(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_clients(monkeypatch)
+    mocks["opentargets"].associated_targets = AsyncMock(
+        return_value=[{"overall_score": 0.8, "target_gene_symbol": "G", "uniprot_id": "P1"}]
+    )
+    mocks["chembl"].find_repurposable_drugs = AsyncMock(
+        return_value=[{"molecule_chembl_id": "C1", "max_phase": 2.5}]
+    )
+    out = await find_drug_repurposing_candidates(
+        DrugRepurposingInput(disease_mondo_id="MONDO:0007254", min_phase=2)
+    )
+    assert out["candidate_count"] == 1
+    assert out["candidates"][0]["max_phase"] == 2.5
+    assert out["candidates"][0]["composite_repurposing_score"] == 0.5
+    assert out["evidence_completeness"]["invalid_or_unassessed_drug_records"] == 0
+
+
+async def test_find_drug_repurposing_rejects_unassessed_phase_without_zero_imputation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_clients(monkeypatch)
+    mocks["opentargets"].associated_targets = AsyncMock(
+        return_value=[{"overall_score": 0.8, "target_gene_symbol": "G", "uniprot_id": "P1"}]
+    )
+    invalid = [
+        {"molecule_chembl_id": "NONE", "max_phase": None},
+        {"molecule_chembl_id": "MISSING"},
+        {"molecule_chembl_id": "BOOL", "max_phase": True},
+        {"molecule_chembl_id": "WORD", "max_phase": "not-a-phase"},
+        {"molecule_chembl_id": "NAN", "max_phase": float("nan")},
+        {"molecule_chembl_id": "INF", "max_phase": float("inf")},
+        {"molecule_chembl_id": "LOW", "max_phase": 0},
+        {"molecule_chembl_id": "HIGH", "max_phase": 5},
+        {"molecule_chembl_id": "UNVERIFIED", "max_phase": 4, "max_phase_known": False},
+        {"max_phase": 4},
+        None,
+    ]
+    valid = {"molecule_chembl_id": "VALID", "max_phase": 4}
+    mocks["chembl"].find_repurposable_drugs = AsyncMock(return_value=[*invalid, valid])
+    out = await find_drug_repurposing_candidates(
+        DrugRepurposingInput(disease_mondo_id="MONDO:0007254")
+    )
+    assert out["candidate_count"] == 1
+    assert out["candidates"][0]["molecule_chembl_id"] == "VALID"
+    assert out["candidates"][0]["max_phase"] == 4
+    assert out["evidence_completeness"]["invalid_or_unassessed_drug_records"] == len(invalid)
+    assert out["evidence_completeness"]["partial"] is True
+    assert out["data_sources_status"]["chembl"] == "partial"
+    assert "were not scored" in out["message"]
+
+
+async def test_find_drug_repurposing_unplaceable_phase_is_unassessed_not_no_data(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A target whose only candidate has an unknown clinical phase is partial, not empty."""
+    mocks = _patch_clients(monkeypatch)
+    mocks["opentargets"].associated_targets = AsyncMock(
+        return_value=[{"overall_score": 0.8, "target_gene_symbol": "G", "uniprot_id": "P1"}]
+    )
+    mocks["chembl"].find_repurposable_drugs = AsyncMock(
+        return_value=[
+            {
+                "molecule_chembl_id": "CHEMBL_U",
+                "max_phase": -1,
+                "max_phase_known": True,
+                "max_phase_label": "Clinical phase unknown",
+            }
+        ]
+    )
+    out = await find_drug_repurposing_candidates(
+        DrugRepurposingInput(disease_mondo_id="MONDO:0007254", min_phase=2)
+    )
+    assert out["candidates"] == []
+    assert out["evidence_completeness"]["invalid_or_unassessed_drug_records"] == 1
+    assert out["evidence_completeness"]["partial"] is True
+    assert out["data_sources_status"]["chembl"] == "partial"
+
+
+async def test_find_drug_repurposing_unplaceable_phase_survives_candidate_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Five placeable candidates plus one unknown-phase molecule: still partial."""
+    mocks = _patch_clients(monkeypatch)
+    mocks["opentargets"].associated_targets = AsyncMock(
+        return_value=[{"overall_score": 0.8, "target_gene_symbol": "G", "uniprot_id": "P1"}]
+    )
+    placeable = [{"molecule_chembl_id": f"CHEMBL_{i}", "max_phase": 4} for i in range(5)]
+    unplaceable = {
+        "molecule_chembl_id": "CHEMBL_U",
+        "max_phase": -1,
+        "max_phase_known": True,
+        "max_phase_label": "Clinical phase unknown",
+    }
+    # What the client now returns for limit=5: the limited candidates plus
+    # the unplaceable molecule appended after the limit.
+    mocks["chembl"].find_repurposable_drugs = AsyncMock(return_value=[*placeable, unplaceable])
+    out = await find_drug_repurposing_candidates(
+        DrugRepurposingInput(disease_mondo_id="MONDO:0007254", min_phase=2)
+    )
+    assert mocks["chembl"].find_repurposable_drugs.await_args.kwargs["limit"] == 5
+    assert out["candidate_count"] == 5
+    assert out["evidence_completeness"]["invalid_or_unassessed_drug_records"] == 1
+    assert out["evidence_completeness"]["partial"] is True
+    assert out["data_sources_status"]["chembl"] == "partial"
 
 
 async def test_find_drug_repurposing_dedup(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -2275,6 +3098,7 @@ async def test_find_drug_repurposing_gather_exception(
         DrugRepurposingInput(disease_mondo_id="MONDO:0007254")
     )
     assert out["candidate_count"] == 0
+    assert out["data_sources_status"]["chembl"] == "failed"
 
 
 async def test_classify_variant_acmg_never_asserts_pvs1_without_mechanism(
@@ -2408,3 +3232,491 @@ async def test_synthetic_acmg_rejects_invalid_population_responses(
     assert out["draft_classification"] == "Not assessed"
     assert out["data_sources_status"]["gnomad_variant"] == "invalid_response"
     assert out["data_sources_status"]["gnomad_constraint"] == "invalid_response"
+
+
+def _patch_dossier_clients(monkeypatch: pytest.MonkeyPatch) -> dict[str, MagicMock]:
+    """All dossier fetches must be awaitable even when the test changes one."""
+    mocks = _patch_clients(monkeypatch)
+    mocks["opentargets"].associated_diseases = AsyncMock(return_value=[])
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(return_value={})
+    mocks["disgenet"].gene_disease_associations = AsyncMock(return_value=[])
+    mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
+    mocks["clinvar"].search_gene = AsyncMock(return_value=[])
+    mocks["ensembl"].gene_lookup = AsyncMock(return_value={})
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value=None)
+    return mocks
+
+
+@pytest.mark.parametrize(
+    ("ot_count", "expected_status"),
+    [
+        (None, "no_data"),
+        (-1, "invalid_response"),
+        (True, "invalid_response"),
+        ("7", "invalid_response"),
+    ],
+)
+async def test_assess_target_druggability_malformed_ot_count_is_not_zero(
+    monkeypatch: pytest.MonkeyPatch, ot_count: Any, expected_status: str
+) -> None:
+    mocks = _patch_clients(monkeypatch)
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value={})
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(
+        return_value={"drug_count": ot_count}
+    )
+    with pytest.raises(ValueError, match=f"open_targets={expected_status}"):
+        await assess_target_druggability(DruggabilityInput(uniprot_id="P38398"))
+
+
+async def test_assess_target_druggability_client_validation_error_is_invalid_response(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A ValueError from the client is malformed content, not a failed request."""
+    mocks = _patch_clients(monkeypatch)
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value=None)
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(
+        side_effect=ValueError("Open Targets drug count must be a nonnegative integer")
+    )
+    with pytest.raises(ValueError, match="chembl=no_data, open_targets=invalid_response"):
+        await assess_target_druggability(DruggabilityInput(uniprot_id="P38398"))
+
+
+async def test_dossier_client_validation_errors_are_invalid_response(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_dossier_clients(monkeypatch)
+    mocks["disgenet"].gene_disease_associations = AsyncMock(
+        side_effect=ValueError("DisGeNET association score: missing or invalid numeric value")
+    )
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(
+        side_effect=ValueError("Open Targets tractability list is malformed")
+    )
+    with pytest.raises(ValueError, match="open_targets=invalid_response"):
+        await synthesize_protein_dossier(
+            ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="brief")
+        )
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(return_value={"drug_count": 0})
+    out = await synthesize_protein_dossier(
+        ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="brief")
+    )
+    assert out["data_sources_status"]["disgenet"] == "invalid_response"
+
+
+async def test_assess_target_druggability_chembl_validation_error_is_invalid_response(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An ambiguous or malformed ChEMBL target response is not a failed request."""
+    mocks = _patch_clients(monkeypatch)
+    mocks["chembl"].target_by_uniprot = AsyncMock(
+        side_effect=ValueError("ChEMBL UniProt accession has ambiguous individual protein targets")
+    )
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(return_value={})
+    with pytest.raises(ValueError, match="chembl=invalid_response, open_targets=no_data"):
+        await assess_target_druggability(DruggabilityInput(uniprot_id="P38398"))
+
+
+async def test_dossier_chembl_validation_errors_are_invalid_response(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_dossier_clients(monkeypatch)
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(return_value={"drug_count": 0})
+    mocks["chembl"].target_by_uniprot = AsyncMock(
+        side_effect=ValueError("ChEMBL target lookup pagination cannot be verified")
+    )
+    out = await synthesize_protein_dossier(
+        ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="brief")
+    )
+    assert out["data_sources_status"]["chembl_drugs"] == "invalid_response"
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value={"chembl_id": "TGT"})
+    mocks["chembl"].approved_drugs = AsyncMock(
+        side_effect=ValueError("ChEMBL mechanism pagination incomplete")
+    )
+    out = await synthesize_protein_dossier(
+        ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="brief")
+    )
+    assert out["data_sources_status"]["chembl_drugs"] == "invalid_response"
+    assert out["druggability"]["drug_count_source"] == "open_targets_drug_and_clinical_candidates"
+
+
+async def test_assess_target_druggability_chembl_failure_not_drug_absence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_clients(monkeypatch)
+    mocks["chembl"].target_by_uniprot = AsyncMock(side_effect=RuntimeError("upstream down"))
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(
+        side_effect=RuntimeError("upstream down")
+    )
+    with pytest.raises(ValueError, match="chembl=failed, open_targets=failed"):
+        await assess_target_druggability(DruggabilityInput(uniprot_id="P38398"))
+
+
+@pytest.mark.parametrize(
+    ("ot_count", "expected_status"),
+    [
+        (None, "no_data"),
+        (-1, "invalid_response"),
+        (True, "invalid_response"),
+        ("7", "invalid_response"),
+    ],
+)
+async def test_dossier_malformed_ot_count_without_chembl_is_unassessed(
+    monkeypatch: pytest.MonkeyPatch, ot_count: Any, expected_status: str
+) -> None:
+    mocks = _patch_dossier_clients(monkeypatch)
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(
+        return_value={"drug_count": ot_count}
+    )
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value=None)
+    with pytest.raises(ValueError, match="no observed drug count"):
+        await synthesize_protein_dossier(
+            ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="brief")
+        )
+
+
+async def test_dossier_chembl_observed_count_survives_missing_ot_count(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_dossier_clients(monkeypatch)
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(return_value={})
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value={"chembl_id": "TGT"})
+    mocks["chembl"].approved_drugs = AsyncMock(return_value=[{"molecule_chembl_id": "D"}])
+    out = await synthesize_protein_dossier(
+        ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="brief")
+    )
+    assert out["druggability"]["drug_count"] == 1
+    assert out["druggability"]["tier"] != "NOT_ASSESSED"
+    assert out["data_sources_status"]["chembl_drugs"] == "ok"
+
+
+async def test_dossier_malformed_source_is_not_misreported_as_healthy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_dossier_clients(monkeypatch)
+    mocks["disgenet"].gene_disease_associations = AsyncMock(return_value=123)
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(return_value={"drug_count": 0})
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value=None)
+    out = await synthesize_protein_dossier(
+        ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="brief")
+    )
+    assert out["data_sources_status"]["disgenet"] == "invalid_response"
+    assert out["disease_associations"] == []
+    assert out["druggability"]["tier"] in {"HOT", "WARM", "COLD", "NOT_DRUGGABLE"}
+
+
+async def test_dossier_invalid_tractability_payload_is_not_observed_zero(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_dossier_clients(monkeypatch)
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(return_value="bad")
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value=None)
+    with pytest.raises(ValueError, match="open_targets=invalid_response"):
+        await synthesize_protein_dossier(
+            ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="brief")
+        )
+
+
+async def test_druggability_incomplete_chembl_molecule_lookup_never_counts_as_zero(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_clients(monkeypatch)
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value={"chembl_id": "CHEMBL_TARGET"})
+    mocks["chembl"].approved_drugs = AsyncMock(
+        side_effect=ValueError("ChEMBL molecule metadata incomplete")
+    )
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(return_value={})
+    with pytest.raises(ValueError, match="chembl=invalid_response, open_targets=no_data"):
+        await assess_target_druggability(DruggabilityInput(uniprot_id="P38398"))
+    assert mocks["chembl"].approved_drugs.await_args.kwargs["require_complete"] is True
+
+
+async def test_druggability_chembl_molecule_request_failure_is_failed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_clients(monkeypatch)
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value={"chembl_id": "CHEMBL_TARGET"})
+    mocks["chembl"].approved_drugs = AsyncMock(side_effect=RuntimeError("timeout"))
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(return_value={})
+    with pytest.raises(ValueError, match="chembl=failed, open_targets=no_data"):
+        await assess_target_druggability(DruggabilityInput(uniprot_id="P38398"))
+
+
+async def test_druggability_valid_open_targets_survives_incomplete_chembl(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_clients(monkeypatch)
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value={"chembl_id": "CHEMBL_TARGET"})
+    mocks["chembl"].approved_drugs = AsyncMock(
+        side_effect=ValueError("ChEMBL molecule metadata incomplete")
+    )
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(
+        return_value={"drug_count": 3, "tractability_labels": []}
+    )
+    out = await assess_target_druggability(DruggabilityInput(uniprot_id="P38398"))
+    assert out["evidence"]["drug_count"] == 3
+    assert out["druggability_tier"] != "NOT_ASSESSED"
+    assert out["data_sources_status"]["chembl_drug_count"] == "invalid_response"
+    assert out["data_sources_status"]["open_targets_drug_count"] == "ok"
+
+
+async def test_assess_target_druggability_preserves_observed_chembl_zero(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A verified zero is not falsy missing evidence."""
+    mocks = _patch_clients(monkeypatch)
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value={"chembl_id": "TGT"})
+    mocks["chembl"].approved_drugs = AsyncMock(return_value=[])
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(
+        return_value={"drug_count": 0, "tractability_labels": []}
+    )
+    mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
+    result = await assess_target_druggability(DruggabilityInput(uniprot_id="P38398"))
+    assert result["evidence"]["drug_count"] == 0
+    assert result["evidence"]["drug_count_source"] == "chembl_mechanism_distinct_molecules"
+    assert result["evidence"]["open_targets_drug_candidate_count"] == 0
+    assert result["evidence"]["drug_precedent_scope"] == "approved_and_clinical"
+
+
+async def test_dossier_refuses_ambiguous_target_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_dossier_clients(monkeypatch)
+    mocks["opentargets"].resolve_target = AsyncMock(
+        side_effect=AmbiguousTargetError("Open Targets target mapping is ambiguous")
+    )
+    with pytest.raises(ValueError, match="could not be established"):
+        await synthesize_protein_dossier(
+            ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="brief")
+        )
+    mocks["opentargets"].associated_diseases.assert_not_awaited()
+    mocks["chembl"].target_by_uniprot.assert_not_awaited()
+
+
+async def test_dossier_reports_identity_verification(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_dossier_clients(monkeypatch)
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value={"chembl_id": "TGT"})
+    mocks["chembl"].approved_drugs = AsyncMock(
+        return_value=[{"molecule_chembl_id": "CHEMBL1", "max_phase": 4}]
+    )
+    out = await synthesize_protein_dossier(
+        ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="brief")
+    )
+    assert out["target"]["identity_verified"] is True
+    assert out["target"]["identity_sources"] == ["open_targets"]
+    # A malformed (non-ambiguous) mapping response leaves identity unverified
+    # and is reported, rather than aborting the dossier or being guessed.
+    mocks["opentargets"].resolve_target = AsyncMock(
+        side_effect=ValueError("Open Targets mapIds hits must be a list")
+    )
+    out = await synthesize_protein_dossier(
+        ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="brief")
+    )
+    assert out["target"]["identity_verified"] is False
+    assert out["data_sources_status"]["ot_diseases"] == "invalid_response"
+
+
+async def test_dossier_alphafold_gene_is_an_independent_identity_witness(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The AlphaFold DB record names the accession's gene; it verifies identity
+    when Open Targets cannot, and a disagreement aborts the dossier."""
+    mocks = _patch_dossier_clients(monkeypatch)
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value={"chembl_id": "TGT"})
+    mocks["chembl"].approved_drugs = AsyncMock(
+        return_value=[{"molecule_chembl_id": "CHEMBL1", "max_phase": 4}]
+    )
+    mocks["opentargets"].resolve_target = AsyncMock(side_effect=RuntimeError("ot down"))
+    mocks["alphafold"].get_prediction = AsyncMock(
+        return_value={"entryId": "AF-P38398-F1", "globalMetricValue": 85.0, "gene": "BRCA1"}
+    )
+    out = await synthesize_protein_dossier(
+        ProteinDossierInput(uniprot_id="P38398", gene_symbol="brca1", depth="brief")
+    )
+    assert out["target"]["identity_verified"] is True
+    assert out["target"]["identity_sources"] == ["alphafold_db"]
+
+    # Both witnesses available and agreeing.
+    mocks["opentargets"].resolve_target = AsyncMock(
+        return_value={"ensembl_id": "ENSG00000012048", "symbol": "BRCA1"}
+    )
+    out = await synthesize_protein_dossier(
+        ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="brief")
+    )
+    assert out["target"]["identity_sources"] == ["open_targets", "alphafold_db"]
+
+    # Accession P04637 is TP53: a caller asserting BRCA1 is refused even with
+    # Open Targets unavailable, before any symbol-keyed source is fused.
+    mocks["opentargets"].resolve_target = AsyncMock(side_effect=RuntimeError("ot down"))
+    mocks["alphafold"].get_prediction = AsyncMock(
+        return_value={"entryId": "AF-P04637-F1", "globalMetricValue": 70.0, "gene": "TP53"}
+    )
+    fused_before = mocks["disgenet"].gene_disease_associations.await_count
+    with pytest.raises(ValueError, match="AlphaFold DB record"):
+        await synthesize_protein_dossier(
+            ProteinDossierInput(uniprot_id="P04637", gene_symbol="BRCA1", depth="brief")
+        )
+    assert mocks["disgenet"].gene_disease_associations.await_count == fused_before
+
+    # A record without a gene name is no witness: unverified, not refused.
+    mocks["alphafold"].get_prediction = AsyncMock(
+        return_value={"entryId": "AF-P04637-F1", "globalMetricValue": 70.0, "gene": None}
+    )
+    out = await synthesize_protein_dossier(
+        ProteinDossierInput(uniprot_id="P04637", gene_symbol="BRCA1", depth="brief")
+    )
+    assert out["target"]["identity_verified"] is False
+    assert out["target"]["identity_sources"] == []
+
+
+async def test_alphafold_schema_error_is_invalid_response_not_failed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A malformed prediction record is rejected content, not a failed request."""
+    mocks = _patch_clients(monkeypatch)
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value={"chembl_id": "TGT"})
+    mocks["chembl"].approved_drugs = AsyncMock(
+        return_value=[{"molecule_chembl_id": "CHEMBL1", "max_phase": 4}]
+    )
+    mocks["alphafold"].get_prediction = AsyncMock(
+        side_effect=AlphaFoldPredictionSchemaError("AlphaFold DB prediction response malformed")
+    )
+    out = await assess_target_druggability(DruggabilityInput(uniprot_id="P38398"))
+    assert out["data_sources_status"]["alphafold_plddt"] == "invalid_response"
+    assert out["evidence"]["plddt_mean"] is None
+
+    dossier_mocks = _patch_dossier_clients(monkeypatch)
+    dossier_mocks["chembl"].target_by_uniprot = AsyncMock(return_value={"chembl_id": "TGT"})
+    dossier_mocks["chembl"].approved_drugs = AsyncMock(
+        return_value=[{"molecule_chembl_id": "CHEMBL1", "max_phase": 4}]
+    )
+    dossier_mocks["alphafold"].get_prediction = AsyncMock(
+        side_effect=AlphaFoldPredictionSchemaError("AlphaFold DB prediction response malformed")
+    )
+    out = await synthesize_protein_dossier(
+        ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="brief")
+    )
+    assert out["data_sources_status"]["alphafold_plddt"] == "invalid_response"
+    assert out["target"]["identity_sources"] == ["open_targets"]
+
+
+async def test_dossier_conflicting_alphafold_label_is_no_identity_witness(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A prediction record labelled with a different accession is rejected by the
+    client (empty record), so it can neither verify nor refute identity."""
+    mocks = _patch_dossier_clients(monkeypatch)
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value={"chembl_id": "TGT"})
+    mocks["chembl"].approved_drugs = AsyncMock(
+        return_value=[{"molecule_chembl_id": "CHEMBL1", "max_phase": 4}]
+    )
+    mocks["opentargets"].resolve_target = AsyncMock(side_effect=RuntimeError("ot down"))
+    # What AlphaFoldClient.get_prediction returns for a labelled, conflicting
+    # record set (pinned by test_get_prediction_rejects_mismatched_labelled_isoform).
+    mocks["alphafold"].get_prediction = AsyncMock(return_value={})
+    out = await synthesize_protein_dossier(
+        ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="brief")
+    )
+    assert out["target"]["identity_verified"] is False
+    assert out["target"]["identity_sources"] == []
+    assert out["data_sources_status"]["alphafold_plddt"] == "missing"
+
+
+async def test_dossier_unavailable_count_message_reports_count_status(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A successful Open Targets request without a count is no_data, not ok."""
+    mocks = _patch_dossier_clients(monkeypatch)
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(
+        return_value={"drug_count": None, "tractability_labels": []}
+    )
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value=None)
+    with pytest.raises(ValueError, match="chembl=no_data, open_targets=no_data"):
+        await synthesize_protein_dossier(
+            ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="brief")
+        )
+
+
+async def test_dossier_rejects_mismatched_gene_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_dossier_clients(monkeypatch)
+    mocks["opentargets"].resolve_target = AsyncMock(
+        return_value={"ensembl_id": "ENSG_TP53", "symbol": "TP53"}
+    )
+    with pytest.raises(ValueError, match="identity mismatch"):
+        await synthesize_protein_dossier(
+            ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="brief")
+        )
+    mocks["opentargets"].associated_diseases.assert_not_awaited()
+
+
+async def test_dossier_credits_open_targets_presence_when_chembl_single_protein_is_zero(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_dossier_clients(monkeypatch)
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value={"chembl_id": "TGT"})
+    mocks["chembl"].approved_drugs = AsyncMock(return_value=[])
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(
+        return_value={"drug_count": 3, "tractability_labels": []}
+    )
+    dossier = await synthesize_protein_dossier(
+        ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="brief")
+    )
+    druggability = dossier["druggability"]
+    assert druggability["drug_count"] == 3
+    assert druggability["drug_precedent_scoring_count"] == 1
+    assert druggability["drug_count_source"] == "open_targets_drug_and_clinical_candidates"
+    assert druggability["drug_precedent_scope"] == "approved_and_clinical"
+    assert druggability["chembl_mechanism_molecule_count"] == 0
+    assert druggability["open_targets_drug_candidate_count"] == 3
+    assert dossier["data_sources_status"]["chembl_drugs"] == "ok"
+
+
+async def test_dossier_uses_distinct_molecule_count_when_sources_both_positive(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_dossier_clients(monkeypatch)
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value={"chembl_id": "TGT"})
+    mocks["chembl"].approved_drugs = AsyncMock(return_value=[{"molecule_chembl_id": "CHEMBL1"}])
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(
+        return_value={"drug_count": 5, "tractability_labels": []}
+    )
+    dossier = await synthesize_protein_dossier(
+        ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="brief")
+    )
+    assert dossier["druggability"]["drug_count"] == 1
+    assert dossier["druggability"]["open_targets_drug_candidate_count"] == 5
+    assert dossier["druggability"]["drug_count_source"] == "chembl_mechanism_distinct_molecules"
+
+
+async def test_open_targets_rows_do_not_count_as_distinct_drugs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Several disease-linked rows need not represent several molecules."""
+    mocks = _patch_clients(monkeypatch)
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value=None)
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(
+        return_value={"drug_count": 6, "tractability_labels": []}
+    )
+    mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
+    result = await assess_target_druggability(DruggabilityInput(uniprot_id="P38398"))
+    assert result["evidence"]["drug_count"] == 6
+    assert result["evidence"]["drug_precedent_scoring_count"] == 1
+    assert result["druggability_tier"] == "WARM"
+
+
+async def test_dossier_open_targets_rows_are_presence_only_for_scoring(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_dossier_clients(monkeypatch)
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value=None)
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(
+        return_value={"drug_count": 7, "tractability_labels": []}
+    )
+    result = await synthesize_protein_dossier(
+        ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="brief")
+    )
+    assert result["druggability"]["drug_count"] == 7
+    assert result["druggability"]["drug_precedent_scoring_count"] == 1
+    assert result["druggability"]["tier"] == "WARM"

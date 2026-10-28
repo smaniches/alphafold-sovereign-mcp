@@ -7,11 +7,152 @@
     research aid, never as clinical decision support. See
     [Limitations L1](../limitations.md).
 
-!!! warning "Druggability tier is a heuristic"
-    `assess_target_druggability` returns a `HOT/WARM/COLD/NOT_DRUGGABLE`
-    tier from a 4-line scoring heuristic. The thresholds are not
-    calibrated against a benchmark. See
-    [Limitations L2](../limitations.md).
+!!! warning "Druggability tiers are unvalidated research heuristics"
+    `assess_target_druggability` and `synthesize_protein_dossier` report
+    `HOT`, `WARM`, `COLD`, or `NOT_DRUGGABLE` only when at least one
+    drug-precedent source provides an observed count in the requested
+    development-stage scope. Otherwise the tool reports an
+    evidence-availability error and no tier is assigned. A failed upstream
+    request is not evidence of zero. The thresholds are author-defined,
+    not calibrated against outcomes, and do not establish target safety
+    or biological druggability. See [Limitations L2](../limitations.md).
+
+## Drug-precedent count semantics
+
+The two sources count different things and are **not interchangeable**;
+both observed counts are always reported so the difference is auditable.
+
+**ChEMBL** (`chembl_mechanism_molecule_count`): distinct molecules with a
+mechanism-of-action record on the *single-protein* ChEMBL target that
+carries the requested UniProt accession, at or above the requested
+development stage (`drug_precedent_scope` is `approved_only` when
+`include_clinical_stage=False`, otherwise `approved_and_clinical`, which
+starts at ChEMBL's Early Phase 1 (`max_phase` 0.5) because ChEMBL defines
+it as a clinical candidate in Early Phase 1 trials). The
+mechanism list is paginated and verified against ChEMBL's reported total;
+a target with more than 200 distinct mechanism-linked molecules is refused
+rather than truncated. ChEMBL often records a mechanism on a protein
+complex or family rather than the single protein (live 2026-10-28, ChEMBL
+37: GABRA1/P14867 has one single-subunit mechanism while the GABA-A
+receptor complex target carries 66), so a ChEMBL zero does not establish
+that no drug engages the protein, and a mechanism record does not by
+itself establish direct target engagement for a given indication.
+
+**Open Targets** (`open_targets_drug_candidate_count`):
+`target.drugAndClinicalCandidates.count`. In the deployed release probed on
+2026-10-28 (API 26.9.0, data 26.09) each row is one drug record with a
+`maxClinicalStage`, and the count equalled the number of distinct drug
+identifiers for every probed target (BRCA1 0, TP53 9, B3GAT1 0, PARP1 13,
+GABRA1 76, EGFR 82). The count spans every stage, including withdrawn and
+unknown-stage records, and is not stage-filtered by this tool.
+
+The tools choose the count that backs the heuristic (`drug_count_source`)
+as follows:
+
+1. A positive ChEMBL count in the requested scope is used as the distinct
+   molecule count.
+2. Otherwise, when the requested scope includes clinical stages, a positive
+   Open Targets count is credited as evidence of *presence* only:
+   `drug_precedent_scoring_count` is 1, never three or more distinct drugs,
+   because the record set is not stage- or mechanism-verified here.
+3. Otherwise an observed ChEMBL zero stands for the requested scope; with
+   `include_clinical_stage=False` an all-stage Open Targets count cannot
+   override an approved-only ChEMBL zero.
+4. An Open Targets zero bounds every scope and is accepted when ChEMBL has
+   no record (live B3GAT1/Q9P2W7: no ChEMBL target, zero Open Targets
+   records).
+5. With no observed count in the requested scope (for example ChEMBL
+   unavailable and only all-stage Open Targets records for an approved-only
+   request) the tool raises instead of inventing a count.
+
+`drug_count` preserves the chosen source's raw count. The ChEMBL-versus-
+Open Targets difference is never treated as a contradiction: the sources
+differ in target granularity and stage scope by construction.
+
+`data_sources_status.open_targets_drug_count` is `skipped` only when Open
+Targets maps no target to the accession; the dossier then does not query
+the Open Targets sources at all and reports them as `skipped` too. Ensembl
+and gnomAD lookups that return an explicit negative (`found: false`,
+`constraint_available: false`) are reported as `no_data`, not `ok`. A failed or malformed
+UniProt-to-Ensembl resolution is reported as `failed` or
+`invalid_response`, and the dossier's Open Targets sources inherit that
+status rather than being queried with an empty identifier. For ChEMBL,
+`invalid_response` means the client rejected the content it received
+(ambiguous target, unverifiable pagination, unknown molecule phase,
+identifier mismatch); a failed molecule request during a strict count is
+reported as `failed`, as for any other request failure. A molecule
+`max_phase` counts as observed only when it is one of ChEMBL's documented
+stages (4, 3, 2, 1, 0.5, -1, or the legacy preclinical 0); any other
+number is treated as malformed content. ChEMBL assigns -1 to a drug or
+clinical candidate whose clinical phase it cannot place: such a molecule
+is included in an approved-plus-clinical count (label "Clinical phase
+unknown") but makes an approved-only strict count unassessable, because it
+cannot be placed above or below the approval threshold. In
+`find_drug_repurposing_candidates` such a molecule is passed through to the
+report and counted in `invalid_or_unassessed_drug_records` (the result is
+`partial`) rather than being dropped at the phase threshold or truncated
+away by the per-target candidate limit. `find_drug_repurposing_candidates`
+applies the same split per target: `chembl_lookups_failed` counts request
+failures and `chembl_lookups_invalid` counts rejected source content, and
+either makes the candidate list incomplete.
+
+A protein dossier also checks the supplied gene symbol against the
+resolved UniProt-to-Ensembl target gene symbol when mapping evidence is
+available. A mismatch prevents multi-gene evidence synthesis, and so does
+an ambiguous mapping (more than one Open Targets target matches the
+accession exactly). Two accession-keyed witnesses are consulted: the Open
+Targets mapping and the gene name on the AlphaFold DB prediction record
+(live 2026-10-28: P38398 BRCA1, P04637 TP53, P14867 GABRA1, P00533 EGFR).
+A disagreement from either witness aborts the dossier.
+`target.identity_verified` is `true` when at least one witness confirmed
+the supplied symbol, and `target.identity_sources` lists which. With no
+witness available (both sources failed or the record carries no gene
+name) it is `false`, and the symbol-keyed sources (DisGeNET, gnomAD,
+ClinVar, Ensembl) rest on the caller's assertion that the symbol belongs
+to the accession.
+
+## Recorded Open Targets identifier mapping
+
+`resolve_target` uses the Open Targets `mapIds` GraphQL operation and
+accepts only an exact approved-symbol or UniProt `proteinIds` match on the
+returned `Target` object. `tests/fixtures/opentargets_mapids_20261028.json`
+is a sanitised capture of the deployed API (release metadata and retrieval
+date in its `meta` block) for P38398 (BRCA1), P04637 (TP53), B3GAT1 (an
+approved gene symbol shaped like an accession) and two identifiers that do
+not exist; `tests/test_client_opentargets.py` replays it through the
+client. A later schema change must be re-recorded, not assumed.
+
+## Disease-landscape counts
+
+`map_disease_drug_landscape` reports counts only for the retrieved source
+pages (20 rows per source). `total_indication_entries` and
+`total_associated_targets` keep their published numeric value, the
+retrieved page count; the companion `indication_page_complete` and
+`target_page_complete` flags state whether that count is a verified source
+total (a page shorter than the 20-row request) or only a lower bound. The
+aggregates in `competitive_intelligence` (`approved_count`,
+`pipeline_count`, `druggable_target_count`) are page-scoped and are
+reported whenever every retrieved row could be classified, so on an
+incomplete page they are lower bounds; `counts_complete` is `true` only
+when both pages are complete and fully classified, `false` when a page is
+full or a row could not be classified, and `null` when a page could not
+be retrieved. Investability is assessed only when `counts_complete` is
+`true`. When the MONDO-keyed Open Targets lookup returns no targets and the
+EFO-keyed retry fails, the target list is reported as `failed`, the
+target-derived counts are `null` and the investability summary is
+`NOT_ASSESSED`; an empty first page followed by a failed retry is never an
+observed zero. A ChEMBL `drug_indication` response without the documented
+list (for example an error envelope with HTTP 200) is `invalid_response`,
+not an observed empty page. Indication rows are bucketed by ChEMBL's
+reported `max_phase_for_ind` (live ChEMBL 37, 2026-10-28: `4`, `3`, `2`,
+`1`, `0.5` for early phase 1, and `-1` for a clinical phase ChEMBL cannot
+assign); `0.5` counts as early clinical pipeline. A retrieved row with
+`-1` or a missing phase is reported in `unassigned_phase_entries`, and
+`approved_count`, `pipeline_count` and investability are withheld because
+the page's stage composition is not supported. Likewise, if any retrieved target row carries no
+tractability assessment (`tractable: null`), `druggable_target_count` is
+`null` and investability is `NOT_ASSESSED`, because an unknown
+tractability is not an observed non-tractable target.
 
 ## AlphaMissense evidence status
 

@@ -329,8 +329,8 @@ def test_detect_idr_segments_terminal() -> None:
     types = {s["segment_type"] for s in segs}
     # First segment starts at position 1 → N-terminal tail
     # Last segment ends at length n → C-terminal tail
-    assert "N-terminal tail" in types
-    assert "C-terminal tail" in types
+    assert "Model N-terminal low-confidence region" in types
+    assert "Model C-terminal low-confidence region" in types
 
 
 def test_detect_idr_segments_no_idr() -> None:
@@ -354,32 +354,35 @@ def test_detect_idr_segments_short_terminal_skipped() -> None:
 
 
 def test_detect_idr_segments_linker() -> None:
-    """Internal short IDR → 'Linker'."""
+    """Internal short IDR → 'Short internal low-confidence region'."""
     plddts = [80.0] * 10 + [30.0] * 10 + [80.0] * 10
     segs = _detect_idr_segments(plddts)
-    assert any(s["segment_type"] == "Linker" for s in segs)
+    assert any(s["segment_type"] == "Short internal low-confidence region" for s in segs)
 
 
 def test_detect_idr_segments_long_idr() -> None:
-    """Long internal IDR (≥ 20) → 'Long IDR'."""
+    """Long internal IDR (≥ 20) → 'Long internal low-confidence region'."""
     plddts = [80.0] * 5 + [30.0] * 25 + [80.0] * 5
     segs = _detect_idr_segments(plddts)
-    assert any(s["segment_type"] == "Long IDR" for s in segs)
+    assert any(s["segment_type"] == "Long internal low-confidence region" for s in segs)
 
 
 def test_classify_idr_segment_branches() -> None:
     """Direct tests for classification helper."""
     seg = _classify_idr_segment(1, 10, 10, 30.0, 100)
-    assert seg["segment_type"] == "N-terminal tail"
+    assert seg["segment_type"] == "Model N-terminal low-confidence region"
+
+    whole = _classify_idr_segment(1, 100, 100, 30.0, 100)
+    assert whole["segment_type"] == "Entire modeled span: low confidence"
 
     seg = _classify_idr_segment(50, 100, 51, 30.0, 100)
-    assert seg["segment_type"] == "C-terminal tail"
+    assert seg["segment_type"] == "Model C-terminal low-confidence region"
 
     seg = _classify_idr_segment(40, 50, 10, 30.0, 100)
-    assert seg["segment_type"] == "Linker"
+    assert seg["segment_type"] == "Short internal low-confidence region"
 
     seg = _classify_idr_segment(40, 70, 30, 30.0, 100)
-    assert seg["segment_type"] == "Long IDR"
+    assert seg["segment_type"] == "Long internal low-confidence region"
 
 
 def test_find_high_pae_pairs() -> None:
@@ -806,6 +809,7 @@ async def test_analyze_structural_confidence_success(
     out = await analyze_structural_confidence(UniProtInput(uniprot_id="P12345"))
     assert out["confidence_tier"] == "HIGH"
     assert out["mean_plddt"] == 85.0
+    assert "HIGHER MODEL CONFIDENCE" in out["druggability_pre_screen"]["structural_suitability"]
 
 
 async def test_analyze_structural_confidence_not_found(
@@ -845,6 +849,77 @@ async def test_analyze_structural_confidence_no_plddt(
     monkeypatch.setattr(si, "_fetch_af_plddt", fake_fetch)
     out = await analyze_structural_confidence(UniProtInput(uniprot_id="P12345"))
     assert out["mean_plddt"] is None
+    assert out["druggability_pre_screen"]["structural_suitability"].startswith("NOT_ASSESSED")
+
+
+async def test_analyze_structural_confidence_observed_zero_plddt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A reported zero is observed low confidence, not missing evidence."""
+
+    async def fake_fetch(uid: str) -> dict[str, Any]:
+        return {"uniprot_id": uid, "mean_plddt": 0.0}
+
+    monkeypatch.setattr(si, "_fetch_af_plddt", fake_fetch)
+    out = await analyze_structural_confidence(UniProtInput(uniprot_id="P12345"))
+    assert out["mean_plddt"] == 0.0
+    assert "CAUTION" in out["druggability_pre_screen"]["structural_suitability"]
+
+
+@pytest.mark.parametrize("bad_plddt", [101.0, -1.0, float("nan"), float("inf"), True, "95"])
+async def test_analyze_confidence_invalid_plddt_unassessed(
+    monkeypatch: pytest.MonkeyPatch, bad_plddt: object
+) -> None:
+    async def fake_fetch(uid: str) -> dict[str, Any]:
+        return {"uniprot_id": uid, "mean_plddt": bad_plddt}
+
+    monkeypatch.setattr(si, "_fetch_af_plddt", fake_fetch)
+    out = await analyze_structural_confidence(UniProtInput(uniprot_id="P12345"))
+    assert out["mean_plddt"] is None
+    assert out["confidence_tier"] == "UNKNOWN"
+    assert out["plddt_status"] == "invalid_response"
+    assert out["druggability_pre_screen"]["structural_suitability"].startswith("NOT_ASSESSED")
+
+
+async def test_fetch_af_plddt_invalid_source_preserves_valid_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    af = _fake_af(monkeypatch)
+    af.get_prediction.return_value = {**_af_meta(), "globalMetricValue": float("inf")}
+    af.get_pae.return_value = {}
+    out = await _fetch_af_plddt("P12345")
+    assert out is not None
+    assert out["mean_plddt"] is None
+    assert out["plddt_status"] == "invalid_response"
+
+
+async def test_analyze_structural_confidence_preserves_invalid_source_status(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_fetch(uid: str) -> dict[str, Any]:
+        return {"uniprot_id": uid, "mean_plddt": None, "plddt_status": "invalid_response"}
+
+    monkeypatch.setattr(si, "_fetch_af_plddt", fake_fetch)
+    out = await analyze_structural_confidence(UniProtInput(uniprot_id="P12345"))
+    assert out["mean_plddt"] is None
+    assert out["plddt_status"] == "invalid_response"
+
+
+@pytest.mark.parametrize("bad_plddt", [101.0, float("inf"), float("nan"), True, "95"])
+async def test_get_protein_structure_invalid_plddt_unassessed(
+    monkeypatch: pytest.MonkeyPatch, bad_plddt: object
+) -> None:
+    af = _fake_af(monkeypatch)
+    af.get_prediction.return_value = {**_full_af_meta(), "globalMetricValue": bad_plddt}
+    out = await get_protein_structure(StructureRetrievalInput(uniprot_id="P38398"))
+    assert out["structure_available"] is True
+    assert out["mean_plddt"] is None
+    assert out["plddt_status"] == "invalid_response"
+
+
+@pytest.mark.parametrize("bad_plddt", [101.0, float("nan"), float("inf")])
+def test_plddt_tier_rejects_invalid_numeric_values(bad_plddt: float) -> None:
+    assert si._plddt_tier(bad_plddt) == "UNKNOWN"
 
 
 # ---------------------------------------------------------------------------
@@ -1321,6 +1396,11 @@ async def test_detect_intrinsically_disordered_ordered(
     out = await detect_intrinsically_disordered(UniProtInput(uniprot_id="P12345"))
     assert out["is_idr_protein"] is None
     assert out["idr_classification"].startswith("NOT_ASSESSED")
+    assert out["idr_fraction"] == 0.0
+    assert out["disordered_residue_count"] == 0
+    assert out["low_plddt_fraction"] == 0.0
+    assert out["low_plddt_residue_count"] == 0
+    assert out["low_plddt_segments"] == []
 
 
 async def test_detect_intrinsically_disordered_disordered(
@@ -1337,6 +1417,14 @@ async def test_detect_intrinsically_disordered_disordered(
     out = await detect_intrinsically_disordered(UniProtInput(uniprot_id="P12345"))
     assert out["is_idr_protein"] is None
     assert out["idr_classification"].startswith("NOT_ASSESSED")
+    assert out["idr_fraction"] == 1.0
+    assert out["disordered_residue_count"] == 40
+    assert out["low_plddt_fraction"] == 1.0
+    assert out["low_plddt_residue_count"] == 40
+    assert out["low_plddt_cutoff"] == 50.0
+    assert out["low_plddt_segments"] == out["idr_segments"]
+    assert out["idr_segments"][0]["segment_type"] == "Entire modeled span: low confidence"
+    assert "not proven intrinsically" in out["segment_evidence_note"]
 
 
 async def test_detect_idr_returns_pdb_identifiers_without_claiming_uniprot_mapping(

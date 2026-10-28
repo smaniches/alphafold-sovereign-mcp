@@ -159,7 +159,24 @@ class PhenotypeAssociation:
 
 @dataclass(frozen=True, slots=True)
 class TargetEvidenceScore:
-    """Open Targets association score between a target and a disease."""
+    """Open Targets association score between a target and a disease.
+
+    Open Targets serialises ``datatypeScores`` sparsely: a datatype that
+    contributed no evidence to the association is simply absent from the list
+    (the deployed API also emits explicit ``0`` entries for some datatypes).
+    Absence therefore means *no evidence of that datatype in the queried
+    release*, which is the platform's own zero, not an unavailable
+    measurement; the published numeric fields keep ``0.0`` for it and
+    ``evidence_datatypes_reported`` records exactly which datatypes the
+    source listed. ``overall_score`` must always be reported by the source.
+
+    ``drug_count`` is the target's source-reported
+    ``drugAndClinicalCandidates.count`` (drug records at every clinical
+    stage) and ``tractable`` is true when any Open Targets tractability
+    bucket is set, both queried alongside the association. Either is
+    ``None`` only when the source response omits the field; neither is ever
+    imputed as ``0`` or ``False``.
+    """
 
     target_ensembl_id: str
     target_gene_symbol: str
@@ -175,8 +192,10 @@ class TargetEvidenceScore:
     literature: float = 0.0
     animal_model: float = 0.0
     rna_expression: float = 0.0
-    drug_count: int = 0
-    tractable: bool = False
+    drug_count: int | None = None
+    tractable: bool | None = None
+    evidence_datatypes_reported: tuple[str, ...] = ()
+    """Datatype identifiers present in the source ``datatypeScores`` list."""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -195,6 +214,7 @@ class TargetEvidenceScore:
                 "animal_model": round(self.animal_model, 4),
                 "rna_expression": round(self.rna_expression, 4),
             },
+            "evidence_datatypes_reported": list(self.evidence_datatypes_reported),
             "drug_count": self.drug_count,
             "tractable": self.tractable,
         }

@@ -231,8 +231,8 @@ Add to `claude_desktop_config.json`:
 
 Restart Claude Desktop and the tools become available in conversations.
 Try asking, for example: *"Triage BRCA1 c.5266dupC"* or *"Assess EGFR
-as a drug target"*. See the [`examples/`](examples/) directory for three end-to-end
-illustrations of what a session looks like.
+as a drug target"*. See [`examples/`](examples/) for source-retrieval workflow
+guidance. The previous illustrative clinical-session transcripts were retired.
 
 ### Offline mode
 
@@ -270,8 +270,8 @@ input schema is a Pydantic model; results are JSON.
 | Tool | What it does |
 |---|---|
 | `generate_variant_clinical_report` | HGVS → sourced multi-database report + unreviewed computational signals |
-| `assess_target_druggability` | UniProt → HOT/WARM/COLD/NOT_DRUGGABLE tier |
-| `synthesize_protein_dossier` | UniProt → multi-source briefing |
+| `assess_target_druggability` | UniProt → uncalibrated HOT/WARM/COLD/NOT_DRUGGABLE heuristic when an observed drug count is available; otherwise explicit tool error |
+| `synthesize_protein_dossier` | UniProt → source-attributed research briefing; errors rather than inventing a druggability tier if source counts are unavailable |
 | `map_disease_drug_landscape` | MONDO → approved drugs + pipeline + ChEMBL phase counts |
 | `classify_variant_acmg` | HGVS → source evidence + unassessed candidate signals; no automatic clinical class |
 | `find_drug_repurposing_candidates` | MONDO → candidates ranked by OT evidence × ChEMBL phase |
@@ -289,7 +289,7 @@ original attribution; clinical interpretation requires independent review.
 | `compare_proteins_topologically` | Pairwise L2 fingerprint-distance matrix for 2–10 proteins |
 | `find_evolutionary_structural_shifts` | Ensembl sequence identity + method-labeled structural feature distances; no mixed-scale risk ranking |
 | `score_binding_pocket_geometry` | Geometric pocket detection + heuristic druggability index |
-| `detect_intrinsically_disordered` | IDR map (linkers, tails, long IDRs) |
+| `detect_intrinsically_disordered` | Low-pLDDT modeled intervals; no validated disorder, linker, or clinical classification |
 | `get_protein_structure` | Retrieve an AlphaFold model: metadata, download URLs, optional coordinates |
 
 ### Knowledge graph (`tools/knowledge_graph_tools.py`)

@@ -610,6 +610,11 @@ async def get_disease_targets(params: DiseaseTargetsInput) -> str:
     - ``animal_model``: Knockout / model organism phenotypes
     - ``rna_expression``: Differential expression evidence
 
+    ``drug_count`` is the target's Open Targets drug-and-clinical-candidate
+    record count (all stages) and ``tractable`` is true when any Open Targets
+    tractability bucket is set; both are observed per row and are ``null``
+    only when the source omits them.
+
     Example: ``get_disease_targets(disease_id='MONDO:0007254', limit=15)``
     returns top 15 targets for breast carcinoma.
     """

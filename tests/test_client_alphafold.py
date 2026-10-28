@@ -96,6 +96,24 @@ async def test_get_prediction_rejects_mismatched_labelled_isoform(
         assert await client.get_prediction("P04637") == {}
 
 
+async def test_get_prediction_rejects_conflicting_labelled_accession(
+    respx_mock: respx.MockRouter,
+) -> None:
+    """A labelled record for another protein is never attributed to the request,
+    and the unlabelled legacy fallback does not apply once any label is present."""
+    respx_mock.get("https://alphafold.ebi.ac.uk/api/prediction/P38398").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {"uniprotAccession": "P04637", "gene": "TP53", "modelEntityId": "AF-P04637-F1"},
+                {"entryId": "AF-UNLABELLED-F1", "gene": "TP53"},
+            ],
+        ),
+    )
+    async with AlphaFoldClient() as client:
+        assert await client.get_prediction("P38398") == {}
+
+
 async def test_get_prediction_unlabelled_legacy_list_uses_first(
     respx_mock: respx.MockRouter,
 ) -> None:

@@ -176,6 +176,7 @@ def test_target_evidence_score_to_dict() -> None:
         rna_expression=0.15,
         drug_count=4,
         tractable=True,
+        evidence_datatypes_reported=("genetic_association", "known_drug"),
     )
     d = score.to_dict()
     assert d["target_ensembl_id"] == "ENSG00000141510"
@@ -194,8 +195,30 @@ def test_target_evidence_score_to_dict() -> None:
         "animal_model": round(0.30, 4),
         "rna_expression": round(0.15, 4),
     }
+    assert d["evidence_datatypes_reported"] == ["genetic_association", "known_drug"]
     assert d["drug_count"] == 4
     assert d["tractable"] is True
+
+
+@pytest.mark.unit
+def test_target_evidence_unlisted_components_are_sparse_zero() -> None:
+    score = TargetEvidenceScore(
+        target_ensembl_id="ENSG1",
+        target_gene_symbol="SYNTH",
+        uniprot_id="",
+        disease_mondo_id="MONDO:1",
+        disease_name="Synthetic",
+        overall_score=0.0,
+    )
+    result = score.to_dict()
+    assert result["overall_score"] == 0.0
+    # Datatypes the source did not list are its own sparse zero (numeric for
+    # the published contract); the reported list shows none were listed.
+    assert all(v == 0.0 for v in result["evidence_scores"].values())
+    assert result["evidence_datatypes_reported"] == []
+    # Never populated from the source, so never a fabricated 0.
+    assert result["drug_count"] is None
+    assert result["tractable"] is None
 
 
 @pytest.mark.unit

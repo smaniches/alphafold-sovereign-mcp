@@ -1,0 +1,429 @@
+{
+  "meta": {
+    "source": "Open Targets Platform GraphQL API",
+    "endpoint": "https://api.platform.opentargets.org/api/v4/graphql",
+    "operation": "mapIds(queryTerms: [$q], entityNames: [\"target\"]) { mappings { hits { id name entity object { ... on Target { id approvedSymbol proteinIds { id source } } } } } }",
+    "api_version": "26.9.0",
+    "data_version": "26.09",
+    "retrieved_at": "2026-10-28T15:05:42Z",
+    "sanitisation": "Live responses trimmed to the fields the client requests; proteinIds keep only UniProt-source entries (uniprot_swissprot, uniprot_trembl, uniprot_obsolete) and 'proteinIds_total' records the full live length. Hits, terms, identifiers and symbols are verbatim."
+  },
+  "responses": {
+    "P38398": {
+      "data": {
+        "mapIds": {
+          "total": 1,
+          "mappings": [
+            {
+              "term": "P38398",
+              "hits": [
+                {
+                  "id": "ENSG00000012048",
+                  "name": "BRCA1",
+                  "entity": "target",
+                  "object": {
+                    "id": "ENSG00000012048",
+                    "approvedSymbol": "BRCA1",
+                    "proteinIds": [
+                      {
+                        "id": "P38398",
+                        "source": "uniprot_swissprot"
+                      },
+                      {
+                        "id": "A0A0U1RRA9",
+                        "source": "uniprot_trembl"
+                      },
+                      {
+                        "id": "A0A2R8Y6Y9",
+                        "source": "uniprot_trembl"
+                      },
+                      {
+                        "id": "A0A2R8Y7V5",
+                        "source": "uniprot_trembl"
+                      },
+                      {
+                        "id": "A0A494C182",
+                        "source": "uniprot_trembl"
+                      },
+                      {
+                        "id": "A0A8V8TPY7",
+                        "source": "uniprot_trembl"
+                      },
+                      {
+                        "id": "A0A9Y1QPT7",
+                        "source": "uniprot_trembl"
+                      },
+                      {
+                        "id": "A0A9Y1QQK3",
+                        "source": "uniprot_trembl"
+                      },
+                      {
+                        "id": "A0A9Y1VVE2",
+                        "source": "uniprot_trembl"
+                      },
+                      {
+                        "id": "C6YB45",
+                        "source": "uniprot_trembl"
+                      },
+                      {
+                        "id": "C9IZW4",
+                        "source": "uniprot_trembl"
+                      },
+                      {
+                        "id": "E7ENB7",
+                        "source": "uniprot_trembl"
+                      },
+                      {
+                        "id": "E7EQW4",
+                        "source": "uniprot_trembl"
+                      },
+                      {
+                        "id": "E7EUM2",
+                        "source": "uniprot_trembl"
+                      },
+                      {
+                        "id": "E7EWN5",
+                        "source": "uniprot_trembl"
+                      },
+                      {
+                        "id": "E9PC22",
+                        "source": "uniprot_trembl"
+                      },
+                      {
+                        "id": "G1UI37",
+                        "source": "uniprot_trembl"
+                      },
+                      {
+                        "id": "H0Y850",
+                        "source": "uniprot_trembl"
+                      },
+                      {
+                        "id": "H0Y8B8",
+                        "source": "uniprot_trembl"
+                      },
+                      {
+                        "id": "H0Y8D8",
+                        "source": "uniprot_trembl"
+                      },
+                      {
+                        "id": "K7EJW3",
+                        "source": "uniprot_trembl"
+                      },
+                      {
+                        "id": "K7EPC7",
+                        "source": "uniprot_trembl"
+                      },
+                      {
+                        "id": "Q3B891",
+                        "source": "uniprot_trembl"
+                      },
+                      {
+                        "id": "E9PFZ0",
+                        "source": "uniprot_obsolete"
+                      },
+                      {
+                        "id": "O15129",
+                        "source": "uniprot_obsolete"
+                      },
+                      {
+                        "id": "Q1RMC1",
+                        "source": "uniprot_obsolete"
+                      },
+                      {
+                        "id": "Q3LRJ0",
+                        "source": "uniprot_obsolete"
+                      },
+                      {
+                        "id": "Q3LRJ6",
+                        "source": "uniprot_obsolete"
+                      },
+                      {
+                        "id": "Q6IN79",
+                        "source": "uniprot_obsolete"
+                      },
+                      {
+                        "id": "Q7KYU9",
+                        "source": "uniprot_obsolete"
+                      }
+                    ],
+                    "proteinIds_total": 80
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "P04637": {
+      "data": {
+        "mapIds": {
+          "total": 1,
+          "mappings": [
+            {
+              "term": "P04637",
+              "hits": [
+                {
+                  "id": "ENSG00000141510",
+                  "name": "TP53",
+                  "entity": "target",
+                  "object": {
+                    "id": "ENSG00000141510",
+                    "approvedSymbol": "TP53",
+                    "proteinIds": [
+                      {
+                        "id": "P04637",
+                        "source": "uniprot_swissprot"
+                      },
+                      {
+                        "id": "A0A087WT22",
+                        "source": "uniprot_trembl"
+                      },
+                      {
+                        "id": "A0A087WXZ1",
+                        "source": "uniprot_trembl"
+                      },
+                      {
+                        "id": "A0A087X1Q1",
+                        "source": "uniprot_trembl"
+                      },
+                      {
+                        "id": "A0A0U1RQC9",
+                        "source": "uniprot_trembl"
+                      },
+                      {
+                        "id": "A0A386NBZ1",
+                        "source": "uniprot_trembl"
+                      },
+                      {
+                        "id": "A0AAQ5BHX5",
+                        "source": "uniprot_trembl"
+                      },
+                      {
+                        "id": "A0AAQ5BHY1",
+                        "source": "uniprot_trembl"
+                      },
+                      {
+                        "id": "A0AAQ5BHZ9",
+                        "source": "uniprot_trembl"
+                      },
+                      {
+                        "id": "E7EMR6",
+                        "source": "uniprot_trembl"
+                      },
+                      {
+                        "id": "E7EQX7",
+                        "source": "uniprot_trembl"
+                      },
+                      {
+                        "id": "E7ESS1",
+                        "source": "uniprot_trembl"
+                      },
+                      {
+                        "id": "E9PCY9",
+                        "source": "uniprot_trembl"
+                      },
+                      {
+                        "id": "E9PFT5",
+                        "source": "uniprot_trembl"
+                      },
+                      {
+                        "id": "H2EHT1",
+                        "source": "uniprot_trembl"
+                      },
+                      {
+                        "id": "I3L0W9",
+                        "source": "uniprot_trembl"
+                      },
+                      {
+                        "id": "J3KP33",
+                        "source": "uniprot_trembl"
+                      },
+                      {
+                        "id": "K7PPA8",
+                        "source": "uniprot_trembl"
+                      },
+                      {
+                        "id": "S4R334",
+                        "source": "uniprot_trembl"
+                      },
+                      {
+                        "id": "Q15086",
+                        "source": "uniprot_obsolete"
+                      },
+                      {
+                        "id": "Q15087",
+                        "source": "uniprot_obsolete"
+                      },
+                      {
+                        "id": "Q15088",
+                        "source": "uniprot_obsolete"
+                      },
+                      {
+                        "id": "Q16535",
+                        "source": "uniprot_obsolete"
+                      },
+                      {
+                        "id": "Q16807",
+                        "source": "uniprot_obsolete"
+                      },
+                      {
+                        "id": "Q16808",
+                        "source": "uniprot_obsolete"
+                      },
+                      {
+                        "id": "Q16809",
+                        "source": "uniprot_obsolete"
+                      },
+                      {
+                        "id": "Q16810",
+                        "source": "uniprot_obsolete"
+                      },
+                      {
+                        "id": "Q16811",
+                        "source": "uniprot_obsolete"
+                      },
+                      {
+                        "id": "Q16848",
+                        "source": "uniprot_obsolete"
+                      },
+                      {
+                        "id": "Q2XN98",
+                        "source": "uniprot_obsolete"
+                      },
+                      {
+                        "id": "Q3LRW1",
+                        "source": "uniprot_obsolete"
+                      },
+                      {
+                        "id": "Q3LRW2",
+                        "source": "uniprot_obsolete"
+                      },
+                      {
+                        "id": "Q3LRW3",
+                        "source": "uniprot_obsolete"
+                      },
+                      {
+                        "id": "Q3LRW4",
+                        "source": "uniprot_obsolete"
+                      },
+                      {
+                        "id": "Q3LRW5",
+                        "source": "uniprot_obsolete"
+                      },
+                      {
+                        "id": "Q86UG1",
+                        "source": "uniprot_obsolete"
+                      },
+                      {
+                        "id": "Q8J016",
+                        "source": "uniprot_obsolete"
+                      },
+                      {
+                        "id": "Q99659",
+                        "source": "uniprot_obsolete"
+                      },
+                      {
+                        "id": "Q9BTM4",
+                        "source": "uniprot_obsolete"
+                      },
+                      {
+                        "id": "Q9HAQ8",
+                        "source": "uniprot_obsolete"
+                      },
+                      {
+                        "id": "Q9NP68",
+                        "source": "uniprot_obsolete"
+                      },
+                      {
+                        "id": "Q9NPJ2",
+                        "source": "uniprot_obsolete"
+                      },
+                      {
+                        "id": "Q9NZD0",
+                        "source": "uniprot_obsolete"
+                      },
+                      {
+                        "id": "Q9UBI2",
+                        "source": "uniprot_obsolete"
+                      },
+                      {
+                        "id": "Q9UQ61",
+                        "source": "uniprot_obsolete"
+                      }
+                    ],
+                    "proteinIds_total": 82
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "B3GAT1": {
+      "data": {
+        "mapIds": {
+          "total": 1,
+          "mappings": [
+            {
+              "term": "B3GAT1",
+              "hits": [
+                {
+                  "id": "ENSG00000109956",
+                  "name": "B3GAT1",
+                  "entity": "target",
+                  "object": {
+                    "id": "ENSG00000109956",
+                    "approvedSymbol": "B3GAT1",
+                    "proteinIds": [
+                      {
+                        "id": "Q9P2W7",
+                        "source": "uniprot_swissprot"
+                      },
+                      {
+                        "id": "B7Z5Z8",
+                        "source": "uniprot_obsolete"
+                      },
+                      {
+                        "id": "Q96FS7",
+                        "source": "uniprot_obsolete"
+                      }
+                    ],
+                    "proteinIds_total": 12
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "Q99999999": {
+      "data": {
+        "mapIds": {
+          "total": 0,
+          "mappings": [
+            {
+              "term": "Q99999999",
+              "hits": []
+            }
+          ]
+        }
+      }
+    },
+    "XYZNOTAGENE123": {
+      "data": {
+        "mapIds": {
+          "total": 0,
+          "mappings": [
+            {
+              "term": "XYZNOTAGENE123",
+              "hits": []
+            }
+          ]
+        }
+      }
+    }
+  }
+}

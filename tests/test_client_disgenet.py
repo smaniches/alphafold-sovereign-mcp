@@ -4,12 +4,20 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import httpx
 import pytest
 import respx
 
 from alphafold_sovereign.clients._base import UpstreamError
-from alphafold_sovereign.clients.disgenet import DisGeNETClient
+from alphafold_sovereign.clients.disgenet import (
+    DisGeNETClient,
+    _optional_count,
+    _optional_number,
+    _source_items,
+    _source_number,
+)
 
 # ---------------------------------------------------------------------------
 # Constructor
@@ -350,3 +358,179 @@ async def test_shared_genes_intersection(respx_mock: respx.MockRouter) -> None:
     async with DisGeNETClient(api_key="k") as client:
         shared = await client.shared_genes("C1", "C2", min_score=0.1)
     assert shared == ["TP53"]
+
+
+# ---------------------------------------------------------------------------
+# Evidence-preserving numeric parsing regression tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "value",
+    [None, True, False, -0.01, 1.01, float("nan"), float("inf"), "missing", object()],
+)
+def test_source_probability_rejects_missing_malformed_or_nonfinite(value: Any) -> None:
+    with pytest.raises(ValueError, match="DisGeNET"):
+        _source_number(value, "score", maximum=1.0)
+
+
+def test_source_numbers_preserve_observed_zero_and_allow_unbounded_ratio() -> None:
+    assert _source_number(0.0, "p_value", maximum=1.0) == 0.0
+    assert _source_number("0.25", "score", maximum=1.0) == 0.25
+    assert _source_number(3.2, "ratio") == 3.2
+    assert _optional_number(None, "fdr", maximum=1.0) is None
+    assert _optional_number(0, "fdr", maximum=1.0) == 0.0
+    assert _optional_count(None, "n_pmids") is None
+    assert _optional_count(0, "n_pmids") == 0
+    assert _optional_count("5", "n_pmids") == 5
+    with pytest.raises(ValueError, match="integer"):
+        _optional_count(1.5, "observed")
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "arg"),
+    [
+        ("gene_disease_associations", "/api/v1/gda/gene", "GENE"),
+        ("disease_gene_associations", "/api/v1/gda/disease", "C1"),
+        ("variant_disease_associations", "/api/v1/vda/variant", "rs1"),
+    ],
+)
+@pytest.mark.parametrize("raw_score", [None, "invalid"])
+async def test_disgenet_missing_or_malformed_association_score_fails_closed(
+    respx_mock: respx.MockRouter, method: str, path: str, arg: str, raw_score: Any
+) -> None:
+    respx_mock.get("https://api.disgenet.com" + path).mock(
+        return_value=httpx.Response(200, json={"payload": [{"score": raw_score}]})
+    )
+    async with DisGeNETClient(api_key="k") as client:
+        with pytest.raises(ValueError, match="DisGeNET"):
+            await getattr(client, method)(arg)
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "arg"),
+    [
+        ("gene_disease_associations", "/api/v1/gda/gene", "GENE"),
+        ("disease_gene_associations", "/api/v1/gda/disease", "C1"),
+        ("variant_disease_associations", "/api/v1/vda/variant", "rs1"),
+    ],
+)
+async def test_disgenet_observed_zero_association_score_remains_zero(
+    respx_mock: respx.MockRouter, method: str, path: str, arg: str
+) -> None:
+    respx_mock.get("https://api.disgenet.com" + path).mock(
+        return_value=httpx.Response(200, json={"payload": [{"score": 0.0}]})
+    )
+    async with DisGeNETClient(api_key="k") as client:
+        # Disease->gene defaults to min_score 0.1; override for legitimate zero.
+        options = {"min_score": 0.0} if method != "variant_disease_associations" else {}
+        rows = await getattr(client, method)(arg, **options)
+    assert len(rows) == 1
+    assert rows[0]["score"] == 0.0
+    assert rows[0]["n_pmids"] is None
+
+
+async def test_disgenet_zero_enrichment_pvalue_and_fdr_are_not_rewritten(
+    respx_mock: respx.MockRouter,
+) -> None:
+    respx_mock.get("https://api.disgenet.com/api/v1/enrichment/gene").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "payload": [
+                    {
+                        "p_value": 0.0,
+                        "fdr": 0.0,
+                        "expected": 0.0,
+                        "observed": 0,
+                        "ratio": 0.0,
+                    }
+                ]
+            },
+        )
+    )
+    async with DisGeNETClient(api_key="k") as client:
+        rows = await client.enrichment(["GENE"])
+    assert len(rows) == 1
+    for key in ("p_value", "fdr", "expected", "observed", "ratio"):
+        assert rows[0][key] == 0
+
+
+async def test_disgenet_missing_optional_enrichment_measures_remain_unknown(
+    respx_mock: respx.MockRouter,
+) -> None:
+    respx_mock.get("https://api.disgenet.com/api/v1/enrichment/gene").mock(
+        return_value=httpx.Response(200, json={"payload": [{"p_value": 0.01}]})
+    )
+    async with DisGeNETClient(api_key="k") as client:
+        rows = await client.enrichment(["GENE"])
+    assert rows[0]["p_value"] == 0.01
+    for key in ("fdr", "expected", "observed", "ratio"):
+        assert rows[0][key] is None
+
+
+@pytest.mark.parametrize("raw_pval", [None, -0.1, 1.2, "missing"])
+async def test_disgenet_invalid_enrichment_pvalue_cannot_become_no_data(
+    respx_mock: respx.MockRouter, raw_pval: Any
+) -> None:
+    respx_mock.get("https://api.disgenet.com/api/v1/enrichment/gene").mock(
+        return_value=httpx.Response(200, json={"payload": [{"p_value": raw_pval}]})
+    )
+    async with DisGeNETClient(api_key="k") as client:
+        with pytest.raises(ValueError, match="p_value"):
+            await client.enrichment(["GENE"])
+
+
+async def test_disgenet_malformed_optional_enrichment_count_is_rejected(
+    respx_mock: respx.MockRouter,
+) -> None:
+    respx_mock.get("https://api.disgenet.com/api/v1/enrichment/gene").mock(
+        return_value=httpx.Response(200, json={"payload": [{"p_value": 0.01, "observed": 3.5}]})
+    )
+    async with DisGeNETClient(api_key="k") as client:
+        with pytest.raises(ValueError, match="integer"):
+            await client.enrichment(["GENE"])
+
+
+def test_disgenet_empty_source_response_is_distinct_from_malformed() -> None:
+    assert _source_items([]) == []
+    assert _source_items({}) == []
+    assert _source_items({"payload": []}) == []
+    assert _source_items({"payload": [{"score": 0.0}]}) == [{"score": 0.0}]
+
+
+@pytest.mark.parametrize(
+    "invalid_payload",
+    [
+        None,
+        "not-json-object",
+        {"payload": None},
+        {"payload": "not a list"},
+        {"error": "denied"},
+    ],
+)
+def test_disgenet_malformed_response_cannot_be_interpreted_as_empty(
+    invalid_payload: Any,
+) -> None:
+    with pytest.raises(ValueError, match="invalid payload"):
+        _source_items(invalid_payload)
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "arg"),
+    [
+        ("gene_disease_associations", "/api/v1/gda/gene", "GENE"),
+        ("disease_gene_associations", "/api/v1/gda/disease", "C1"),
+        ("variant_disease_associations", "/api/v1/vda/variant", "rs1"),
+        ("enrichment", "/api/v1/enrichment/gene", ["GENE"]),
+    ],
+)
+async def test_disgenet_malformed_200_payload_fails_closed(
+    respx_mock: respx.MockRouter, method: str, path: str, arg: Any
+) -> None:
+    respx_mock.get("https://api.disgenet.com" + path).mock(
+        return_value=httpx.Response(200, json={"payload": "broken"})
+    )
+    async with DisGeNETClient(api_key="k") as client:
+        with pytest.raises(ValueError, match="invalid payload"):
+            await getattr(client, method)(arg)
