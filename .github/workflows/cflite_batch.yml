@@ -28,6 +28,8 @@ jobs:
         with:
           language: python
           sanitizer: ${{ matrix.sanitizer }}
+          # Batch fuzzing should retain every target without requiring prior coverage.
+          keep-unaffected-fuzz-targets: true
       - name: Run fuzzers
         id: run
         uses: google/clusterfuzzlite/actions/run_fuzzers@884713a6c30a92e5e8544c39945cd7cb630abcd1 # v1
