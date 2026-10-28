@@ -19,6 +19,30 @@
     not calibrated against outcomes, and do not establish target safety
     or biological druggability. See [Limitations L2](../limitations.md).
 
+## Drug-precedent count semantics
+
+ChEMBL's complete, verified mechanism results are counted as distinct
+mechanism-linked molecule identifiers. Open Targets
+`drugAndClinicalCandidates.count` instead counts target-disease-drug
+clinical rows and may repeat one molecule across different indications.
+The two counts are **not interchangeable**.
+
+The tools report the source-specific `drug_count_source`,
+`chembl_mechanism_molecule_count`, and
+`open_targets_clinical_row_count`. Their `drug_count` preserves the
+chosen source's raw count; `drug_precedent_scoring_count` is the
+conservative input to the unvalidated heuristic. If only Open Targets
+clinical rows are available, any positive row count contributes evidence
+of *at least one* clinical association, never evidence of three distinct
+drugs. When both sources give incompatible observed zero-versus-positive
+results, the tools abstain rather than produce a druggability tier.
+
+A protein dossier also checks the supplied gene symbol against the
+resolved UniProt-to-Ensembl target gene symbol when mapping evidence is
+available. A mismatch prevents multi-gene evidence synthesis. Resolution
+failures do not establish a matching biological identity and should be
+evaluated separately.
+
 ## AlphaMissense evidence status
 
 The variant report and draft ACMG tool preserve the AlphaMissense numerical
