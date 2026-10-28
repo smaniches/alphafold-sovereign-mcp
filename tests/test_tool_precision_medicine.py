@@ -1214,7 +1214,13 @@ async def test_assess_target_druggability_no_chembl_no_ot(
 async def test_assess_target_druggability_no_drug_count_from_chembl(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Disagreeing source presence must not be silently laundered into a tier."""
+    """A ChEMBL single-protein zero beside Open Targets records is a scope gap.
+
+    Live 2026-10-28: GABRA1 has one ChEMBL mechanism on the alpha-1 subunit
+    (benzodiazepine mechanisms sit on the GABA-A complex target) but 76 Open
+    Targets drug records. That is not a contradiction to abstain on; with the
+    comparable approved-plus-clinical scope the records count as presence.
+    """
     mocks = _patch_clients(monkeypatch)
     mocks["chembl"].target_by_uniprot = AsyncMock(
         return_value={"chembl_id": "CHEMBL_TGT", "pref_name": "X"}
@@ -1225,8 +1231,78 @@ async def test_assess_target_druggability_no_drug_count_from_chembl(
     )
     mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
 
-    with pytest.raises(ValueError, match="evidence discordant"):
-        await assess_target_druggability(DruggabilityInput(uniprot_id="P38398"))
+    out = await assess_target_druggability(DruggabilityInput(uniprot_id="P38398"))
+    evidence = out["evidence"]
+    assert evidence["drug_count"] == 3
+    assert evidence["drug_precedent_scoring_count"] == 1
+    assert evidence["drug_count_source"] == "open_targets_drug_and_clinical_candidates"
+    assert evidence["drug_precedent_scope"] == "approved_and_clinical"
+    assert evidence["chembl_mechanism_molecule_count"] == 0
+    assert evidence["open_targets_drug_candidate_count"] == 3
+    assert out["data_sources_status"]["chembl_drug_count"] == "ok"
+    assert out["druggability_tier"] == "WARM"
+
+
+async def test_approved_only_scope_keeps_chembl_zero_authoritative(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Approved-only: clinical-stage Open Targets records cannot override."""
+    mocks = _patch_clients(monkeypatch)
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value={"chembl_id": "CHEMBL1962"})
+    mocks["chembl"].approved_drugs = AsyncMock(return_value=[])
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(
+        return_value={"tractability_labels": [], "drug_count": 76}
+    )
+    mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
+
+    out = await assess_target_druggability(
+        DruggabilityInput(uniprot_id="P14867", include_clinical_stage=False)
+    )
+    assert mocks["chembl"].approved_drugs.await_args.kwargs["include_clinical"] is False
+    evidence = out["evidence"]
+    assert evidence["drug_count"] == 0
+    assert evidence["drug_precedent_scoring_count"] == 0
+    assert evidence["drug_count_source"] == "chembl_mechanism_distinct_molecules"
+    assert evidence["drug_precedent_scope"] == "approved_only"
+    # Both observed counts stay visible so the scope difference is auditable.
+    assert evidence["chembl_mechanism_molecule_count"] == 0
+    assert evidence["open_targets_drug_candidate_count"] == 76
+    assert out["data_sources_status"]["open_targets_drug_count"] == "ok"
+    assert out["scoring_breakdown"]["components"]["drug_precedent"]["contribution"] == 0
+
+
+async def test_approved_only_scope_without_chembl_cannot_use_clinical_records(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mocks = _patch_clients(monkeypatch)
+    mocks["chembl"].target_by_uniprot = AsyncMock(side_effect=RuntimeError("chembl down"))
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(
+        return_value={"tractability_labels": [], "drug_count": 9}
+    )
+    with pytest.raises(ValueError, match="approved_only; chembl=failed, open_targets=ok"):
+        await assess_target_druggability(
+            DruggabilityInput(uniprot_id="P04637", include_clinical_stage=False)
+        )
+
+
+async def test_approved_only_scope_accepts_open_targets_all_stage_zero(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Live B3GAT1: no ChEMBL target record and zero Open Targets records."""
+    mocks = _patch_clients(monkeypatch)
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value=None)
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(
+        return_value={"tractability_labels": [], "drug_count": 0}
+    )
+    mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
+    out = await assess_target_druggability(
+        DruggabilityInput(uniprot_id="Q9P2W7", include_clinical_stage=False)
+    )
+    evidence = out["evidence"]
+    assert evidence["drug_count"] == 0
+    assert evidence["drug_count_source"] == "open_targets_drug_and_clinical_candidates"
+    assert evidence["chembl_mechanism_molecule_count"] is None
+    assert out["data_sources_status"]["chembl_drug_count"] == "no_data"
 
 
 async def test_assess_target_druggability_gnomad_constraint_exception(
@@ -1811,6 +1887,36 @@ async def test_map_disease_drug_landscape_ot_efo_fallback(
     assert out["drug_landscape"]["total_indication_entries"] == 0
     # The fallback queried Open Targets with the underscore-form EFO ID.
     assert mocks["opentargets"].associated_targets.await_args.args[0] == "EFO_0000339"
+
+
+async def test_map_disease_landscape_failed_efo_fallback_is_not_observed_zero(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An empty MONDO page followed by a failed EFO retry is unavailable evidence."""
+    mocks = _patch_clients(monkeypatch)
+    mondo_result = MagicMock(spec=DiseaseRecord)
+    mondo_result.name = "chronic myeloid leukemia"
+    mondo_result.efo_ids = ("EFO:0000339",)
+    mocks["mondo"].lookup = AsyncMock(return_value=mondo_result)
+    mocks["opentargets"].associated_targets = AsyncMock(
+        side_effect=[[], RuntimeError("open targets unavailable")]
+    )
+    mocks["chembl"].drug_indications = AsyncMock(
+        return_value=[{"max_phase_for_indication": "4.0", "molecule_chembl_id": "C1"}]
+    )
+    mocks["chembl"].molecule_names = AsyncMock(return_value={"C1": "Imatinib"})
+
+    out = await map_disease_drug_landscape(
+        DiseaseDrugLandscapeInput(disease_mondo_id="MONDO:0011996")
+    )
+    assert out["data_sources_status"]["open_targets"] == "failed"
+    assert out["target_landscape"]["top_targets"] == []
+    assert out["target_landscape"]["retrieved_associated_targets"] is None
+    assert out["target_landscape"]["total_associated_targets"] is None
+    assert out["competitive_intelligence"]["druggable_target_count"] is None
+    assert out["competitive_intelligence"]["investability"].startswith("NOT_ASSESSED")
+    # The complete ChEMBL page is still reported on its own.
+    assert out["competitive_intelligence"]["approved_count"] == 1
 
 
 async def test_map_disease_drug_landscape_mesh_fallback(
@@ -2894,7 +3000,8 @@ async def test_assess_target_druggability_preserves_observed_chembl_zero(
     result = await assess_target_druggability(DruggabilityInput(uniprot_id="P38398"))
     assert result["evidence"]["drug_count"] == 0
     assert result["evidence"]["drug_count_source"] == "chembl_mechanism_distinct_molecules"
-    assert result["evidence"]["open_targets_clinical_row_count"] == 0
+    assert result["evidence"]["open_targets_drug_candidate_count"] == 0
+    assert result["evidence"]["drug_precedent_scope"] == "approved_and_clinical"
 
 
 async def test_dossier_rejects_mismatched_gene_identity(
@@ -2911,7 +3018,7 @@ async def test_dossier_rejects_mismatched_gene_identity(
     mocks["opentargets"].associated_diseases.assert_not_awaited()
 
 
-async def test_dossier_rejects_discordant_drug_presence(
+async def test_dossier_credits_open_targets_presence_when_chembl_single_protein_is_zero(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     mocks = _patch_dossier_clients(monkeypatch)
@@ -2920,10 +3027,17 @@ async def test_dossier_rejects_discordant_drug_presence(
     mocks["opentargets"].drug_count_and_tractability = AsyncMock(
         return_value={"drug_count": 3, "tractability_labels": []}
     )
-    with pytest.raises(ValueError, match="evidence discordant"):
-        await synthesize_protein_dossier(
-            ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="brief")
-        )
+    dossier = await synthesize_protein_dossier(
+        ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="brief")
+    )
+    druggability = dossier["druggability"]
+    assert druggability["drug_count"] == 3
+    assert druggability["drug_precedent_scoring_count"] == 1
+    assert druggability["drug_count_source"] == "open_targets_drug_and_clinical_candidates"
+    assert druggability["drug_precedent_scope"] == "approved_and_clinical"
+    assert druggability["chembl_mechanism_molecule_count"] == 0
+    assert druggability["open_targets_drug_candidate_count"] == 3
+    assert dossier["data_sources_status"]["chembl_drugs"] == "ok"
 
 
 async def test_dossier_uses_distinct_molecule_count_when_sources_both_positive(
@@ -2939,7 +3053,7 @@ async def test_dossier_uses_distinct_molecule_count_when_sources_both_positive(
         ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="brief")
     )
     assert dossier["druggability"]["drug_count"] == 1
-    assert dossier["druggability"]["open_targets_clinical_row_count"] == 5
+    assert dossier["druggability"]["open_targets_drug_candidate_count"] == 5
     assert dossier["druggability"]["drug_count_source"] == "chembl_mechanism_distinct_molecules"
 
 

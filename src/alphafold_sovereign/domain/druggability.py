@@ -241,6 +241,70 @@ def validated_plddt(value: object) -> tuple[float | None, str]:
     return observed, "ok"
 
 
+CHEMBL_DRUG_PRECEDENT_SOURCE = "chembl_mechanism_distinct_molecules"
+"""ChEMBL: distinct molecules with a mechanism on the single-protein target."""
+
+OPEN_TARGETS_DRUG_PRECEDENT_SOURCE = "open_targets_drug_and_clinical_candidates"
+"""Open Targets ``target.drugAndClinicalCandidates.count`` (all clinical stages)."""
+
+
+@dataclass(frozen=True, slots=True)
+class DrugPrecedent:
+    """Which observed source count backs the drug-precedent signal.
+
+    ``drug_count`` is the chosen source's raw observed count. ``scoring_count``
+    is the conservative input to :func:`score_target_druggability`: Open
+    Targets records are credited as presence only (at most 1), because the
+    tier's ``>= DRUG_PRECEDENT_STRONG_COUNT`` cut-off was defined on
+    mechanism-verified ChEMBL molecules and the Open Targets record set is not
+    stage- or mechanism-filtered by this tool.
+    """
+
+    drug_count: int
+    scoring_count: int
+    source: str
+
+
+def resolve_drug_precedent(
+    *,
+    chembl_count: int | None,
+    open_targets_count: int | None,
+    include_clinical: bool,
+) -> DrugPrecedent | None:
+    """Combine two differently scoped observed counts without inventing zero.
+
+    ``chembl_count`` counts distinct mechanism-linked molecules at or above
+    the requested development stage (approved only, or approved plus
+    clinical). ``open_targets_count`` counts Open Targets drug and clinical
+    candidate records across every stage, so it is scope-comparable only when
+    ``include_clinical`` is true. ``None`` means the source did not supply an
+    observed count.
+
+    The two sources also differ in target granularity: ChEMBL mechanisms are
+    often recorded on a protein complex or family rather than the single
+    protein, so a ChEMBL zero alongside positive Open Targets records is an
+    expected scope difference, not a contradiction. Both counts are reported
+    to the caller; this function only decides which one backs the signal:
+
+    * a positive ChEMBL count (exact requested scope) wins;
+    * otherwise a scope-comparable Open Targets count is evidence of
+      presence (or, when zero, of absence at every stage, which also bounds
+      the approved-only scope);
+    * otherwise an observed ChEMBL zero stands for the requested scope;
+    * with no observed count in the requested scope the result is ``None``
+      and the caller must report the assessment as unavailable.
+    """
+    if chembl_count is not None and chembl_count > 0:
+        return DrugPrecedent(chembl_count, chembl_count, CHEMBL_DRUG_PRECEDENT_SOURCE)
+    if open_targets_count is not None and open_targets_count > 0 and include_clinical:
+        return DrugPrecedent(open_targets_count, 1, OPEN_TARGETS_DRUG_PRECEDENT_SOURCE)
+    if chembl_count is not None:
+        return DrugPrecedent(chembl_count, chembl_count, CHEMBL_DRUG_PRECEDENT_SOURCE)
+    if open_targets_count == 0:
+        return DrugPrecedent(0, 0, OPEN_TARGETS_DRUG_PRECEDENT_SOURCE)
+    return None
+
+
 def score_target_druggability(
     *,
     drug_count: int,

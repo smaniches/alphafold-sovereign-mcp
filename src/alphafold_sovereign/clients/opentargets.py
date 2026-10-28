@@ -192,7 +192,8 @@ class OpenTargetsClient(BaseAsyncClient):
 
         Returns:
             List of ``TargetEvidenceScore`` sorted by overall score descending.
-            Missing datatype components remain None rather than measured zero.
+            A datatype absent from the source list is reported as 0.0 (no
+            evidence of that type in the release); see ``TargetEvidenceScore``.
         """
         limit = max(1, min(limit, 200))
         data = await self._graphql(
@@ -226,7 +227,8 @@ class OpenTargetsClient(BaseAsyncClient):
 
         Returns:
             List of ``TargetEvidenceScore`` sorted by overall score descending.
-            Missing datatype components remain None rather than measured zero.
+            A datatype absent from the source list is reported as 0.0 (no
+            evidence of that type in the release); see ``TargetEvidenceScore``.
         """
         limit = max(1, min(limit, 200))
         # Open Targets keys disease records on underscore-form CURIEs
@@ -260,14 +262,15 @@ class OpenTargetsClient(BaseAsyncClient):
                     disease_mondo_id=_to_curie(disease_id),
                     disease_name=disease_name,
                     overall_score=_observed_score(row.get("score")),
-                    genetic_association=dt.get("genetic_association"),
-                    somatic_mutation=dt.get("somatic_mutation"),
-                    known_drug=dt.get("known_drug"),
-                    affected_pathway=dt.get("affected_pathway"),
-                    literature=dt.get("literature"),
-                    animal_model=dt.get("animal_model"),
-                    rna_expression=dt.get("rna_expression"),
+                    genetic_association=dt.get("genetic_association", 0.0),
+                    somatic_mutation=dt.get("somatic_mutation", 0.0),
+                    known_drug=dt.get("known_drug", 0.0),
+                    affected_pathway=dt.get("affected_pathway", 0.0),
+                    literature=dt.get("literature", 0.0),
+                    animal_model=dt.get("animal_model", 0.0),
+                    rna_expression=dt.get("rna_expression", 0.0),
                     tractable=tractable,
+                    evidence_datatypes_reported=tuple(dt),
                 )
             )
         return sorted(scores, key=lambda s: s.overall_score, reverse=True)
@@ -426,11 +429,12 @@ class OpenTargetsClient(BaseAsyncClient):
             disease_mondo_id=_to_curie(disease.get("id", "")),
             disease_name=disease.get("name", ""),
             overall_score=_observed_score(row.get("score")),
-            genetic_association=dt.get("genetic_association"),
-            somatic_mutation=dt.get("somatic_mutation"),
-            known_drug=dt.get("known_drug"),
-            affected_pathway=dt.get("affected_pathway"),
-            literature=dt.get("literature"),
-            animal_model=dt.get("animal_model"),
-            rna_expression=dt.get("rna_expression"),
+            genetic_association=dt.get("genetic_association", 0.0),
+            somatic_mutation=dt.get("somatic_mutation", 0.0),
+            known_drug=dt.get("known_drug", 0.0),
+            affected_pathway=dt.get("affected_pathway", 0.0),
+            literature=dt.get("literature", 0.0),
+            animal_model=dt.get("animal_model", 0.0),
+            rna_expression=dt.get("rna_expression", 0.0),
+            evidence_datatypes_reported=tuple(dt),
         )

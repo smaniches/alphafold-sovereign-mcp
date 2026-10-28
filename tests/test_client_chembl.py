@@ -858,12 +858,81 @@ async def test_approved_drugs_rejects_unretrieved_pagination_or_truncation(
     route.mock(
         return_value=httpx.Response(
             200,
-            json={"mechanisms": [{"molecule_chembl_id": f"CHEMBL_{i}"} for i in range(51)]},
+            json={
+                "mechanisms": [{"molecule_chembl_id": f"CHEMBL_{i}"} for i in range(201)],
+                "page_meta": {"total_count": 201},
+            },
         )
     )
     async with ChEMBLClient() as client:
-        with pytest.raises(ValueError, match="more than 50"):
+        with pytest.raises(ValueError, match="more than 200"):
             await client.approved_drugs("CHEMBL_T", require_complete=True)
+
+
+def _mechanism_page(start: int, size: int, total: int) -> httpx.Response:
+    return httpx.Response(
+        200,
+        json={
+            "mechanisms": [
+                {"molecule_chembl_id": f"CHEMBL_{i}", "mechanism_of_action": "Inhibitor"}
+                for i in range(start, min(start + size, total))
+            ],
+            "page_meta": {"limit": size, "offset": start, "total_count": total},
+        },
+    )
+
+
+def _molecule_from_path(request: httpx.Request) -> httpx.Response:
+    chembl_id = request.url.path.rsplit("/", 1)[-1].removesuffix(".json")
+    return httpx.Response(200, json={"molecule_chembl_id": chembl_id, "max_phase": 4})
+
+
+async def test_approved_drugs_follows_mechanism_pagination(respx_mock: respx.MockRouter) -> None:
+    """A target with more mechanism rows than one page is fully retrieved.
+
+    Live ChEMBL 37 reports 90 mechanism rows for EGFR (CHEMBL203); the first
+    page alone would silently truncate the distinct molecule count.
+    """
+    route = respx_mock.get("https://www.ebi.ac.uk/chembl/api/data/mechanism.json")
+    route.side_effect = [_mechanism_page(0, 100, 150), _mechanism_page(100, 100, 150)]
+    respx_mock.get(url__regex=r".*/chembl/api/data/molecule/CHEMBL_\d+\.json").mock(
+        side_effect=_molecule_from_path
+    )
+    async with ChEMBLClient() as client:
+        drugs = await client.approved_drugs("CHEMBL203", require_complete=True)
+    assert len(drugs) == 150
+    assert len({d["molecule_chembl_id"] for d in drugs}) == 150
+    assert [c.request.url.params["offset"] for c in route.calls] == ["0", "100"]
+
+
+@pytest.mark.parametrize("total_count", [None, True, -1, "2"])
+async def test_approved_drugs_require_complete_rejects_invalid_total_count(
+    respx_mock: respx.MockRouter, total_count: Any
+) -> None:
+    respx_mock.get("https://www.ebi.ac.uk/chembl/api/data/mechanism.json").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "mechanisms": [{"molecule_chembl_id": "CHEMBL_A"}],
+                "page_meta": {"total_count": total_count},
+            },
+        )
+    )
+    async with ChEMBLClient() as client:
+        with pytest.raises(ValueError, match="pagination incomplete"):
+            await client.approved_drugs("CHEMBL_T", require_complete=True)
+
+
+async def test_approved_drugs_page_bound_does_not_truncate_silently(
+    respx_mock: respx.MockRouter,
+) -> None:
+    """Beyond the page bound a complete count is refused, never truncated."""
+    route = respx_mock.get("https://www.ebi.ac.uk/chembl/api/data/mechanism.json")
+    route.side_effect = [_mechanism_page(100 * i, 100, 10_000) for i in range(5)]
+    async with ChEMBLClient() as client:
+        with pytest.raises(ValueError, match="more than 200"):
+            await client.approved_drugs("CHEMBL_T", require_complete=True)
+    assert route.call_count == 5
 
 
 async def test_approved_drugs_does_not_promote_unknown_phase(

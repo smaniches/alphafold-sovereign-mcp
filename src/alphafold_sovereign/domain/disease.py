@@ -157,16 +157,23 @@ class PhenotypeAssociation:
         }
 
 
-def _round_optional(value: float | None) -> float | None:
-    return round(value, 4) if value is not None else None
-
-
 @dataclass(frozen=True, slots=True)
 class TargetEvidenceScore:
-    """Open Targets association with optional source-reported evidence components.
+    """Open Targets association score between a target and a disease.
 
-    Missing component scores, drug counts and tractability are unknown rather
-    than measured zero or observed false; a real reported zero is preserved.
+    Open Targets serialises ``datatypeScores`` sparsely: a datatype that
+    contributed no evidence to the association is simply absent from the list
+    (the deployed API also emits explicit ``0`` entries for some datatypes).
+    Absence therefore means *no evidence of that datatype in the queried
+    release*, which is the platform's own zero, not an unavailable
+    measurement; the published numeric fields keep ``0.0`` for it and
+    ``evidence_datatypes_reported`` records exactly which datatypes the
+    source listed. ``overall_score`` must always be reported by the source.
+
+    ``drug_count`` and ``tractable`` are ``None`` when the source supplied no
+    record: this client never queries a per-association drug count, so the
+    previous constant ``0`` was fabricated, and ``tractable`` is unknown when
+    the target carries no tractability assessment.
     """
 
     target_ensembl_id: str
@@ -176,15 +183,17 @@ class TargetEvidenceScore:
     disease_name: str
     overall_score: float
     """0.0–1.0 composite score."""
-    genetic_association: float | None = None
-    somatic_mutation: float | None = None
-    known_drug: float | None = None
-    affected_pathway: float | None = None
-    literature: float | None = None
-    animal_model: float | None = None
-    rna_expression: float | None = None
+    genetic_association: float = 0.0
+    somatic_mutation: float = 0.0
+    known_drug: float = 0.0
+    affected_pathway: float = 0.0
+    literature: float = 0.0
+    animal_model: float = 0.0
+    rna_expression: float = 0.0
     drug_count: int | None = None
     tractable: bool | None = None
+    evidence_datatypes_reported: tuple[str, ...] = ()
+    """Datatype identifiers present in the source ``datatypeScores`` list."""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -195,14 +204,15 @@ class TargetEvidenceScore:
             "disease_name": self.disease_name,
             "overall_score": round(self.overall_score, 4),
             "evidence_scores": {
-                "genetic_association": _round_optional(self.genetic_association),
-                "somatic_mutation": _round_optional(self.somatic_mutation),
-                "known_drug": _round_optional(self.known_drug),
-                "affected_pathway": _round_optional(self.affected_pathway),
-                "literature": _round_optional(self.literature),
-                "animal_model": _round_optional(self.animal_model),
-                "rna_expression": _round_optional(self.rna_expression),
+                "genetic_association": round(self.genetic_association, 4),
+                "somatic_mutation": round(self.somatic_mutation, 4),
+                "known_drug": round(self.known_drug, 4),
+                "affected_pathway": round(self.affected_pathway, 4),
+                "literature": round(self.literature, 4),
+                "animal_model": round(self.animal_model, 4),
+                "rna_expression": round(self.rna_expression, 4),
             },
+            "evidence_datatypes_reported": list(self.evidence_datatypes_reported),
             "drug_count": self.drug_count,
             "tractable": self.tractable,
         }

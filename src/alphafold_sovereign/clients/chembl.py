@@ -89,18 +89,35 @@ def _valid_phase(value: Any) -> bool:
     return math.isfinite(phase) and -1 <= phase <= 4
 
 
-def _verify_complete_mechanisms(mechanisms: list[Any], page_meta: Any, unique_ids: int) -> None:
-    """Refuse counts when the paginated, identified upstream sample is incomplete."""
-    if unique_ids > 50:
-        raise ValueError("ChEMBL target has more than 50 mechanism candidates")
+MAX_MECHANISM_MOLECULES = 200
+"""Upper bound on distinct mechanism-linked molecules fetched per target.
+
+Live ChEMBL 37 totals for heavily drugged single proteins (EGFR 76 distinct
+molecules over 90 mechanism rows, HRH1 72 rows, DRD2 68 rows) sit well below
+this bound; beyond it a complete count is refused rather than truncated.
+"""
+
+_MECHANISM_PAGE_SIZE = 100
+_MAX_MECHANISM_PAGES = 5
+
+
+def _page_total(page_meta: Any) -> int:
+    """Return the verified ``page_meta.total_count`` of a ChEMBL list response."""
     if not isinstance(page_meta, dict):
         raise ValueError("ChEMBL mechanism pagination cannot be verified")
     total_count = page_meta.get("total_count")
-    if (
-        not isinstance(total_count, int)
-        or isinstance(total_count, bool)
-        or total_count != len(mechanisms)
-    ):
+    if not isinstance(total_count, int) or isinstance(total_count, bool) or total_count < 0:
+        raise ValueError("ChEMBL mechanism pagination incomplete")
+    return total_count
+
+
+def _verify_complete_mechanisms(mechanisms: list[Any], page_meta: Any, unique_ids: int) -> None:
+    """Refuse counts when the paginated, identified upstream sample is incomplete."""
+    if unique_ids > MAX_MECHANISM_MOLECULES:
+        raise ValueError(
+            f"ChEMBL target has more than {MAX_MECHANISM_MOLECULES} mechanism candidates"
+        )
+    if _page_total(page_meta) != len(mechanisms):
         raise ValueError("ChEMBL mechanism pagination incomplete")
     if any(
         not isinstance(item, dict)
@@ -320,18 +337,33 @@ class ChEMBLClient(BaseAsyncClient):
         """
         min_phase = 1 if include_clinical else 4
 
-        # Get mechanism of action entries for this target
-        data = await self._get(
-            f"{self._API_ROOT}/mechanism.json",
-            params={
-                "target_chembl_id": target_chembl_id,
-                "limit": 100,
-                "format": "json",
-            },
-        )
-        mechanisms = data.get("mechanisms")
-        if not isinstance(mechanisms, list):
-            raise ValueError("ChEMBL mechanism response missing a valid mechanisms list")
+        # Get mechanism of action entries for this target, following the
+        # offset pagination that ChEMBL reports in ``page_meta`` so a heavily
+        # drugged target (EGFR: 90 mechanism rows) is not silently truncated.
+        mechanisms: list[Any] = []
+        page_meta: Any = None
+        for page in range(_MAX_MECHANISM_PAGES):
+            data = await self._get(
+                f"{self._API_ROOT}/mechanism.json",
+                params={
+                    "target_chembl_id": target_chembl_id,
+                    "limit": _MECHANISM_PAGE_SIZE,
+                    "offset": page * _MECHANISM_PAGE_SIZE,
+                    "format": "json",
+                },
+            )
+            page_rows = data.get("mechanisms")
+            if not isinstance(page_rows, list):
+                raise ValueError("ChEMBL mechanism response missing a valid mechanisms list")
+            mechanisms.extend(page_rows)
+            page_meta = data.get("page_meta")
+            if (
+                len(page_rows) < _MECHANISM_PAGE_SIZE
+                or not isinstance(page_meta, dict)
+                or not isinstance(page_meta.get("total_count"), int)
+                or len(mechanisms) >= page_meta["total_count"]
+            ):
+                break
         chembl_ids = sorted(
             {
                 molecule_id
@@ -346,12 +378,12 @@ class ChEMBLClient(BaseAsyncClient):
 
         # Best effort remains supported, but published counts must be complete.
         if require_complete:
-            _verify_complete_mechanisms(mechanisms, data.get("page_meta"), len(chembl_ids))
+            _verify_complete_mechanisms(mechanisms, page_meta, len(chembl_ids))
         if not chembl_ids:
             return []
 
         # Batch-fetch compound info in parallel
-        target_ids = chembl_ids[:50]
+        target_ids = chembl_ids[:MAX_MECHANISM_MOLECULES]
         molecule_results = await asyncio.gather(
             *[self._get_molecule(cid) for cid in target_ids],
             return_exceptions=True,
@@ -378,7 +410,7 @@ class ChEMBLClient(BaseAsyncClient):
                 continue
             mechs = [
                 m.get("mechanism_of_action", "")
-                for m in data.get("mechanisms", [])
+                for m in mechanisms
                 if m.get("molecule_chembl_id") == cid and m.get("mechanism_of_action")
             ]
             drug["mechanism"] = mechs[0] if mechs else ""

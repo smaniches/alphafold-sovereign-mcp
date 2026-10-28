@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -73,7 +75,8 @@ def test_row_to_score_missing_disease_uses_defaults() -> None:
     assert score.disease_mondo_id == ""
     assert score.disease_name == ""
     assert score.overall_score == 0.0
-    assert score.genetic_association is None
+    assert score.genetic_association == 0.0
+    assert score.evidence_datatypes_reported == ()
     assert score.drug_count is None
 
 
@@ -580,6 +583,40 @@ async def test_resolve_target_malformed_mapping_fails_closed(
 # ---------------------------------------------------------------------------
 
 
+_MAPIDS_FIXTURE = Path(__file__).parent / "fixtures" / "opentargets_mapids_20261028.json"
+
+
+@pytest.mark.parametrize(
+    ("term", "expected"),
+    [
+        ("P38398", {"ensembl_id": "ENSG00000012048", "symbol": "BRCA1"}),
+        ("P04637", {"ensembl_id": "ENSG00000141510", "symbol": "TP53"}),
+        ("B3GAT1", {"ensembl_id": "ENSG00000109956", "symbol": "B3GAT1"}),
+        ("Q99999999", {}),
+        ("XYZNOTAGENE123", {}),
+    ],
+)
+async def test_resolve_target_recorded_live_mapids_examples(
+    respx_mock: respx.MockRouter, term: str, expected: dict[str, str]
+) -> None:
+    """Replay recorded live ``mapIds`` responses (see fixture ``meta``).
+
+    The fixture is a sanitised capture of the deployed Open Targets GraphQL
+    API, not a hand-authored shape; its ``meta`` records the API/data release
+    and retrieval date so a future schema drift can be re-verified.
+    """
+    fixture = json.loads(_MAPIDS_FIXTURE.read_text())
+    assert fixture["meta"]["api_version"] and fixture["meta"]["data_version"]
+    respx_mock.post(_GQL_URL).mock(
+        return_value=httpx.Response(200, json=fixture["responses"][term])
+    )
+    async with OpenTargetsClient() as client:
+        assert await client.resolve_target(term) == expected
+    sent = json.loads(respx_mock.calls.last.request.content)
+    assert sent["variables"] == {"q": term}
+    assert "mapIds(queryTerms: [$q]" in sent["query"]
+
+
 async def test_resolve_disease_efo_found(respx_mock: respx.MockRouter) -> None:
     """Returns the first EFO hit as a colon-form CURIE, skipping non-EFO hits."""
     respx_mock.post(_GQL_URL).mock(
@@ -715,13 +752,19 @@ def test_open_targets_row_component_missing_vs_observed_zero() -> None:
     out = OpenTargetsClient._row_to_score(base, "ENSG1", "SYNTH", "")
     assert out.overall_score == 0.0
     assert out.known_drug == 0.0
-    assert out.genetic_association is None
+    # Open Targets lists only datatypes that contributed evidence; an absent
+    # datatype is the platform's own zero, kept numeric for the published
+    # contract, while the reported list preserves which ones were listed.
+    assert out.genetic_association == 0.0
+    assert out.evidence_datatypes_reported == ("known_drug",)
     assert out.drug_count is None
-    assert out.to_dict()["evidence_scores"]["known_drug"] == 0.0
-    assert out.to_dict()["evidence_scores"]["genetic_association"] is None
+    public = out.to_dict()
+    assert public["evidence_scores"]["known_drug"] == 0.0
+    assert public["evidence_scores"]["genetic_association"] == 0.0
+    assert public["evidence_datatypes_reported"] == ["known_drug"]
 
 
-async def test_open_targets_null_component_stays_unknown_in_public_result(
+async def test_open_targets_sparse_components_stay_numeric_with_reported_list(
     respx_mock: respx.MockRouter,
 ) -> None:
     respx_mock.post(_GQL_URL).mock(
@@ -755,7 +798,8 @@ async def test_open_targets_null_component_stays_unknown_in_public_result(
         scores = await client.associated_targets("MONDO:1")
     assert len(scores) == 1
     assert scores[0].overall_score == 0.0
-    assert scores[0].genetic_association is None
+    assert scores[0].genetic_association == 0.0
+    assert scores[0].evidence_datatypes_reported == ()
     assert scores[0].tractable is None
 
 
