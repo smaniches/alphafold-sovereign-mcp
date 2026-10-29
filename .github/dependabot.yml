@@ -31,6 +31,15 @@ updates:
       time: "09:00"
       timezone: UTC
     open-pull-requests-limit: 5
+    # Defer only the incompatible Pillow 13 major line while docs[imaging]
+    # supports Python 3.10. The current uv.lock independently resolves
+    # virtualenv 20.36.1 on 3.10 and 21.14.13 on 3.11+; do not globally
+    # ignore virtualenv 21, which would suppress otherwise safe updates.
+    # Review security advisories manually and remove this exception when
+    # the supported Python range permits Pillow 13.
+    ignore:
+      - dependency-name: pillow
+        versions: ["13.*"]
     labels:
       - dependencies
       - python
