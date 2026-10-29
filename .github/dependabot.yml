@@ -40,6 +40,13 @@ updates:
     ignore:
       - dependency-name: pillow
         versions: ["13.*"]
+      # pymdown-extensions 12.2/12.3 changes Highlight.__init__(md),
+      # incompatible with the Python 3.10-compatible mkdocstrings 1.0.4.
+      # docs strict-build failure on PR #300 proves this is not safe.
+      # Retain Python 3.10/docs functionality; revisit on a tested
+      # mkdocstrings update. This guard does not disable security scans.
+      - dependency-name: pymdown-extensions
+        versions: [">=12.2,<12.4"]
     labels:
       - dependencies
       - python
