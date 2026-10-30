@@ -1,5 +1,10 @@
 # Installation
 
+**Supported runtime:** Python 3.11 or newer (CI-verified on 3.11–3.13).
+Python 3.10 reached upstream end of life on 1 October 2026 and is no longer
+supported. The distribution requires the patched DNS dependency
+`dnspython>=2.9.0`. The optional docs extra requires `pillow>=13.0.0`.
+
 ## Quick install (PyPI)
 
 `alphafold-sovereign-mcp` is published on PyPI:

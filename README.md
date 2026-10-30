@@ -43,7 +43,7 @@ respective owner and is used here only to describe the public data
 [![PyPI](https://img.shields.io/pypi/v/alphafold-sovereign-mcp?label=PyPI)](https://pypi.org/project/alphafold-sovereign-mcp/)
 [![PyPI downloads/30d](https://img.shields.io/pypi/dm/alphafold-sovereign-mcp?label=downloads%2F30d)](https://pypistats.org/packages/alphafold-sovereign-mcp)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](pyproject.toml)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)](pyproject.toml)
 [![MCP Spec 2025-06-18](https://img.shields.io/badge/MCP-2025--06--18-purple)](https://modelcontextprotocol.io)
 [![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)](https://github.com/smaniches/alphafold-sovereign-mcp/actions/workflows/ci.yml)
 [![ORCID](https://img.shields.io/badge/ORCID-0009--0005--6480--1987-A6CE39?logo=orcid&logoColor=white)](https://orcid.org/0009-0005-6480-1987)
@@ -86,7 +86,12 @@ A Python MCP server that:
   L2 distance between those feature vectors is not a calibrated measure
   of protein homology or biological function.
 
-It targets `mcp-spec 2025-06-18` and runs on Python 3.10–3.13.
+It targets `mcp-spec 2025-06-18` and is CI-tested on Python 3.11–3.13.
+Python 3.10 reached upstream end of life on 1 October 2026 and is no longer
+supported. New installs require Python 3.11+. The runtime requires patched
+`dnspython>=2.9.0` (CVE-2026-114605); optional documentation builds require
+`pillow>=13.0.0` to avoid the affected Pillow 12 line. Existing Python 3.10
+users should upgrade their interpreter before upgrading this package.
 
 **AlphaFold DB compatibility:** the prediction API announced modern model
 and sequence field names and a legacy-field sunset in June 2026.
@@ -464,7 +469,7 @@ See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the full module map.
   SLSA provenance is generated in CI; attaching it to each GitHub Release
   remains a roadmap item.
 
-The full CI matrix (Python 3.10, 3.11, 3.12, 3.13 × Ubuntu, macOS)
+The full CI matrix (Python 3.11, 3.12, 3.13 × Ubuntu, macOS)
 runs on every push. The coverage percentage above is the number a
 `git clone && uv run nox -s cov` produces on the current HEAD; if you
 find a divergence, please open an issue.

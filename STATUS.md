@@ -14,7 +14,7 @@ expectation of what this project is and is not.
 
 | Dimension | Status | Evidence |
 |---|---|---|
-| Offline unit tests | Passing | `uv run pytest tests/` on every PR; CI matrix across Python 3.10–3.13 |
+| Offline unit tests | Passing | `uv run pytest tests/` on every PR; CI matrix across Python 3.11–3.13 |
 | Line + branch coverage | 100% on shipped surface | `nox -s cov`; enforced by `--cov-fail-under=100` |
 | Static analysis | Clean | `ruff check`, `mypy --strict`, `bandit` on every PR |
 | Security scanning | Automated PR checks passing on verified commits | CodeQL `security-extended` runs in CI; repository-wide open security alerts require a separate Security-tab check |
@@ -83,7 +83,7 @@ expectation of what this project is and is not.
   push to main.
 
 ### CI matrix
-- Python 3.10 / 3.11 / 3.12 / 3.13 on Ubuntu and macOS.
+- Python 3.11 / 3.12 / 3.13 on Ubuntu and macOS.
 - Lint (ruff), format (ruff format), type-check (mypy strict),
   build (sdist + wheel), MCP schema validation.
 

@@ -31,20 +31,13 @@ updates:
       time: "09:00"
       timezone: UTC
     open-pull-requests-limit: 5
-    # Defer only the incompatible Pillow 13 major line while docs[imaging]
-    # supports Python 3.10. The current uv.lock independently resolves
-    # virtualenv 20.36.1 on 3.10 and 21.14.13 on 3.11+; do not globally
-    # ignore virtualenv 21, which would suppress otherwise safe updates.
-    # Review security advisories manually and remove this exception when
-    # the supported Python range permits Pillow 13.
+    # The unsupported Pillow 13 exclusion has been removed. The docs extra
+    # requires the patched Pillow 13 line on supported Python >=3.11.
     ignore:
-      - dependency-name: pillow
-        versions: ["13.*"]
       # pymdown-extensions 12.2+ changes Highlight.__init__(md),
-      # incompatible with the Python 3.10-compatible mkdocstrings 1.0.4.
-      # docs strict-build failure on PR #300 proves this is not safe.
-      # Retain Python 3.10/docs functionality; revisit on a tested
-      # mkdocstrings update. This guard does not disable security scans.
+      # incompatible with the currently tested mkdocstrings API. Strict docs
+      # builds demonstrated the mismatch; revisit once verified compatible.
+      # This guard does not suppress dependency security scans.
       - dependency-name: pymdown-extensions
         versions: [">=12.2"]
     labels:

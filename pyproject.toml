@@ -13,7 +13,7 @@ version = "1.5.8"
 description = "MCP server wrapping AlphaFold DB and 8 other biomedical data sources, with a local SQLite knowledge graph."
 readme = "README.md"
 license = {text = "Apache-2.0"}
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 authors = [
     {name = "Santiago Maniches", email = "santiago@topologica.ai"},
 ]
@@ -45,7 +45,6 @@ classifiers = [
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -87,6 +86,9 @@ dependencies = [
     # that closes the full set reported by pip-audit and OSV. Authlib is
     # reachable at runtime through fastmcp.server.auth.oauth_proxy.
     "authlib>=1.9.1",
+    # Runtime security floor: dnspython 2.8.x is affected by
+    # CVE-2026-114605. Patched 2.9.0 requires Python >=3.11.
+    "dnspython>=2.9.0",
 ]
 
 [project.optional-dependencies]
@@ -120,11 +122,13 @@ docs = [
     # (Open Graph preview) plugin; the Cairo/Pango system libraries are
     # installed in the docs CI workflow.
     "mkdocs-material[imaging]>=9.7.7",
+    # Pillow 12.x carries 2026 advisories; imaging is documentation-only.
+    # Pillow 13 requires Python 3.11+ and is enforced for docs builds.
+    "pillow>=13.0.0",
     "mkdocstrings[python]>=0.25.0",
-    # pymdown-extensions 12.2+ changed Highlight.__init__(md), while the
-    # Python 3.10-compatible mkdocstrings 1.0.4 still calls it without md.
-    # mkdocstrings 1.0.7 fixes the API but drops Python 3.10. Retain the
-    # last compatible pymdown release until the whole 3.10 docs path is safe.
+    # pymdown-extensions 12.2+ changed Highlight.__init__(md), incompatible
+    # with the mkdocstrings version resolved by this docs stack. Retain the
+    # tested range until a matching docs-plugin upgrade passes strict builds.
     "pymdown-extensions>=10.0,<12.2",
     # mkdocs-material's dependency tree includes requests -> urllib3.
     # Keep the patched floor scoped to docs rather than normal runtime.
@@ -138,11 +142,8 @@ docs = [
 security = [
     "bandit[toml]>=1.7.8",
     "pip-audit>=2.7.0",
-    # CVE-2026-112940 affects FileLock 3.20.4 through 4.2.0.
-    # 4.2.x needs Python 3.11; 3.20.3 predates the affected feature.
-    # This dependency belongs to cachecontrol[filecache] in the scanner.
-    "filelock>=4.2.1; python_version >= '3.11'",
-    "filelock==3.20.3; python_version < '3.11'",
+    # CVE-2026-112940 fix for the pip-audit toolchain; no legacy 3.10 pin.
+    "filelock>=4.2.1",
     # CVE-2026-114613 affects msgpack < 1.2.3 (cachecontrol[filecache] in the
     # scanner); scoped to the audit environment like filelock above.
     "msgpack>=1.2.3",
@@ -259,7 +260,7 @@ known-first-party = ["alphafold_sovereign"]
 # ── Mypy ──────────────────────────────────────────────────────────────────────────────────
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.11"
 strict = true
 warn_return_any = true
 warn_unused_ignores = true

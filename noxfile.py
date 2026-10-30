@@ -59,7 +59,7 @@ def type(session: nox.Session) -> None:
     session.run("mypy", *SRC_DIRS_TYPE, "--config-file", "pyproject.toml")
 
 
-@nox.session(python=["3.10", "3.11", "3.12", "3.13"])
+@nox.session(python=["3.11", "3.12", "3.13"])
 def test(session: nox.Session) -> None:
     """Run the full pytest suite on each supported Python."""
     session.install("-e", ".[dev]")
