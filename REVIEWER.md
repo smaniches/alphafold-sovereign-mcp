@@ -1,7 +1,7 @@
 # Reviewer Guide
 
 This document helps a cold reviewer verify the project's claims in
-under 30 minutes. It assumes a Unix-like environment with Python 3.10+
+under 30 minutes. It assumes a Unix-like environment with Python 3.11+
 and `uv` installed.
 
 ---

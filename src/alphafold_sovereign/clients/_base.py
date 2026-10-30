@@ -52,7 +52,7 @@ logger = structlog.get_logger(__name__)
 
 # Bound to ``BaseAsyncClient`` so ``async with EnsemblClient() as c`` (and the
 # ``session()`` helper) yields the concrete subclass rather than the base type.
-# ``typing.Self`` is unavailable on Python 3.10, which this project supports.
+# Keep TypeVar-based subclass typing for explicit compatibility with callers.
 _T = TypeVar("_T", bound="BaseAsyncClient")
 
 # ---------------------------------------------------------------------------

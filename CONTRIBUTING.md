@@ -87,7 +87,7 @@ automation) and merge commits are exempt.
 ## How to Set Up a Dev Environment
 
 ```bash
-# Prerequisites: Python 3.10+ (3.12 recommended), uv, git, optionally Docker
+# Prerequisites: Python 3.11+ (3.12 recommended), uv, git, optionally Docker
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Clone & sync
@@ -190,7 +190,7 @@ the lockfile drifts.
 
 ## Style
 
-- **Python**: 3.10+ (3.12 for the primary dev environment, matching the
+- **Python**: 3.11+ (3.12 for the primary dev environment, matching the
   pinned `nox` tooling sessions), `ruff` for
   lint+format, `mypy --strict` for types. We use the Google docstring
   convention.

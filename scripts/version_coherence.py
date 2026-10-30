@@ -18,7 +18,7 @@ drift was found (printed as a table); 2 means a file was missing/malformed or a
 version field could not be read.
 
 Deliberately stdlib-only and TOML-parser-free (``tomllib`` is 3.11+), so it runs
-across the project's full ``>=3.10`` support range with zero dependencies.
+across the project's supported ``>=3.11`` range with zero dependencies.
 """
 
 from __future__ import annotations

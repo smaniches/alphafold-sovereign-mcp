@@ -1,0 +1,45 @@
+name: One-time security lock reconciliation
+on:
+  push:
+    branches:
+      - fix/python311-runtime-security-20261030
+permissions:
+  contents: write
+jobs:
+  reconcile:
+    if: startsWith(github.event.head_commit.message, 'fix(compat): retire Python 3.10 and patch security floors')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: "0.12.3"
+      - name: Resolve and verify the supported dependency contract
+        run: |
+          set -euo pipefail
+          uv python install 3.12
+          uv lock --upgrade-package dnspython --upgrade-package pillow
+          uv lock --check
+          uv export --no-dev --no-emit-project --frozen --format requirements-txt -o .clusterfuzzlite/requirements.txt
+          uv sync --python 3.12 --extra docs --locked
+          uv sync --python 3.12 --extra security --locked
+          grep -Eq '^dnspython==2[.]9[.]' .clusterfuzzlite/requirements.txt
+          if grep -Eq '^dnspython==2[.]8[.]' .clusterfuzzlite/requirements.txt; then
+            echo "::error::vulnerable dnspython 2.8.x remains in runtime export"
+            exit 1
+          fi
+          grep -Eq '^pillow>=13[.]0[.]0|^pillow==13[.]' pyproject.toml || grep -Fq '"pillow>=13.0.0"' pyproject.toml
+      - name: Commit only regenerated lock and fuzz runtime closure
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add uv.lock .clusterfuzzlite/requirements.txt
+          if git diff --cached --quiet; then
+            echo "No lock changes; resolution already coherent"
+            exit 0
+          fi
+          git commit -s -m "fix(deps): regenerate supported-runtime uv and fuzz locks"
+          git push origin HEAD:fix/python311-runtime-security-20261030
