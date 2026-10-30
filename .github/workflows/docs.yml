@@ -23,6 +23,7 @@ on:
       - "AUDIT.md"
       - "README.md"
       - ".github/workflows/docs.yml"
+      - ".github/dependabot.yml"
   pull_request:
     branches: [main]
     paths:
@@ -45,6 +46,7 @@ on:
       - "AUDIT.md"
       - "README.md"
       - ".github/workflows/docs.yml"
+      - ".github/dependabot.yml"
   workflow_dispatch:
 
 concurrency:
