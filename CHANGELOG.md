@@ -7,6 +7,13 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.5.9](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.5.8...v1.5.9) (2026-10-30)
+
+
+### Bug Fixes
+
+* **security:** retire Python 3.10 and patch runtime/docs dependencies ([#303](https://github.com/smaniches/alphafold-sovereign-mcp/issues/303)) ([bfc8aa6](https://github.com/smaniches/alphafold-sovereign-mcp/commit/bfc8aa6bb3c2364ce2d2b4921a6d15b8c197a403))
+
 ## [1.5.8](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.5.7...v1.5.8) (2026-10-30)
 
 

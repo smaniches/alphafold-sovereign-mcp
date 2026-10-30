@@ -13,6 +13,16 @@ small group of volunteer maintainers.
 | Previous minor release | Yes (6 months after a new minor releases) |
 | All older releases | No |
 
+**Runtime security boundary (v1.5.9 onward):** supported Python
+interpreters are 3.11 or newer (CI-tested on 3.11–3.13). Python 3.10
+reached upstream end of life on October 1, 2026 and is not security-
+supported. The patched DNS dependency `dnspython>=2.9.0` and the optional
+documentation-imaging dependency `pillow>=13.0.0` both require Python 3.11+.
+Earlier package releases are immutable and may resolve affected transitive
+dependencies when installed with Python 3.10. Upgrade the interpreter and
+install the latest release; historical release support does not override
+this runtime-security boundary.
+
 ## Coordinated disclosure
 
 **Please do not file public GitHub issues for security
