@@ -30,8 +30,9 @@ PASS. No network calls.
 uv run pytest tests/ -q --tb=short
 ```
 
-All tests use `respx` to mock HTTP upstreams. No network access
-required. Verify the test count matches the claim in `README.md`.
+Offline HTTP regression tests use `respx` to mock upstream requests; the
+standard test suite does not require access to live biomedical APIs.
+Do not use a volatile README test count as a correctness criterion.
 
 ## 4. Verify coverage
 
@@ -100,7 +101,7 @@ grep '^version:' CITATION.cff
 Read these files in order:
 
 1. [`STATUS.md`](STATUS.md) — validation matrix and project posture
-2. [`LIMITATIONS.md`](LIMITATIONS.md) — itemised gap list (L1–L7)
+2. [`LIMITATIONS.md`](LIMITATIONS.md) — named limitations and validation boundaries
 3. [`AUDIT.md`](AUDIT.md) — what has and has not been externally audited
 
 Key distinction: the test suite validates *engineering correctness*
@@ -111,4 +112,4 @@ remain open.
 
 ---
 
-Last updated: 2026-05-26.
+Last reviewed: 2026-10-30 (UTC).

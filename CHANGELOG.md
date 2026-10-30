@@ -7,6 +7,52 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.5.8](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.5.7...v1.5.8) (2026-10-30)
+
+
+### Bug Fixes
+
+* **ci:** format evidence regressions and satisfy mypy/coverage gates ([ff62222](https://github.com/smaniches/alphafold-sovereign-mcp/commit/ff6222262e7759f08613e8412b1b81d65f97ca17))
+* **ci:** match ClusterFuzzLite PR analysis to protected-main scan ([2202388](https://github.com/smaniches/alphafold-sovereign-mcp/commit/22023883f2a4e15630b60f7cba773ff6eeccd260))
+* **ci:** match ClusterFuzzLite PR scanning to protected main ([a782378](https://github.com/smaniches/alphafold-sovereign-mcp/commit/a7823784697423ef8fdb6e2823976c78402eef81))
+* **ci:** satisfy type, lint and source-status coverage contracts ([0294ded](https://github.com/smaniches/alphafold-sovereign-mcp/commit/0294dedeec9edbc1a88ee1c4a8c80427cca856d8))
+* **ci:** type-narrow external AlphaMissense response and format tests ([f1c013f](https://github.com/smaniches/alphafold-sovereign-mcp/commit/f1c013f8319a523df11d154c6384f3e2be084706))
+* **clinvar:** enforce reference-aware matching and expose retrieval outcomes ([7d15865](https://github.com/smaniches/alphafold-sovereign-mcp/commit/7d1586568bee4b5bf021fe887a5f646c54020cc0))
+* correct ClinVar identity, evidence failure states and retired documentation ([54bd807](https://github.com/smaniches/alphafold-sovereign-mcp/commit/54bd8072dbadc4ea51ec953463cab0796c1f9365))
+* **dependabot:** avoid incompatible pymdown updates on Python 3.10 ([#301](https://github.com/smaniches/alphafold-sovereign-mcp/issues/301)) ([f899a06](https://github.com/smaniches/alphafold-sovereign-mcp/commit/f899a06fb5163b5978373c1f7f8e1ff84b737a87))
+* **deps:** close Authlib, dnspython and msgpack advisories flagged by pip-audit ([eb308d1](https://github.com/smaniches/alphafold-sovereign-mcp/commit/eb308d1f8bb536a391a368c9890db27468e3d30f))
+* **deps:** close Authlib, dnspython and msgpack advisories flagged by pip-audit ([c86c67d](https://github.com/smaniches/alphafold-sovereign-mcp/commit/c86c67d3ba1de33fdfae6fe3e1fc51ca1fcb2448))
+* preserve source evidence boundaries and retire unsupported biomedical claims ([be0e6da](https://github.com/smaniches/alphafold-sovereign-mcp/commit/be0e6dab64915304b03823a3da533aad44b96ca7))
+* **release:** recover partial PyPI uploads without replacing published files ([5e9a9a2](https://github.com/smaniches/alphafold-sovereign-mcp/commit/5e9a9a29a8bc6bee5e738fae3a4eb0640828718c))
+* **release:** resume draft releases, require SPDX graph nodes, lock SBOM resolution ([8c63f93](https://github.com/smaniches/alphafold-sovereign-mcp/commit/8c63f9378e0c03e9a72b03e493dfbe83d898d858))
+* **release:** separate signed historical SPDX from strict new release parity ([bd6dac7](https://github.com/smaniches/alphafold-sovereign-mcp/commit/bd6dac76bdb4e471c8ec21854eeceb2db3873bad))
+* **release:** verify installed-wheel SPDX and preserve immutable release assets ([2a1e84e](https://github.com/smaniches/alphafold-sovereign-mcp/commit/2a1e84eb9c039d5515dd8e0125d9c0831875aea4))
+* **science:** avoid treating clinical target rows as distinct drugs ([625102a](https://github.com/smaniches/alphafold-sovereign-mcp/commit/625102a809575be731b3686ff65e49547c7ca733))
+* **science:** classify ChEMBL validation errors and keep landscape totals numeric ([4502968](https://github.com/smaniches/alphafold-sovereign-mcp/commit/450296885660673c93e932662e014cf36cfa662c))
+* **science:** correct drug evidence handling and preserve API contracts ([edd06e9](https://github.com/smaniches/alphafold-sovereign-mcp/commit/edd06e94ce72eceb8a3f106acd506a0461fd9454))
+* **science:** count Early Phase 1 as clinical precedent; classify AlphaFold schema errors ([5c89355](https://github.com/smaniches/alphafold-sovereign-mcp/commit/5c89355258a65f72fa69df10dcc466df38a4e08a))
+* **science:** distinguish AlphaMissense failure from absent evidence ([6cdfb0c](https://github.com/smaniches/alphafold-sovereign-mcp/commit/6cdfb0c61db362a347ee4647929a5950c939e149))
+* **science:** establish dossier identity and classify Open Targets content errors ([89d1ba7](https://github.com/smaniches/alphafold-sovereign-mcp/commit/89d1ba7a7eba814b02d438dae11a1b2786e0302e))
+* **science:** honor gnomAD absence flags and recover ACMG transcript gene ([b95f6c5](https://github.com/smaniches/alphafold-sovereign-mcp/commit/b95f6c5d97d8dd7ac5b73b3429aa149f41881af8))
+* **science:** keep unknown tractability out of landscape counts ([2f9d00c](https://github.com/smaniches/alphafold-sovereign-mcp/commit/2f9d00c9e1910eeef78f7108726e054f63c25d2d))
+* **science:** keep unplaceable clinical candidates outside the repurposing limit ([8228771](https://github.com/smaniches/alphafold-sovereign-mcp/commit/8228771c3c36cbf34646ecd058b8a980415a462a))
+* **science:** observe association drug counts and tractability from source ([7844644](https://github.com/smaniches/alphafold-sovereign-mcp/commit/78446440e52d39db7768a44b8381f290ab1c99b3))
+* **science:** pass unplaceable clinical phases through repurposing retrieval ([7689449](https://github.com/smaniches/alphafold-sovereign-mcp/commit/7689449a91a805e3f8407e2bf37ad32e45d01282))
+* **science:** preserve VEP uncertainty in AlphaMissense status ([08ed3f3](https://github.com/smaniches/alphafold-sovereign-mcp/commit/08ed3f3a871a4ed8d8cbe16a1098450531e9e899))
+* **science:** reject contradictory drug evidence and verify dossier identity ([4253b2e](https://github.com/smaniches/alphafold-sovereign-mcp/commit/4253b2eece5c1248bb06c7c712dc3ac7b012e889))
+* **science:** reject incomplete tractability and classify validation errors ([e80ef6a](https://github.com/smaniches/alphafold-sovereign-mcp/commit/e80ef6af0125623023ed5a0fc1fd77514b771211))
+* **science:** reject malformed evidence envelopes and unknown indication phases ([02217e3](https://github.com/smaniches/alphafold-sovereign-mcp/commit/02217e3dd2dede158ba606e94cf83ae090d3404f))
+* **science:** report Open Targets resolution failures instead of a skip ([c92b439](https://github.com/smaniches/alphafold-sovereign-mcp/commit/c92b4393d8666b3b3c7fa103880f5d75a74a8d8b))
+* **science:** require exact ClinVar identity before transcript gene reuse ([513bffc](https://github.com/smaniches/alphafold-sovereign-mcp/commit/513bffc9c0afefa71c1f2c27c2934cca1ecfb48b))
+* **science:** restrict ChEMBL phases to documented stages and classify repurposing errors ([47fb0bb](https://github.com/smaniches/alphafold-sovereign-mcp/commit/47fb0bb8aa3ee2271597dc6d72bacd0bca94d746))
+* **science:** restrict VEP gene attribution to the queried transcript ([68d0e5a](https://github.com/smaniches/alphafold-sovereign-mcp/commit/68d0e5ae8b52315d75e6eb08d5b61a1fb0310272))
+* **science:** retain versioned RefSeq xrefs for conservative gene context ([36f87b9](https://github.com/smaniches/alphafold-sovereign-mcp/commit/36f87b9c45597ef5a0be32687a7a103601fb552d))
+* **science:** retire clinical replay cases and enforce ClinVar identity boundaries ([ee43a75](https://github.com/smaniches/alphafold-sovereign-mcp/commit/ee43a75abd965dd55a4726f6b9f354fb3b38f809))
+* **science:** scope drug-precedent sources and record live mapIds evidence ([c9de2c4](https://github.com/smaniches/alphafold-sovereign-mcp/commit/c9de2c421d01106d74d15b771f07ed77b6254a5f))
+* **science:** skip unmapped dossier sources, honor negative flags, place unknown phases ([063214e](https://github.com/smaniches/alphafold-sovereign-mcp/commit/063214e40f379e3e3a7eebcd84aa1e69e3a9fa0b))
+* **science:** surface molecule request failures in strict ChEMBL counts ([bbfc9b5](https://github.com/smaniches/alphafold-sovereign-mcp/commit/bbfc9b502ad898358751b8e8a9287f3640532e8f))
+* **science:** verify dossier target identity with the AlphaFold DB gene witness ([5ebb8eb](https://github.com/smaniches/alphafold-sovereign-mcp/commit/5ebb8eb22403157ac04c85205f49dd628c0f0453))
+
 ## [1.5.7](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.5.6...v1.5.7) (2026-10-23)
 
 
