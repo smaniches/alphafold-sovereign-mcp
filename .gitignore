@@ -79,6 +79,9 @@ insert_*.py
 .verify-env/
 coverage.xml
 
+# Generated per-run from uv.lock by ClusterFuzzLite workflows
+.clusterfuzzlite/requirements.txt
+
 # Release-path ephemeral environments and artefacts
 # (created by scripts/install_release_tooling.sh and
 #  scripts/generate_release_sbom.sh in CI and local validation)
