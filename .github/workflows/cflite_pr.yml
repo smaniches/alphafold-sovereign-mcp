@@ -27,8 +27,10 @@ jobs:
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
           version: "0.12.3"
-      - name: Derive hash-locked fuzzer runtime from uv.lock
-        run: uv export --locked --no-dev --no-emit-project --format requirements-txt --output-file .clusterfuzzlite/requirements.txt
+      - name: Verify committed fuzzer dependencies match uv.lock
+        run: |
+          uv export --locked --no-dev --no-emit-project --format requirements-txt --output-file .clusterfuzzlite/requirements.txt
+          git diff --exit-code -- .clusterfuzzlite/requirements.txt
       - name: Build fuzzers
         id: build
         uses: google/clusterfuzzlite/actions/build_fuzzers@884713a6c30a92e5e8544c39945cd7cb630abcd1 # v1

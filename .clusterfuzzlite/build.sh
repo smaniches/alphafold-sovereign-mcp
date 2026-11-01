@@ -1,6 +1,8 @@
 #!/bin/bash -eu
-# The CI workflow derives this hash-locked runtime closure from uv.lock,
-# avoiding a second committed dependency snapshot. For standalone builds run:
+# This hash-locked export is committed intentionally: ClusterFuzzLite
+# performs a fresh Git checkout inside its build container, not a mount of
+# runner-generated files. CI verifies the export exactly matches uv.lock.
+# To refresh after changing uv.lock, run:
 # uv export --locked --no-dev --no-emit-project --format requirements-txt \
 #   --output-file .clusterfuzzlite/requirements.txt
 if [ ! -s .clusterfuzzlite/requirements.txt ]; then
