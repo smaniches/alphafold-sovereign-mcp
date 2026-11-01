@@ -99,13 +99,6 @@ jobs:
           fi
         env:
           PYTHONPATH: src
-      - name: Upload coverage
-        if: matrix.python-version == '3.12' && matrix.os == 'ubuntu-latest'
-        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
-        with:
-          files: coverage.xml
-          flags: unit
-          fail_ci_if_error: false
 
   # ── Security scanning ───────────────────────────────────────────────────────────────
   security:
