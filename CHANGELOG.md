@@ -7,6 +7,13 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.5.10](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.5.9...v1.5.10) (2026-11-02)
+
+
+### Bug Fixes
+
+* **deps:** align locked dependencies, pytest and fuzz verification ([#309](https://github.com/smaniches/alphafold-sovereign-mcp/issues/309)) ([6675247](https://github.com/smaniches/alphafold-sovereign-mcp/commit/6675247b0c6b79d3ac318d11ef049256504bb27e))
+
 ## [1.5.9](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.5.8...v1.5.9) (2026-10-30)
 
 
