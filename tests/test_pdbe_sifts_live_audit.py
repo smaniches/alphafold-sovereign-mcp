@@ -14,7 +14,7 @@ SIFTS = b'''<entry><entity type="protein" entityId="A"><segment><listResidue>
 <crossRefDb dbSource="UniProt" dbAccessionId="Q8VH51" dbResNum="495" dbResName="W"/>
 </residue></listResidue></segment></entity></entry>'''
 
-CLAIM = {"pdb_id": "5cxt", "chain": "A", "entity_id": 1,
+CLAIM = {"pdb_id": "5cxt", "chain": "M", "entity_id": 1,
          "label_residue": 79, "author_residue": 495}
 LISTING = {"5cxt": [{"entity_id": 1, "chains": [{
     "struct_asym_id": "A", "chain_id": "M", "residues": [
