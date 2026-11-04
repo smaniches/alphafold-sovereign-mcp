@@ -5,6 +5,7 @@ PASS means queried records agree under the tested coordinate contract; it is
 not validation of AlphaFold predictions, experiments, mechanisms or clinical
 interpretations. UNKNOWN is never promoted to PASS.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -46,7 +47,9 @@ def retrieve(label, url, provenance):
         item["error"] = "disallowed_url"
         return None
     try:
-        request = urllib.request.Request(url, headers={"User-Agent": "Sovereign-MCP-readonly-evidence-audit/1.0"})
+        request = urllib.request.Request(
+            url, headers={"User-Agent": "Sovereign-MCP-readonly-evidence-audit/1.0"}
+        )
         with urllib.request.urlopen(request, timeout=20) as response:
             redirected = urlsplit(response.geturl())
             if redirected.scheme != "https" or redirected.hostname not in HOSTS:
@@ -57,7 +60,9 @@ def retrieve(label, url, provenance):
             if len(content) > 16_000_000:
                 item["error"] = "oversized"
                 return None
-        item.update(status="RETRIEVED", sha256=hashlib.sha256(content).hexdigest(), bytes=len(content))
+        item.update(
+            status="RETRIEVED", sha256=hashlib.sha256(content).hexdigest(), bytes=len(content)
+        )
         return content
     except Exception as error:
         item["error"] = type(error).__name__ + ": " + str(error)[:150]
@@ -123,21 +128,30 @@ def parse_annotations(data):
                     if site["indexType"] != "PDB":
                         raise ValueError("non_pdb_index")
                     for ann in site["additionalData"]:
-                        if ann.get("uniprotAccession") != ACCESSION or str(ann.get("uniprotResidue")) != str(POSITION):
+                        if ann.get("uniprotAccession") != ACCESSION or str(
+                            ann.get("uniprotResidue")
+                        ) != str(POSITION):
                             result["excluded_mismatches"] += 1
                             continue
-                        if not (isinstance(ann.get("pdbChain"), str) and
-                                all(type(ann.get(k)) is int and ann[k] > 0
-                                    for k in ("entityId", "pdbResidue", "authorResidueNumber"))):
+                        if not (
+                            isinstance(ann.get("pdbChain"), str)
+                            and all(
+                                type(ann.get(k)) is int and ann[k] > 0
+                                for k in ("entityId", "pdbResidue", "authorResidueNumber")
+                            )
+                        ):
                             raise ValueError("bad_annotation_identity")
-                        result["rows"].append({
-                            "pdb_id": pdb, "chain": ann["pdbChain"],
-                            "entity_id": ann["entityId"],
-                            "label_residue": ann["pdbResidue"],
-                            "author_residue": ann["authorResidueNumber"],
-                            "pmid": str(ann.get("pubmedId") or ""),
-                            "doi": ann.get("doi"),
-                        })
+                        result["rows"].append(
+                            {
+                                "pdb_id": pdb,
+                                "chain": ann["pdbChain"],
+                                "entity_id": ann["entityId"],
+                                "label_residue": ann["pdbResidue"],
+                                "author_residue": ann["authorResidueNumber"],
+                                "pmid": str(ann.get("pubmedId") or ""),
+                                "doi": ann.get("doi"),
+                            }
+                        )
     except (KeyError, TypeError, AttributeError, ValueError) as exc:
         result["rows"] = []
         result["reason"] = "malformed_annotation_schema:" + str(exc)[:60]
@@ -145,9 +159,12 @@ def parse_annotations(data):
     result["total_rows"] = len(result["rows"])
     result["unique_publications"] = sorted({r["pmid"] for r in result["rows"] if r["pmid"]})
     result["unique_pdb_entries"] = sorted({r["pdb_id"] for r in result["rows"]})
-    result["unique_structural_claims"] = len({(r["pdb_id"], r["chain"], r["entity_id"],
-                                                r["label_residue"], r["author_residue"])
-                                               for r in result["rows"]})
+    result["unique_structural_claims"] = len(
+        {
+            (r["pdb_id"], r["chain"], r["entity_id"], r["label_residue"], r["author_residue"])
+            for r in result["rows"]
+        }
+    )
     if result["rows"]:
         result["status"] = "PASS"  # source annotation schema and identity only
     else:
@@ -175,23 +192,32 @@ def parse_sifts(data):
             if local(residue.tag) != "residue":
                 continue
             cross = [c.attrib for c in residue if local(c.tag) == "crossRefDb"]
-            matched = [c for c in cross if c.get("dbSource") == "UniProt" and
-                       c.get("dbAccessionId") == ACCESSION and c.get("dbResNum") == str(POSITION)]
+            matched = [
+                c
+                for c in cross
+                if c.get("dbSource") == "UniProt"
+                and c.get("dbAccessionId") == ACCESSION
+                and c.get("dbResNum") == str(POSITION)
+            ]
             if not matched:
                 continue
-            unobserved = any(local(c.tag) == "residueDetail" and
-                             "notobserved" in "".join((c.text or "").lower().split()).replace("_", "")
-                             for c in residue)
+            unobserved = any(
+                local(c.tag) == "residueDetail"
+                and "notobserved" in "".join((c.text or "").lower().split()).replace("_", "")
+                for c in residue
+            )
             for pdb in (c for c in cross if c.get("dbSource") == "PDB"):
-                mapped.append({
-                    "chain": entity.get("entityId"),
-                    "label_residue": residue.get("dbResNum"),
-                    "author_chain": pdb.get("dbChainId"),
-                    "author_residue": pdb.get("dbResNum"),
-                    "uniprot_aa": matched[0].get("dbResName"),
-                    "pdb_aa": pdb.get("dbResName"),
-                    "unobserved": unobserved,
-                })
+                mapped.append(
+                    {
+                        "chain": entity.get("entityId"),
+                        "label_residue": residue.get("dbResNum"),
+                        "author_chain": pdb.get("dbChainId"),
+                        "author_residue": pdb.get("dbResNum"),
+                        "uniprot_aa": matched[0].get("dbResName"),
+                        "pdb_aa": pdb.get("dbResName"),
+                        "unobserved": unobserved,
+                    }
+                )
     return mapped
 
 
@@ -199,8 +225,11 @@ def check_structure(claim, sifts, listing):
     """Require exact chain, entity, label/author numbering and observed PDB identity."""
     if sifts is None or not isinstance(listing, dict):
         return {"status": "UNKNOWN", "reason": "missing_sifts_or_pdb"}
-    candidates = [m for m in sifts if m["author_chain"] == claim["chain"] and
-                  m["label_residue"] == str(claim["label_residue"])]
+    candidates = [
+        m
+        for m in sifts
+        if m["author_chain"] == claim["chain"] and m["label_residue"] == str(claim["label_residue"])
+    ]
     if not candidates:
         return {"status": "UNKNOWN", "reason": "no_independent_sifts_correspondence"}
     if len(candidates) != 1:
@@ -247,47 +276,81 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     sources = {}
-    sequence = check_sequence(get_json("uniprot",
-        f"https://rest.uniprot.org/uniprotkb/{ACCESSION}.json", sources))
-    annotation = parse_annotations(get_json("annotations",
-        f"https://www.ebi.ac.uk/pdbe/api/v2/uniprot/llm_annotations/summary/{ACCESSION}/{POSITION}", sources))
-    unique = {(r["pdb_id"], r["chain"], r["entity_id"], r["label_residue"], r["author_residue"]): r
-              for r in annotation["rows"]}
+    sequence = check_sequence(
+        get_json("uniprot", f"https://rest.uniprot.org/uniprotkb/{ACCESSION}.json", sources)
+    )
+    annotation = parse_annotations(
+        get_json(
+            "annotations",
+            f"https://www.ebi.ac.uk/pdbe/api/v2/uniprot/llm_annotations/summary/{ACCESSION}/{POSITION}",
+            sources,
+        )
+    )
+    unique = {
+        (r["pdb_id"], r["chain"], r["entity_id"], r["label_residue"], r["author_residue"]): r
+        for r in annotation["rows"]
+    }
     claims = []
     for pdb_id in sorted({PDB, *(k[0] for k in unique)})[:10]:
         sifts = None
-        for i, path in enumerate((f"xml/{pdb_id}.xml.gz",
-                                  f"splitxml/{pdb_id[1:3]}/{pdb_id}.xml.gz")):
-            sifts = parse_sifts(retrieve(f"sifts_{pdb_id}_{i}",
-                f"https://ftp.ebi.ac.uk/pub/databases/msd/sifts/{path}", sources))
+        for i, path in enumerate(
+            (f"xml/{pdb_id}.xml.gz", f"splitxml/{pdb_id[1:3]}/{pdb_id}.xml.gz")
+        ):
+            sifts = parse_sifts(
+                retrieve(
+                    f"sifts_{pdb_id}_{i}",
+                    f"https://ftp.ebi.ac.uk/pub/databases/msd/sifts/{path}",
+                    sources,
+                )
+            )
             if sifts is not None:
                 break
-        listing = get_json(f"pdb_listing_{pdb_id}",
-            f"https://www.ebi.ac.uk/pdbe/api/pdb/entry/residue_listing/{pdb_id}", sources)
+        listing = get_json(
+            f"pdb_listing_{pdb_id}",
+            f"https://www.ebi.ac.uk/pdbe/api/pdb/entry/residue_listing/{pdb_id}",
+            sources,
+        )
         for claim in unique.values():
             if claim["pdb_id"] == pdb_id:
                 claims.append({"claim": claim, **check_structure(claim, sifts, listing)})
     structure = {"status": combine(*(c["status"] for c in claims)), "claims": claims}
     report = {
-        "audit": "readonly-v1", "retrieved_utc": now(),
+        "audit": "readonly-v1",
+        "retrieved_utc": now(),
         "status_scope": "record-level coordinate consistency only; not biological ground truth or clinical interpretation",
         "reference": {"uniprot": ACCESSION, "position": POSITION, "aa": AMINO_ACID},
-        "sources": sources, "sequence_check": sequence,
+        "sources": sources,
+        "sequence_check": sequence,
         "annotation_check": {k: v for k, v in annotation.items() if k != "rows"},
         "structure_check": structure,
-        "overall": combine(sequence["status"], annotation["status"], structure["status"]) if len({PDB, *(k[0] for k in unique)}) <= 10 else "UNKNOWN",
-        "not_validated": ["AlphaFold predictive accuracy", "experimental structural model quality",
-                          "biological conformational ensemble", "HGVS transcript/isoform identity", "primary-paper statement review",
-                          "published MCP interface live output", "clinical significance"],
+        "overall": combine(sequence["status"], annotation["status"], structure["status"])
+        if len({PDB, *(k[0] for k in unique)}) <= 10
+        else "UNKNOWN",
+        "not_validated": [
+            "AlphaFold predictive accuracy",
+            "experimental structural model quality",
+            "biological conformational ensemble",
+            "HGVS transcript/isoform identity",
+            "primary-paper statement review",
+            "published MCP interface live output",
+            "clinical significance",
+        ],
         "terms": "Consult upstream provider attribution/reuse conditions; raw evidence is not redistributed",
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    print(json.dumps({"overall": report["overall"],
-                      "sequence": sequence["status"],
-                      "annotations": annotation["status"],
-                      "structure": structure["status"],
-                      "sources": {k: v["status"] for k, v in sources.items()}}, indent=2))
+    print(
+        json.dumps(
+            {
+                "overall": report["overall"],
+                "sequence": sequence["status"],
+                "annotations": annotation["status"],
+                "structure": structure["status"],
+                "sources": {k: v["status"] for k, v in sources.items()},
+            },
+            indent=2,
+        )
+    )
     return 1 if report["overall"] == "CONFLICT" else 0
 
 
