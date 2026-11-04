@@ -7,7 +7,7 @@ Sovereign Structure Cache
 High-performance caching for AlphaFold structure data and features.
 Enables instant retrieval of pre-computed features.
 
-Patent-pending framework by Santiago Maniches (ORCID: 0009-0005-6480-1987)
+Historical implementation by Santiago Maniches (ORCID: 0009-0005-6480-1987)
 TOPOLOGICA LLC
 """
 
@@ -54,7 +54,7 @@ class SovereignStructureCache:
         ├── topology/               # Topological features
         └── embeddings/             # Coordinate embeddings
     
-    Patent-pending framework by Santiago Maniches
+    Historical implementation by Santiago Maniches
     (ORCID: 0009-0005-6480-1987)
     """
     
