@@ -268,7 +268,7 @@ def main():
         "sources": sources, "sequence_check": sequence,
         "annotation_check": {k: v for k, v in annotation.items() if k != "rows"},
         "structure_check": structure,
-        "overall": combine(sequence["status"], annotation["status"], structure["status"]),
+        "overall": combine(sequence["status"], annotation["status"], structure["status"]) if len({PDB, *(k[0] for k in unique)}) <= 10 else "UNKNOWN",
         "not_validated": ["HGVS transcript/isoform identity", "primary-paper statement review",
                           "published MCP interface live output", "clinical significance"],
         "terms": "Consult upstream provider attribution/reuse conditions; raw evidence is not redistributed",
