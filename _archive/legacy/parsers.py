@@ -13,7 +13,7 @@ Mathematical Foundation:
     - E: Edge set (covalent bonds)
     - F: Feature set (pLDDT, secondary structure, sequence)
 
-Patent-pending framework by Santiago Maniches (ORCID: 0009-0005-6480-1987)
+Historical implementation by Santiago Maniches (ORCID: 0009-0005-6480-1987)
 """
 
 from typing import Dict, List, Optional, Tuple, Any
