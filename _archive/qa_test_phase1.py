@@ -3,7 +3,7 @@
 Comprehensive QA Test Suite for AlphaFold Sovereign MCP Phase 1 Tools.
 
 TOPOLOGICA LLC - Santiago Maniches (ORCID: 0009-0005-6480-1987)
-Patent-pending drift tensor correction framework.
+Archived test harness; does not establish drift-tensor functionality or patent status.
 
 Tests all 25 tools for:
 1. Input model field alignment
