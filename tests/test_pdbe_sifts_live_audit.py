@@ -143,14 +143,18 @@ class Contract(unittest.TestCase):
             "Q8VH51": {
                 "dataType": "ANNOTATIONS",
                 "uniprotResidue": 495,
-                "data": [{
-                    "pdbId": "5cxt",
-                    "providerList": [{
-                        "residueList": [{"indexType": "PDB", "additionalData": [
-                            correct, incorrect
-                        ]}]
-                    }]
-                }],
+                "data": [
+                    {
+                        "pdbId": "5cxt",
+                        "providerList": [
+                            {
+                                "residueList": [
+                                    {"indexType": "PDB", "additionalData": [correct, incorrect]}
+                                ]
+                            }
+                        ],
+                    }
+                ],
             }
         }
         checked = audit.parse_annotations(payload)
@@ -163,9 +167,9 @@ class Contract(unittest.TestCase):
 
         handler = audit.RejectRedirects()
         request = Request("https://www.ebi.ac.uk/resource")
-        self.assertIsNone(handler.redirect_request(
-            request, None, 302, "Moved", {}, "http://127.0.0.1/"
-        ))
+        self.assertIsNone(
+            handler.redirect_request(request, None, 302, "Moved", {}, "http://127.0.0.1/")
+        )
 
     def test_compressed_xml_size_is_bounded(self):
         original = audit.MAX_SIFTS_XML_BYTES
