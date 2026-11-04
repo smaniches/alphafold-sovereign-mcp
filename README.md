@@ -567,5 +567,4 @@ Copyright 2024–2026 Santiago Maniches.
 
 Licensed under the Apache License, Version 2.0. See [`LICENSE`](LICENSE).
 
-Patent reservation: see [`PATENTS.md`](PATENTS.md).
 Trademark policy: see [`TRADEMARKS.md`](TRADEMARKS.md).
