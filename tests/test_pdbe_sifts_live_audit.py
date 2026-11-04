@@ -16,11 +16,11 @@ SIFTS = b'''<entry><entity type="protein" entityId="A"><segment><listResidue>
 
 CLAIM = {"pdb_id": "5cxt", "chain": "M", "entity_id": 1,
          "label_residue": 79, "author_residue": 495}
-LISTING = {"5cxt": [{"entity_id": 1, "chains": [{
+LISTING = {"5cxt": {"molecules": [{"entity_id": 1, "chains": [{
     "struct_asym_id": "A", "chain_id": "M", "residues": [
         {"residue_number": 79, "author_residue_number": 495,
          "residue_name": "TRP", "observed_ratio": 1.0}
-    ]}]}]}
+    ]}]}]}}
 
 
 class Contract(unittest.TestCase):
@@ -37,12 +37,12 @@ class Contract(unittest.TestCase):
 
     def test_unobserved_and_insertion_code(self):
         mapped = audit.parse_sifts(SIFTS)
-        residue = LISTING["5cxt"][0]["chains"][0]["residues"][0]
+        residue = LISTING["5cxt"]["molecules"][0]["chains"][0]["residues"][0]
         for variant, status in (({"observed_ratio": 0}, "CONFLICT"),
                                 ({"author_insertion_code": "A"}, "UNKNOWN")):
-            listing = {"5cxt": [{"entity_id": 1, "chains": [
-                {**LISTING["5cxt"][0]["chains"][0],
-                 "residues": [{**residue, **variant}]}]}]}
+            listing = {"5cxt": {"molecules": [{"entity_id": 1, "chains": [
+                {**LISTING["5cxt"]["molecules"][0]["chains"][0],
+                 "residues": [{**residue, **variant}]}]}]}}
             self.assertEqual(audit.check_structure(CLAIM, mapped, listing)["status"], status)
 
     def test_sequence_identity(self):
