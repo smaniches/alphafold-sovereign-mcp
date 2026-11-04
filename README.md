@@ -58,6 +58,49 @@ independent domain experts; not yet deployed in production. See
 
 ---
 
+## What the evidence does and does not establish
+
+**Predicted structure is not an observed structure.** AlphaFold predicts a
+protein's three-dimensional structure from sequence and learned structural
+relationships. Its coordinates represent a model of a possible conformation,
+not a direct observation or a guarantee that a protein adopts that single
+conformation in every biological context. Proteins are dynamic; binding
+partners, environment, sequence changes, alternative conformational states,
+and disorder can matter. pLDDT and PAE characterize aspects of **prediction
+uncertainty**. They are not experimental validation probabilities and do not
+measure how often the protein adopts a conformation in a cell.
+
+**Experimental structure evidence is different.** A PDB entry may record an
+experimentally determined structural model, with its own experimental
+conditions, modeled residues, missing or disordered regions, uncertainty,
+and quality measures. It is not a universal photograph of all conformations.
+PDBe/SIFTS provides sequence-to-structure coordinate correspondences;
+correct correspondence requires matching the exact UniProt accession and
+position, PDB entry, molecular entity, chain identifiers, sequence positions,
+author numbering and insertion codes as applicable. A verified coordinate
+correspondence is **not** independent validation of an AlphaFold prediction
+or proof of a specific biological mechanism.
+
+**Automated annotations are a third evidence class.** The optional PDBe/IUCr
+client retrieves AI-text-mined publication mentions and source-reported
+residue correspondences. Multiple rows, chains or PDB entries derived from
+the same paper are not independent replications. An extraction score is not
+a scientific confidence measure. A paper reporting one tested substitution
+does not substantiate other substitutions or clinical pathogenicity.
+
+**This MCP is a source-attributed connector, not a new structure predictor or
+experimental/clinical validator.** The source-reported identities and
+limitations travel with the output. Deterministic parsing and regression
+tests can validate the software contract; independent checks of live
+coordinate mappings can test a narrow source-consistency claim, but cannot
+turn predictions, text-mined mentions, or a coordinate join into biological
+ground truth. When a required correspondence cannot be established, the
+correct state is unresolved rather than guessed.
+
+See [AlphaFold DB compatibility](docs/afdb-compatibility.md),
+[scientific limitations](LIMITATIONS.md), and
+[validation status](STATUS.md).
+
 ## What this is
 
 A Python MCP server that:
