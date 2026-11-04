@@ -1,11 +1,13 @@
 # `_archive/legacy/`
 
-This directory contains the pre-decomposition monolith from the v0.x line of
-AlphaFold Sovereign MCP.
+This directory preserves the pre-decomposition code from the v0.x line of
+AlphaFold Sovereign MCP. It is a historical reference, not the current
+implementation or a shipped package component. The table below reflects
+migration notes written during decomposition, not current release status.
 
 ## What's here
 
-| File | Role (legacy) | Status |
+| File | Role (legacy) | Historical migration note |
 |------|---------------|--------|
 | `alphafold_mcp.py` (5,840 LOC) | Monolithic FastMCP server with 25 tools wired against AlphaFold DB + UniProt + GO + persistent-homology | superseded by `src/alphafold_sovereign/server/`, `tools/`, `clients/`, `domain/`, `storage/`, `compute/` (Wave 1) |
 | `parsers.py` | PDB / mmCIF parsing → `AlphaFoldStructure`, `AlphaFoldMetadata`, `Atom`, `Residue` | will move to `src/alphafold_sovereign/domain/structure.py` (Wave 1 cont.) |
@@ -15,34 +17,32 @@ AlphaFold Sovereign MCP.
 | `fetcher.py` | `AlphaFoldFetcher` (urllib-based) | superseded by `clients/alphafold.py` (httpx-based) |
 | `cache.py` | `SovereignStructureCache` | moves to `storage/cache.py` (gains Redis backend) |
 
-## Why "_archive/"?
+## Why keep the archive?
 
-These files are **not part of the public API surface of v1.x**. They are kept
-in-tree (rather than deleted outright) so that:
+The old implementation is retained for historical comparison and targeted
+regression investigations. The archive alone does not establish equivalence
+with the current implementation; that requires separate tests.
 
-1. Bytes-identical reference outputs remain reproducible for regression
-   testing during the decomposition.
-2. Maintainers can compare the new module-tree implementations against the
-   monolith for parity.
-3. The patent-pending mathematics (drift tensor, topological fingerprinting,
-   R² = 0.9992) remain on-record in the repo history at the original
-   line-numbered locations cited in the patent filings.
+Archived source code and comments do not substantiate current mathematical
+functionality, numerical performance, or patent application status. The
+changelog records the withdrawal of an unsupported performance claim.
+Historical metadata does not impose licensing restrictions beyond those
+in the applicable license; see `LICENSE` and `PATENTS.md` in the repo root.
 
-## How they are kept out of the v1.x distribution
+## Package and analysis exclusions
 
-- `pyproject.toml` `[tool.hatch.build.targets.wheel]` only includes
-  `src/alphafold_sovereign/`. Files under `_archive/` are **not packaged**.
+- `pyproject.toml` packages only `src/alphafold_sovereign/` in wheels,
+  and its source-distribution manifest does not include `_archive/`.
 - `[tool.coverage.run]` excludes `_archive/` from coverage measurement.
 - `[tool.mypy]` and `[tool.ruff]` ignore `_archive/`.
 - `[tool.bandit]` skips `_archive/`.
 
-## Deprecation timeline
+## Version context
 
-- **v1.1** (current): files archived, lazy re-exports from
-  `alphafold_sovereign.__init__` keep `from alphafold_sovereign import PDBParser`
-  working for one release.
-- **v1.2**: re-exports removed; legacy imports raise `ImportError`.
-- **v2.0**: directory deleted from the repo.
+The archive dates from the v1.x decomposition period. Earlier references to
+v1.1 as the "current" release and to future v1.2/v2.0 removals were period
+notes, not current release information or continuing commitments. Consult
+the root README, release metadata, and CHANGELOG for the supported version.
 
 ## Licensing
 

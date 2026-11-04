@@ -7,7 +7,7 @@ Sovereign AlphaFold Feature Extractor
 Extract structural features from AlphaFold structures for ML/analysis.
 Supports: secondary structure, binding pockets, topology, geometric features.
 
-Patent-pending framework by Santiago Maniches (ORCID: 0009-0005-6480-1987)
+Historical implementation by Santiago Maniches (ORCID: 0009-0005-6480-1987)
 TOPOLOGICA LLC
 """
 
@@ -593,7 +593,7 @@ class StructureFeatureExtractor:
         - Geometric features (radius of gyration, etc.)
         - ML-ready feature vectors
     
-    Patent-pending framework by Santiago Maniches
+    Historical implementation by Santiago Maniches
     (ORCID: 0009-0005-6480-1987)
     """
     

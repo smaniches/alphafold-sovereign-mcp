@@ -1025,8 +1025,8 @@ class PDBParser:
     """
     High-performance PDB file parser.
     
-    PROPRIETARY FRAMEWORK - NOT FOR PUBLIC DISTRIBUTION
-    Patent-pending by Santiago Maniches (ORCID: 0009-0005-6480-1987)
+    Archived implementation; see repository Apache-2.0 license
+    Historical implementation by Santiago Maniches (ORCID: 0009-0005-6480-1987)
     
     Performance Characteristics:
         - Regex-based parsing: O(n) where n = lines
@@ -1152,8 +1152,8 @@ class AlphaFoldFetcher:
     """
     Fetches structures from AlphaFold Database online.
     
-    PROPRIETARY FRAMEWORK - NOT FOR PUBLIC DISTRIBUTION
-    Patent-pending by Santiago Maniches (ORCID: 0009-0005-6480-1987)
+    Archived implementation; see repository Apache-2.0 license
+    Historical implementation by Santiago Maniches (ORCID: 0009-0005-6480-1987)
     
     URL Pattern:
         https://alphafold.ebi.ac.uk/files/AF-{UNIPROT_ID}-F1-model_v4.pdb
@@ -1443,8 +1443,8 @@ class StructureManager:
     """
     Manages structure retrieval from local cache and online AlphaFold DB.
     
-    PROPRIETARY FRAMEWORK - NOT FOR PUBLIC DISTRIBUTION
-    Patent-pending by Santiago Maniches (ORCID: 0009-0005-6480-1987)
+    Archived implementation; see repository Apache-2.0 license
+    Historical implementation by Santiago Maniches (ORCID: 0009-0005-6480-1987)
     
     Operation Mode:
         1. Check local cache first (sovereign, no network)
@@ -1591,8 +1591,8 @@ class FeatureComputer:
     """
     Computes structural features from AlphaFold structures.
     
-    PROPRIETARY FRAMEWORK - NOT FOR PUBLIC DISTRIBUTION
-    Patent-pending by Santiago Maniches (ORCID: 0009-0005-6480-1987)
+    Archived implementation; see repository Apache-2.0 license
+    Historical implementation by Santiago Maniches (ORCID: 0009-0005-6480-1987)
     
     Features Computed:
         1. Secondary Structure: alpha-helix, beta-strand, coil classification
@@ -1857,8 +1857,8 @@ class TopologyComputer:
     """
     Computes topological features via persistent homology.
     
-    PROPRIETARY FRAMEWORK - NOT FOR PUBLIC DISTRIBUTION
-    Patent-pending by Santiago Maniches (ORCID: 0009-0005-6480-1987)
+    Archived implementation; see repository Apache-2.0 license
+    Historical implementation by Santiago Maniches (ORCID: 0009-0005-6480-1987)
     
     Mathematical Foundation:
         Vietoris-Rips filtration: VR(X, epsilon) for epsilon in [0, epsilon_max]
@@ -2233,7 +2233,7 @@ class GOAnnotationCache:
     """
     Persistent cache for GO term annotations.
     
-    PROPRIETARY FRAMEWORK - TOPOLOGICA LLC
+    Historical TOPOLOGICA LLC implementation (Apache-2.0)
     
     Architecture:
         - Forward index: protein_id → [GO terms]
@@ -2373,7 +2373,7 @@ class SequenceDatabase:
     """
     In-memory sequence database for similarity search.
     
-    PROPRIETARY FRAMEWORK - TOPOLOGICA LLC
+    Historical TOPOLOGICA LLC implementation (Apache-2.0)
     
     Uses simple k-mer based similarity for fast approximate matching.
     For CAFA6-scale: 142k proteins, each ~400 aa average.
@@ -2475,7 +2475,7 @@ class ProgressCallback:
     """
     Progress tracking for long-running operations.
     
-    PROPRIETARY FRAMEWORK - TOPOLOGICA LLC
+    Historical TOPOLOGICA LLC implementation (Apache-2.0)
     """
     
     def __init__(
@@ -2558,8 +2558,8 @@ class PAEExtractor:
     """
     Extract Predicted Aligned Error (PAE) from AlphaFold.
     
-    PROPRIETARY FRAMEWORK - TOPOLOGICA LLC
-    Patent-pending by Santiago Maniches (ORCID: 0009-0005-6480-1987)
+    Historical TOPOLOGICA LLC implementation (Apache-2.0)
+    Historical implementation by Santiago Maniches (ORCID: 0009-0005-6480-1987)
     
     PAE[i,j] = expected position error of residue i when aligned on residue j
     URL: https://alphafold.ebi.ac.uk/files/AF-{UNIPROT_ID}-F1-predicted_aligned_error_v4.json
@@ -2646,7 +2646,7 @@ class DomainDetector:
     """
     Detect protein domains from PAE matrix.
     
-    PROPRIETARY FRAMEWORK - TOPOLOGICA LLC
+    Historical TOPOLOGICA LLC implementation (Apache-2.0)
     """
     
     def __init__(self, pae_threshold: float = 5.0, min_domain_size: int = 30):
@@ -2843,7 +2843,7 @@ class DisorderPredictor:
     """
     Predict intrinsically disordered regions from pLDDT scores.
     
-    PROPRIETARY FRAMEWORK - TOPOLOGICA LLC
+    Historical TOPOLOGICA LLC implementation (Apache-2.0)
     """
     
     def __init__(self, plddt_threshold: float = 50.0, min_region_length: int = 5):
@@ -2957,8 +2957,8 @@ class InformationContentCalculator:
     """
     Calculate Information Content (IC) for GO terms.
     
-    PROPRIETARY FRAMEWORK - TOPOLOGICA LLC
-    Patent-pending by Santiago Maniches (ORCID: 0009-0005-6480-1987)
+    Historical TOPOLOGICA LLC implementation (Apache-2.0)
+    Historical implementation by Santiago Maniches (ORCID: 0009-0005-6480-1987)
     
     IC(term) = -log2(P(term))
     """
@@ -3057,7 +3057,7 @@ class SemanticSimilarityCalculator:
     """
     Calculate semantic similarity between GO terms.
     
-    PROPRIETARY FRAMEWORK - TOPOLOGICA LLC
+    Historical TOPOLOGICA LLC implementation (Apache-2.0)
     """
     
     def __init__(self, ic_calculator: Optional[InformationContentCalculator] = None):
@@ -3167,8 +3167,8 @@ class AdvancedTopologyComputer:
     """
     Advanced topological data analysis for protein structures.
     
-    PROPRIETARY FRAMEWORK - TOPOLOGICA LLC
-    Patent-pending by Santiago Maniches (ORCID: 0009-0005-6480-1987)
+    Historical TOPOLOGICA LLC implementation (Apache-2.0)
+    Historical implementation by Santiago Maniches (ORCID: 0009-0005-6480-1987)
     """
     
     def __init__(self, max_dimension: int = 2, max_filtration: float = 25.0):
@@ -5833,6 +5833,6 @@ async def batch_protein_analysis(params: BatchProteinAnalysisInput) -> str:
 
 if __name__ == "__main__":
     logger.info(f"[{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}] Starting AlphaFold Sovereign MCP Server")
-    logger.info("PROPRIETARY FRAMEWORK - TOPOLOGICA LLC")
-    logger.info("Patent-pending by Santiago Maniches (ORCID: 0009-0005-6480-1987)")
+    logger.info("Historical TOPOLOGICA LLC implementation (Apache-2.0)")
+    logger.info("Historical implementation by Santiago Maniches (ORCID: 0009-0005-6480-1987)")
     mcp.run()

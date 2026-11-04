@@ -7,7 +7,7 @@ Sovereign AlphaFold Connector - Core Module
 Main interface for sovereign AlphaFold structure access.
 Filesystem-first, no API dependencies.
 
-Patent-pending framework by Santiago Maniches (ORCID: 0009-0005-6480-1987)
+Historical implementation by Santiago Maniches (ORCID: 0009-0005-6480-1987)
 TOPOLOGICA LLC
 """
 
@@ -102,9 +102,8 @@ class SovereignAlphaFoldConnector:
         P: sequence → (R³)^N where N = number of atoms
         Topological features: H_k(P) persistent homology
     
-    Patent Notice:
-        Sovereign AlphaFold connector framework is patent-pending
-        intellectual property of Santiago Maniches
+    Historical attribution:
+        Legacy AlphaFold connector implementation by Santiago Maniches
         (ORCID: 0009-0005-6480-1987)
     """
     

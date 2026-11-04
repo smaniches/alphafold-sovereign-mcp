@@ -82,8 +82,8 @@ class AlphaFoldFetcher:
     """
     Fetches AlphaFold structures from online database.
     
-    PROPRIETARY FRAMEWORK - NOT FOR PUBLIC DISTRIBUTION
-    Patent-pending by Santiago Maniches (ORCID: 0009-0005-6480-1987)
+    Archived implementation; see repository Apache-2.0 license
+    Historical implementation by Santiago Maniches (ORCID: 0009-0005-6480-1987)
     
     Design Principles:
         1. NO API KEY REQUIRED - AlphaFold DB is publicly accessible

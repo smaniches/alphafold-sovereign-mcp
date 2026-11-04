@@ -13,7 +13,7 @@ Mathematical Foundation:
     Compute persistent homology H_k via filtration
     Extract topological invariants: β₀, β₁, β₂
 
-Patent-pending framework by Santiago Maniches (ORCID: 0009-0005-6480-1987)
+Historical implementation by Santiago Maniches (ORCID: 0009-0005-6480-1987)
 TOPOLOGICA LLC
 """
 
@@ -254,7 +254,7 @@ class StructureTopologyAnalyzer:
         - β₁ > 0 indicates circular arrangements (barrels, etc.)
         - β₂ > 0 indicates enclosed cavities
     
-    Patent-pending framework by Santiago Maniches
+    Historical implementation by Santiago Maniches
     (ORCID: 0009-0005-6480-1987)
     """
     
