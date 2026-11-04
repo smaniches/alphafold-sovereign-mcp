@@ -87,6 +87,36 @@ the same schema, that every fragment is handled, or that a clinical
 interpretation is scientifically valid. This repository has no continuously
 executed live AlphaFold DB compatibility suite; see `STATUS.md`.
 
+## Scientific interpretation boundary
+
+AlphaFold DB serves **predicted** structure models. Their atomic coordinates
+are model outputs, not experimental measurements. pLDDT and PAE describe
+specific aspects of prediction uncertainty; neither is an experimental
+accuracy certificate or the probability of a fixed in-vivo conformation.
+Alternative states, molecular partners, solvent/environment and disordered
+regions can change the physical structural ensemble.
+
+PDBe/PDB experimental structure records, SIFTS residue correspondences,
+and literature-derived annotations have different provenance and semantics.
+A residue correspondence can be checked against independently fetched
+sequence, SIFTS and PDB identifiers without claiming to revalidate the
+underlying structural experiment or an AlphaFold prediction. Even a consistent
+mapping does not demonstrate binding, mechanism, pathogenicity, experimental
+replication or correctness of an AI-mined sentence. Conversely, a failed
+coordinate join may indicate an identifier/numbering or source-contract
+problem, not a false structural prediction.
+
+The optional literature connector remains deliberately restricted to
+**upstream-reported annotations**. No structure-to-HGVS attribution,
+mechanism, clinical classification or source-specific scientific confidence
+is silently inferred. See issue #244 and its separate read-only audit PR for
+a narrow, reproducible source-consistency test. The auditor's `PASS` means
+agreement among the *queried records under the tested coordinate contract*,
+not that AlphaFold's prediction was biologically proven or that a publication
+is valid for the user's variant. Research users must distinguish a prediction,
+an experimentally derived structural model, a text-mined claim and direct
+variant-specific experimental evidence.
+
 ## AI-derived residue annotations (October 2026)
 
 EMBL-EBI's current AlphaFold DB website integrates residue- and mutation-level
