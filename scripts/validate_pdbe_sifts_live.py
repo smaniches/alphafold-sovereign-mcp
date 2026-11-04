@@ -158,7 +158,7 @@ def parse_sifts(data):
     if data is None:
         return None
     try:
-        body = gzip.decompress(data) if data[:2] == b"\\x1f\\x8b" else data
+        body = gzip.decompress(data) if data[:2] == b"\x1f\x8b" else data
         root = ET.fromstring(body)
     except (OSError, ValueError, ET.ParseError):
         return None
