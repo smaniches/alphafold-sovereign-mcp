@@ -194,7 +194,7 @@ def check_structure(claim, sifts, listing):
     """Require exact chain, entity, label/author numbering and observed PDB identity."""
     if sifts is None or not isinstance(listing, dict):
         return {"status": "UNKNOWN", "reason": "missing_sifts_or_pdb"}
-    candidates = [m for m in sifts if m["chain"] == claim["chain"] and
+    candidates = [m for m in sifts if m["author_chain"] == claim["chain"] and
                   m["label_residue"] == str(claim["label_residue"])]
     if not candidates:
         return {"status": "UNKNOWN", "reason": "no_independent_sifts_correspondence"}
@@ -207,16 +207,17 @@ def check_structure(claim, sifts, listing):
         return {"status": "CONFLICT", "reason": "sifts_unobserved"}
     if m["uniprot_aa"] != AMINO_ACID or AA3.get(m["pdb_aa"]) != AMINO_ACID:
         return {"status": "CONFLICT", "reason": "sifts_amino_acid_disagrees"}
-    molecules = listing.get(claim["pdb_id"])
+    entry = listing.get(claim["pdb_id"])
+    molecules = entry.get("molecules") if isinstance(entry, dict) else None
     if not isinstance(molecules, list):
         return {"status": "UNKNOWN", "reason": "pdb_entry_unavailable"}
     for mol in molecules:
         if mol.get("entity_id") != claim["entity_id"]:
             continue
         for chain in mol.get("chains", []):
-            if chain.get("struct_asym_id") != claim["chain"]:
+            if chain.get("struct_asym_id") != m["chain"]:
                 continue
-            if chain.get("chain_id") != m["author_chain"]:
+            if chain.get("chain_id") != claim["chain"]:
                 return {"status": "CONFLICT", "reason": "author_chain_disagrees"}
             for res in chain.get("residues", []):
                 if res.get("residue_number") != claim["label_residue"]:
