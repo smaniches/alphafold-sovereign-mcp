@@ -11,6 +11,8 @@ from __future__ import annotations
 import argparse
 import gzip
 import hashlib
+import io
+import math
 import json
 import re
 import urllib.request
@@ -25,6 +27,7 @@ AMINO_ACID = "W"
 PDB = "5cxt"
 HOSTS = {"rest.uniprot.org", "www.ebi.ac.uk", "ftp.ebi.ac.uk"}
 AA3 = {"TRP": "W"}
+MAX_SIFTS_XML_BYTES = 64_000_000
 
 
 def now():
@@ -39,6 +42,13 @@ def combine(*statuses):
     return "PASS"
 
 
+class RejectRedirects(urllib.request.HTTPRedirectHandler):
+    """Do not make a second network request to an untrusted redirect target."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
 def retrieve(label, url, provenance):
     item = {"url": url, "retrieved_utc": now(), "status": "UNKNOWN"}
     provenance[label] = item
@@ -50,7 +60,7 @@ def retrieve(label, url, provenance):
         request = urllib.request.Request(
             url, headers={"User-Agent": "Sovereign-MCP-readonly-evidence-audit/1.0"}
         )
-        with urllib.request.urlopen(request, timeout=20) as response:
+        with urllib.request.build_opener(RejectRedirects()).open(request, timeout=20) as response:
             redirected = urlsplit(response.geturl())
             if redirected.scheme != "https" or redirected.hostname not in HOSTS:
                 item["error"] = "disallowed_redirect"
@@ -165,8 +175,10 @@ def parse_annotations(data):
             for r in result["rows"]
         }
     )
-    if result["rows"]:
+    if result["rows"] and result["excluded_mismatches"] == 0:
         result["status"] = "PASS"  # source annotation schema and identity only
+    elif result["excluded_mismatches"]:
+        result["reason"] = "unexpected_accession_or_residue_in_source"
     else:
         result["reason"] = "no_matching_source_annotations"
     return result
@@ -180,7 +192,13 @@ def parse_sifts(data):
     if data is None:
         return None
     try:
-        body = gzip.decompress(data) if data[:2] == b"\x1f\x8b" else data
+        if data[:2] == b"\x1f\x8b":
+            with gzip.GzipFile(fileobj=io.BytesIO(data)) as stream:
+                body = stream.read(MAX_SIFTS_XML_BYTES + 1)
+        else:
+            body = data
+        if len(body) > MAX_SIFTS_XML_BYTES:
+            return None
         root = ET.fromstring(body)
     except (OSError, ValueError, ET.ParseError):
         return None
@@ -263,8 +281,8 @@ def check_structure(claim, sifts, listing):
                 if AA3.get(res.get("residue_name")) != AMINO_ACID:
                     return {"status": "CONFLICT", "reason": "pdb_residue_name_disagrees"}
                 ratio = res.get("observed_ratio")
-                if not isinstance(ratio, (float, int)):
-                    return {"status": "UNKNOWN", "reason": "missing_observed_ratio"}
+                if type(ratio) not in (int, float) or not math.isfinite(ratio) or ratio > 1:
+                    return {"status": "UNKNOWN", "reason": "invalid_observed_ratio"}
                 if ratio <= 0:
                     return {"status": "CONFLICT", "reason": "pdb_residue_unobserved"}
                 return {"status": "PASS", "observed_ratio": ratio}
