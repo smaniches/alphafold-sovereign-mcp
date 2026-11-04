@@ -1,6 +1,8 @@
 """Offline contract tests: fabricated records, never biological observations."""
 
 import importlib.util
+import gzip
+import json
 import unittest
 from pathlib import Path
 
@@ -116,6 +118,63 @@ class Contract(unittest.TestCase):
         self.assertEqual(out["total_rows"], 203)
         self.assertEqual(out["unique_publications"], ["27050129"])
         self.assertEqual(out["unique_structural_claims"], 1)
+
+    def test_invalid_observed_ratio_is_not_pass(self):
+        mapped = audit.parse_sifts(SIFTS)
+        for bad in (float("nan"), float("inf"), 1.01, True, "1.0"):
+            listing = json.loads(json.dumps(LISTING))
+            listing["5cxt"]["molecules"][0]["chains"][0]["residues"][0]["observed_ratio"] = bad
+            self.assertEqual(
+                audit.check_structure(CLAIM, mapped, listing)["status"],
+                "UNKNOWN",
+            )
+
+    def test_mixed_source_annotations_do_not_pass(self):
+        correct = {
+            "uniprotAccession": "Q8VH51",
+            "uniprotResidue": 495,
+            "pdbChain": "M",
+            "entityId": 1,
+            "pdbResidue": 79,
+            "authorResidueNumber": 495,
+        }
+        incorrect = {**correct, "uniprotResidue": 496}
+        payload = {
+            "Q8VH51": {
+                "dataType": "ANNOTATIONS",
+                "uniprotResidue": 495,
+                "data": [{
+                    "pdbId": "5cxt",
+                    "providerList": [{
+                        "residueList": [{"indexType": "PDB", "additionalData": [
+                            correct, incorrect
+                        ]}]
+                    }]
+                }],
+            }
+        }
+        checked = audit.parse_annotations(payload)
+        self.assertEqual(checked["excluded_mismatches"], 1)
+        self.assertEqual(len(checked["rows"]), 1)
+        self.assertEqual(checked["status"], "UNKNOWN")
+
+    def test_redirects_are_rejected_before_followup_request(self):
+        from urllib.request import Request
+
+        handler = audit.RejectRedirects()
+        request = Request("https://www.ebi.ac.uk/resource")
+        self.assertIsNone(handler.redirect_request(
+            request, None, 302, "Moved", {}, "http://127.0.0.1/"
+        ))
+
+    def test_compressed_xml_size_is_bounded(self):
+        original = audit.MAX_SIFTS_XML_BYTES
+        try:
+            audit.MAX_SIFTS_XML_BYTES = 40
+            self.assertIsNone(audit.parse_sifts(gzip.compress(SIFTS)))
+            self.assertIsNone(audit.parse_sifts(SIFTS))
+        finally:
+            audit.MAX_SIFTS_XML_BYTES = original
 
     def test_unavailable_never_passes(self):
         self.assertEqual(audit.combine("PASS", "UNKNOWN"), "UNKNOWN")
