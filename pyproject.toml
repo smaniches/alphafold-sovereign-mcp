@@ -177,7 +177,6 @@ include = [
     "NOTICE",
     "README.md",
     "CHANGELOG.md",
-    "PATENTS.md",
     "pyproject.toml",
 ]
 

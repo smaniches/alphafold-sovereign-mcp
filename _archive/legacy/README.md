@@ -19,15 +19,9 @@ migration notes written during decomposition, not current release status.
 
 ## Why keep the archive?
 
-The old implementation is retained for historical comparison and targeted
-regression investigations. The archive alone does not establish equivalence
-with the current implementation; that requires separate tests.
-
-Archived source code and comments do not substantiate current mathematical
-functionality, numerical performance, or patent application status. The
-changelog records the withdrawal of an unsupported performance claim.
-Historical metadata does not impose licensing restrictions beyond those
-in the applicable license; see `LICENSE` and `PATENTS.md` in the repo root.
+Legacy source is retained for historical comparison and targeted regression
+checks. It is not a supported entry point or packaged runtime component.
+For current behavior and interfaces, see the root README and `src/`.
 
 ## Package and analysis exclusions
 
