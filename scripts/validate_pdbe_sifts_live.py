@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Read-only, evidence-bound audit. UNKNOWN is never promoted to PASS."""
+"""Read-only source-coordinate consistency audit, not biological validation.
+
+PASS means queried records agree under the tested coordinate contract; it is
+not validation of AlphaFold predictions, experiments, mechanisms or clinical
+interpretations. UNKNOWN is never promoted to PASS.
+"""
 from __future__ import annotations
 
 import argparse
@@ -265,12 +270,14 @@ def main():
     structure = {"status": combine(*(c["status"] for c in claims)), "claims": claims}
     report = {
         "audit": "readonly-v1", "retrieved_utc": now(),
+        "status_scope": "record-level coordinate consistency only; not biological ground truth or clinical interpretation",
         "reference": {"uniprot": ACCESSION, "position": POSITION, "aa": AMINO_ACID},
         "sources": sources, "sequence_check": sequence,
         "annotation_check": {k: v for k, v in annotation.items() if k != "rows"},
         "structure_check": structure,
         "overall": combine(sequence["status"], annotation["status"], structure["status"]) if len({PDB, *(k[0] for k in unique)}) <= 10 else "UNKNOWN",
-        "not_validated": ["HGVS transcript/isoform identity", "primary-paper statement review",
+        "not_validated": ["AlphaFold predictive accuracy", "experimental structural model quality",
+                          "biological conformational ensemble", "HGVS transcript/isoform identity", "primary-paper statement review",
                           "published MCP interface live output", "clinical significance"],
         "terms": "Consult upstream provider attribution/reuse conditions; raw evidence is not redistributed",
     }
