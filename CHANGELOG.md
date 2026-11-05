@@ -1118,33 +1118,17 @@ threat model, examples, mkdocs site).
 - Zenodo DOI integration via GitHub releases; DOI added to
   `CITATION.cff`.
 
-### Changed — language scrub for open release
-- Removed marketing and overclaim language from the README, docstrings,
-  and module headers. Specifically:
-  - Dropped claims of "drift tensor R²=0.9992" — there is no benchmark
-    in the repository that substantiates this number.
-  - Dropped "patent-pending TOPOLOGICA methodology" framing from the
-    structure-intelligence module. The patent status is described
-    soberly in [`PATENTS.md`](https://github.com/smaniches/alphafold-sovereign-mcp/blob/main/PATENTS.md).
-  - Dropped "Defense-grade sovereignty stack (FedRAMP-aligned, FIPS,
-    SBOM, SLSA L3)" comparison line. None of those certifications has
-    been audited; only an SBOM is actually emitted today.
-  - Renamed `_wasserstein_distance` → `_fingerprint_distance` because
-    the function computes L2 distance between length-normalised
-    fingerprint vectors, not a Wasserstein distance on persistence
-    diagrams. Updated callers, tests, and the tool's annotation title
-    accordingly.
-  - The ACMG/AMP output of the variant tools is now consistently
-    described as a "draft surface of the upstream evidence", not a
-    clinical interpretation.
-  - The druggability tier is consistently described as a "heuristic".
-- Removed the `LICENSE-COMMERCIAL.md` file and the "Enterprise
-  Edition" wording everywhere. The project is licensed under
-  Apache 2.0, full stop.
-- Dropped enterprise / commercial contact email addresses from the
-  docs. Contact channels are: GitHub Discussions for questions,
-  GitHub Issues for bugs, GitHub Security Advisories for
-  vulnerabilities.
+### Changed — documentation and interfaces
+- Renamed `_wasserstein_distance` → `_fingerprint_distance` because
+  the function computes L2 distance between length-normalised
+  fingerprint vectors, not a Wasserstein distance on persistence
+  diagrams. Updated callers, tests, and the tool's annotation title
+  accordingly.
+- ACMG/AMP outputs are documented as drafts of upstream evidence, not
+  clinical interpretations.
+- Druggability tiers are documented as heuristics.
+- Support channels are GitHub Discussions, GitHub Issues, and GitHub
+  Security Advisories.
 
 ### Changed — test surface
 - 623 unit tests, hermetic (respx-mocked upstreams), runs in under 15

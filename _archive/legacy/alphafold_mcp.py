@@ -1269,7 +1269,6 @@ class UniProtFetcher:
     """
     Fetches protein metadata from UniProt REST API.
     
-    PROPRIETARY INTEGRATION - TOPOLOGICA LLC
     
     Provides complementary metadata to AlphaFold structures:
         - Protein name and function
@@ -3639,7 +3638,6 @@ async def get_structure(params: GetStructureInput) -> str:
     """
     Retrieve an AlphaFold protein structure by UniProt ID.
     
-    PROPRIETARY TOOL - TOPOLOGICA LLC
     
     Operation (Cache-First Sovereign Strategy):
         1. Check local cache (dynamically indexed, grows with usage)
@@ -3702,7 +3700,6 @@ async def search_structures(params: SearchStructuresInput) -> str:
     """
     Search local AlphaFold structure cache.
     
-    PROPRIETARY TOOL - TOPOLOGICA LLC
     
     Searches the sovereign cache (dynamically indexed) by UniProt ID pattern.
     Includes both pre-downloaded structures and previously-fetched online structures.
@@ -3769,7 +3766,6 @@ async def batch_structures(params: BatchStructuresInput) -> str:
     """
     Retrieve multiple AlphaFold structures in batch.
     
-    PROPRIETARY TOOL - TOPOLOGICA LLC
     
     Efficiently retrieves multiple structures with optional features.
     
@@ -3845,7 +3841,6 @@ async def get_features(params: GetFeaturesInput) -> str:
     """
     Compute detailed structural features for a protein.
     
-    PROPRIETARY TOOL - TOPOLOGICA LLC
     
     Available features:
         - secondary_structure: Alpha-helix, beta-strand, coil classification
@@ -3906,7 +3901,6 @@ async def get_topology(params: GetTopologyInput) -> str:
     """
     Compute topological features (persistent homology) for a protein.
     
-    PROPRIETARY TOOL - TOPOLOGICA LLC
     
     Mathematical Foundation:
         Vietoris-Rips filtration on C-alpha atom point cloud.
@@ -3966,7 +3960,6 @@ async def check_availability(params: CheckAvailabilityInput) -> str:
     """
     Check availability of structures (local cache and online).
     
-    PROPRIETARY TOOL - TOPOLOGICA LLC
     
     Checks both local cache (instant) and AlphaFold DB (network).
     
@@ -4022,7 +4015,6 @@ async def get_cache_statistics() -> str:
     """
     Get statistics about the local structure cache.
     
-    PROPRIETARY TOOL - TOPOLOGICA LLC
     
     Returns information about:
         - Number of local structures
@@ -4089,9 +4081,8 @@ async def get_enriched_protein(params: GetEnrichedProteinInput) -> str:
     """
     Get comprehensive protein information combining AlphaFold structure + UniProt metadata.
     
-    PROPRIETARY TOOL - TOPOLOGICA LLC
     
-    This tool provides UNIQUE VALUE by combining:
+    This tool combines:
         1. AlphaFold structural data (3D coordinates, pLDDT confidence)
         2. UniProt functional annotations (function, GO terms, active sites)
         3. Disease associations and literature links
@@ -4267,7 +4258,6 @@ async def batch_go_lookup(params: BatchGOLookupInput) -> str:
     """
     Get GO terms for hundreds of proteins at once.
     
-    PROPRIETARY TOOL - TOPOLOGICA LLC
     
     Efficiently fetches GO annotations for large protein sets.
     Uses local cache when available, fetches from UniProt when needed.
@@ -4375,7 +4365,6 @@ async def search_by_go_term(params: SearchByGOTermInput) -> str:
     """
     Find all proteins with a specific GO annotation.
     
-    PROPRIETARY TOOL - TOPOLOGICA LLC
     
     Searches the inverted index for proteins annotated with a GO term.
     Essential for building training sets for function prediction.
@@ -4461,7 +4450,6 @@ async def get_go_hierarchy(params: GetGOHierarchyInput) -> str:
     """
     Navigate GO term parent/child relationships.
     
-    PROPRIETARY TOOL - TOPOLOGICA LLC
     
     Fetches GO term hierarchy from QuickGO API.
     Essential for GO term propagation in function prediction.
@@ -4584,7 +4572,6 @@ async def export_protein_set(params: ExportProteinSetInput) -> str:
     """
     Export filtered proteins to TSV/CSV for ML pipelines.
     
-    PROPRIETARY TOOL - TOPOLOGICA LLC
     
     Creates tabular exports suitable for:
         - Training machine learning models
@@ -4708,7 +4695,6 @@ async def find_similar_proteins(params: FindSimilarProteinsInput) -> str:
     """
     Find proteins similar by sequence or structure.
     
-    PROPRIETARY TOOL - TOPOLOGICA LLC
     
     Uses k-mer based sequence similarity for fast approximate matching.
     For structure similarity, uses C-alpha RMSD when structures available.
@@ -4837,7 +4823,6 @@ async def get_domain_annotations(params: GetDomainAnnotationsInput) -> str:
     """
     Retrieve Pfam/InterPro domain annotations.
     
-    PROPRIETARY TOOL - TOPOLOGICA LLC
     
     Fetches domain annotations from UniProt cross-references.
     Domains are key features for function prediction.
@@ -4942,7 +4927,6 @@ async def filter_by_organism(params: FilterByOrganismInput) -> str:
     """
     Filter proteins by organism from local cache.
     
-    PROPRIETARY TOOL - TOPOLOGICA LLC
     
     Searches local AlphaFold structures for organism-specific proteins.
     Essential for species-specific function prediction.
@@ -5032,7 +5016,6 @@ async def get_protein_families(params: GetProteinFamiliesInput) -> str:
     """
     Cluster proteins by sequence or GO term similarity.
     
-    PROPRIETARY TOOL - TOPOLOGICA LLC
     
     Groups proteins into families based on similarity.
     Useful for identifying functionally related proteins.
@@ -5214,7 +5197,6 @@ async def extract_pae_matrix(params: ExtractPAEMatrixInput) -> str:
     """
     Extract Predicted Aligned Error (PAE) matrix from AlphaFold structure.
     
-    PROPRIETARY TOOL - TOPOLOGICA LLC
     
     PAE measures predicted distance error between residue pairs.
     Low PAE (<5Å) indicates high confidence in relative positioning.
@@ -5287,7 +5269,6 @@ async def detect_domains(params: DetectDomainsInput) -> str:
     """
     Detect protein domains from PAE matrix clustering.
     
-    PROPRIETARY TOOL - TOPOLOGICA LLC
     
     Uses PAE values to identify independently folded domains.
     Low intra-domain PAE + high inter-domain PAE = domain boundary.
@@ -5356,7 +5337,6 @@ async def predict_disorder(params: PredictDisorderInput) -> str:
     """
     Predict intrinsically disordered regions (IDRs) from pLDDT scores.
     
-    PROPRIETARY TOOL - TOPOLOGICA LLC
     
     Low pLDDT (<50) often indicates disorder/flexibility.
     Returns IDR regions, propensity profile, and disorder statistics.
@@ -5418,7 +5398,6 @@ async def get_plddt_profile(params: GetPLDDTProfileInput) -> str:
     """
     Get detailed per-residue pLDDT confidence profile.
     
-    PROPRIETARY TOOL - TOPOLOGICA LLC
     
     pLDDT categories:
     - Very high (>90): High confidence
@@ -5492,7 +5471,6 @@ async def compute_information_content(params: ComputeInformationContentInput) ->
     """
     Compute Information Content (IC) for GO terms using corpus frequencies.
     
-    PROPRIETARY TOOL - TOPOLOGICA LLC
     
     IC(t) = -log(P(t)) where P(t) = freq(t)/max_freq
     Higher IC = more specific term = more informative
@@ -5541,7 +5519,6 @@ async def compute_semantic_similarity(params: ComputeSemanticSimilarityInput) ->
     """
     Compute semantic similarity between GO terms.
     
-    PROPRIETARY TOOL - TOPOLOGICA LLC
     
     Methods:
     - Resnik: IC of Most Informative Common Ancestor (MICA)
@@ -5584,7 +5561,6 @@ async def get_advanced_topology(params: GetAdvancedTopologyInput) -> str:
     """
     Compute advanced topological features with full TDA pipeline.
     
-    PROPRIETARY TOOL - TOPOLOGICA LLC
     
     Features:
     - Persistence diagrams (birth-death pairs)
@@ -5659,7 +5635,6 @@ async def compare_protein_topology(params: CompareProteinTopologyInput) -> str:
     """
     Compare topological features between two proteins.
     
-    PROPRIETARY TOOL - TOPOLOGICA LLC
     
     Distance Metrics:
     - Wasserstein (Earth Mover's): Optimal transport between diagrams
@@ -5731,7 +5706,6 @@ async def batch_protein_analysis(params: BatchProteinAnalysisInput) -> str:
     """
     Comprehensive batch analysis of multiple proteins with progress tracking.
     
-    PROPRIETARY TOOL - TOPOLOGICA LLC
     
     Runs selected analyses on all proteins:
     - Structure retrieval
