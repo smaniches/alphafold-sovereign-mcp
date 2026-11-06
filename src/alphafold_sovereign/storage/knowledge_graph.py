@@ -712,9 +712,12 @@ class KnowledgeGraph:
         omim_ids: list[str] | None = None,
         orphanet_ids: list[str] | None = None,
         synonyms: list[str] | None = None,
-        therapeutic_area: bool = False,
+        therapeutic_area: bool | None = None,
     ) -> str:
-        """Upsert a disease record. Returns the mondo_id."""
+        """Upsert a disease; omitted metadata preserves stored values.
+
+        Explicit empty lists clear identifiers on update.
+        """
         now = datetime.datetime.now(datetime.timezone.utc).isoformat()
         async with self._lock:
             loop = asyncio.get_running_loop()
@@ -729,8 +732,15 @@ class KnowledgeGraph:
                 json.dumps(omim_ids or []),
                 json.dumps(orphanet_ids or []),
                 json.dumps(synonyms or []),
-                int(therapeutic_area),
+                int(therapeutic_area or False),
                 now,
+                tuple(
+                    value is not None
+                    for value in (
+                        icd10_codes, icd11_codes, omim_ids,
+                        orphanet_ids, synonyms, therapeutic_area,
+                    )
+                ),
             )
         return mondo_id
 
@@ -746,6 +756,7 @@ class KnowledgeGraph:
         synonyms_json: str,
         therapeutic_area: int,
         now: str,
+        supplied: tuple[bool, bool, bool, bool, bool, bool],
     ) -> None:
         assert self._conn is not None
         self._conn.execute(
@@ -757,7 +768,12 @@ class KnowledgeGraph:
             ON CONFLICT(mondo_id) DO UPDATE SET
                 name = excluded.name,
                 definition = COALESCE(NULLIF(excluded.definition,''), diseases.definition),
-                icd10_codes = excluded.icd10_codes,
+                icd10_codes = CASE WHEN ? THEN excluded.icd10_codes ELSE diseases.icd10_codes END,
+                icd11_codes = CASE WHEN ? THEN excluded.icd11_codes ELSE diseases.icd11_codes END,
+                omim_ids = CASE WHEN ? THEN excluded.omim_ids ELSE diseases.omim_ids END,
+                orphanet_ids = CASE WHEN ? THEN excluded.orphanet_ids ELSE diseases.orphanet_ids END,
+                synonyms = CASE WHEN ? THEN excluded.synonyms ELSE diseases.synonyms END,
+                therapeutic_area = CASE WHEN ? THEN excluded.therapeutic_area ELSE diseases.therapeutic_area END,
                 updated_at = excluded.updated_at
             """,
             [
@@ -772,6 +788,7 @@ class KnowledgeGraph:
                 therapeutic_area,
                 now,
                 now,
+                *supplied,
             ],
         )
         self._conn.commit()
