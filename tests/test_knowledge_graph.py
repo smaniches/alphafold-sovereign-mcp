@@ -153,6 +153,48 @@ async def test_store_drug(akg: KnowledgeGraph) -> None:
     assert stats["entity_counts"]["drugs"] >= 1
 
 
+@pytest.mark.unit
+async def test_disease_upsert_preserves_omitted_metadata_and_updates_supplied_fields(
+    akg: KnowledgeGraph,
+) -> None:
+    """Omitted metadata stays intact; explicitly empty lists clear old values."""
+    key = "MONDO:0000001"
+    await akg.store_disease(
+        mondo_id=key,
+        name="Initial disease",
+        icd10_codes=["A00"],
+        icd11_codes=["1A00"],
+        omim_ids=["100100"],
+        orphanet_ids=["ORPHA:1"],
+        synonyms=["Initial label"],
+        therapeutic_area=True,
+    )
+
+    await akg.store_disease(
+        mondo_id=key,
+        name="Updated disease",
+        omim_ids=["200200"],
+        synonyms=[],
+        therapeutic_area=False,
+    )
+    diseases = (await akg.export_to_dict(tables=["diseases"]))["diseases"]
+    row = next(row for row in diseases if row["mondo_id"] == key)
+    assert row["name"] == "Updated disease"
+    assert row["icd10_codes"] == '["A00"]'
+    assert row["icd11_codes"] == '["1A00"]'
+    assert row["omim_ids"] == '["200200"]'
+    assert row["orphanet_ids"] == '["ORPHA:1"]'
+    assert row["synonyms"] == "[]"
+    assert row["therapeutic_area"] == 0
+
+    await akg.store_disease(mondo_id=key, name="Final disease", icd10_codes=[])
+    diseases = (await akg.export_to_dict(tables=["diseases"]))["diseases"]
+    row = next(row for row in diseases if row["mondo_id"] == key)
+    assert row["icd10_codes"] == "[]"
+    assert row["icd11_codes"] == '["1A00"]'
+    assert row["omim_ids"] == '["200200"]'
+
+
 # ── audit trail ───────────────────────────────────────────────────────────────
 
 

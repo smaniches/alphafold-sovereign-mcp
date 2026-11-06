@@ -90,7 +90,7 @@ expectation of what this project is and is not.
 ### Legal kit
 - Apache 2.0 (``LICENSE``). Pure Apache 2.0 — no commercial-edition
   carve-out.
-- ``NOTICE``, ``PATENTS``, ``TRADEMARKS``, ``CONTRIBUTING``,
+- ``NOTICE``, ``TRADEMARKS``, ``CONTRIBUTING``,
   ``SECURITY``, ``CODE_OF_CONDUCT``, ``GOVERNANCE``,
   ``INCIDENT_RESPONSE``, ``AUDIT``, ``PRIVACY``, ``SUPPORT``.
 
