@@ -147,8 +147,8 @@ The first line is ≤ 72 characters. The body explains *why*, not
 A reviewer will not start until all of these are true:
 
 - [ ] Branch is up to date with `main`.
-- [ ] Commits are signed off (`Signed-off-by:` trailer) — requested,
-      not required (see DCO).
+- [ ] Every human-authored commit has a DCO `Signed-off-by:` trailer
+      (required; see Developer Certificate of Origin above).
 - [ ] `nox -s lint type test cov` passes locally.
 - [ ] New code has tests at the right layer (see above).
 - [ ] Public APIs have docstrings; tools have MCP annotations.
