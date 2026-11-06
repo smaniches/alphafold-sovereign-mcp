@@ -7,6 +7,13 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.5.11](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.5.10...v1.5.11) (2026-11-06)
+
+
+### Bug Fixes
+
+* **storage:** preserve existing disease metadata when optional fields are omitted, while respecting explicitly empty lists and false values ([#318](https://github.com/smaniches/alphafold-sovereign-mcp/pull/318))
+
 ## [1.5.10](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.5.9...v1.5.10) (2026-11-02)
 
 
