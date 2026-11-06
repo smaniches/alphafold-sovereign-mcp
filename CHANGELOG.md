@@ -12,8 +12,7 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ### Bug Fixes
 
-* **storage:** preserve disease metadata and repair CI gates ([7a4ec21](https://github.com/smaniches/alphafold-sovereign-mcp/commit/7a4ec21a712d7189a57f592e8761d4836ad9abb1))
-* **storage:** preserve omitted disease metadata and repair CI checks ([41bf661](https://github.com/smaniches/alphafold-sovereign-mcp/commit/41bf6619080906a53ae801c2a543a39c3559c76b))
+* **storage:** preserve existing disease metadata when optional fields are omitted, while respecting explicitly empty lists and false values ([#318](https://github.com/smaniches/alphafold-sovereign-mcp/pull/318))
 
 ## [1.5.10](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.5.9...v1.5.10) (2026-11-02)
 
