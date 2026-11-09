@@ -393,6 +393,8 @@ generate_variant_clinical_report(
 
 The example demonstrates the request shape, not proof that this HGVS
 expression has been transcript-mapped or clinically interpreted.
+`Q8VH51` identifies *mouse* RBM39; the gene-relative HGVS string does not
+establish a human variant or a cross-species residue correspondence.
 Returned `literature_residue_evidence` preserves PDBe/IUCr annotation
 provenance: publication identifiers, text-mined sentence and exact span,
 extraction confidence, experimental PDB chain/residue information,
