@@ -57,6 +57,7 @@ def _run_self_test() -> int:
     # 2026-11-10 UTC). BRCA1 is on the reverse strand, so the duplicated C is
     # a G in the forward-strand gnomAD variant ID.
     vep_locus = {
+        "input": "NM_007294.4:c.5266dup",
         "assembly_name": "GRCh38",
         "seq_region_name": "17",
         "start": 43057064,

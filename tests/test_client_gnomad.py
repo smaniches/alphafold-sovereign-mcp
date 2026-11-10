@@ -231,7 +231,7 @@ async def test_variant_frequencies_full_payload(respx_mock: respx.MockRouter) ->
                                 # Kept: maps via _POP_LABELS
                                 {"id": "nfe", "ac": 3, "an": 100, "ac_hom": 0},
                                 # Kept but unknown id (no _POP_LABELS hit)
-                                {"id": "unknown", "ac": 1, "an": 50, "ac_hom": 1},
+                                {"id": "unknown", "ac": 2, "an": 50, "ac_hom": 1},
                                 # ac/an returned as None → coalesce to 0
                                 {"id": "afr", "ac": None, "an": None, "ac_hom": None},
                             ],
@@ -561,6 +561,145 @@ async def test_variant_frequency_population_malformed_count_rejected(
     async with GnomADClient() as client:
         with pytest.raises(ValueError):
             await client.variant_frequencies("1-1-A-G")
+
+
+# ---------------------------------------------------------------------------
+# Homozygote counts
+# ---------------------------------------------------------------------------
+
+
+def _record_with_homozygotes(
+    where: str, value: Any, *, ac: int | None = 5, an: int | None = 100
+) -> dict[str, Any]:
+    """Two cohorts of ``ac`` alleles in ``an``; ``where`` gets the homozygote count.
+
+    ``where`` is ``exome``, ``genome`` or ``population`` (the listed ``nfe``
+    record of the exome cohort, which has 5 alleles in 100).
+    """
+    record: dict[str, Any] = {
+        name: {
+            "ac": ac,
+            "an": an,
+            "ac_hom": 0,
+            "populations": [{"id": "nfe", "ac": 5, "an": 100, "ac_hom": 0}],
+        }
+        for name in ("exome", "genome")
+    }
+    target = record["exome"]["populations"][0] if where == "population" else record[where]
+    target["ac_hom"] = value
+    return record
+
+
+def _mock_variant(respx_mock: respx.MockRouter, variant_id: str, record: dict[str, Any]) -> None:
+    respx_mock.post("https://gnomad.broadinstitute.org/api").mock(
+        return_value=httpx.Response(
+            200, json={"data": {"variant": {"variantId": variant_id, **record}}}
+        )
+    )
+
+
+def _reported_homozygotes(out: dict[str, Any]) -> dict[str, Any]:
+    """Every place the client's result carries a homozygote count."""
+    return {
+        "summary": out["homozygote_count"],
+        "exome": out["cohorts"]["exome"]["homozygote_count"],
+        "genome": out["cohorts"]["genome"]["homozygote_count"],
+        "population": out["populations"][0]["homozygote_count"],
+    }
+
+
+@pytest.mark.parametrize("where", ["exome", "genome", "population"])
+@pytest.mark.parametrize("value", [True, -1, 1.0, "1", 6])
+async def test_variant_frequency_malformed_homozygote_count_rejected(
+    respx_mock: respx.MockRouter, where: str, value: Any
+) -> None:
+    """A homozygote count is passed on only as a whole number its 5 alleles allow.
+
+    The variant is on X, so no ploidy is assumed: 6 homozygotes are rejected
+    because each carries the allele at least once.
+    """
+    _mock_variant(respx_mock, "X-1-A-G", _record_with_homozygotes(where, value))
+    async with GnomADClient() as client:
+        with pytest.raises(ValueError, match="homozygote count"):
+            await client.variant_frequencies("X-1-A-G")
+
+
+@pytest.mark.parametrize("where", ["exome", "genome", "population"])
+@pytest.mark.parametrize(
+    ("variant_id", "homozygotes", "accepted"),
+    [
+        ("1-1-A-G", 2, True),  # two diploid homozygotes: 4 of the 5 alleles
+        ("1-1-A-G", 3, False),  # three would carry 6
+        ("22-1-A-G", 3, False),
+        ("X-1-A-G", 3, True),  # ploidy is not assumed off the autosomes
+        ("Y-1-A-G", 5, True),
+    ],
+)
+async def test_variant_frequency_homozygote_bound_is_diploid_only_on_autosomes(
+    respx_mock: respx.MockRouter, where: str, variant_id: str, homozygotes: int, accepted: bool
+) -> None:
+    _mock_variant(respx_mock, variant_id, _record_with_homozygotes(where, homozygotes))
+    async with GnomADClient() as client:
+        if not accepted:
+            with pytest.raises(ValueError, match="exceeds what its allele count or number allows"):
+                await client.variant_frequencies(variant_id)
+            return
+        reported = _reported_homozygotes(await client.variant_frequencies(variant_id))
+    assert reported[where] == homozygotes
+    # The summary repeats the exome cohort's count; every other count is the 0 it was given.
+    expected = {"summary": 0, "exome": 0, "genome": 0, "population": 0, where: homozygotes}
+    if where == "exome":
+        expected["summary"] = homozygotes
+    assert reported == expected
+
+
+@pytest.mark.parametrize("unreported", ["null", "absent"])
+async def test_variant_frequency_unreported_homozygote_count_stays_unreported(
+    respx_mock: respx.MockRouter, unreported: str
+) -> None:
+    """A count gnomAD does not report is not a count of 0, and nothing else is withheld."""
+    record = _record_with_homozygotes("exome", None)
+    for cohort in record.values():
+        for target in (cohort, cohort["populations"][0]):
+            if unreported == "absent":
+                del target["ac_hom"]
+            else:
+                target["ac_hom"] = None
+    _mock_variant(respx_mock, "1-1-A-G", record)
+    async with GnomADClient() as client:
+        out = await client.variant_frequencies("1-1-A-G")
+    assert _reported_homozygotes(out) == {
+        "summary": None,
+        "exome": None,
+        "genome": None,
+        "population": None,
+    }
+    assert out["global_af"] == 0.05
+    assert out["populations"][0]["allele_count"] == 5
+
+
+@pytest.mark.parametrize(
+    ("variant_id", "an", "homozygotes", "accepted"),
+    [
+        ("1-1-A-G", 100, 50, True),  # 50 diploid homozygotes account for all 100 alleles
+        ("1-1-A-G", 100, 51, False),
+        ("X-1-A-G", 100, 100, True),
+        ("X-1-A-G", 100, 101, False),
+        ("1-1-A-G", None, 7, True),  # nothing reported that the count could contradict
+    ],
+)
+async def test_variant_frequency_homozygote_count_without_allele_count_is_bounded_by_allele_number(
+    respx_mock: respx.MockRouter, variant_id: str, an: int | None, homozygotes: int, accepted: bool
+) -> None:
+    record = _record_with_homozygotes("genome", homozygotes, ac=None, an=an)
+    _mock_variant(respx_mock, variant_id, record)
+    async with GnomADClient() as client:
+        if not accepted:
+            with pytest.raises(ValueError, match="exceeds what its allele count or number allows"):
+                await client.variant_frequencies(variant_id)
+            return
+        out = await client.variant_frequencies(variant_id)
+    assert out["cohorts"]["genome"]["homozygote_count"] == homozygotes
 
 
 # ---------------------------------------------------------------------------

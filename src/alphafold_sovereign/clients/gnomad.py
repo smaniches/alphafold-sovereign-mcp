@@ -116,6 +116,10 @@ _SEX_KARYOTYPES = ("XX", "XY")
 # for any allele number up to 1e9, so the frequency of other counts cannot pass.
 _AF_REL_TOL = 1e-9
 
+# Chromosomes on which every genotype is diploid. On X and Y the ploidy of a
+# cohort depends on its sex composition, so no ploidy is assumed there.
+_AUTOSOMES = frozenset(str(number) for number in range(1, 23))
+
 
 def _af_safe(ac: int, an: int) -> float:
     return ac / an if an > 0 else 0.0
@@ -187,6 +191,29 @@ def _cohort_counts(cohort: dict[str, Any]) -> tuple[int | None, int | None, floa
     return ac, an, af
 
 
+def _homozygote_count(
+    record: dict[str, Any], ac: int | None, an: int | None, *, diploid: bool
+) -> int | None:
+    """Validate the homozygote count reported beside ``ac`` and ``an``.
+
+    ``None`` is kept: a count gnomAD does not report is not a count of 0. A
+    homozygote carries the allele at least once, and twice where every
+    genotype is diploid, so the count is bounded by the allele count, or by
+    the allele number when no allele count is reported. A value that is not a
+    non-negative whole number, or that exceeds that bound, raises
+    ``ValueError``.
+    """
+    raw: object = record.get("ac_hom")
+    if raw is None:
+        return None
+    if not isinstance(raw, int) or isinstance(raw, bool) or raw < 0:
+        raise ValueError("Invalid gnomAD homozygote count")
+    alleles = ac if ac is not None else an
+    if alleles is not None and raw * (2 if diploid else 1) > alleles:
+        raise ValueError("gnomAD homozygote count exceeds what its allele count or number allows")
+    return raw
+
+
 class GnomADClient(BaseAsyncClient):
     """
     Async GraphQL client for gnomAD population genetics data.
@@ -241,8 +268,10 @@ class GnomADClient(BaseAsyncClient):
 
         Raises:
             ValueError: gnomAD returned neither a record nor its "Variant not
-                found" error, a record for a different variant, or malformed
-                or mutually contradictory cohort counts.
+                found" error, a record for a different variant, malformed or
+                mutually contradictory cohort counts, or a homozygote count
+                of a cohort or a listed population that is malformed or
+                exceeds what its allele count or number allows.
         """
         try:
             data = await self._graphql(
@@ -270,6 +299,7 @@ class GnomADClient(BaseAsyncClient):
         if variant.get("variantId") != variant_id:
             raise ValueError("gnomAD returned a record for a different variant than requested")
 
+        diploid = variant_id.partition("-")[0] in _AUTOSOMES
         # Prefer exome data; fall back to genome. Both cohorts are reported:
         # a variant with no exome carrier can still be observed in genomes.
         cohorts: dict[str, dict[str, Any]] = {}
@@ -280,7 +310,9 @@ class GnomADClient(BaseAsyncClient):
                     "allele_count": count,
                     "allele_number": number,
                     "allele_frequency": frequency,
-                    "homozygote_count": variant[name].get("ac_hom"),
+                    "homozygote_count": _homozygote_count(
+                        variant[name], count, number, diploid=diploid
+                    ),
                 }
         cohort_name = next(iter(cohorts), None)
         cohort = variant[cohort_name] if cohort_name else {}
@@ -306,7 +338,7 @@ class GnomADClient(BaseAsyncClient):
                     allele_count=ac,
                     allele_number=an,
                     allele_frequency=_af_safe(ac, an),
-                    homozygote_count=pop.get("ac_hom"),
+                    homozygote_count=_homozygote_count(pop, ac, an, diploid=diploid),
                 )
             )
 
@@ -324,7 +356,7 @@ class GnomADClient(BaseAsyncClient):
             "global_af": global_af,
             "global_ac": global_ac,
             "global_an": global_an,
-            "homozygote_count": cohort.get("ac_hom"),
+            "homozygote_count": cohorts[cohort_name]["homozygote_count"] if cohort_name else None,
             "populations": [p.to_dict() for p in populations],
         }
 

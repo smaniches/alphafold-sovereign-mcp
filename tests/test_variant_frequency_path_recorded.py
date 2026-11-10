@@ -296,6 +296,7 @@ async def test_indel_not_found_is_not_absence(recorded: dict[str, list[Any]]) ->
     frequency = out["unassessed_evidence"]["population_frequency"]
     assert frequency["lookup_status"] == "not_found_representation_unverified"
     assert "neither absence nor an allele frequency of 0" in frequency["detail"]
+    assert "HGVS-derived position" in frequency["detail"]
 
     held = await pm._gnomad().variant_frequencies("7-117559590-ATCT-A")
     assert held["found"] is True
@@ -387,7 +388,11 @@ async def test_recorded_vep_rejection_skips_lookup(
     assert out["data_sources_status"]["ensembl_vep"] == "failed"
     assert out["data_sources_status"]["gnomad_variant"] == "skipped"
     assert frequency["lookup_status"] == "not_attempted"
-    assert frequency["detail"] == "Ensembl VEP returned no genomic mapping for this expression."
+    # The reason names the rejection; it is not "VEP returned no genomic mapping".
+    assert frequency["detail"] == (
+        "The Ensembl VEP request failed or was rejected, so this expression was not mapped "
+        "to a genomic allele."
+    )
     assert frequency["variant_id"] is None
     assert frequency["cohorts"] == {}
     assert recorded["gnomad_variant"] == []
@@ -472,9 +477,100 @@ async def test_synthetic_two_mappings_are_ambiguous(recorded: dict[str, list[Any
     """Synthetic: the recorded BRCA1 and BRCA2 mappings offered for one expression."""
     ensembl = pm._ensembl()
     rows = await ensembl.vep_hgvs(_BRCA1_REVERSE) + await ensembl.vep_hgvs(_BRCA2_FORWARD)
+    # The BRCA2 rows name another input, so the reply is not this expression's.
+    resolved = pm._resolve_gnomad_variant(_BRCA1_REVERSE, rows)
+    assert resolved["variant_id"] is None
+    assert "does not name this expression as its input" in resolved["detail"]
+    # Two mappings that both name the expression: none is chosen.
+    for row in rows:
+        row["locus"]["input"] = _BRCA1_REVERSE
     resolved = pm._resolve_gnomad_variant(_BRCA1_REVERSE, rows)
     assert resolved["variant_id"] is None
     assert "more than one genomic mapping" in resolved["detail"]
+
+
+_NO_FUNCTIONAL_CONSEQUENCE = {
+    "consequence_terms": [],
+    "impact": "",
+    "amino_acids": "",
+    "hgvsp": "",
+    "sift_prediction": "",
+    "sift_score": None,
+    "polyphen_prediction": "",
+    "polyphen_score": None,
+    "cadd_phred": None,
+}
+
+
+@pytest.mark.parametrize("served", ["another_gene", "same_transcript", "no_input"])
+async def test_synthetic_vep_reply_that_does_not_name_the_query_is_rejected_by_both_tools(
+    recorded: dict[str, list[Any]], respx_mock: respx.MockRouter, served: str
+) -> None:
+    """Synthetic: VEP answers the BRCA1 query with a self-consistent hit that does not name it.
+
+    The query is c.181T>G. The hit is the recorded BRCA2 reply (another gene),
+    the recorded reply for the BRCA1 frameshift c.68_69del (the queried
+    transcript, another variant), or the recorded c.181T>G reply without
+    ``input``. Read unchecked, the first gives the BRCA1 query the BRCA2
+    variant's frequency (0.998), consequence and predictor outputs, and the
+    second gives it the gene and the loss-of-function signal of the
+    frameshift. Such a reply is an invalid response: nothing is read from it
+    and no lookup follows from it. ClinVar, which is asked independently, is
+    kept.
+    """
+    if served == "another_gene":
+        body = _RESPONSES["ensembl_vep"][_BRCA2_FORWARD]["body"]
+    elif served == "same_transcript":
+        body = _RESPONSES["ensembl_vep"]["NM_007294.4:c.68_69del"]["body"]
+    else:
+        body = json.loads(json.dumps(_RESPONSES["ensembl_vep"][_BRCA1_REVERSE]["body"]))
+        for hit in body:
+            del hit["input"]
+    respx_mock.get(url__startswith=_VEP_PREFIX).mock(return_value=httpx.Response(200, json=body))
+    pm._clinvar().search_by_hgvs = AsyncMock(
+        return_value=[
+            {"exact_change_match": True, "classification": "Pathogenic", "variation_id": "17661"}
+        ]
+    )
+
+    report = await _report(_BRCA1_REVERSE)
+    acmg = await _classify(_BRCA1_REVERSE)
+
+    # Only Ensembl VEP was asked: no frequency, no gene constraint and no
+    # AlphaMissense score was looked up on the strength of the rejected hit.
+    assert {call.request.url.host for call in respx_mock.calls} == {"rest.ensembl.org"}
+    assert recorded["gnomad_variant"] == []
+    for out, gnomad_key in ((report, "gnomad"), (acmg, "gnomad_variant")):
+        status = out["data_sources_status"]
+        assert status["ensembl_vep"] == "invalid_response"
+        assert status[gnomad_key] == "skipped"
+        assert status["gnomad_constraint"] == "skipped"
+        assert status["alphamissense"] == "skipped_upstream_invalid"
+        assert status["clinvar"] == "ok"
+        assert out["gene_symbol"] is None
+        evidence = out["unassessed_evidence"]
+        frequency = evidence["population_frequency"]
+        assert frequency["lookup_status"] == "not_attempted"
+        assert frequency["variant_id"] is None
+        assert frequency["mapping_basis"] is None
+        assert frequency["cohorts"] == {}
+        assert "response could not be validated" in frequency["detail"]
+        predictions = evidence["computational_predictions"]
+        assert set(predictions["ensembl_vep"].values()) == {None}
+        assert predictions["alphamissense"] == {
+            "status": "skipped_upstream_invalid",
+            "protein_variant": None,
+            "score": None,
+            "source_class": None,
+        }
+    assert report["functional_consequence"] == _NO_FUNCTIONAL_CONSEQUENCE
+    assert report["acmg_criteria_draft"]["criteria"] == {}
+    assert report["population_genetics"]["global_af"] is None
+    assert report["clinvar"]["found"] is True
+    assert report["clinvar"]["classification"] == "Pathogenic"
+    assert acmg["candidate_criteria"] == {}
+    assert acmg["clinvar_reference"]["found"] is True
+    assert acmg["clinvar_reference"]["classification"] == "Pathogenic"
 
 
 async def test_synthetic_unanchored_length_change_is_not_looked_up(
@@ -756,3 +852,282 @@ async def test_synthetic_contradictory_cohort_values_are_a_failure(
     )
     assert population["populations"] == []
     assert frequency["acmg_criteria"] == _NOT_ASSESSED_FREQUENCY
+
+
+async def test_synthetic_exome_without_frequency_does_not_hide_genome_frequency(
+    recorded: dict[str, list[Any]], respx_mock: respx.MockRouter
+) -> None:
+    """Synthetic: the recorded BRCA1 c.181T>G record with an exome cohort of AN 0.
+
+    The exome-first summary then has no frequency, but the genome cohort has
+    one. The lookup is ``found``; it is not ``no_frequency_data``.
+    """
+    body = json.loads(json.dumps(_RESPONSES["gnomad_variant"]["17-43106487-A-C"]["body"]))
+    body["data"]["variant"]["exome"].update({"ac": 0, "an": 0, "af": None})
+
+    def gnomad(request: httpx.Request) -> httpx.Response:
+        variables = json.loads(request.content)["variables"]
+        if "variantId" in variables:
+            return httpx.Response(200, json=body)
+        return httpx.Response(
+            200, json=_RESPONSES["gnomad_constraint"][variables["geneSymbol"]]["body"]
+        )
+
+    respx_mock.post(_GNOMAD_URL).mock(side_effect=gnomad)
+    report = await _report(_BRCA1_REVERSE)
+    population = report["population_genetics"]
+    frequency = report["unassessed_evidence"]["population_frequency"]
+
+    assert report["data_sources_status"]["gnomad"] == "ok"
+    assert frequency["lookup_status"] == "found"
+    assert frequency["cohorts"]["exome"]["allele_frequency"] is None
+    assert frequency["cohorts"]["genome"]["allele_frequency"] == pytest.approx(5 / 152214)
+    # The summary keeps its meaning: the exome cohort, which has no frequency here.
+    assert (population["cohort"], population["global_an"], population["global_af"]) == (
+        "exome",
+        0,
+        None,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Homozygote counts must be possible for their allele counts
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("variant_id", _HELD_VARIANTS)
+async def test_recorded_homozygote_counts_fit_their_allele_counts(
+    recorded: dict[str, list[Any]], variant_id: str
+) -> None:
+    """Every recorded count is one of diploid homozygotes, so the rule rejects no real record."""
+    variant = _recorded_variant(variant_id)
+    result = await pm._gnomad().variant_frequencies(variant_id)
+
+    assert variant_id.partition("-")[0].isdigit()  # every recorded variant is autosomal
+    for name, cohort in result["cohorts"].items():
+        source = variant[name]
+        assert cohort["homozygote_count"] == source["ac_hom"]
+        for record in (source, *source["populations"]):
+            assert type(record["ac_hom"]) is int
+            assert 0 <= 2 * record["ac_hom"] <= record["ac"]
+    assert result["homozygote_count"] == variant[result["cohort"]]["ac_hom"]
+
+
+@pytest.mark.parametrize(
+    ("where", "value"),
+    [
+        ("genome", -1),
+        ("exome", True),
+        ("exome", 26),
+        ("exome", 13),
+        ("nfe", 2.5),
+        ("nfe", 12),
+    ],
+    ids=[
+        "negative_in_second_cohort",
+        "boolean",
+        "more_homozygotes_than_alleles",
+        "more_than_half_the_alleles_on_an_autosome",
+        "population_not_a_whole_number",
+        "population_more_than_half_its_alleles",
+    ],
+)
+async def test_synthetic_impossible_homozygote_count_is_a_failure(
+    recorded: dict[str, list[Any]],
+    respx_mock: respx.MockRouter,
+    where: str,
+    value: Any,
+) -> None:
+    """Synthetic: one homozygote count of the recorded BRCA1 c.181T>G record is altered.
+
+    The record has 25 exome alleles, 23 of them in ``nfe``, on chromosome 17,
+    where every genotype is diploid. A count that is not a non-negative whole
+    number, or that needs more alleles than were counted, is an upstream
+    failure. It is not passed on as population evidence.
+    """
+    body = json.loads(json.dumps(_RESPONSES["gnomad_variant"]["17-43106487-A-C"]["body"]))
+    variant = body["data"]["variant"]
+    assert (variant["exome"]["ac"], variant["exome"]["ac_hom"]) == (25, 0)
+    if where == "nfe":
+        (record,) = [p for p in variant["exome"]["populations"] if p["id"] == "nfe"]
+        assert record["ac"] == 23
+    else:
+        record = variant[where]
+    record["ac_hom"] = value
+
+    def gnomad(request: httpx.Request) -> httpx.Response:
+        variables = json.loads(request.content)["variables"]
+        if "variantId" in variables:
+            return httpx.Response(200, json=body)
+        return httpx.Response(
+            200, json=_RESPONSES["gnomad_constraint"][variables["geneSymbol"]]["body"]
+        )
+
+    respx_mock.post(_GNOMAD_URL).mock(side_effect=gnomad)
+    report = await _report(_BRCA1_REVERSE)
+    acmg = await _classify(_BRCA1_REVERSE)
+    population = report["population_genetics"]
+    frequency = report["unassessed_evidence"]["population_frequency"]
+
+    assert report["data_sources_status"]["gnomad"] == "failed"
+    assert acmg["data_sources_status"]["gnomad_variant"] == "failed"
+    assert frequency["lookup_status"] == "failed"
+    assert frequency["variant_id"] == "17-43106487-A-C"
+    assert frequency["cohorts"] == {}
+    assert acmg["unassessed_evidence"]["population_frequency"]["cohorts"] == {}
+    assert population["homozygote_count"] is None
+    assert population["populations"] == []
+
+
+# ---------------------------------------------------------------------------
+# A VEP hit without transcript consequences
+# ---------------------------------------------------------------------------
+
+_INTERGENIC = "NC_000005.10:g.25500000T>C"
+# Recorded 2026-11-10 17:35 UTC with the clients' own requests: the complete
+# Ensembl VEP reply for this intergenic expression, which has no
+# ``transcript_consequences``, and gnomAD's reply for the variant ID it maps to.
+_INTERGENIC_VEP_BODY: list[dict[str, Any]] = [
+    {
+        "input": _INTERGENIC,
+        "id": _INTERGENIC,
+        "assembly_name": "GRCh38",
+        "seq_region_name": "5",
+        "start": 25500000,
+        "end": 25500000,
+        "strand": 1,
+        "allele_string": "T/C",
+        "vcf_string": "5-25500000-T-C",
+        "most_severe_consequence": "intergenic_variant",
+        "intergenic_consequences": [
+            {
+                "consequence_terms": ["intergenic_variant"],
+                "impact": "MODIFIER",
+                "variant_allele": "C",
+            }
+        ],
+    }
+]
+_INTERGENIC_GNOMAD_BODY = {"errors": [{"message": "Variant not found"}], "data": {"variant": None}}
+
+
+async def test_recorded_intergenic_expression_is_looked_up(
+    recorded: dict[str, list[Any]], respx_mock: respx.MockRouter
+) -> None:
+    """The locus of a hit without transcript consequences reaches the gnomAD lookup."""
+    asked: list[dict[str, Any]] = []
+
+    def gnomad(request: httpx.Request) -> httpx.Response:
+        asked.append(json.loads(request.content)["variables"])
+        return httpx.Response(200, json=_INTERGENIC_GNOMAD_BODY)
+
+    respx_mock.get(url__startswith=_VEP_PREFIX).mock(
+        side_effect=lambda request: httpx.Response(200, json=_INTERGENIC_VEP_BODY)
+    )
+    respx_mock.post(_GNOMAD_URL).mock(side_effect=gnomad)
+
+    rows = await pm._ensembl().vep_hgvs(_INTERGENIC)
+    assert [(row["transcript_id"], row["canonical"]) for row in rows] == [("", False)]
+    assert rows[0]["locus"]["vcf_string"] == "5-25500000-T-C"
+
+    out = await _classify(_INTERGENIC)
+    frequency = out["unassessed_evidence"]["population_frequency"]
+    assert out["data_sources_status"]["ensembl_vep"] == "ok"
+    assert out["data_sources_status"]["gnomad_variant"] == "no_data"
+    assert asked == [{"variantId": "5-25500000-T-C", "datasetId": "gnomad_r4"}]
+    assert frequency["variant_id"] == "5-25500000-T-C"
+    assert frequency["mapping_basis"] == "versioned_hgvs_via_ensembl_vep"
+    assert frequency["lookup_status"] == "not_found"
+
+
+async def test_recorded_intergenic_consequence_is_reported_without_a_transcript(
+    recorded: dict[str, list[Any]], respx_mock: respx.MockRouter
+) -> None:
+    """The terms and impact VEP reports as intergenic are the functional consequence.
+
+    No transcript is named, no transcript-level field is filled in, and no
+    criterion or prediction follows from them.
+    """
+    respx_mock.get(url__startswith=_VEP_PREFIX).mock(
+        return_value=httpx.Response(200, json=_INTERGENIC_VEP_BODY)
+    )
+    respx_mock.post(_GNOMAD_URL).mock(
+        return_value=httpx.Response(200, json=_INTERGENIC_GNOMAD_BODY)
+    )
+
+    rows = await pm._ensembl().vep_hgvs(_INTERGENIC)
+    assert [
+        (
+            row["consequence_source"],
+            row["consequence_terms"],
+            row["impact"],
+            row["transcript_id"],
+            row["gene_symbol"],
+            row["canonical"],
+        )
+        for row in rows
+    ] == [("intergenic_consequences", ["intergenic_variant"], "MODIFIER", "", "", False)]
+
+    report = await _report(_INTERGENIC)
+    assert report["functional_consequence"] == {
+        "consequence_terms": ["intergenic_variant"],
+        "impact": "MODIFIER",
+        "amino_acids": "",
+        "hgvsp": "",
+        "sift_prediction": "",
+        "sift_score": None,
+        "polyphen_prediction": "",
+        "polyphen_score": None,
+        "cadd_phred": None,
+    }
+    assert report["gene_symbol"] is None
+    assert report["acmg_criteria_draft"]["criteria"] == {}
+    assert report["data_sources_status"]["alphamissense"] == "skipped_no_canonical"
+    predictions = report["unassessed_evidence"]["computational_predictions"]
+    assert predictions["ensembl_vep"]["transcript_id"] is None
+    assert predictions["acmg_criteria"] == _NOT_ASSESSED_PREDICTION
+
+    acmg = await _classify(_INTERGENIC)
+    assert acmg["candidate_criteria"] == {}
+    assert acmg["criteria_met"] == {}
+    acmg_predictions = acmg["unassessed_evidence"]["computational_predictions"]
+    assert acmg_predictions["ensembl_vep"] == predictions["ensembl_vep"]
+
+
+# ---------------------------------------------------------------------------
+# A variant ID supplied by the caller
+# ---------------------------------------------------------------------------
+
+_CALLER_ID = "17-43106487-A-C"
+# Recorded 2026-11-10 21:08 UTC with the client's own request: Ensembl VEP's
+# complete HTTP 400 reply to this identifier, which is not an HGVS expression.
+_CALLER_ID_VEP_ERROR = {
+    "error": (
+        "Unable to parse HGVS notation '17-43106487-A-C': "
+        "Could not parse the HGVS notation 17-43106487-A-C"
+    )
+}
+
+
+async def test_recorded_caller_supplied_variant_id_is_looked_up_without_vep(
+    recorded: dict[str, list[Any]], respx_mock: respx.MockRouter
+) -> None:
+    """A gnomAD-style ID is looked up as supplied; it does not rest on a VEP reply."""
+    respx_mock.get(url__startswith=_VEP_PREFIX).mock(
+        return_value=httpx.Response(400, json=_CALLER_ID_VEP_ERROR)
+    )
+
+    report = await _report(_CALLER_ID)
+    acmg = await _classify(_CALLER_ID)
+
+    assert recorded["gnomad_variant"] == [{"variantId": _CALLER_ID, "datasetId": "gnomad_r4"}] * 2
+    for out, gnomad_key in ((report, "gnomad"), (acmg, "gnomad_variant")):
+        assert out["data_sources_status"]["ensembl_vep"] == "failed"
+        assert out["data_sources_status"][gnomad_key] == "ok"
+        frequency = out["unassessed_evidence"]["population_frequency"]
+        assert frequency["variant_id"] == _CALLER_ID
+        assert frequency["mapping_basis"] == "caller_supplied_variant_id"
+        assert frequency["reference_genome"] is None
+        assert frequency["lookup_status"] == "found"
+        assert frequency["cohorts"]["exome"]["allele_count"] == 25
+        assert "supplied by the caller" in frequency["detail"]

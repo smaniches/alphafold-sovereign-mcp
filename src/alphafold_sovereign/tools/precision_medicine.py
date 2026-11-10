@@ -417,6 +417,12 @@ _GNOMAD_LOOKUP_DETAIL = {
         "insertions and deletions and the HGVS-derived position can differ, so neither "
         "absence nor an allele frequency of 0 can be concluded."
     ),
+    # The same status when the identifier came from the caller, not from HGVS.
+    "not_found_representation_unverified/caller_supplied_variant_id": (
+        "gnomAD has no record under this representation. gnomAD stores left-aligned "
+        "insertions and deletions and the supplied identifier was not checked against that "
+        "alignment, so neither absence nor an allele frequency of 0 can be concluded."
+    ),
     "failed": "The gnomAD request failed; the allele frequency is unknown.",
     "invalid_response": (
         "The gnomAD response could not be validated; the allele frequency is unknown."
@@ -453,9 +459,11 @@ def _unassessed_evidence(
                 if gnomad_variant["variant_class"] == "snv"
                 else "not_found_representation_unverified"
             )
-        detail = " ".join(
-            filter(None, (_GNOMAD_LOOKUP_DETAIL.get(lookup_status), gnomad_variant["detail"]))
+        explanation = _GNOMAD_LOOKUP_DETAIL.get(
+            f"{lookup_status}/{gnomad_variant['mapping_basis']}",
+            _GNOMAD_LOOKUP_DETAIL.get(lookup_status),
         )
+        detail = " ".join(filter(None, (explanation, gnomad_variant["detail"])))
     return {
         "population_frequency": {
             "source": "gnomAD",
@@ -544,6 +552,26 @@ def _vep_to_acmg(consequences: list[dict[str, Any]]) -> dict[str, str]:
                 "assessment performed. BP7 requires further evidence."
             )
     return criteria
+
+
+def _vep_rows_for_query(
+    hgvs: str, rows: list[dict[str, Any]], source_status: dict[str, str]
+) -> list[dict[str, Any]]:
+    """Return ``rows`` only if every one belongs to a VEP hit naming ``hgvs`` as its input.
+
+    Ensembl VEP echoes the expression it annotated in each hit, and the client
+    keeps that echo in ``locus.input``. Rows of a reply that names another
+    input, or none, describe some other variant. Such a reply is an invalid
+    response: ``source_status["ensembl_vep"]`` says so and no row is returned,
+    so no consequence, prediction, gene or genomic mapping is read from it.
+    """
+    if all(
+        isinstance(row.get("locus"), dict) and row["locus"].get("input") == hgvs for row in rows
+    ):
+        return rows
+    logger.warning("ensembl_vep.input_mismatch", hgvs=hgvs)
+    source_status["ensembl_vep"] = "invalid_response"
+    return []
 
 
 # Re-exported so the tier scoring, the ``tractability_assessment`` display, and
@@ -675,7 +703,14 @@ def _gnomad_result_status(payload: dict[str, Any], availability_field: str) -> s
     if not payload or payload.get(availability_field) is False:
         return "no_data"
     if availability_field == "found" and payload.get("global_af") is None:
-        return "no_data"  # Identity is not measured frequency evidence.
+        # Identity is not measured frequency evidence. A frequency in a cohort
+        # other than the summarised one is: the summary is exome-first.
+        cohorts = payload.get("cohorts")
+        if not isinstance(cohorts, dict) or not any(
+            isinstance(cohort, dict) and cohort.get("allele_frequency") is not None
+            for cohort in cohorts.values()
+        ):
+            return "no_data"
     return "ok"
 
 
@@ -754,13 +789,15 @@ async def generate_variant_clinical_report(
         source_status[source] = "ok" if raw else "no_data"
         return raw
 
-    vep_results = _checked_rows("ensembl_vep", gathered[0])
+    vep_results = _vep_rows_for_query(
+        hgvs, _checked_rows("ensembl_vep", gathered[0]), source_status
+    )
     clinvar_results = _checked_rows("clinvar", gathered[1])
     gene_symbol = _report_gene_from_sources(hgvs, vep_results, clinvar_results)
 
     # ── Step 3: gnomAD variant ID construction ───────────────────────────────
     gnomad_data: dict[str, Any] = {}
-    gnomad_variant = _resolve_gnomad_variant(hgvs, vep_results)
+    gnomad_variant = _resolve_gnomad_variant(hgvs, vep_results, source_status["ensembl_vep"])
     gnomad_id = gnomad_variant["variant_id"]
     if gnomad_id:
         try:
@@ -913,6 +950,13 @@ async def generate_variant_clinical_report(
             if tc.get("canonical"):
                 canonical_tc = tc
                 break
+    # A variant outside every transcript has no canonical consequence. The
+    # terms and impact VEP reports for it as intergenic are then given as
+    # they are; no transcript is named and no criterion follows from them.
+    consequence_tc = canonical_tc or next(
+        (tc for tc in vep_results if tc.get("consequence_source") == "intergenic_consequences"),
+        {},
+    )
 
     # ── Build report ─────────────────────────────────────────────────────────
     report: dict[str, Any] = {
@@ -921,8 +965,8 @@ async def generate_variant_clinical_report(
         "clinical_tier": tier,
         "clinical_tier_explanation": _tier_explanation(tier),
         "functional_consequence": {
-            "consequence_terms": canonical_tc.get("consequence_terms", []),
-            "impact": canonical_tc.get("impact", ""),
+            "consequence_terms": consequence_tc.get("consequence_terms", []),
+            "impact": consequence_tc.get("impact", ""),
             "amino_acids": canonical_tc.get("amino_acids", ""),
             "hgvsp": canonical_tc.get("hgvsp", ""),
             "sift_prediction": canonical_tc.get("sift_prediction", ""),
@@ -1963,7 +2007,7 @@ async def classify_variant_acmg(
         source_status[name] = "ok" if raw else "no_data"
         return raw
 
-    vep_results = _checked_rows("ensembl_vep", vep_raw)
+    vep_results = _vep_rows_for_query(hgvs, _checked_rows("ensembl_vep", vep_raw), source_status)
     clinvar_results = _checked_rows("clinvar", clinvar_raw)
     gene_symbol = _report_gene_from_sources(hgvs, vep_results, clinvar_results)
     if clinvar_results and not any(r.get("exact_change_match") is True for r in clinvar_results):
@@ -1975,7 +2019,7 @@ async def classify_variant_acmg(
 
     # gnomAD
     gnomad_data: dict[str, Any] = {}
-    gnomad_variant = _resolve_gnomad_variant(hgvs, vep_results)
+    gnomad_variant = _resolve_gnomad_variant(hgvs, vep_results, source_status["ensembl_vep"])
     gnomad_id = gnomad_variant["variant_id"]
     source_status["gnomad_variant"] = "skipped"
     if gnomad_id:
@@ -2361,6 +2405,19 @@ _VARIANT_ID_RE = re.compile(
 )
 _COMPLEMENT = str.maketrans("ACGT", "TGCA")
 
+# Why a versioned expression has no VEP locus when the VEP call itself did not
+# succeed: a failed request or an unusable response is not a mapping result.
+_VEP_UNMAPPED_DETAIL = {
+    "failed": (
+        "The Ensembl VEP request failed or was rejected, so this expression was not mapped "
+        "to a genomic allele."
+    ),
+    "invalid_response": (
+        "The Ensembl VEP response could not be validated, so this expression was not mapped "
+        "to a genomic allele."
+    ),
+}
+
 
 def _vep_locus_matches(locus: dict[str, Any], pos: int, ref: str, alt: str) -> bool:
     """True when VEP's coordinates, strand and allele string describe ``pos ref>alt``.
@@ -2390,15 +2447,20 @@ def _vep_locus_matches(locus: dict[str, Any], pos: int, ref: str, alt: str) -> b
     )
 
 
-def _resolve_gnomad_variant(hgvs: str, vep_results: list[dict[str, Any]]) -> dict[str, Any]:
+def _resolve_gnomad_variant(
+    hgvs: str, vep_results: list[dict[str, Any]], vep_status: str = "ok"
+) -> dict[str, Any]:
     """Name the single gnomAD variant a query denotes, or say why none is looked up.
 
     Returns ``variant_id`` (``None`` when no lookup is justified),
     ``variant_class``, ``mapping_basis``, ``reference_genome`` and ``detail``.
     A lookup is justified only for a single-nucleotide change or a simple
     insertion/deletion whose identity rests on a versioned HGVS expression
-    that Ensembl VEP maps to one GRCh38 allele, or on a variant ID the caller
-    supplied. Nothing is guessed: every other input gets an explicit reason.
+    that Ensembl VEP maps to one GRCh38 allele in a reply naming that
+    expression as its input, or on a variant ID the caller supplied. Nothing
+    is guessed: every other input gets an explicit reason.
+    ``vep_status`` is the tool's status for the VEP call, so that a failed
+    request or an invalid response is not described as a mapping result.
     """
     resolution: dict[str, Any] = {
         "variant_id": None,
@@ -2424,7 +2486,17 @@ def _resolve_gnomad_variant(hgvs: str, vep_results: list[dict[str, Any]]) -> dic
             return resolution
         loci = [row["locus"] for row in vep_results if isinstance(row.get("locus"), dict)]
         if not loci:
-            resolution["detail"] = "Ensembl VEP returned no genomic mapping for this expression."
+            resolution["detail"] = _VEP_UNMAPPED_DETAIL.get(
+                vep_status, "Ensembl VEP returned no genomic mapping for this expression."
+            )
+            return resolution
+        # A mapping is this expression's only when VEP names the expression as
+        # the input it mapped; an absent or different echo is not attributed.
+        if any(locus.get("input") != hgvs for locus in loci):
+            resolution["detail"] = (
+                "Ensembl VEP's reply does not name this expression as its input, so its "
+                "genomic mapping is not attributed to it."
+            )
             return resolution
         locus = loci[0]
         if any(other != locus for other in loci):

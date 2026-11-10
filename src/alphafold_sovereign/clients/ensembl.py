@@ -55,6 +55,10 @@ _VEP_LOCUS_FIELDS = (
     "vcf_string",
 )
 
+# The fields of a VEP hit that consequence rows are read from, in order of
+# preference: a hit with transcript consequences is described by them alone.
+_VEP_CONSEQUENCE_FIELDS = ("transcript_consequences", "intergenic_consequences")
+
 
 def _first_uniprot(value: Any) -> str:
     """Normalise a VEP ``swissprot`` cross-reference to one accession.
@@ -127,7 +131,13 @@ class EnsemblClient(BaseAsyncClient):
             for the hit the consequence belongs to (``input``,
             ``assembly_name``, ``seq_region_name``, ``start``, ``end``,
             ``strand``, ``allele_string``, ``vcf_string``), passed through
-            unvalidated; an absent field is ``None``.
+            unvalidated; an absent field is ``None``. ``consequence_source``
+            names the VEP field a dict was read from. A hit without transcript
+            consequences keeps its ``locus``: an intergenic variant gives the
+            ``consequence_terms`` and ``impact`` of its
+            ``intergenic_consequences`` with empty transcript fields and
+            ``canonical`` false; a hit with neither gives one empty dict
+            whose ``consequence_source`` is ``None``.
         """
         params: dict[str, Any] = {
             "canonical": int(canonical),
@@ -151,8 +161,14 @@ class EnsemblClient(BaseAsyncClient):
         any_data: Any = data
         for hit in any_data if isinstance(any_data, list) else []:
             locus = {name: hit.get(name) for name in _VEP_LOCUS_FIELDS}
-            for tc in hit.get("transcript_consequences", []):
-                results.append({**self._parse_tc(tc), "locus": dict(locus)})
+            # A hit without transcript consequences (an intergenic variant) is
+            # read from the consequences VEP does report for it, so that its
+            # locus, terms and impact are kept; no transcript is filled in.
+            source = next((name for name in _VEP_CONSEQUENCE_FIELDS if hit.get(name)), None)
+            for tc in hit[source] if source else [{}]:
+                results.append(
+                    {**self._parse_tc(tc), "consequence_source": source, "locus": dict(locus)}
+                )
         return results
 
     # ------------------------------------------------------------------

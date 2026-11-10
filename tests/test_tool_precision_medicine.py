@@ -117,11 +117,12 @@ def test_acmg_code(cls: str, expected: str) -> None:
     assert _acmg_code(cls) == expected
 
 
-def _snv_locus_row(variant_id: str = "1-42-A-G", **fields: Any) -> dict[str, Any]:
-    """A VEP row with a self-consistent forward-strand SNV locus (synthetic)."""
+def _snv_locus_row(hgvs: str, variant_id: str = "1-42-A-G", **fields: Any) -> dict[str, Any]:
+    """A VEP row for ``hgvs`` with a self-consistent forward-strand SNV locus (synthetic)."""
     chrom, pos, ref, alt = variant_id.split("-")
     return {
         "locus": {
+            "input": hgvs,
             "assembly_name": "GRCh38",
             "seq_region_name": chrom,
             "start": int(pos),
@@ -270,7 +271,16 @@ def test_druggability_tier_branches(
             None,
         ),
         # A versioned expression with a self-consistent locus resolves.
-        ("NM_007294.4:c.1A>G", [_snv_locus_row("17-123-A-G")], "17-123-A-G", "snv"),
+        (
+            "NM_007294.4:c.1A>G",
+            [_snv_locus_row("NM_007294.4:c.1A>G", "17-123-A-G")],
+            "17-123-A-G",
+            "snv",
+        ),
+        # A mapping VEP reports for another input is not this expression's,
+        # even when that input could be another spelling of the same variant.
+        ("NM_007294.4:c.1A>G", [_snv_locus_row("NM_007294.4:c.1A>C", "17-123-A-G")], None, None),
+        ("NM_007294.4:c.1A>G", [_snv_locus_row("BRCA1:c.1A>G", "17-123-A-G")], None, None),
     ],
 )
 def test_resolve_gnomad_variant(
@@ -457,7 +467,7 @@ def test_lazy_singletons_create_once() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _make_vep_result() -> list[dict[str, Any]]:
+def _make_vep_result(hgvs: str = "NM_007294.4(BRCA1):c.181T>G") -> list[dict[str, Any]]:
     return [
         {
             "canonical": True,
@@ -468,8 +478,10 @@ def _make_vep_result() -> list[dict[str, Any]]:
             "impact": "MODERATE",
             "amino_acids": "R/H",
             "hgvsp": "p.Arg61His",
-            # Ensembl VEP's mapping of BRCA1 c.181T>G (reverse strand).
+            # Ensembl VEP's mapping of BRCA1 c.181T>G (reverse strand), echoing
+            # the expression ``hgvs`` that the test queries.
             "locus": {
+                "input": hgvs,
                 "assembly_name": "GRCh38",
                 "seq_region_name": "17",
                 "start": 43106487,
@@ -763,7 +775,7 @@ async def test_generate_variant_report_drug_context_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     mocks = _patch_clients(monkeypatch)
-    mocks["ensembl"].vep_hgvs = AsyncMock(return_value=_make_vep_result())
+    mocks["ensembl"].vep_hgvs = AsyncMock(return_value=_make_vep_result("BRCA1:c.181T>G"))
     mocks["ensembl"].gene_lookup = AsyncMock(
         return_value={"ensembl_gene_id": "ENSG", "uniprot_ids": ["P38398"]}
     )
@@ -783,7 +795,7 @@ async def test_generate_variant_report_no_ensembl_id(
 ) -> None:
     """Branch where gene_lookup returns no ensembl_gene_id."""
     mocks = _patch_clients(monkeypatch)
-    mocks["ensembl"].vep_hgvs = AsyncMock(return_value=_make_vep_result())
+    mocks["ensembl"].vep_hgvs = AsyncMock(return_value=_make_vep_result("BRCA1:c.181T>G"))
     mocks["ensembl"].gene_lookup = AsyncMock(return_value={"uniprot_ids": []})
     mocks["clinvar"].search_by_hgvs = AsyncMock(return_value=[])
     mocks["gnomad"].variant_frequencies = AsyncMock(return_value={})
@@ -801,7 +813,7 @@ async def test_generate_variant_report_drug_context_no_uniprot(
 ) -> None:
     """Drug context branch where uniprot_ids is empty."""
     mocks = _patch_clients(monkeypatch)
-    mocks["ensembl"].vep_hgvs = AsyncMock(return_value=_make_vep_result())
+    mocks["ensembl"].vep_hgvs = AsyncMock(return_value=_make_vep_result("BRCA1:c.181T>G"))
     # gene_lookup returns no uniprot
     mocks["ensembl"].gene_lookup = AsyncMock(return_value={"ensembl_gene_id": "ENSG"})
     mocks["clinvar"].search_by_hgvs = AsyncMock(return_value=[])
@@ -819,7 +831,7 @@ async def test_generate_variant_report_no_gene_symbol(
 ) -> None:
     """When HGVS doesn't parse to gene symbol, skip gene constraint and disease context."""
     mocks = _patch_clients(monkeypatch)
-    mocks["ensembl"].vep_hgvs = AsyncMock(return_value=_make_vep_result())
+    mocks["ensembl"].vep_hgvs = AsyncMock(return_value=_make_vep_result("NM_007294.3:c.181T>G"))
     mocks["clinvar"].search_by_hgvs = AsyncMock(return_value=[])
     mocks["gnomad"].variant_frequencies = AsyncMock(return_value={})
 
@@ -836,7 +848,7 @@ async def test_generate_variant_report_no_gene_drug_context_on(
 ) -> None:
     """include_drug_context=True but no gene → chembl skipped."""
     mocks = _patch_clients(monkeypatch)
-    mocks["ensembl"].vep_hgvs = AsyncMock(return_value=_make_vep_result())
+    mocks["ensembl"].vep_hgvs = AsyncMock(return_value=_make_vep_result("NM_007294.3:c.181T>G"))
     mocks["clinvar"].search_by_hgvs = AsyncMock(return_value=[])
     mocks["gnomad"].variant_frequencies = AsyncMock(return_value={})
 
@@ -856,10 +868,12 @@ async def test_generate_variant_report_non_canonical_skipped(
     mocks["ensembl"].vep_hgvs = AsyncMock(
         return_value=[
             {
+                "locus": {"input": "BRCA1:c.181T>G"},
                 "canonical": False,
                 "consequence_terms": ["missense_variant"],
             },
             {
+                "locus": {"input": "BRCA1:c.181T>G"},
                 "canonical": True,
                 "consequence_terms": ["missense_variant"],
                 "amino_acids": "R/H",
@@ -884,7 +898,7 @@ async def test_generate_variant_report_ot_diseases_exception(
 ) -> None:
     """Open Targets associated_diseases raises → ot_diseases stays empty (line 462->466)."""
     mocks = _patch_clients(monkeypatch)
-    mocks["ensembl"].vep_hgvs = AsyncMock(return_value=_make_vep_result())
+    mocks["ensembl"].vep_hgvs = AsyncMock(return_value=_make_vep_result("BRCA1:c.181T>G"))
     mocks["ensembl"].gene_lookup = AsyncMock(
         return_value={"ensembl_gene_id": "ENSG0001", "uniprot_ids": []}
     )
@@ -1073,7 +1087,9 @@ async def test_report_preserves_alphamissense_upstream_failure(
     monkeypatch: pytest.MonkeyPatch, report_kind: str
 ) -> None:
     mocks = _patch_clients(monkeypatch)
-    mocks["ensembl"].vep_hgvs = AsyncMock(return_value=_missense_vep("P38398"))
+    mocks["ensembl"].vep_hgvs = AsyncMock(
+        return_value=[{**_missense_vep("P38398")[0], "locus": {"input": "SYNTHX:c.42A>G"}}]
+    )
     mocks["clinvar"].search_by_hgvs = AsyncMock(return_value=[])
     mocks["ensembl"].gene_lookup = AsyncMock(return_value={})
     mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
@@ -1100,6 +1116,7 @@ async def test_generate_variant_report_alphamissense_scored(
     mocks["ensembl"].vep_hgvs = AsyncMock(
         return_value=[
             {
+                "locus": {"input": "BRCA1:c.181T>G"},
                 "canonical": True,
                 "consequence_terms": ["missense_variant"],
                 "amino_acids": "C/G",
@@ -2285,6 +2302,7 @@ async def test_classify_variant_acmg_pathogenic(monkeypatch: pytest.MonkeyPatch)
     mocks["ensembl"].vep_hgvs = AsyncMock(
         return_value=[
             {
+                "locus": {"input": "BRCA1:c.181T>G"},
                 "canonical": True,
                 "consequence_terms": ["stop_gained"],
             }
@@ -2317,6 +2335,7 @@ async def test_classify_variant_acmg_benign(monkeypatch: pytest.MonkeyPatch) -> 
     mocks["ensembl"].vep_hgvs = AsyncMock(
         return_value=[
             {
+                "locus": {"input": "BRCA1:c.18T>G"},
                 "canonical": True,
                 "consequence_terms": ["synonymous_variant"],
             }
@@ -2425,6 +2444,7 @@ async def test_classify_variant_acmg_pvs1_with_high_loeuf(
     mocks["ensembl"].vep_hgvs = AsyncMock(
         return_value=[
             {
+                "locus": {"input": "BRCA1:c.18T>G"},
                 "canonical": True,
                 "consequence_terms": ["stop_gained"],
             }
@@ -2468,7 +2488,12 @@ async def test_classify_variant_acmg_gnomad_var_freq_exception(
     mocks = _patch_clients(monkeypatch)
     mocks["ensembl"].vep_hgvs = AsyncMock(
         return_value=[
-            _snv_locus_row("17-12345-G-A", canonical=True, consequence_terms=["missense_variant"])
+            _snv_locus_row(
+                "NM_007294.4(BRCA1):c.18T>G",
+                "17-12345-G-A",
+                canonical=True,
+                consequence_terms=["missense_variant"],
+            )
         ]
     )
     mocks["clinvar"].search_by_hgvs = AsyncMock(return_value=[])
@@ -2488,7 +2513,12 @@ async def test_classify_variant_acmg_rare_frequency_is_not_pm2(
     mocks = _patch_clients(monkeypatch)
     mocks["ensembl"].vep_hgvs = AsyncMock(
         return_value=[
-            _snv_locus_row("17-12345-G-A", canonical=True, consequence_terms=["stop_gained"])
+            _snv_locus_row(
+                "NM_007294.4(BRCA1):c.18T>G",
+                "17-12345-G-A",
+                canonical=True,
+                consequence_terms=["stop_gained"],
+            )
         ]
     )
     mocks["clinvar"].search_by_hgvs = AsyncMock(return_value=[])
@@ -2519,6 +2549,7 @@ async def test_classify_variant_acmg_high_alphamissense_is_not_pp3(
     mocks["ensembl"].vep_hgvs = AsyncMock(
         return_value=[
             _snv_locus_row(
+                "NM_007294.4(BRCA1):c.18T>G",
                 "17-12345-G-A",
                 canonical=True,
                 consequence_terms=["missense_variant"],
@@ -2558,6 +2589,7 @@ async def test_classify_variant_acmg_lone_pvs1_not_pathogenic(
     mocks["ensembl"].vep_hgvs = AsyncMock(
         return_value=[
             {
+                "locus": {"input": "BRCA1:c.181T>G"},
                 "canonical": True,
                 "consequence_terms": ["stop_gained"],
             }
@@ -2614,10 +2646,12 @@ async def test_classify_variant_acmg_canonical_skip(
     mocks["ensembl"].vep_hgvs = AsyncMock(
         return_value=[
             {
+                "locus": {"input": "BRCA1:c.18T>G"},
                 "canonical": False,
                 "consequence_terms": ["stop_gained"],
             },
             {
+                "locus": {"input": "BRCA1:c.18T>G"},
                 "canonical": True,
                 "consequence_terms": ["synonymous_variant"],
             },
@@ -3050,7 +3084,13 @@ async def test_classify_variant_acmg_never_asserts_pvs1_without_mechanism(
 ) -> None:
     mocks = _patch_clients(monkeypatch)
     mocks["ensembl"].vep_hgvs = AsyncMock(
-        return_value=[{"canonical": True, "consequence_terms": ["frameshift_variant"]}]
+        return_value=[
+            {
+                "locus": {"input": "BRCA1:c.18T>G"},
+                "canonical": True,
+                "consequence_terms": ["frameshift_variant"],
+            }
+        ]
     )
     mocks["clinvar"].search_by_hgvs = AsyncMock(return_value=[])
     mocks["gnomad"].variant_frequencies = AsyncMock(return_value={"global_af": 1e-6})
@@ -3166,7 +3206,9 @@ async def test_synthetic_acmg_rejects_invalid_population_responses(
 ) -> None:
     """Invalid gnomAD payloads are marked as invalid, not treated as no_data."""
     mocks = _patch_clients(monkeypatch)
-    mocks["ensembl"].vep_hgvs = AsyncMock(return_value=[_snv_locus_row("1-42-A-G")])
+    mocks["ensembl"].vep_hgvs = AsyncMock(
+        return_value=[_snv_locus_row("NM_999999.1(SYNTHX):c.42A>G")]
+    )
     mocks["clinvar"].search_by_hgvs = AsyncMock(return_value=[])
     mocks["gnomad"].variant_frequencies = AsyncMock(return_value=["malformed"])
     mocks["gnomad"].gene_constraint = AsyncMock(return_value=["malformed"])
