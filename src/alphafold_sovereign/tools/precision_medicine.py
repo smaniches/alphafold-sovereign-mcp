@@ -286,10 +286,7 @@ class TargetSelectivityInput(BaseModel):
 
 # ── ACMG criteria helpers ─────────────────────────────────────────────────────
 
-_POPULATION_THRESHOLDS = {
-    "BS1": 0.05,  # allele frequency > 5% in gnomAD → Benign Strong
-    "PM2": 0.001,  # absent or extremely rare → Pathogenic Moderate
-}
+_NOT_ASSESSED = "NOT_ASSESSED"
 
 _PATHOGENIC_MAP = {
     PathogenicityClass.PATHOGENIC: ("P", "Pathogenic"),
@@ -308,22 +305,6 @@ def _acmg_code(cls: str) -> str:
         return _PATHOGENIC_MAP[pc][0]
     except (ValueError, KeyError):
         return "NP"
-
-
-def _am_to_acmg_evidence(am_score: float | None) -> dict[str, str]:
-    """Map AlphaMissense score to provisional ACMG in-silico criteria.
-
-    AlphaMissense calibration (Cheng et al., Science 2023):
-      ≥ 0.564 → likely pathogenic (PP3 triggered)
-      ≤ 0.340 → likely benign (BP4 triggered)
-    """
-    if am_score is None:
-        return {}
-    if am_score >= 0.564:
-        return {"PP3": f"AlphaMissense={am_score:.3f} — likely pathogenic (≥0.564)"}
-    if am_score <= 0.340:
-        return {"BP4": f"AlphaMissense={am_score:.3f} — likely benign (≤0.340)"}
-    return {}
 
 
 def _protein_variant_from_vep(consequence: dict[str, Any]) -> str | None:
@@ -351,12 +332,16 @@ async def _alphamissense_for_variant(
     vep_results: list[dict[str, Any]],
     *,
     source_status: dict[str, str] | None = None,
+    prediction: dict[str, Any] | None = None,
 ) -> float | None:
     """Look up a VEP-mapped AlphaMissense score without conflating failure and absence.
 
-    The optional status sink is additive: existing score-only callers continue
-    receiving a float or None. An absent score is not evidence of benignity.
+    The optional sinks are additive: existing score-only callers continue
+    receiving a float or None. ``prediction`` receives the looked-up
+    ``protein_variant`` and, with a valid score, AlphaFold DB's own
+    ``am_class`` label. An absent score is not evidence of benignity.
     """
+    sink: dict[str, Any] = prediction if prediction is not None else {}
 
     def _mark(state: str) -> None:
         if source_status is not None:
@@ -392,6 +377,7 @@ async def _alphamissense_for_variant(
         _mark("invalid_response")
         return None
 
+    sink["protein_variant"] = protein_variant
     try:
         record: object = await _alphafold().alphamissense_score(uniprot_id, protein_variant)
     except Exception as exc:
@@ -414,21 +400,125 @@ async def _alphamissense_for_variant(
         _mark("invalid_response")
         return None
     _mark("ok")
+    am_class = record.get("am_class")
+    sink["am_class"] = am_class if isinstance(am_class, str) and am_class else None
     return score
 
 
-def _gnomad_to_acmg(af: float | None) -> dict[str, str]:
-    if af is None:
-        return {}
-    if af > _POPULATION_THRESHOLDS["BS1"]:
-        return {"BS1": f"gnomAD AF={af:.4f} > 5% — too common for a rare pathogenic variant"}
-    if af < _POPULATION_THRESHOLDS["PM2"]:
-        return {"PM2": f"gnomAD AF={af:.6f} < 0.1% — extremely rare in population databases"}
-    return {}
+_GNOMAD_LOOKUP_DETAIL = {
+    "found": "gnomAD holds this variant; counts are given per sequencing cohort.",
+    "no_frequency_data": "gnomAD returned no usable allele frequency for this variant.",
+    "not_found": (
+        "gnomAD has no record of this single-nucleotide variant. This is not a measured "
+        "allele frequency of 0: site coverage was not checked."
+    ),
+    "not_found_representation_unverified": (
+        "gnomAD has no record under this representation. gnomAD stores left-aligned "
+        "insertions and deletions and the HGVS-derived position can differ, so neither "
+        "absence nor an allele frequency of 0 can be concluded."
+    ),
+    "failed": "The gnomAD request failed; the allele frequency is unknown.",
+    "invalid_response": (
+        "The gnomAD response could not be validated; the allele frequency is unknown."
+    ),
+}
+
+
+def _unassessed_evidence(
+    *,
+    gnomad_variant: dict[str, Any],
+    gnomad_status: str,
+    gnomad_data: dict[str, Any],
+    am_score: float | None,
+    am_prediction: dict[str, Any],
+    am_status: str | None,
+    canonical_tc: dict[str, Any],
+) -> dict[str, Any]:
+    """Report allele frequency and predictor outputs as observations, never as ACMG criteria.
+
+    BA1, BS1 and PM2 depend on the disorder and on gene-specific
+    specifications; PP3 and BP4 need thresholds calibrated for the chosen
+    predictor. This tool has neither, so every such criterion is NOT_ASSESSED.
+    """
+    if gnomad_variant["variant_id"] is None:
+        lookup_status = "not_attempted"
+        detail = gnomad_variant["detail"]
+    else:
+        lookup_status = {"ok": "found", "no_data": "no_frequency_data"}.get(
+            gnomad_status, gnomad_status
+        )
+        if gnomad_data.get("found") is False:
+            lookup_status = (
+                "not_found"
+                if gnomad_variant["variant_class"] == "snv"
+                else "not_found_representation_unverified"
+            )
+        detail = " ".join(
+            filter(None, (_GNOMAD_LOOKUP_DETAIL.get(lookup_status), gnomad_variant["detail"]))
+        )
+    return {
+        "population_frequency": {
+            "source": "gnomAD",
+            "dataset": gnomad_data.get("dataset"),
+            "reference_genome": gnomad_variant["reference_genome"],
+            "variant_id": gnomad_variant["variant_id"],
+            "variant_class": gnomad_variant["variant_class"],
+            "mapping_basis": gnomad_variant["mapping_basis"],
+            "lookup_status": lookup_status,
+            "detail": detail,
+            "cohorts": gnomad_data.get("cohorts", {}),
+            "acmg_criteria": dict.fromkeys(("BA1", "BS1", "PM2"), _NOT_ASSESSED),
+            "criteria_note": (
+                "Raw gnomAD observation, not an ACMG/AMP criterion. BA1, BS1 and PM2 depend "
+                "on the disorder (prevalence, penetrance, inheritance, genetic and allelic "
+                "heterogeneity), on gene-specific expert-panel specifications and on site "
+                "coverage, none of which this tool evaluates."
+            ),
+        },
+        "computational_predictions": {
+            "alphamissense": {
+                "status": am_status,
+                "protein_variant": am_prediction.get("protein_variant"),
+                "score": am_score,
+                "source_class": am_prediction.get("am_class"),
+            },
+            "ensembl_vep": {
+                key: canonical_tc.get(key)
+                for key in (
+                    "transcript_id",
+                    "sift_prediction",
+                    "sift_score",
+                    "polyphen_prediction",
+                    "polyphen_score",
+                    "cadd_phred",
+                )
+            },
+            "acmg_criteria": dict.fromkeys(("PP3", "BP4"), _NOT_ASSESSED),
+            "criteria_note": (
+                "Predictor outputs as reported by their sources, not ACMG/AMP criteria. PP3 "
+                "and BP4 require score intervals calibrated for the chosen predictor and "
+                "expert judgement; the AlphaMissense class is the predictor's own label, and "
+                "agreement between predictors is not counted."
+            ),
+        },
+        "clinically_calibrated_evidence": {
+            "status": _NOT_ASSESSED,
+            "reason": (
+                "No disease-specific or clinically calibrated evidence is evaluated: no "
+                "gene-disease mechanism, disorder-specific frequency threshold, expert-panel "
+                "specification, calibrated predictor threshold, segregation, functional or "
+                "case data."
+            ),
+        },
+    }
 
 
 def _vep_to_acmg(consequences: list[dict[str, Any]]) -> dict[str, str]:
-    """Extract provisional VEP signals, not clinical ACMG criteria."""
+    """Extract provisional VEP consequence signals, not clinical ACMG criteria.
+
+    SIFT, PolyPhen and CADD outputs are not combined into PP3 here; they are
+    returned as predictions by :func:`_unassessed_evidence`.
+    """
     criteria: dict[str, str] = {}
     null_terms = {
         "stop_gained",
@@ -437,7 +527,6 @@ def _vep_to_acmg(consequences: list[dict[str, Any]]) -> dict[str, str]:
         "splice_donor_variant",
         "start_lost",
     }
-    missense_terms = {"missense_variant"}
     synonymous_terms = {"synonymous_variant"}
 
     for tc in consequences:
@@ -449,21 +538,6 @@ def _vep_to_acmg(consequences: list[dict[str, Any]]) -> dict[str, str]:
                 "Predicted loss-of-function consequence. Disease-specific LoF mechanism, "
                 "relevant transcript, NMD, and variant-specific PVS1 rules are NOT validated."
             )
-        if terms & missense_terms:
-            sift = tc.get("sift_prediction", "")
-            pp = tc.get("polyphen_prediction", "")
-            cadd = tc.get("cadd_phred")
-            parts = []
-            if sift in {"deleterious", "deleterious_low_confidence"}:
-                parts.append(f"SIFT={sift}")
-            if pp in {"probably_damaging", "possibly_damaging"}:
-                parts.append(f"PolyPhen={pp}")
-            if cadd is not None and float(cadd) >= 20:
-                parts.append(f"CADD-phred={cadd:.1f}")
-            if len(parts) >= 2:
-                criteria["PP3"] = (
-                    "Multiple computational evidence suggesting pathogenicity: " + "; ".join(parts)
-                )
         if terms & synonymous_terms:
             criteria["BP7"] = (
                 "Synonymous consequence reported by VEP; no validated splice-impact "
@@ -635,6 +709,17 @@ async def generate_variant_clinical_report(
     sequence consequences, and gene-level drug context. It does not compute
     variant-specific three-dimensional structural impact.
 
+    gnomAD is queried only when the input pins one genomic allele: a versioned
+    RefSeq coding (``NM_…:c.``) or genomic (``NC_…:g.``) expression that
+    Ensembl VEP maps to a single GRCh38 single-nucleotide change or simple
+    insertion/deletion, or a ``chrom-pos-ref-alt`` variant ID.
+    ``unassessed_evidence.population_frequency`` gives the looked-up variant
+    ID, the per-cohort (exome, genome) counts and an explicit ``lookup_status``;
+    a variant without a gnomAD record is never reported as allele frequency 0.
+    Allele frequency and predictor scores (AlphaMissense, SIFT, PolyPhen,
+    CADD) are returned as observations: BA1, BS1, PM2, PP3 and BP4 are
+    ``NOT_ASSESSED``.
+
     Input fields:
         params.hgvs: HGVS expression. Gene-relative expressions discover
             candidate records; clinical source identity requires an exact
@@ -675,7 +760,8 @@ async def generate_variant_clinical_report(
 
     # ── Step 3: gnomAD variant ID construction ───────────────────────────────
     gnomad_data: dict[str, Any] = {}
-    gnomad_id = _build_gnomad_id(hgvs, vep_results)
+    gnomad_variant = _resolve_gnomad_variant(hgvs, vep_results)
+    gnomad_id = gnomad_variant["variant_id"]
     if gnomad_id:
         try:
             variant_response: object = await _gnomad().variant_frequencies(gnomad_id)
@@ -798,16 +884,18 @@ async def generate_variant_clinical_report(
     )
 
     # ── Step 8: AlphaMissense pathogenicity (AlphaFold DB) ─────────────────────────────
+    am_prediction: dict[str, Any] = {}
     am_score: float | None = await _alphamissense_for_variant(
         gene_symbol,
         vep_results,
         source_status=source_status,
+        prediction=am_prediction,
     )
 
     # ── Step 9: Draft ACMG criteria ───────────────────────────────────────────
+    # Only VEP consequence types suggest a criterion for review. Allele
+    # frequency and predictor scores are reported in ``unassessed_evidence``.
     acmg_criteria: dict[str, str] = {}
-    acmg_criteria.update(_am_to_acmg_evidence(am_score))
-    acmg_criteria.update(_gnomad_to_acmg(gnomad_data.get("global_af")))
     if isinstance(vep_results, list):  # pragma: no branch
         acmg_criteria.update(_vep_to_acmg(vep_results))
 
@@ -862,6 +950,7 @@ async def generate_variant_clinical_report(
             "global_ac": gnomad_data.get("global_ac"),
             "global_an": gnomad_data.get("global_an"),
             "homozygote_count": gnomad_data.get("homozygote_count"),
+            "cohort": gnomad_data.get("cohort"),
             "alphamissense_score": am_score,
             "populations": gnomad_data.get("populations", [])
             if params.include_population_breakdown
@@ -879,9 +968,19 @@ async def generate_variant_clinical_report(
                 "Unreviewed computational signals only; no ACMG/AMP criteria are established "
                 "by this report. ClinVar classification is independent source context, not "
                 "PP5/BP6 evidence. Gene-disease mechanism and variant-specific clinical "
-                "criteria require qualified expert assessment."
+                "criteria require qualified expert assessment. Allele frequency and predictor "
+                "outputs are reported in unassessed_evidence without a criterion."
             ),
         },
+        "unassessed_evidence": _unassessed_evidence(
+            gnomad_variant=gnomad_variant,
+            gnomad_status=source_status["gnomad"],
+            gnomad_data=gnomad_data,
+            am_score=am_score,
+            am_prediction=am_prediction,
+            am_status=source_status.get("alphamissense"),
+            canonical_tc=canonical_tc,
+        ),
         "disease_associations": {
             "open_targets_top_diseases": ot_diseases[:3],
             "disgenet_top_associations": disgenet_assocs[:3],
@@ -1827,13 +1926,19 @@ async def classify_variant_acmg(
     scores, and population frequencies are insufficient without clinical
     disease mechanism, inheritance, and criterion-specific validation.
 
-    Criteria populated:
+    Candidate signals (``candidate_criteria``; variant-type observations, never met criteria):
       PVS1 — Candidate loss-of-function consequence; mechanism not established
-      PM2   — Absent/extremely rare in gnomAD population databases
-      PP3   — Multiple in-silico predictors (AlphaMissense ≥0.564, SIFT, PolyPhen, CADD)
-      BP4   — In-silico benign evidence (AlphaMissense ≤0.340)
-      BP7   — Silent variant, no splicing impact
-      BS1   — Allele frequency > 5% in gnomAD
+      BP7   — Synonymous consequence; splice impact not assessed
+
+    Not assessed (``unassessed_evidence``; raw observations, criteria ``NOT_ASSESSED``):
+      BA1 / BS1 / PM2 — gnomAD counts per cohort (exome, genome) for the
+        looked-up variant ID, with an explicit ``lookup_status``. gnomAD is
+        queried only for a versioned ``NM_…:c.`` or ``NC_…:g.`` expression
+        mapped to one GRCh38 single-nucleotide change or simple
+        insertion/deletion, or a ``chrom-pos-ref-alt`` ID; a variant without
+        a gnomAD record is never reported as allele frequency 0.
+      PP3 / BP4 — AlphaMissense score and class, SIFT, PolyPhen and CADD as
+        reported by their sources; no calibrated evidence strength is derived.
       ClinVar is returned as independent source context, not as PP5/BP6 evidence.
 
     Input fields:
@@ -1870,7 +1975,8 @@ async def classify_variant_acmg(
 
     # gnomAD
     gnomad_data: dict[str, Any] = {}
-    gnomad_id = _build_gnomad_id(hgvs, vep_results)
+    gnomad_variant = _resolve_gnomad_variant(hgvs, vep_results)
+    gnomad_id = gnomad_variant["variant_id"]
     source_status["gnomad_variant"] = "skipped"
     if gnomad_id:
         try:
@@ -1909,12 +2015,13 @@ async def classify_variant_acmg(
                 gene=gene_symbol,
             )
 
+    am_prediction: dict[str, Any] = {}
     am_score: float | None = await _alphamissense_for_variant(
         gene_symbol,
         vep_results,
         source_status=source_status,
+        prediction=am_prediction,
     )
-    global_af: float | None = gnomad_data.get("global_af")
     # See generate_variant_clinical_report: a non-exact top hit must not be
     # reported as the queried variant's own ClinVar classification.
     clinvar_record = (
@@ -1930,19 +2037,10 @@ async def classify_variant_acmg(
     # Build criteria
     criteria: dict[str, dict[str, Any]] = {}
 
-    # VEP-derived
+    # VEP-derived. Allele frequency and predictor scores suggest no criterion:
+    # they are reported in ``unassessed_evidence``.
     vep_criteria = _vep_to_acmg(vep_results)
     for k, v in vep_criteria.items():
-        criteria[k] = {"met": True, "evidence": v, "strength": _acmg_strength(k)}
-
-    # AlphaMissense
-    am_criteria = _am_to_acmg_evidence(am_score)
-    for k, v in am_criteria.items():
-        criteria[k] = {"met": True, "evidence": v, "strength": _acmg_strength(k)}
-
-    # gnomAD population
-    gnomad_criteria = _gnomad_to_acmg(global_af)
-    for k, v in gnomad_criteria.items():
         criteria[k] = {"met": True, "evidence": v, "strength": _acmg_strength(k)}
 
     # ClinVar classification is an external assertion, not an ACMG
@@ -1993,6 +2091,15 @@ async def classify_variant_acmg(
         "criteria_met": {},
         "criteria_not_met": [],
         "candidate_criteria": candidate_signals,
+        "unassessed_evidence": _unassessed_evidence(
+            gnomad_variant=gnomad_variant,
+            gnomad_status=source_status["gnomad_variant"],
+            gnomad_data=gnomad_data,
+            am_score=am_score,
+            am_prediction=am_prediction,
+            am_status=source_status.get("alphamissense"),
+            canonical_tc=next((tc for tc in vep_results if tc.get("canonical")), {}),
+        ),
         "summary": {
             "pathogenic_evidence_count": 0,
             "benign_evidence_count": 0,
@@ -2240,25 +2347,132 @@ async def find_drug_repurposing_candidates(
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
-def _build_gnomad_id(hgvs: str, vep_results: list[dict[str, Any]]) -> str | None:
-    """Attempt to build a gnomAD variant ID from VEP result mappings."""
-    for hit in vep_results:
-        # VEP top-level hit contains seq_region_name, start, and allele_string
-        chrom_raw = hit.get("seq_region_name")
-        pos = hit.get("start")
-        allele_str = hit.get("allele_string")
-        if not isinstance(chrom_raw, str) or not isinstance(allele_str, str):
-            continue
-        chrom = chrom_raw.removeprefix("chr")
-        if chrom and pos and "/" in allele_str:
-            ref, _, alt = allele_str.partition("/")
-            if ref and alt and ref != "-" and alt != "-":
-                return f"{chrom}-{pos}-{ref}-{alt}"
-    # Fallback: try to parse from HGVS genomic notation
-    m = re.search(r"(\d+)-(\d+)-([ACGT]+)-([ACGT]+)", hgvs.replace(":", "-"))
-    if m:
-        return f"{m.group(1)}-{m.group(2)}-{m.group(3)}-{m.group(4)}"
-    return None
+# gnomAD r4, the dataset the gnomAD client queries by default, is on GRCh38.
+_GNOMAD_REFERENCE_GENOME = "GRCh38"
+
+# The only HGVS forms looked up in gnomAD. Ensembl VEP rejects a stale RefSeq
+# transcript version and a GRCh37 chromosome accession (recorded 2026-11-10
+# UTC), so these expressions pin their reference sequence. Gene-relative,
+# protein-level, Ensembl-transcript and bare-chromosome expressions do not.
+_VERSIONED_HGVS_RE = re.compile(r"^(?:NM_\d+\.\d+(?:\([^():]*\))?:c|NC_\d+\.\d+:g)\.")
+_VARIANT_ID_RE = re.compile(
+    r"^(?:chr)?(?P<chrom>[1-9]|1\d|2[0-2]|X|Y)[-:](?P<pos>[1-9]\d*)"
+    r"[-:](?P<ref>[ACGT]+)[-:](?P<alt>[ACGT]+)$"
+)
+_COMPLEMENT = str.maketrans("ACGT", "TGCA")
+
+
+def _vep_locus_matches(locus: dict[str, Any], pos: int, ref: str, alt: str) -> bool:
+    """True when VEP's coordinates, strand and allele string describe ``pos ref>alt``.
+
+    VEP writes ``allele_string`` on ``strand`` (the transcript strand for c.
+    HGVS) without the anchor base that the forward-strand VCF form carries
+    when the alleles differ in length; ``start``/``end`` are forward-strand.
+    """
+    start, end, strand = locus.get("start"), locus.get("end"), locus.get("strand")
+    alleles = locus.get("allele_string")
+    if (
+        not all(isinstance(v, int) and not isinstance(v, bool) for v in (start, end, strand))
+        or strand not in (1, -1)
+        or not isinstance(alleles, str)
+    ):
+        return False
+    anchored = len(ref) != len(alt)
+    if anchored and ref[0] != alt[0]:
+        return False
+    if strand == -1:
+        alleles = "/".join(part.translate(_COMPLEMENT)[::-1] for part in alleles.split("/"))
+    core_ref, core_alt = (ref[1:], alt[1:]) if anchored else (ref, alt)
+    return (
+        start == (pos + 1 if anchored else pos)
+        and end == pos + len(ref) - 1
+        and alleles == f"{core_ref or '-'}/{core_alt or '-'}"
+    )
+
+
+def _resolve_gnomad_variant(hgvs: str, vep_results: list[dict[str, Any]]) -> dict[str, Any]:
+    """Name the single gnomAD variant a query denotes, or say why none is looked up.
+
+    Returns ``variant_id`` (``None`` when no lookup is justified),
+    ``variant_class``, ``mapping_basis``, ``reference_genome`` and ``detail``.
+    A lookup is justified only for a single-nucleotide change or a simple
+    insertion/deletion whose identity rests on a versioned HGVS expression
+    that Ensembl VEP maps to one GRCh38 allele, or on a variant ID the caller
+    supplied. Nothing is guessed: every other input gets an explicit reason.
+    """
+    resolution: dict[str, Any] = {
+        "variant_id": None,
+        "variant_class": None,
+        "mapping_basis": None,
+        "reference_genome": None,
+        "detail": "",
+    }
+    match = _VARIANT_ID_RE.match(hgvs)
+    if match is not None:
+        resolution["mapping_basis"] = "caller_supplied_variant_id"
+        resolution["detail"] = (
+            "The variant ID was supplied by the caller; its assembly is not verified and "
+            "it is read as a GRCh38 (gnomAD r4) identifier."
+        )
+    else:
+        if not _VERSIONED_HGVS_RE.match(hgvs):
+            resolution["detail"] = (
+                "gnomAD is queried only for a versioned RefSeq coding (NM_…:c.) or genomic "
+                "(NC_…:g.) HGVS expression, or a chrom-pos-ref-alt variant ID. Gene-relative, "
+                "protein-level and unversioned expressions do not pin one genomic allele."
+            )
+            return resolution
+        loci = [row["locus"] for row in vep_results if isinstance(row.get("locus"), dict)]
+        if not loci:
+            resolution["detail"] = "Ensembl VEP returned no genomic mapping for this expression."
+            return resolution
+        locus = loci[0]
+        if any(other != locus for other in loci):
+            resolution["detail"] = (
+                "Ensembl VEP returned more than one genomic mapping for this expression; "
+                "none is chosen."
+            )
+            return resolution
+        if locus.get("assembly_name") != _GNOMAD_REFERENCE_GENOME:
+            resolution["detail"] = (
+                f"Ensembl VEP mapped this expression on assembly {locus.get('assembly_name')!r}; "
+                f"gnomAD r4 is on {_GNOMAD_REFERENCE_GENOME}."
+            )
+            return resolution
+        vcf_string = locus.get("vcf_string")
+        match = _VARIANT_ID_RE.match(vcf_string) if isinstance(vcf_string, str) else None
+        if (
+            match is None
+            or match["chrom"] != locus.get("seq_region_name")
+            or not _vep_locus_matches(locus, int(match["pos"]), match["ref"], match["alt"])
+        ):
+            resolution["detail"] = (
+                "Ensembl VEP's forward-strand VCF allele is missing or disagrees with its own "
+                "coordinates, strand and allele string; no variant ID is derived."
+            )
+            return resolution
+        resolution["mapping_basis"] = "versioned_hgvs_via_ensembl_vep"
+        resolution["reference_genome"] = _GNOMAD_REFERENCE_GENOME
+
+    ref, alt = match["ref"], match["alt"]
+    variant_id = f"{match['chrom']}-{match['pos']}-{ref}-{alt}"
+    if len(ref) == 1 and len(alt) == 1 and ref != alt:
+        resolution["variant_class"] = "snv"
+    elif ref[0] == alt[0] and len(alt) == 1 and len(ref) > 1:
+        resolution["variant_class"] = "deletion"
+    elif ref[0] == alt[0] and len(ref) == 1 and len(alt) > 1:
+        resolution["variant_class"] = "insertion"
+    else:
+        resolution["variant_class"] = "complex"
+        resolution["detail"] = (
+            f"{variant_id} is neither a single-nucleotide change nor a simple insertion or "
+            "deletion. gnomAD does not hold multi-nucleotide or deletion-insertion alleles as "
+            "one record, so no lookup was made and no frequency is inferred from component "
+            "changes."
+        )
+        return resolution
+    resolution["variant_id"] = variant_id
+    return resolution
 
 
 def _compute_clinical_tier(

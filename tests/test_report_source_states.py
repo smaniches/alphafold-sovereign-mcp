@@ -39,6 +39,25 @@ def _response(value: Any) -> AsyncMock:
     return AsyncMock(return_value=value)
 
 
+_VERSIONED_QUERY = "NM_999999.1(SYNTHX):c.42A>G"
+
+
+def _locus_row(**locus: Any) -> dict[str, Any]:
+    """A VEP row whose synthetic locus is self-consistent unless overridden."""
+    return {
+        "locus": {
+            "assembly_name": "GRCh38",
+            "seq_region_name": "1",
+            "start": 42,
+            "end": 42,
+            "strand": 1,
+            "allele_string": "A/G",
+            "vcf_string": "1-42-A-G",
+            **locus,
+        }
+    }
+
+
 async def _report(hgvs: str = "SYNTHX:c.42A>G", *, drug_context: bool = False) -> dict[str, Any]:
     return await pm.generate_variant_clinical_report(
         pm.VariantClinicalReportInput(hgvs=hgvs, include_drug_context=drug_context)
@@ -117,37 +136,66 @@ async def test_report_source_rows_are_not_mislabelled(
 
 
 @pytest.mark.parametrize(
-    ("variant", "constraint", "expected"),
+    ("variant", "constraint", "expected", "expected_lookup"),
     [
-        (None, None, "invalid_response"),
-        (["malformed"], ["malformed"], "invalid_response"),
-        ({}, {}, "no_data"),
-        ({"global_af": 0.002}, {"loeuf": 0.75}, "ok"),
+        (None, None, "invalid_response", "invalid_response"),
+        (["malformed"], ["malformed"], "invalid_response", "invalid_response"),
+        ({}, {}, "no_data", "no_frequency_data"),
+        ({"global_af": 0.002}, {"loeuf": 0.75}, "ok", "found"),
         (
             {"found": False, "global_af": None},
             {"constraint_available": False, "gene_symbol": "SYNTHX"},
             "no_data",
+            "not_found",
+        ),
+        (
+            {"found": True, "global_af": None},
+            {"constraint_available": False, "gene_symbol": "SYNTHX"},
+            "no_data",
+            "no_frequency_data",
         ),
         (
             {"found": True, "global_af": 0.002},
             {"constraint_available": True, "loeuf": 0.75},
             "ok",
+            "found",
         ),
-        (RuntimeError("variant down"), RuntimeError("constraint down"), "failed"),
+        (RuntimeError("variant down"), RuntimeError("constraint down"), "failed", "failed"),
     ],
 )
 async def test_report_gnomad_outcomes(
-    sources: dict[str, MagicMock], variant: Any, constraint: Any, expected: str
+    sources: dict[str, MagicMock],
+    variant: Any,
+    constraint: Any,
+    expected: str,
+    expected_lookup: str,
 ) -> None:
-    sources["ensembl"].vep_hgvs = AsyncMock(
-        return_value=[{"seq_region_name": "1", "start": 42, "allele_string": "A/G"}]
-    )
+    sources["ensembl"].vep_hgvs = AsyncMock(return_value=[_locus_row()])
     sources["gnomad"].variant_frequencies = _response(variant)
     sources["gnomad"].gene_constraint = _response(constraint)
-    report = await _report()
+    report = await _report(_VERSIONED_QUERY)
+    sources["gnomad"].variant_frequencies.assert_awaited_once_with("1-42-A-G")
     assert report["data_sources_status"]["gnomad"] == expected
     assert report["data_sources_status"]["gnomad_constraint"] == expected
+    frequency = report["unassessed_evidence"]["population_frequency"]
+    assert frequency["lookup_status"] == expected_lookup
+    assert frequency["detail"]
+    assert report["acmg_criteria_draft"]["criteria"] == {}
     assert report["clinical_tier"] == "NOT_ASSESSED"
+
+
+async def test_report_gene_relative_query_is_not_looked_up(
+    sources: dict[str, MagicMock],
+) -> None:
+    """A gene-relative expression does not pin one allele, whatever VEP maps."""
+    sources["ensembl"].vep_hgvs = AsyncMock(return_value=[_locus_row()])
+    report = await _report("SYNTHX:c.42A>G")
+    sources["gnomad"].variant_frequencies.assert_not_awaited()
+    assert report["data_sources_status"]["gnomad"] == "skipped"
+    frequency = report["unassessed_evidence"]["population_frequency"]
+    assert frequency["lookup_status"] == "not_attempted"
+    assert frequency["variant_id"] is None
+    assert report["population_genetics"]["global_af"] is None
 
 
 @pytest.mark.parametrize(
@@ -295,25 +343,47 @@ async def test_transcript_queries_retain_verified_gene_context(
         sources["disgenet"].gene_disease_associations.assert_not_awaited()
 
 
+async def test_report_caller_supplied_variant_id_is_still_looked_up(
+    sources: dict[str, MagicMock],
+) -> None:
+    """An input that is itself a gnomAD-style ID keeps working; its assembly is unverified."""
+    sources["ensembl"].vep_hgvs = AsyncMock(side_effect=RuntimeError("not an HGVS expression"))
+    sources["gnomad"].variant_frequencies = AsyncMock(
+        return_value={"found": True, "global_af": 0.002, "cohort": "exome"}
+    )
+    report = await _report("chr1:42:A:G")
+    sources["gnomad"].variant_frequencies.assert_awaited_once_with("1-42-A-G")
+    assert report["data_sources_status"]["gnomad"] == "ok"
+    assert report["population_genetics"]["global_af"] == 0.002
+    assert report["population_genetics"]["cohort"] == "exome"
+    frequency = report["unassessed_evidence"]["population_frequency"]
+    assert frequency["mapping_basis"] == "caller_supplied_variant_id"
+    assert frequency["reference_genome"] is None
+    assert frequency["lookup_status"] == "found"
+    assert "assembly is not verified" in frequency["detail"]
+    assert report["acmg_criteria_draft"]["criteria"] == {}
+
+
 @pytest.mark.parametrize(
     ("rows", "expected"),
     [
-        ([{"seq_region_name": None, "start": 42, "allele_string": "A/G"}], None),
-        ([{"seq_region_name": "1", "start": 42, "allele_string": None}], None),
-        ([{"seq_region_name": "chr1", "start": 42, "allele_string": "A/G"}], "1-42-A-G"),
-        (
-            [
-                {"seq_region_name": "1", "start": 42, "allele_string": "A"},
-                {"seq_region_name": "2", "start": 43, "allele_string": "G/T"},
-            ],
-            "2-43-G-T",
-        ),
+        ([_locus_row()], "1-42-A-G"),
+        ([_locus_row(seq_region_name=None)], None),
+        ([_locus_row(allele_string=None)], None),
+        ([_locus_row(start="42")], None),
+        # A chromosome name that disagrees with the VCF allele is not repaired.
+        ([_locus_row(seq_region_name="chr1")], None),
+        # Two different mappings: none is chosen (the old builder took one).
+        ([_locus_row(allele_string="A"), _locus_row(seq_region_name="2")], None),
+        ([{"locus": None}, {}], None),
     ],
 )
 def test_malformed_vep_coordinates_do_not_form_variant_ids(
     rows: list[dict[str, Any]], expected: str | None
 ) -> None:
-    assert pm._build_gnomad_id("SYNTHX:c.42A>G", rows) == expected
+    resolved = pm._resolve_gnomad_variant(_VERSIONED_QUERY, rows)
+    assert resolved["variant_id"] == expected
+    assert bool(resolved["detail"]) is (expected is None)
 
 
 async def test_open_targets_converter_failure_is_explicit(
@@ -357,20 +427,22 @@ def test_gnomad_sentinels_do_not_count_as_evidence(
 async def test_acmg_reports_gnomad_negative_sentinels(
     sources: dict[str, MagicMock],
 ) -> None:
-    sources["ensembl"].vep_hgvs = AsyncMock(
-        return_value=[{"seq_region_name": "1", "start": 42, "allele_string": "A/G"}]
-    )
+    sources["ensembl"].vep_hgvs = AsyncMock(return_value=[_locus_row()])
     sources["gnomad"].variant_frequencies = AsyncMock(
         return_value={"variant_id": "1-42-A-G", "found": False, "global_af": None}
     )
     sources["gnomad"].gene_constraint = AsyncMock(
         return_value={"gene_symbol": "SYNTHX", "constraint_available": False}
     )
-    out = await pm.classify_variant_acmg(pm.ACMGVariantInput(hgvs="SYNTHX:c.42A>G"))
+    out = await pm.classify_variant_acmg(pm.ACMGVariantInput(hgvs=_VERSIONED_QUERY))
+    sources["gnomad"].variant_frequencies.assert_awaited_once_with("1-42-A-G")
     assert out["data_sources_status"]["gnomad_variant"] == "no_data"
     assert out["data_sources_status"]["gnomad_constraint"] == "no_data"
-    assert "BS1" not in out["candidate_criteria"]
-    assert "PM2" not in out["candidate_criteria"]
+    assert out["candidate_criteria"] == {}
+    frequency = out["unassessed_evidence"]["population_frequency"]
+    assert frequency["lookup_status"] == "not_found"
+    assert frequency["cohorts"] == {}
+    assert frequency["acmg_criteria"]["PM2"] == "NOT_ASSESSED"
     assert out["draft_classification"] == "Not assessed"
 
 

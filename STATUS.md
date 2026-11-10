@@ -99,10 +99,15 @@ expectation of what this project is and is not.
 ## What is NOT solid
 
 ### Scientific / clinical validation
-- **No clinical geneticist has reviewed the ACMG mapping.** The
-  implementation follows the 2015 Richards et al. guidelines but no
-  independent expert has signed off on the criterion-by-criterion
-  mapping. Use ``generate_variant_clinical_report`` or
+- **No clinical geneticist has reviewed the ACMG mapping.** The mapping
+  covers two candidate signals only, PVS1 and BP7, derived from VEP
+  consequence terms on the author's reading of the 2015 Richards et al.
+  guidelines. They are observations for expert review, not met criteria,
+  and no independent expert has signed off on them. BA1, BS1, PM2, PP3
+  and BP4 are reported as ``NOT_ASSESSED``: gnomAD allele frequencies
+  and predictor outputs are returned as observations and are not mapped
+  onto criteria. No other criterion is evaluated and no pathogenicity
+  class is assigned. Use ``generate_variant_clinical_report`` or
   ``classify_variant_acmg`` as a research aid, never as clinical
   decision support.
 - **The druggability tier scoring is a heuristic.** Cut-offs for the
@@ -148,7 +153,7 @@ expectation of what this project is and is not.
 | If you are …                  | You can use this project for …                             | You should NOT use this project for …                                                                            |
 |-------------------------------|------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------|
 | A researcher exploring a target | Pulling and joining data from 9 core upstream sources via MCP, plus conditional UniProtKB isoform verification | Making a final go/no-go decision on a drug programme                                                            |
-| A clinical geneticist          | Quickly assembling a literature snapshot for a variant     | Issuing a clinical report; ACMG calls produced here are not validated and should be re-derived from raw sources |
+| A clinical geneticist          | Quickly assembling a literature snapshot for a variant     | Issuing a clinical report; ACMG candidate signals produced here are not validated and should be re-derived from raw sources |
 | A platform engineer            | Studying a tested example of an MCP server with retries    | Production deployment without your own validation, monitoring, and SLA work                                     |
 | A bioinformatician             | Prototyping a workflow that calls 9 sources behind one API| Reproducible publication-grade analyses (upstream APIs are not pinned by us)                                    |
 
@@ -165,10 +170,13 @@ planned, sequenced steps are:
    replays were retired; live API concordance, independently validated allele
    identity, and clinical validation are not claimed. Independent scientific
    validation remains items 3–4.
-2. **ACMG traceability matrix.** A markdown table mapping each
-   criterion (PVS1, PS1–4, PM1–6, PP1–5, BA1, BS1–4, BP1–7) to the
-   line of code that implements it, the test that exercises it, and
-   the 2015 Richards et al. section it derives from.
+2. **ACMG traceability matrix.** A markdown table stating, for each
+   criterion (PVS1, PS1–4, PM1–6, PP1–5, BA1, BS1–4, BP1–7), whether the
+   tools emit a candidate signal (currently PVS1 and BP7 only), report
+   it as ``NOT_ASSESSED`` (currently BA1, BS1, PM2, PP3 and BP4) or do
+   not evaluate it, with the line of code that implements that state,
+   the test that exercises it, and the 2015 Richards et al. section it
+   derives from.
 3. **External review.** One clinical geneticist to review the ACMG
    mapping; one medicinal chemist to review the druggability heuristic.
    Findings published as issues, then closed by PRs.

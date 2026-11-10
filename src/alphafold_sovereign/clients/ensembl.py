@@ -40,6 +40,21 @@ _HGVS_GENE_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Variant-level fields of a VEP hit. ``start``/``end`` are forward-strand
+# coordinates; ``allele_string`` is written on ``strand`` (the transcript
+# strand for c. HGVS input); ``vcf_string`` is the forward-strand
+# ``chrom-pos-ref-alt`` form and is returned only when requested.
+_VEP_LOCUS_FIELDS = (
+    "input",
+    "assembly_name",
+    "seq_region_name",
+    "start",
+    "end",
+    "strand",
+    "allele_string",
+    "vcf_string",
+)
+
 
 def _first_uniprot(value: Any) -> str:
     """Normalise a VEP ``swissprot`` cross-reference to one accession.
@@ -108,6 +123,11 @@ class EnsemblClient(BaseAsyncClient):
             ``protein_id``, ``protein_start``, ``amino_acids``, ``codons``,
             ``polyphen_score``, ``sift_score``, ``cadd_phred``,
             ``sift_prediction``, ``polyphen_prediction``, ``swissprot``.
+            Each dict also carries ``locus``: the genomic mapping VEP reports
+            for the hit the consequence belongs to (``input``,
+            ``assembly_name``, ``seq_region_name``, ``start``, ``end``,
+            ``strand``, ``allele_string``, ``vcf_string``), passed through
+            unvalidated; an absent field is ``None``.
         """
         params: dict[str, Any] = {
             "canonical": int(canonical),
@@ -116,6 +136,7 @@ class EnsemblClient(BaseAsyncClient):
             "uniprot": 1,
             "xref_refseq": 1,
             "Genoverse": 0,
+            "vcf_string": 1,
         }
         try:
             data = await self._get(
@@ -129,8 +150,9 @@ class EnsemblClient(BaseAsyncClient):
         results: list[dict[str, Any]] = []
         any_data: Any = data
         for hit in any_data if isinstance(any_data, list) else []:
+            locus = {name: hit.get(name) for name in _VEP_LOCUS_FIELDS}
             for tc in hit.get("transcript_consequences", []):
-                results.append(self._parse_tc(tc))
+                results.append({**self._parse_tc(tc), "locus": dict(locus)})
         return results
 
     # ------------------------------------------------------------------

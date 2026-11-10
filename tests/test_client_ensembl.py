@@ -166,6 +166,17 @@ async def test_vep_hgvs_parses_transcript_consequences(
     assert rows[0]["gene_symbol"] == "BRCA1"
     assert rows[0]["refseq_transcript_ids"] == ["NM_007294.4"]
     assert rows[0]["canonical"] is True
+    # Variant-level fields of the hit are passed through; absent ones are None.
+    assert rows[0]["locus"] == {
+        "input": "BRCA1:c.181T>G",
+        "assembly_name": None,
+        "seq_region_name": None,
+        "start": None,
+        "end": None,
+        "strand": None,
+        "allele_string": None,
+        "vcf_string": None,
+    }
 
 
 async def test_vep_hgvs_non_list_payload_returns_empty(
@@ -188,6 +199,7 @@ async def test_vep_hgvs_canonical_false_kwarg(
         assert await client.vep_hgvs("X:c.1A>T", canonical=False) == []
     assert "canonical=0" in str(route.calls.last.request.url)
     assert "uniprot=1" in str(route.calls.last.request.url)
+    assert "vcf_string=1" in str(route.calls.last.request.url)
 
 
 async def test_vep_hgvs_error_returns_empty(respx_mock: respx.MockRouter) -> None:

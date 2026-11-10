@@ -24,8 +24,6 @@ from alphafold_sovereign.tools.precision_medicine import (
     _acmg_strength,
     _alphafold,
     _alphamissense_for_variant,
-    _am_to_acmg_evidence,
-    _build_gnomad_id,
     _chembl,
     _clinvar,
     _compute_clinical_tier,
@@ -35,7 +33,6 @@ from alphafold_sovereign.tools.precision_medicine import (
     _druggability_tier,
     _ensembl,
     _gnomad,
-    _gnomad_to_acmg,
     _investability_rating,
     _is_benign_strong_key,
     _is_pathogenic_strong_key,
@@ -44,7 +41,9 @@ from alphafold_sovereign.tools.precision_medicine import (
     _opentargets,
     _protein_variant_from_vep,
     _provenance,
+    _resolve_gnomad_variant,
     _tier_explanation,
+    _unassessed_evidence,
     _vep_to_acmg,
     assess_target_druggability,
     classify_variant_acmg,
@@ -118,38 +117,60 @@ def test_acmg_code(cls: str, expected: str) -> None:
     assert _acmg_code(cls) == expected
 
 
-@pytest.mark.parametrize(
-    ("score", "expected_key"),
-    [
-        (0.9, "PP3"),
-        (0.2, "BP4"),
-        (0.5, None),
-        (None, None),
-    ],
-)
-def test_am_to_acmg_evidence(score: float | None, expected_key: str | None) -> None:
-    out = _am_to_acmg_evidence(score)
-    if expected_key:
-        assert expected_key in out
-    else:
-        assert out == {}
+def _snv_locus_row(variant_id: str = "1-42-A-G", **fields: Any) -> dict[str, Any]:
+    """A VEP row with a self-consistent forward-strand SNV locus (synthetic)."""
+    chrom, pos, ref, alt = variant_id.split("-")
+    return {
+        "locus": {
+            "assembly_name": "GRCh38",
+            "seq_region_name": chrom,
+            "start": int(pos),
+            "end": int(pos),
+            "strand": 1,
+            "allele_string": f"{ref}/{alt}",
+            "vcf_string": variant_id,
+        },
+        **fields,
+    }
 
 
 @pytest.mark.parametrize(
-    ("af", "expected_key"),
+    ("allele_frequency", "am_score"),
     [
-        (0.1, "BS1"),
-        (1e-5, "PM2"),
+        (0.1, None),  # was labelled BS1
+        (1e-5, None),  # was labelled PM2
         (0.005, None),
+        (None, 0.9),  # was labelled PP3
+        (None, 0.2),  # was labelled BP4
+        (None, 0.5),
         (None, None),
     ],
 )
-def test_gnomad_to_acmg(af: float | None, expected_key: str | None) -> None:
-    out = _gnomad_to_acmg(af)
-    if expected_key:
-        assert expected_key in out
-    else:
-        assert out == {}
+def test_unassessed_evidence_assigns_no_criterion(
+    allele_frequency: float | None, am_score: float | None
+) -> None:
+    """No allele frequency or AlphaMissense score maps to an ACMG criterion."""
+    evidence = _unassessed_evidence(
+        gnomad_variant=_resolve_gnomad_variant("17-123-A-G", []),
+        gnomad_status="ok",
+        gnomad_data={"found": True, "cohorts": {"exome": {"allele_frequency": allele_frequency}}},
+        am_score=am_score,
+        am_prediction={},
+        am_status="ok",
+        canonical_tc={},
+    )
+    frequency = evidence["population_frequency"]
+    predictions = evidence["computational_predictions"]
+    assert frequency["lookup_status"] == "found"
+    assert frequency["cohorts"]["exome"]["allele_frequency"] == allele_frequency
+    assert frequency["acmg_criteria"] == {
+        "BA1": "NOT_ASSESSED",
+        "BS1": "NOT_ASSESSED",
+        "PM2": "NOT_ASSESSED",
+    }
+    assert predictions["alphamissense"]["score"] == am_score
+    assert predictions["acmg_criteria"] == {"PP3": "NOT_ASSESSED", "BP4": "NOT_ASSESSED"}
+    assert evidence["clinically_calibrated_evidence"]["status"] == "NOT_ASSESSED"
 
 
 def test_vep_to_acmg_pvs1() -> None:
@@ -157,48 +178,32 @@ def test_vep_to_acmg_pvs1() -> None:
     assert "PVS1" in out
 
 
-def test_vep_to_acmg_pp3_missense() -> None:
-    out = _vep_to_acmg(
-        [
-            {
-                "canonical": True,
-                "consequence_terms": ["missense_variant"],
-                "sift_prediction": "deleterious",
-                "polyphen_prediction": "probably_damaging",
-                "cadd_phred": 25.0,
-            }
-        ]
-    )
-    assert "PP3" in out
-
-
-def test_vep_to_acmg_pp3_low_confidence() -> None:
-    out = _vep_to_acmg(
-        [
-            {
-                "canonical": True,
-                "consequence_terms": ["missense_variant"],
-                "sift_prediction": "deleterious_low_confidence",
-                "polyphen_prediction": "possibly_damaging",
-            }
-        ]
-    )
-    assert "PP3" in out
-
-
-def test_vep_to_acmg_missense_single_signal() -> None:
-    """Only one in-silico predictor → PP3 not triggered."""
-    out = _vep_to_acmg(
-        [
-            {
-                "canonical": True,
-                "consequence_terms": ["missense_variant"],
-                "sift_prediction": "deleterious",
-                "polyphen_prediction": "benign",
-            }
-        ]
-    )
-    assert "PP3" not in out
+@pytest.mark.parametrize(
+    "predictors",
+    [
+        # These three combinations used to yield PP3.
+        {
+            "sift_prediction": "deleterious",
+            "polyphen_prediction": "probably_damaging",
+            "cadd_phred": 25.0,
+        },
+        {
+            "sift_prediction": "deleterious_low_confidence",
+            "polyphen_prediction": "possibly_damaging",
+        },
+        {"polyphen_prediction": "probably_damaging", "cadd_phred": 25.0},
+        {"sift_prediction": "deleterious", "polyphen_prediction": "benign"},
+        {"sift_prediction": "deleterious", "cadd_phred": 10.0},
+        {"polyphen_prediction": "probably_damaging"},
+        {},
+    ],
+)
+def test_vep_to_acmg_missense_predictors_assign_no_criterion(
+    predictors: dict[str, Any],
+) -> None:
+    """SIFT, PolyPhen and CADD outputs are predictions, never a PP3 signal."""
+    row = {"canonical": True, "consequence_terms": ["missense_variant"], **predictors}
+    assert _vep_to_acmg([row]) == {}
 
 
 def test_vep_to_acmg_synonymous() -> None:
@@ -209,63 +214,6 @@ def test_vep_to_acmg_synonymous() -> None:
 def test_vep_to_acmg_non_canonical_skipped() -> None:
     out = _vep_to_acmg([{"canonical": False, "consequence_terms": ["stop_gained"]}])
     assert out == {}
-
-
-def test_vep_to_acmg_cadd_below_threshold() -> None:
-    out = _vep_to_acmg(
-        [
-            {
-                "canonical": True,
-                "consequence_terms": ["missense_variant"],
-                "sift_prediction": "deleterious",
-                "cadd_phred": 10.0,
-            }
-        ]
-    )
-    # CADD 10 < 20, only SIFT signal → PP3 not triggered
-    assert "PP3" not in out
-
-
-def test_vep_to_acmg_no_signals_at_all() -> None:
-    """Missense with no in-silico predictors set."""
-    out = _vep_to_acmg(
-        [
-            {
-                "canonical": True,
-                "consequence_terms": ["missense_variant"],
-            }
-        ]
-    )
-    assert out == {}
-
-
-def test_vep_to_acmg_pp_only() -> None:
-    """Single PolyPhen signal → no PP3."""
-    out = _vep_to_acmg(
-        [
-            {
-                "canonical": True,
-                "consequence_terms": ["missense_variant"],
-                "polyphen_prediction": "probably_damaging",
-            }
-        ]
-    )
-    assert out == {}
-
-
-def test_vep_to_acmg_cadd_and_polyphen() -> None:
-    """CADD + PolyPhen (no SIFT) triggers PP3."""
-    out = _vep_to_acmg(
-        [
-            {
-                "canonical": True,
-                "consequence_terms": ["missense_variant"],
-                "polyphen_prediction": "probably_damaging",
-                "cadd_phred": 25.0,
-            }
-        ]
-    )
-    assert "PP3" in out
 
 
 @pytest.mark.parametrize(
@@ -299,25 +247,50 @@ def test_druggability_tier_branches(
 
 
 @pytest.mark.parametrize(
-    ("hgvs", "vep_results", "expected_starts_with"),
+    ("hgvs", "vep_results", "variant_id", "variant_class"),
     [
-        ("X", [{"seq_region_name": "17", "start": 123, "allele_string": "A/G"}], "17-"),
-        ("17-123-A-G", [], "17-123-A-G"),
-        ("chrX:c.1T>G", [], None),
-        ("X", [{"seq_region_name": "1", "start": 100, "allele_string": "A/-"}], None),
-        # chr prefix removed
-        ("X", [{"seq_region_name": "chr5", "start": 200, "allele_string": "T/C"}], "5-"),
+        # A caller-supplied gnomAD-style ID is looked up as given.
+        ("17-123-A-G", [], "17-123-A-G", "snv"),
+        ("chr17:123:A:G", [], "17-123-A-G", "snv"),
+        ("X-123-AT-A", [], "X-123-AT-A", "deletion"),
+        ("17-123-A-AT", [], "17-123-A-AT", "insertion"),
+        # Multi-nucleotide or unchanged alleles are not one gnomAD record.
+        ("17-123-AC-GT", [], None, "complex"),
+        ("17-123-A-A", [], None, "complex"),
+        # An SPDI-like string used to be read as chromosome 11 (the accession
+        # version), and an ID was extracted from inside other text.
+        ("NC_000017.11:43106486:A:C", [], None, None),
+        ("variant 17-123-A-G", [], None, None),
+        ("chrX:c.1T>G", [], None, None),
+        # The flat keys the old builder read were never returned by the client.
+        (
+            "NM_007294.4:c.1A>G",
+            [{"seq_region_name": "17", "start": 123, "allele_string": "A/G"}],
+            None,
+            None,
+        ),
+        # A versioned expression with a self-consistent locus resolves.
+        ("NM_007294.4:c.1A>G", [_snv_locus_row("17-123-A-G")], "17-123-A-G", "snv"),
     ],
 )
-def test_build_gnomad_id(
-    hgvs: str, vep_results: list[dict[str, Any]], expected_starts_with: str | None
+def test_resolve_gnomad_variant(
+    hgvs: str,
+    vep_results: list[dict[str, Any]],
+    variant_id: str | None,
+    variant_class: str | None,
 ) -> None:
-    out = _build_gnomad_id(hgvs, vep_results)
-    if expected_starts_with is None:
-        assert out is None
+    out = _resolve_gnomad_variant(hgvs, vep_results)
+    assert out["variant_id"] == variant_id
+    assert out["variant_class"] == variant_class
+    if variant_id is None:
+        assert out["detail"]
+    elif vep_results:
+        assert out["mapping_basis"] == "versioned_hgvs_via_ensembl_vep"
+        assert out["reference_genome"] == "GRCh38"
     else:
-        assert out is not None
-        assert out.startswith(expected_starts_with)
+        assert out["mapping_basis"] == "caller_supplied_variant_id"
+        assert out["reference_genome"] is None
+        assert "assembly is not verified" in out["detail"]
 
 
 @pytest.mark.parametrize(
@@ -495,9 +468,16 @@ def _make_vep_result() -> list[dict[str, Any]]:
             "impact": "MODERATE",
             "amino_acids": "R/H",
             "hgvsp": "p.Arg61His",
-            "seq_region_name": "17",
-            "start": 43094692,
-            "allele_string": "T/G",
+            # Ensembl VEP's mapping of BRCA1 c.181T>G (reverse strand).
+            "locus": {
+                "assembly_name": "GRCh38",
+                "seq_region_name": "17",
+                "start": 43106487,
+                "end": 43106487,
+                "strand": -1,
+                "allele_string": "T/G",
+                "vcf_string": "17-43106487-A-C",
+            },
         }
     ]
 
@@ -592,10 +572,18 @@ async def test_generate_variant_report_full(monkeypatch: pytest.MonkeyPatch) -> 
         ]
     )
 
-    out = await generate_variant_clinical_report(VariantClinicalReportInput(hgvs="BRCA1:c.181T>G"))
+    out = await generate_variant_clinical_report(
+        VariantClinicalReportInput(hgvs="NM_007294.4(BRCA1):c.181T>G")
+    )
     assert out["clinical_tier"] == "NOT_ASSESSED"
     assert out["gene_symbol"] == "BRCA1"
     assert "PP5" not in out["acmg_criteria_draft"]["criteria"]
+    # The forward-strand ID is looked up; the rare frequency is not PM2.
+    mocks["gnomad"].variant_frequencies.assert_awaited_once_with("17-43106487-A-C")
+    assert out["data_sources_status"]["gnomad"] == "ok"
+    assert out["population_genetics"]["global_af"] == 1e-5
+    assert out["acmg_criteria_draft"]["criteria"] == {}
+    assert out["unassessed_evidence"]["population_frequency"]["lookup_status"] == "found"
     assert out["clinvar"]["classification"] == "Pathogenic"
     assert "drug_context" in out
     assert "literature_residue_evidence" not in out
@@ -870,16 +858,10 @@ async def test_generate_variant_report_non_canonical_skipped(
             {
                 "canonical": False,
                 "consequence_terms": ["missense_variant"],
-                "seq_region_name": "17",
-                "start": 1,
-                "allele_string": "A/G",
             },
             {
                 "canonical": True,
                 "consequence_terms": ["missense_variant"],
-                "seq_region_name": "17",
-                "start": 2,
-                "allele_string": "C/T",
                 "amino_acids": "R/H",
             },
         ]
@@ -932,9 +914,11 @@ async def test_generate_variant_report_gnomad_variant_freq_exception(
     mocks["opentargets"].associated_diseases = AsyncMock(return_value=[])
 
     out = await generate_variant_clinical_report(
-        VariantClinicalReportInput(hgvs="BRCA1:c.181T>G", include_drug_context=False)
+        VariantClinicalReportInput(hgvs="NM_007294.4(BRCA1):c.181T>G", include_drug_context=False)
     )
     assert out["population_genetics"]["global_af"] is None
+    assert out["data_sources_status"]["gnomad"] == "failed"
+    assert out["unassessed_evidence"]["population_frequency"]["lookup_status"] == "failed"
 
 
 # ---------------------------------------------------------------------------
@@ -1111,7 +1095,7 @@ async def test_generate_variant_report_alphamissense_scored(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A missense variant with a protein position resolves an AlphaMissense
-    score from AlphaFold DB into the report and its ACMG criteria."""
+    score from AlphaFold DB into the report as a prediction, not as PP3."""
     mocks = _patch_clients(monkeypatch)
     mocks["ensembl"].vep_hgvs = AsyncMock(
         return_value=[
@@ -1121,9 +1105,6 @@ async def test_generate_variant_report_alphamissense_scored(
                 "amino_acids": "C/G",
                 "protein_start": 61,
                 "swissprot": "P38398.280",
-                "seq_region_name": "17",
-                "start": 43094692,
-                "allele_string": "T/G",
             }
         ]
     )
@@ -1147,7 +1128,15 @@ async def test_generate_variant_report_alphamissense_scored(
         VariantClinicalReportInput(hgvs="BRCA1:c.181T>G", include_drug_context=False)
     )
     assert out["population_genetics"]["alphamissense_score"] == 0.9904
-    assert "PP3" in out["acmg_criteria_draft"]["criteria"]
+    assert out["acmg_criteria_draft"]["criteria"] == {}
+    predictions = out["unassessed_evidence"]["computational_predictions"]
+    assert predictions["alphamissense"] == {
+        "status": "ok",
+        "protein_variant": "C61G",
+        "score": 0.9904,
+        "source_class": "LPath",
+    }
+    assert predictions["acmg_criteria"] == {"PP3": "NOT_ASSESSED", "BP4": "NOT_ASSESSED"}
 
 
 # ---------------------------------------------------------------------------
@@ -2298,9 +2287,6 @@ async def test_classify_variant_acmg_pathogenic(monkeypatch: pytest.MonkeyPatch)
             {
                 "canonical": True,
                 "consequence_terms": ["stop_gained"],
-                "seq_region_name": "17",
-                "start": 12345,
-                "allele_string": "G/A",
             }
         ]
     )
@@ -2333,9 +2319,6 @@ async def test_classify_variant_acmg_benign(monkeypatch: pytest.MonkeyPatch) -> 
             {
                 "canonical": True,
                 "consequence_terms": ["synonymous_variant"],
-                "seq_region_name": "17",
-                "start": 12345,
-                "allele_string": "G/A",
             }
         ]
     )
@@ -2346,7 +2329,7 @@ async def test_classify_variant_acmg_benign(monkeypatch: pytest.MonkeyPatch) -> 
     mocks["gnomad"].gene_constraint = AsyncMock(return_value={"loeuf": 0.5})
 
     out = await classify_variant_acmg(ACMGVariantInput(hgvs="BRCA1:c.18T>G"))
-    assert "BP7" in out["candidate_criteria"] or "BS1" in out["candidate_criteria"]
+    assert set(out["candidate_criteria"]) == {"BP7"}
     assert out["draft_classification"] == "Not assessed"
 
 
@@ -2444,9 +2427,6 @@ async def test_classify_variant_acmg_pvs1_with_high_loeuf(
             {
                 "canonical": True,
                 "consequence_terms": ["stop_gained"],
-                "seq_region_name": "17",
-                "start": 12345,
-                "allele_string": "G/A",
             }
         ]
     )
@@ -2484,114 +2464,84 @@ async def test_classify_variant_acmg_no_gnomad_id(monkeypatch: pytest.MonkeyPatc
 async def test_classify_variant_acmg_gnomad_var_freq_exception(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """gnomad.variant_frequencies raises during classify (line 1090-1091)."""
+    """gnomad.variant_frequencies raises during classify: failed, never absent."""
     mocks = _patch_clients(monkeypatch)
     mocks["ensembl"].vep_hgvs = AsyncMock(
         return_value=[
-            {
-                "canonical": True,
-                "consequence_terms": ["missense_variant"],
-                "seq_region_name": "17",
-                "start": 12345,
-                "allele_string": "G/A",
-            }
+            _snv_locus_row("17-12345-G-A", canonical=True, consequence_terms=["missense_variant"])
         ]
     )
     mocks["clinvar"].search_by_hgvs = AsyncMock(return_value=[])
     mocks["gnomad"].variant_frequencies = AsyncMock(side_effect=RuntimeError("g fail"))
     mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
 
-    out = await classify_variant_acmg(ACMGVariantInput(hgvs="BRCA1:c.18T>G"))
+    out = await classify_variant_acmg(ACMGVariantInput(hgvs="NM_007294.4(BRCA1):c.18T>G"))
     assert "criteria_met" in out
+    assert out["data_sources_status"]["gnomad_variant"] == "failed"
+    assert out["unassessed_evidence"]["population_frequency"]["lookup_status"] == "failed"
 
 
-async def test_classify_variant_acmg_pathogenic_strong_strong(
+async def test_classify_variant_acmg_rare_frequency_is_not_pm2(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Hit final classification line 1165: 'Pathogenic' branch with PVS1 + Strong P*.
-
-    The evidence-starts-with-P condition relies on internal criteria construction.
-    Patch _acmg_strength to make PM2 a 'Strong' criterion with evidence starting 'P'.
-    """
-    import alphafold_sovereign.tools.precision_medicine as pm_mod
-
-    original_strength = pm_mod._acmg_strength
-
-    def fake_strength(code: str) -> str:
-        if code == "PM2":
-            return "Strong"
-        return original_strength(code)
-
-    def fake_gnomad_to_acmg(af: float | None) -> dict[str, str]:
-        # Inject evidence starting with "P"
-        if af is None:
-            return {}
-        return {"PM2": "Pathogenic-leaning evidence: af present"}
-
-    monkeypatch.setattr(pm_mod, "_acmg_strength", fake_strength)
-    monkeypatch.setattr(pm_mod, "_gnomad_to_acmg", fake_gnomad_to_acmg)
-
+    """A looked-up rare allele frequency adds no PM2 beside a PVS1 candidate."""
     mocks = _patch_clients(monkeypatch)
     mocks["ensembl"].vep_hgvs = AsyncMock(
         return_value=[
-            {
-                "canonical": True,
-                "consequence_terms": ["stop_gained"],
-                "seq_region_name": "17",
-                "start": 12345,
-                "allele_string": "G/A",
-            }
-        ]
-    )
-    mocks["clinvar"].search_by_hgvs = AsyncMock(return_value=[])
-    mocks["gnomad"].variant_frequencies = AsyncMock(return_value={"global_af": 1e-6})
-    mocks["gnomad"].gene_constraint = AsyncMock(return_value={"loeuf": 0.2})
-
-    out = await classify_variant_acmg(ACMGVariantInput(hgvs="BRCA1:c.18T>G"))
-    assert out["draft_classification"] == "Not assessed"
-
-
-async def test_classify_variant_acmg_likely_pathogenic_two_strong(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Hit line 1167: 'Likely Pathogenic' branch (no PVS1, ≥2 Strong P*)."""
-    import alphafold_sovereign.tools.precision_medicine as pm_mod
-
-    def fake_strength(code: str) -> str:
-        if code in {"PM2", "PP3"}:
-            return "Strong"
-        return "Supporting"
-
-    def fake_gnomad_to_acmg(af: float | None) -> dict[str, str]:
-        return {"PM2": "Pathogenic evidence: rare"}
-
-    def fake_am_to_acmg(am_score: float | None) -> dict[str, str]:
-        return {"PP3": "Pathogenic evidence: AM high"}
-
-    monkeypatch.setattr(pm_mod, "_acmg_strength", fake_strength)
-    monkeypatch.setattr(pm_mod, "_gnomad_to_acmg", fake_gnomad_to_acmg)
-    monkeypatch.setattr(pm_mod, "_am_to_acmg_evidence", fake_am_to_acmg)
-
-    mocks = _patch_clients(monkeypatch)
-    mocks["ensembl"].vep_hgvs = AsyncMock(
-        return_value=[
-            {
-                "canonical": True,
-                "consequence_terms": ["missense_variant"],
-                "seq_region_name": "17",
-                "start": 12345,
-                "allele_string": "G/A",
-            }
+            _snv_locus_row("17-12345-G-A", canonical=True, consequence_terms=["stop_gained"])
         ]
     )
     mocks["clinvar"].search_by_hgvs = AsyncMock(return_value=[])
     mocks["gnomad"].variant_frequencies = AsyncMock(
-        return_value={"alphamissense_score": 0.9, "global_af": 1e-6}
+        return_value={
+            "found": True,
+            "global_af": 1e-6,
+            "cohorts": {"exome": {"allele_frequency": 1e-6}},
+        }
     )
-    mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
+    mocks["gnomad"].gene_constraint = AsyncMock(return_value={"loeuf": 0.2})
 
-    out = await classify_variant_acmg(ACMGVariantInput(hgvs="BRCA1:c.18T>G"))
+    out = await classify_variant_acmg(ACMGVariantInput(hgvs="NM_007294.4(BRCA1):c.18T>G"))
+    mocks["gnomad"].variant_frequencies.assert_awaited_once_with("17-12345-G-A")
+    assert set(out["candidate_criteria"]) == {"PVS1"}
     assert out["draft_classification"] == "Not assessed"
+    frequency = out["unassessed_evidence"]["population_frequency"]
+    assert frequency["lookup_status"] == "found"
+    assert frequency["cohorts"] == {"exome": {"allele_frequency": 1e-6}}
+    assert frequency["acmg_criteria"]["PM2"] == "NOT_ASSESSED"
+
+
+async def test_classify_variant_acmg_high_alphamissense_is_not_pp3(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A high AlphaMissense score beside a rare frequency yields no candidate."""
+    mocks = _patch_clients(monkeypatch)
+    mocks["ensembl"].vep_hgvs = AsyncMock(
+        return_value=[
+            _snv_locus_row(
+                "17-12345-G-A",
+                canonical=True,
+                consequence_terms=["missense_variant"],
+                amino_acids="C/G",
+                protein_start=61,
+                swissprot="P38398.280",
+            )
+        ]
+    )
+    mocks["clinvar"].search_by_hgvs = AsyncMock(return_value=[])
+    mocks["gnomad"].variant_frequencies = AsyncMock(return_value={"found": True, "global_af": 1e-6})
+    mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
+    mocks["alphafold"].alphamissense_score = AsyncMock(
+        return_value={"protein_variant": "C61G", "am_pathogenicity": 0.9904, "am_class": "LPath"}
+    )
+
+    out = await classify_variant_acmg(ACMGVariantInput(hgvs="NM_007294.4(BRCA1):c.18T>G"))
+    assert out["candidate_criteria"] == {}
+    assert out["draft_classification"] == "Not assessed"
+    predictions = out["unassessed_evidence"]["computational_predictions"]
+    assert predictions["alphamissense"]["score"] == 0.9904
+    assert predictions["alphamissense"]["source_class"] == "LPath"
+    assert predictions["acmg_criteria"] == {"PP3": "NOT_ASSESSED", "BP4": "NOT_ASSESSED"}
 
 
 async def test_classify_variant_acmg_lone_pvs1_not_pathogenic(
@@ -2610,14 +2560,11 @@ async def test_classify_variant_acmg_lone_pvs1_not_pathogenic(
             {
                 "canonical": True,
                 "consequence_terms": ["stop_gained"],
-                "seq_region_name": "17",
-                "start": 12345,
-                "allele_string": "G/A",
             }
         ]
     )
     mocks["clinvar"].search_by_hgvs = AsyncMock(return_value=[])
-    # Mid-range AF: too common for PM2, too rare for BS1 → no extra criteria.
+    # An allele frequency never adds a criterion.
     mocks["gnomad"].variant_frequencies = AsyncMock(return_value={"global_af": 0.01})
     mocks["gnomad"].gene_constraint = AsyncMock(return_value={"loeuf": 0.2})
 
@@ -2673,9 +2620,6 @@ async def test_classify_variant_acmg_canonical_skip(
             {
                 "canonical": True,
                 "consequence_terms": ["synonymous_variant"],
-                "seq_region_name": "1",
-                "start": 100,
-                "allele_string": "A/G",
             },
         ]
     )
@@ -3222,16 +3166,18 @@ async def test_synthetic_acmg_rejects_invalid_population_responses(
 ) -> None:
     """Invalid gnomAD payloads are marked as invalid, not treated as no_data."""
     mocks = _patch_clients(monkeypatch)
-    mocks["ensembl"].vep_hgvs = AsyncMock(return_value=[])
+    mocks["ensembl"].vep_hgvs = AsyncMock(return_value=[_snv_locus_row("1-42-A-G")])
     mocks["clinvar"].search_by_hgvs = AsyncMock(return_value=[])
     mocks["gnomad"].variant_frequencies = AsyncMock(return_value=["malformed"])
     mocks["gnomad"].gene_constraint = AsyncMock(return_value=["malformed"])
-    monkeypatch.setattr(pm, "_build_gnomad_id", lambda hgvs, rows: "1-42-A-G")
 
-    out = await classify_variant_acmg(ACMGVariantInput(hgvs="SYNTHX:c.42A>G"))
+    out = await classify_variant_acmg(ACMGVariantInput(hgvs="NM_999999.1(SYNTHX):c.42A>G"))
     assert out["draft_classification"] == "Not assessed"
     assert out["data_sources_status"]["gnomad_variant"] == "invalid_response"
     assert out["data_sources_status"]["gnomad_constraint"] == "invalid_response"
+    frequency = out["unassessed_evidence"]["population_frequency"]
+    assert frequency["lookup_status"] == "invalid_response"
+    assert frequency["cohorts"] == {}
 
 
 def _patch_dossier_clients(monkeypatch: pytest.MonkeyPatch) -> dict[str, MagicMock]:

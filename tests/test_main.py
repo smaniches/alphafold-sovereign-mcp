@@ -91,7 +91,7 @@ def test_self_test_reports_failure_when_acmg_helper_regresses(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """``_run_self_test`` returns 1 and reports every failing fixture when the
-    ACMG helper functions regress.
+    evidence helper functions regress.
 
     The passing path (exercised by ``test_self_test_function_directly``) never
     enters the failure-reporting branch. Monkeypatching all three helpers to
@@ -106,13 +106,35 @@ def test_self_test_reports_failure_when_acmg_helper_regresses(
         return {}
 
     monkeypatch.setattr(precision_medicine, "_vep_to_acmg", _empty)
-    monkeypatch.setattr(precision_medicine, "_gnomad_to_acmg", _empty)
-    monkeypatch.setattr(precision_medicine, "_am_to_acmg_evidence", _empty)
+    monkeypatch.setattr(precision_medicine, "_resolve_gnomad_variant", _empty)
+    monkeypatch.setattr(precision_medicine, "_unassessed_evidence", _empty)
 
     rc = entry._run_self_test()
     err = capsys.readouterr().err
 
     assert rc == 1
     assert "SELF-TEST FAIL" in err
-    # All five fixtures (PVS1, PM2, PP3, BP4, BS1) must be reported as failed.
+    # All five fixtures (PVS1 signal, reverse-strand variant ID, and the three
+    # observations that must stay NOT_ASSESSED) must be reported as failed.
     assert err.count("  - ") == 5
+
+
+@pytest.mark.unit
+def test_self_test_fails_if_a_frequency_is_assigned_a_criterion(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Re-introducing a frequency or score threshold as a criterion fails the self-test."""
+    from alphafold_sovereign import __main__ as entry
+    from alphafold_sovereign.tools import precision_medicine
+
+    def _assigning(**_kwargs: object) -> dict[str, object]:
+        return {
+            "population_frequency": {"acmg_criteria": {"BS1": "met"}},
+            "computational_predictions": {"acmg_criteria": {"PP3": "NOT_ASSESSED"}},
+        }
+
+    monkeypatch.setattr(precision_medicine, "_unassessed_evidence", _assigning)
+
+    assert entry._run_self_test() == 1
+    assert capsys.readouterr().err.count("  - ") == 3
