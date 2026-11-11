@@ -19,20 +19,23 @@ import sys
 
 
 def _run_self_test() -> int:
-    """Exercise deterministic ACMG helper functions on a BRCA1 fixture.
+    """Exercise deterministic variant-evidence helpers on a BRCA1 fixture.
 
-    The self-test asserts that the three pure functions (`_vep_to_acmg`,
-    `_gnomad_to_acmg`, `_am_to_acmg_evidence`) emit the expected ACMG
-    criteria on a hand-built fixture that mirrors what the upstream
-    APIs would return for BRCA1 c.5266dupC. This proves the install is
-    importable and the ACMG mapping is wired up correctly without
-    requiring any network access.
+    The self-test asserts, on hand-built fixtures that mirror what the
+    upstream APIs return for BRCA1 c.5266dupC, that the pure helpers behave
+    as documented: a frameshift consequence yields a PVS1 candidate signal
+    (`_vep_to_acmg`); the Ensembl VEP mapping of this reverse-strand variant
+    resolves to its forward-strand gnomAD variant ID
+    (`_resolve_gnomad_variant`); and allele frequency and AlphaMissense
+    scores are reported without any ACMG criterion (`_unassessed_evidence`).
+    This proves the install is importable and the evidence handling is
+    wired up correctly without requiring any network access.
     """
     # Defer heavy imports until self-test is requested so `--version`
     # stays cheap.
     from alphafold_sovereign.tools.precision_medicine import (  # noqa: PLC0415
-        _am_to_acmg_evidence,
-        _gnomad_to_acmg,
+        _resolve_gnomad_variant,
+        _unassessed_evidence,
         _vep_to_acmg,
     )
 
@@ -50,25 +53,50 @@ def _run_self_test() -> int:
     if "PVS1" not in out:
         failures.append(f"_vep_to_acmg(frameshift) → expected PVS1 key, got {out!r}")
 
-    # Fixture 2: extremely rare gnomAD AF (BRCA1 c.5266dupC ~ 1.4e-5) → PM2.
-    out2 = _gnomad_to_acmg(1.42e-5)
-    if "PM2" not in out2:
-        failures.append(f"_gnomad_to_acmg(1.42e-5) → expected PM2 key, got {out2!r}")
+    # Fixture 2: Ensembl VEP's mapping of BRCA1 c.5266dupC (recorded
+    # 2026-11-10 UTC). BRCA1 is on the reverse strand, so the duplicated C is
+    # a G in the forward-strand gnomAD variant ID.
+    vep_locus = {
+        "input": "NM_007294.4:c.5266dup",
+        "assembly_name": "GRCh38",
+        "seq_region_name": "17",
+        "start": 43057064,
+        "end": 43057063,
+        "strand": -1,
+        "allele_string": "-/C",
+        "vcf_string": "17-43057063-G-GG",
+    }
+    variant = _resolve_gnomad_variant("NM_007294.4:c.5266dup", [{"locus": vep_locus}])
+    if variant.get("variant_id") != "17-43057063-G-GG":
+        failures.append(
+            f"_resolve_gnomad_variant(c.5266dup) → expected 17-43057063-G-GG, got {variant!r}"
+        )
 
-    # Fixture 3: high AlphaMissense score (likely_pathogenic) → PP3.
-    out3 = _am_to_acmg_evidence(0.95)
-    if "PP3" not in out3:
-        failures.append(f"_am_to_acmg_evidence(0.95) → expected PP3 key, got {out3!r}")
-
-    # Fixture 4: low AlphaMissense score (likely_benign) → BP4.
-    out4 = _am_to_acmg_evidence(0.05)
-    if "BP4" not in out4:
-        failures.append(f"_am_to_acmg_evidence(0.05) → expected BP4 key, got {out4!r}")
-
-    # Fixture 5: common gnomAD AF (>5%) → BS1.
-    out5 = _gnomad_to_acmg(0.10)
-    if "BS1" not in out5:
-        failures.append(f"_gnomad_to_acmg(0.10) → expected BS1 key, got {out5!r}")
+    # Fixtures 3-5: a rare allele frequency (BRCA1 c.5266dupC ~ 1.4e-5), a
+    # common one (>5%) and a high AlphaMissense score are observations. None
+    # of them may assign BA1, BS1, PM2, PP3 or BP4.
+    for label, allele_frequency, am_score in (
+        ("rare allele frequency", 1.42e-5, None),
+        ("common allele frequency", 0.10, None),
+        ("high AlphaMissense score", None, 0.95),
+    ):
+        evidence = _unassessed_evidence(
+            gnomad_variant=variant,
+            gnomad_status="ok",
+            gnomad_data={"cohorts": {"exome": {"allele_frequency": allele_frequency}}},
+            am_score=am_score,
+            am_prediction={},
+            am_status=None,
+            canonical_tc={},
+        )
+        statuses = {
+            *evidence.get("population_frequency", {}).get("acmg_criteria", {"": ""}).values(),
+            *evidence.get("computational_predictions", {}).get("acmg_criteria", {"": ""}).values(),
+        }
+        if statuses != {"NOT_ASSESSED"}:
+            failures.append(
+                f"_unassessed_evidence({label}) → expected only NOT_ASSESSED, got {evidence!r}"
+            )
 
     if failures:
         print("SELF-TEST FAIL", file=sys.stderr)

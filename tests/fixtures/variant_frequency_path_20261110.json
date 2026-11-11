@@ -1,0 +1,5164 @@
+{
+ "meta": {
+  "sources": {
+   "ensembl_vep": "GET https://rest.ensembl.org/vep/human/hgvs/{hgvs}?canonical=1&numbers=1&protein=1&uniprot=1&xref_refseq=1&Genoverse=0&vcf_string=1",
+   "gnomad_variant": "POST https://gnomad.broadinstitute.org/api with GnomADClient._VARIANT_QUERY, variables {variantId, datasetId: gnomad_r4}",
+   "gnomad_constraint": "POST https://gnomad.broadinstitute.org/api with GnomADClient._GENE_CONSTRAINT_QUERY, variables {geneSymbol}",
+   "alphafold_prediction": "GET https://alphafold.ebi.ac.uk/api/prediction/{accession}",
+   "alphamissense_csv": "GET the amAnnotationsUrl advertised by the prediction record"
+  },
+  "retrieved_at": "2026-11-10T02:03:36Z/2026-11-10T04:46:17Z",
+  "sanitisation": "Verbatim subsets of live responses. Ensembl VEP hits keep every variant-level field and the transcript consequences flagged canonical; colocated_variants and non-canonical transcript consequences are removed. gnomAD bodies are verbatim except that HGDP/1KG subset population rows (ids containing ':') are removed from the two common variants that have an exome cohort; the genome-only variant 17-43105117-T-C is complete. AlphaFold DB prediction arrays keep the first two model records reduced to identity fields and amAnnotationsUrl; AlphaMissense CSVs keep the header and the substitution rows the tests look up. 'dropped' counts what was removed per response and 'live_body_sha256' is the SHA-256 of each complete live body.",
+  "dropped": {
+   "ensembl_vep/NM_007294.4:c.181T>G": {
+    "non_canonical_transcript_consequences": 52,
+    "colocated_variants": 5
+   },
+   "ensembl_vep/NM_000059.4:c.7397T>C": {
+    "non_canonical_transcript_consequences": 13,
+    "colocated_variants": 3
+   },
+   "ensembl_vep/NC_000017.11:g.43106487A>C": {
+    "non_canonical_transcript_consequences": 52,
+    "colocated_variants": 5
+   },
+   "ensembl_vep/NM_007294.4:c.181T>A": {
+    "non_canonical_transcript_consequences": 52,
+    "colocated_variants": 5
+   },
+   "ensembl_vep/NM_007294.4:c.68_69del": {
+    "non_canonical_transcript_consequences": 68,
+    "colocated_variants": 1
+   },
+   "ensembl_vep/NM_000492.4:c.1521_1523del": {
+    "non_canonical_transcript_consequences": 26,
+    "colocated_variants": 2
+   },
+   "ensembl_vep/NM_007294.4:c.5266dup": {
+    "non_canonical_transcript_consequences": 43,
+    "colocated_variants": 0
+   },
+   "ensembl_vep/NM_007294.4:c.181_182delinsGC": {
+    "non_canonical_transcript_consequences": 52,
+    "colocated_variants": 0
+   },
+   "ensembl_vep/BRCA1:c.181T>G": {
+    "non_canonical_transcript_consequences": 52,
+    "colocated_variants": 5
+   },
+   "ensembl_vep/TP53:p.Arg248Trp": {
+    "non_canonical_transcript_consequences": 38,
+    "colocated_variants": 6
+   },
+   "ensembl_vep/ENST00000357654.8:c.181T>G": {
+    "non_canonical_transcript_consequences": 52,
+    "colocated_variants": 5
+   },
+   "ensembl_vep/NC_000017.11:g.43104108A>G": {
+    "non_canonical_transcript_consequences": 52,
+    "colocated_variants": 1
+   },
+   "gnomad_variant/13-32355250-T-C": {
+    "hgdp_and_1kg_subset_population_rows": 244
+   },
+   "gnomad_variant/7-117559590-ATCT-A": {
+    "hgdp_and_1kg_subset_population_rows": 244
+   },
+   "alphafold_prediction/P38398": {
+    "model_records": 6
+   },
+   "alphamissense_csv/P38398": {
+    "substitution_rows": 35394
+   },
+   "alphafold_prediction/P04637": {
+    "model_records": 7
+   },
+   "alphamissense_csv/P04637": {
+    "substitution_rows": 7466
+   }
+  },
+  "live_body_sha256": {
+   "ensembl_vep/NM_007294.4:c.181T>G": "33c1f800b6bac655fa7ddb5589789f05fb750f91ecd15b9bad8c839c192872bc",
+   "ensembl_vep/NM_000059.4:c.7397T>C": "1ea681565d79ce0f88a85eb5562012814dd79baab70dc9addef1e06db97cde13",
+   "ensembl_vep/NC_000017.11:g.43106487A>C": "873464a15ac0bca4bb0bb517b5a6d002b68bfc00c025831ccb321e86b8a4dd3a",
+   "ensembl_vep/NM_007294.4:c.181T>A": "85af1d3bfe3af331438914e8626c87d445ffb533cf137624aaf6e0bb9c9047dc",
+   "ensembl_vep/NM_007294.4:c.68_69del": "d962bf4129e0efc080deacbbb1533f7c204e709df89d923ec83824e60f99ff9c",
+   "ensembl_vep/NM_000492.4:c.1521_1523del": "9ab9aac23ea3e7efac3a8d362acc3ae861c83164c620189703e2789bb0d71717",
+   "ensembl_vep/NM_007294.4:c.5266dup": "946ef74eb1766abb752fcd59b8b21a3a9ccfc716b49ea016565bdc68cd353bf4",
+   "ensembl_vep/NM_007294.4:c.181_182delinsGC": "dc2f21a2425f36af7ec222a208593d1288362e2d5b002a1f4b00c9267a280601",
+   "ensembl_vep/BRCA1:c.181T>G": "ac73d25302fc12e9f5270c9062c10996673b8e9920776c8fbde0b680d6903b6d",
+   "ensembl_vep/TP53:p.Arg248Trp": "db512375f70773cadf5a861f5605a49e49c4862ea20a5d0dd8430e919fd0b85c",
+   "ensembl_vep/ENST00000357654.8:c.181T>G": "6eb53cbad9ec246bce5a2eab8bbda00fd86ae367a34858cc9f85bdad0814404f",
+   "ensembl_vep/NM_007294.4:c.181A>G": "2363bff4a5c6135cf7c20622c68db7f846575282303308e6676d321665575f01",
+   "ensembl_vep/NM_007294.3:c.181T>G": "6896b902426080f76a727d3e0cc8ceaf1fe4a6b64a19950fbed4e5e17af9f6d3",
+   "ensembl_vep/NC_000017.10:g.41258504A>C": "2b1bd314aecfd6a0c1b53cc88623c2fc634f359343e8e13022a621a2eec8d23b",
+   "ensembl_vep/NC_000017.11:g.43104108A>G": "2617f66e13e4e49ffaad97ef774eb4300dbec9751e720cd40e0971a0d1709aa6",
+   "gnomad_variant/17-43106487-A-C": "71e7dcecb1bd064d20c9d2641762eaad7f79fc4d4566950acddc4dd6cadc81af",
+   "gnomad_variant/13-32355250-T-C": "736627c5f6f3bef09591b72f4051969b3c20046ef4bda04b4cb0448a1dfd4c5a",
+   "gnomad_variant/17-43106487-A-T": "4fb38a733d7e6f1b61444803ec5f9a8266004115c963e1b80aacb4cd8df77e2e",
+   "gnomad_variant/17-43106487-T-G": "4fb38a733d7e6f1b61444803ec5f9a8266004115c963e1b80aacb4cd8df77e2e",
+   "gnomad_variant/17-43124027-ACT-A": "cd9a3bebef6e6a6cdbe26bbe683ca7ff137686752ac6a74c2840e19d4482f066",
+   "gnomad_variant/7-117559591-TCTT-T": "4fb38a733d7e6f1b61444803ec5f9a8266004115c963e1b80aacb4cd8df77e2e",
+   "gnomad_variant/7-117559590-ATCT-A": "7f2a0b233013871c41f324b9efea6cb368a78d81e989f18c5515743b1b12058e",
+   "gnomad_variant/17-43057063-G-GG": "4fb38a733d7e6f1b61444803ec5f9a8266004115c963e1b80aacb4cd8df77e2e",
+   "gnomad_variant/17-43057062-T-TG": "c9d4ecddef8798f3f4a3a0f23fcff5736c2aeedecd2a6b3a7cec0e72e30941a4",
+   "gnomad_variant/17-43104108-A-G": "c623b4559f23fd2b0ade6f109e62ed1a874e21213ede613d085b14ed5720dfbf",
+   "gnomad_variant/17-43105117-T-C": "b1eb204751fd2846e481388ff743efb6718ad054ca151dbbea39c6dba1c0707d",
+   "gnomad_constraint/BRCA1": "d48243a8f11697f547b61f75d8de85bc191def8a5fdc2c99def7dc854404bfda",
+   "gnomad_constraint/BRCA2": "a1afa10a026e3df680d3837b82f31170ab51d3f868c44e3f6e423a87ec2e1788",
+   "gnomad_constraint/CFTR": "a413625cb7b096ca9459f82de0f6a00b7a442c90811800c10852240f7f4d70b1",
+   "gnomad_constraint/TP53": "784b8f999ab5b7661894b2b83cd3ceb2aaf851b5125b66cb6c1a97e9c4c86931",
+   "alphafold_prediction/P38398": "b1f5643bc84f39b12894fbfc103713456f4c08f4867c7b5b6de6f7f7a895cc83",
+   "alphamissense_csv/P38398": "e9519aa837f538536dd46ccbec755a9089bcc57ba2e33b98032596c36436fa51",
+   "alphafold_prediction/P04637": "1ef436288de2bfd9dbc9a24147b758fbe09bd4a1e27db56d0ced3e5bac215589",
+   "alphamissense_csv/P04637": "ad07bb5ea507288bdf5145dbb64d9b76eb699647dfe989e3918019107dce98b5",
+   "alphafold_prediction/P51587": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+  }
+ },
+ "responses": {
+  "ensembl_vep": {
+   "NM_007294.4:c.181T>G": {
+    "status": 200,
+    "body": [
+     {
+      "input": "NM_007294.4:c.181T>G",
+      "strand": -1,
+      "id": "NM_007294.4:c.181T>G",
+      "allele_string": "T/G",
+      "assembly_name": "GRCh38",
+      "seq_region_name": "17",
+      "start": 43106487,
+      "most_severe_consequence": "missense_variant",
+      "vcf_string": "17-43106487-A-C",
+      "end": 43106487,
+      "transcript_consequences": [
+       {
+        "swissprot": [
+         "P38398.282"
+        ],
+        "biotype": "protein_coding",
+        "transcript_id": "ENST00000357654",
+        "cds_start": 181,
+        "impact": "MODERATE",
+        "codons": "Tgt/Ggt",
+        "cdna_start": 294,
+        "uniparc": [
+         "UPI0000126AC8"
+        ],
+        "exon": "4/23",
+        "protein_end": 61,
+        "gene_symbol_source": "HGNC",
+        "amino_acids": "C/G",
+        "cds_end": 181,
+        "gene_symbol": "BRCA1",
+        "hgnc_id": "HGNC:1100",
+        "uniprot_isoform": [
+         "P38398-1"
+        ],
+        "polyphen_prediction": "benign",
+        "protein_start": 61,
+        "consequence_terms": [
+         "missense_variant"
+        ],
+        "polyphen_score": 0.027,
+        "strand": -1,
+        "sift_prediction": "deleterious",
+        "refseq_transcript_ids": [
+         "NM_001407603.1",
+         "NM_001407968.1",
+         "NM_001407652.1",
+         "NM_001407598.1",
+         "NM_001407602.1",
+         "NM_007294.4"
+        ],
+        "protein_id": "ENSP00000350283",
+        "gene_id": "ENSG00000012048",
+        "sift_score": 0,
+        "canonical": 1,
+        "variant_allele": "G",
+        "cdna_end": 294
+       }
+      ]
+     }
+    ]
+   },
+   "NM_000059.4:c.7397T>C": {
+    "status": 200,
+    "body": [
+     {
+      "most_severe_consequence": "missense_variant",
+      "vcf_string": "13-32355250-T-C",
+      "strand": 1,
+      "allele_string": "T/C",
+      "id": "NM_000059.4:c.7397T>C",
+      "seq_region_name": "13",
+      "end": 32355250,
+      "assembly_name": "GRCh38",
+      "input": "NM_000059.4:c.7397T>C",
+      "start": 32355250,
+      "transcript_consequences": [
+       {
+        "sift_prediction": "tolerated",
+        "transcript_id": "ENST00000380152",
+        "cds_end": 7397,
+        "sift_score": 1,
+        "biotype": "protein_coding",
+        "protein_end": 2466,
+        "strand": 1,
+        "consequence_terms": [
+         "missense_variant"
+        ],
+        "impact": "MODERATE",
+        "cdna_end": 7596,
+        "canonical": 1,
+        "swissprot": [
+         "P51587.249"
+        ],
+        "gene_symbol": "BRCA2",
+        "protein_id": "ENSP00000369497",
+        "uniparc": [
+         "UPI00001FCBCC"
+        ],
+        "cds_start": 7397,
+        "exon": "14/27",
+        "refseq_transcript_ids": [
+         "NM_000059.4",
+         "NM_001406719.1",
+         "NM_001406721.1"
+        ],
+        "polyphen_score": 0,
+        "hgnc_id": "HGNC:1101",
+        "polyphen_prediction": "benign",
+        "variant_allele": "C",
+        "cdna_start": 7596,
+        "gene_id": "ENSG00000139618",
+        "gene_symbol_source": "HGNC",
+        "amino_acids": "V/A",
+        "codons": "gTa/gCa",
+        "protein_start": 2466
+       }
+      ]
+     }
+    ]
+   },
+   "NC_000017.11:g.43106487A>C": {
+    "status": 200,
+    "body": [
+     {
+      "start": 43106487,
+      "end": 43106487,
+      "allele_string": "A/C",
+      "strand": 1,
+      "most_severe_consequence": "missense_variant",
+      "id": "NC_000017.11:g.43106487A>C",
+      "input": "NC_000017.11:g.43106487A>C",
+      "vcf_string": "17-43106487-A-C",
+      "seq_region_name": "17",
+      "assembly_name": "GRCh38",
+      "transcript_consequences": [
+       {
+        "amino_acids": "C/G",
+        "biotype": "protein_coding",
+        "protein_start": 61,
+        "polyphen_prediction": "benign",
+        "uniparc": [
+         "UPI0000126AC8"
+        ],
+        "swissprot": [
+         "P38398.282"
+        ],
+        "refseq_transcript_ids": [
+         "NM_001407603.1",
+         "NM_001407968.1",
+         "NM_001407652.1",
+         "NM_001407598.1",
+         "NM_001407602.1",
+         "NM_007294.4"
+        ],
+        "cds_end": 181,
+        "exon": "4/23",
+        "protein_end": 61,
+        "uniprot_isoform": [
+         "P38398-1"
+        ],
+        "cds_start": 181,
+        "strand": -1,
+        "codons": "Tgt/Ggt",
+        "gene_symbol_source": "HGNC",
+        "cdna_end": 294,
+        "gene_symbol": "BRCA1",
+        "sift_score": 0,
+        "canonical": 1,
+        "consequence_terms": [
+         "missense_variant"
+        ],
+        "transcript_id": "ENST00000357654",
+        "sift_prediction": "deleterious",
+        "gene_id": "ENSG00000012048",
+        "variant_allele": "C",
+        "protein_id": "ENSP00000350283",
+        "impact": "MODERATE",
+        "polyphen_score": 0.027,
+        "hgnc_id": "HGNC:1100",
+        "cdna_start": 294
+       }
+      ]
+     }
+    ]
+   },
+   "NM_007294.4:c.181T>A": {
+    "status": 200,
+    "body": [
+     {
+      "vcf_string": "17-43106487-A-T",
+      "most_severe_consequence": "missense_variant",
+      "strand": -1,
+      "allele_string": "T/A",
+      "id": "NM_007294.4:c.181T>A",
+      "seq_region_name": "17",
+      "end": 43106487,
+      "input": "NM_007294.4:c.181T>A",
+      "assembly_name": "GRCh38",
+      "start": 43106487,
+      "transcript_consequences": [
+       {
+        "gene_symbol": "BRCA1",
+        "swissprot": [
+         "P38398.282"
+        ],
+        "canonical": 1,
+        "consequence_terms": [
+         "missense_variant"
+        ],
+        "cdna_end": 294,
+        "impact": "MODERATE",
+        "protein_end": 61,
+        "strand": -1,
+        "biotype": "protein_coding",
+        "sift_score": 0,
+        "cds_end": 181,
+        "transcript_id": "ENST00000357654",
+        "sift_prediction": "deleterious",
+        "protein_start": 61,
+        "uniprot_isoform": [
+         "P38398-1"
+        ],
+        "codons": "Tgt/Agt",
+        "amino_acids": "C/S",
+        "gene_symbol_source": "HGNC",
+        "gene_id": "ENSG00000012048",
+        "variant_allele": "A",
+        "cdna_start": 294,
+        "polyphen_prediction": "benign",
+        "hgnc_id": "HGNC:1100",
+        "polyphen_score": 0.165,
+        "refseq_transcript_ids": [
+         "NM_001407603.1",
+         "NM_001407968.1",
+         "NM_001407652.1",
+         "NM_001407598.1",
+         "NM_001407602.1",
+         "NM_007294.4"
+        ],
+        "exon": "4/23",
+        "cds_start": 181,
+        "uniparc": [
+         "UPI0000126AC8"
+        ],
+        "protein_id": "ENSP00000350283"
+       }
+      ]
+     }
+    ]
+   },
+   "NM_007294.4:c.68_69del": {
+    "status": 200,
+    "body": [
+     {
+      "strand": -1,
+      "start": 43124028,
+      "end": 43124029,
+      "assembly_name": "GRCh38",
+      "id": "NM_007294.4:c.68_69del",
+      "input": "NM_007294.4:c.68_69del",
+      "vcf_string": "17-43124027-ACT-A",
+      "most_severe_consequence": "frameshift_variant",
+      "seq_region_name": "17",
+      "allele_string": "AG/-",
+      "transcript_consequences": [
+       {
+        "protein_id": "ENSP00000350283",
+        "amino_acids": "E/X",
+        "cds_start": 68,
+        "gene_id": "ENSG00000012048",
+        "biotype": "protein_coding",
+        "transcript_id": "ENST00000357654",
+        "consequence_terms": [
+         "frameshift_variant"
+        ],
+        "refseq_transcript_ids": [
+         "NM_001407603.1",
+         "NM_001407968.1",
+         "NM_001407652.1",
+         "NM_001407598.1",
+         "NM_001407602.1",
+         "NM_007294.4"
+        ],
+        "protein_end": 23,
+        "cds_end": 69,
+        "codons": "gAG/g",
+        "uniprot_isoform": [
+         "P38398-1"
+        ],
+        "canonical": 1,
+        "swissprot": [
+         "P38398.282"
+        ],
+        "hgnc_id": "HGNC:1100",
+        "cdna_start": 181,
+        "exon": "2/23",
+        "cdna_end": 182,
+        "uniparc": [
+         "UPI0000126AC8"
+        ],
+        "protein_start": 23,
+        "gene_symbol_source": "HGNC",
+        "variant_allele": "-",
+        "gene_symbol": "BRCA1",
+        "impact": "HIGH",
+        "strand": -1
+       },
+       {
+        "gene_symbol": "NBR2",
+        "impact": "MODIFIER",
+        "canonical": 1,
+        "strand": 1,
+        "gene_symbol_source": "HGNC",
+        "variant_allele": "-",
+        "transcript_id": "ENST00000657841",
+        "biotype": "lncRNA",
+        "consequence_terms": [
+         "upstream_gene_variant"
+        ],
+        "distance": 1522,
+        "hgnc_id": "HGNC:20691",
+        "gene_id": "ENSG00000198496"
+       }
+      ]
+     }
+    ]
+   },
+   "NM_000492.4:c.1521_1523del": {
+    "status": 200,
+    "body": [
+     {
+      "assembly_name": "GRCh38",
+      "seq_region_name": "7",
+      "vcf_string": "7-117559591-TCTT-T",
+      "input": "NM_000492.4:c.1521_1523del",
+      "id": "NM_000492.4:c.1521_1523del",
+      "most_severe_consequence": "inframe_deletion",
+      "allele_string": "CTT/-",
+      "strand": 1,
+      "end": 117559594,
+      "start": 117559592,
+      "transcript_consequences": [
+       {
+        "exon": "11/27",
+        "refseq_transcript_ids": [
+         "NM_000492.4"
+        ],
+        "cds_end": 1523,
+        "protein_end": 508,
+        "uniprot_isoform": [
+         "P13569-1"
+        ],
+        "uniparc": [
+         "UPI000013C4D4"
+        ],
+        "swissprot": [
+         "P13569.283"
+        ],
+        "amino_acids": "IF/I",
+        "biotype": "protein_coding",
+        "protein_start": 507,
+        "codons": "atCTTt/att",
+        "strand": 1,
+        "cds_start": 1521,
+        "transcript_id": "ENST00000003084",
+        "canonical": 1,
+        "consequence_terms": [
+         "inframe_deletion"
+        ],
+        "gene_symbol_source": "HGNC",
+        "cdna_end": 1593,
+        "gene_symbol": "CFTR",
+        "cdna_start": 1591,
+        "hgnc_id": "HGNC:1884",
+        "protein_id": "ENSP00000003084",
+        "variant_allele": "-",
+        "impact": "MODERATE",
+        "gene_id": "ENSG00000001626"
+       },
+       {
+        "canonical": 1,
+        "distance": 1139,
+        "consequence_terms": [
+         "downstream_gene_variant"
+        ],
+        "gene_symbol_source": "HGNC",
+        "biotype": "lncRNA",
+        "gene_symbol": "CFTR-AS1",
+        "transcript_id": "ENST00000441019",
+        "variant_allele": "-",
+        "strand": -1,
+        "impact": "MODIFIER",
+        "gene_id": "ENSG00000232661",
+        "hgnc_id": "HGNC:40144"
+       }
+      ]
+     }
+    ]
+   },
+   "NM_007294.4:c.5266dup": {
+    "status": 200,
+    "body": [
+     {
+      "vcf_string": "17-43057063-G-GG",
+      "assembly_name": "GRCh38",
+      "input": "NM_007294.4:c.5266dup",
+      "allele_string": "-/C",
+      "id": "NM_007294.4:c.5266dup",
+      "start": 43057064,
+      "seq_region_name": "17",
+      "strand": -1,
+      "end": 43057063,
+      "most_severe_consequence": "frameshift_variant",
+      "transcript_consequences": [
+       {
+        "cds_start": 5265,
+        "consequence_terms": [
+         "frameshift_variant"
+        ],
+        "swissprot": [
+         "P38398.282"
+        ],
+        "protein_end": 1756,
+        "cdna_start": 5378,
+        "refseq_transcript_ids": [
+         "NM_001407603.1",
+         "NM_001407968.1",
+         "NM_001407652.1",
+         "NM_001407598.1",
+         "NM_001407602.1",
+         "NM_007294.4"
+        ],
+        "protein_id": "ENSP00000350283",
+        "protein_start": 1755,
+        "strand": -1,
+        "cds_end": 5266,
+        "uniprot_isoform": [
+         "P38398-1"
+        ],
+        "variant_allele": "C",
+        "gene_symbol": "BRCA1",
+        "amino_acids": "-/X",
+        "impact": "HIGH",
+        "uniparc": [
+         "UPI0000126AC8"
+        ],
+        "gene_id": "ENSG00000012048",
+        "biotype": "protein_coding",
+        "transcript_id": "ENST00000357654",
+        "cdna_end": 5379,
+        "hgnc_id": "HGNC:1100",
+        "exon": "19/23",
+        "canonical": 1,
+        "codons": "-/C",
+        "gene_symbol_source": "HGNC"
+       }
+      ]
+     }
+    ]
+   },
+   "NM_007294.4:c.181_182delinsGC": {
+    "status": 200,
+    "body": [
+     {
+      "end": 43106487,
+      "allele_string": "TG/GC",
+      "seq_region_name": "17",
+      "input": "NM_007294.4:c.181_182delinsGC",
+      "strand": -1,
+      "id": "NM_007294.4:c.181_182delinsGC",
+      "vcf_string": "17-43106486-CA-GC",
+      "start": 43106486,
+      "most_severe_consequence": "missense_variant",
+      "assembly_name": "GRCh38",
+      "transcript_consequences": [
+       {
+        "sift_prediction": "deleterious",
+        "codons": "TGt/GCt",
+        "cds_start": 181,
+        "biotype": "protein_coding",
+        "protein_id": "ENSP00000350283",
+        "amino_acids": "C/A",
+        "refseq_transcript_ids": [
+         "NM_001407603.1",
+         "NM_001407968.1",
+         "NM_001407652.1",
+         "NM_001407598.1",
+         "NM_001407602.1",
+         "NM_007294.4"
+        ],
+        "polyphen_score": 0.331,
+        "cds_end": 182,
+        "uniparc": [
+         "UPI0000126AC8"
+        ],
+        "protein_start": 61,
+        "cdna_end": 295,
+        "strand": -1,
+        "polyphen_prediction": "benign",
+        "uniprot_isoform": [
+         "P38398-1"
+        ],
+        "sift_score": 0,
+        "gene_id": "ENSG00000012048",
+        "exon": "4/23",
+        "hgnc_id": "HGNC:1100",
+        "swissprot": [
+         "P38398.282"
+        ],
+        "protein_end": 61,
+        "transcript_id": "ENST00000357654",
+        "gene_symbol_source": "HGNC",
+        "variant_allele": "GC",
+        "canonical": 1,
+        "gene_symbol": "BRCA1",
+        "consequence_terms": [
+         "missense_variant"
+        ],
+        "cdna_start": 294,
+        "impact": "MODERATE"
+       }
+      ]
+     }
+    ]
+   },
+   "BRCA1:c.181T>G": {
+    "status": 200,
+    "body": [
+     {
+      "vcf_string": "17-43106487-A-C",
+      "strand": -1,
+      "id": "BRCA1:c.181T>G",
+      "end": 43106487,
+      "assembly_name": "GRCh38",
+      "seq_region_name": "17",
+      "allele_string": "T/G",
+      "input": "BRCA1:c.181T>G",
+      "most_severe_consequence": "missense_variant",
+      "start": 43106487,
+      "transcript_consequences": [
+       {
+        "variant_allele": "G",
+        "codons": "Tgt/Ggt",
+        "gene_symbol": "BRCA1",
+        "strand": -1,
+        "protein_id": "ENSP00000350283",
+        "polyphen_prediction": "benign",
+        "cdna_start": 294,
+        "cdna_end": 294,
+        "uniparc": [
+         "UPI0000126AC8"
+        ],
+        "refseq_transcript_ids": [
+         "NM_001407603.1",
+         "NM_001407968.1",
+         "NM_001407652.1",
+         "NM_001407598.1",
+         "NM_001407602.1",
+         "NM_007294.4"
+        ],
+        "swissprot": [
+         "P38398.282"
+        ],
+        "hgnc_id": "HGNC:1100",
+        "protein_end": 61,
+        "transcript_id": "ENST00000357654",
+        "exon": "4/23",
+        "gene_id": "ENSG00000012048",
+        "cds_start": 181,
+        "impact": "MODERATE",
+        "uniprot_isoform": [
+         "P38398-1"
+        ],
+        "polyphen_score": 0.027,
+        "cds_end": 181,
+        "sift_prediction": "deleterious",
+        "consequence_terms": [
+         "missense_variant"
+        ],
+        "biotype": "protein_coding",
+        "amino_acids": "C/G",
+        "sift_score": 0,
+        "protein_start": 61,
+        "canonical": 1,
+        "gene_symbol_source": "HGNC"
+       }
+      ]
+     }
+    ]
+   },
+   "TP53:p.Arg248Trp": {
+    "status": 200,
+    "body": [
+     {
+      "most_severe_consequence": "missense_variant",
+      "end": 7674221,
+      "seq_region_name": "17",
+      "start": 7674221,
+      "id": "TP53:p.Arg248Trp",
+      "strand": -1,
+      "input": "TP53:p.Arg248Trp",
+      "allele_string": "C/T",
+      "vcf_string": "17-7674221-G-A",
+      "assembly_name": "GRCh38",
+      "transcript_consequences": [
+       {
+        "protein_id": "ENSP00000269305",
+        "protein_start": 248,
+        "consequence_terms": [
+         "missense_variant"
+        ],
+        "cds_start": 742,
+        "protein_end": 248,
+        "sift_prediction": "deleterious",
+        "swissprot": [
+         "P04637.312"
+        ],
+        "cdna_start": 884,
+        "refseq_transcript_ids": [
+         "NM_001126112.3",
+         "NM_000546.6"
+        ],
+        "cds_end": 742,
+        "strand": -1,
+        "trembl": [
+         "K7PPA8.97"
+        ],
+        "gene_symbol": "TP53",
+        "sift_score": 0,
+        "impact": "MODERATE",
+        "amino_acids": "R/W",
+        "variant_allele": "T",
+        "uniprot_isoform": [
+         "P04637-1"
+        ],
+        "canonical": 1,
+        "codons": "Cgg/Tgg",
+        "gene_symbol_source": "HGNC",
+        "uniparc": [
+         "UPI000002ED67"
+        ],
+        "gene_id": "ENSG00000141510",
+        "transcript_id": "ENST00000269305",
+        "biotype": "protein_coding",
+        "cdna_end": 884,
+        "hgnc_id": "HGNC:11998",
+        "exon": "7/11"
+       }
+      ]
+     }
+    ]
+   },
+   "ENST00000357654.8:c.181T>G": {
+    "status": 200,
+    "body": [
+     {
+      "strand": -1,
+      "most_severe_consequence": "missense_variant",
+      "assembly_name": "GRCh38",
+      "vcf_string": "17-43106487-A-C",
+      "id": "ENST00000357654.8:c.181T>G",
+      "end": 43106487,
+      "allele_string": "T/G",
+      "input": "ENST00000357654.8:c.181T>G",
+      "seq_region_name": "17",
+      "start": 43106487,
+      "transcript_consequences": [
+       {
+        "gene_id": "ENSG00000012048",
+        "amino_acids": "C/G",
+        "cdna_start": 294,
+        "cdna_end": 294,
+        "canonical": 1,
+        "gene_symbol": "BRCA1",
+        "cds_start": 181,
+        "protein_end": 61,
+        "consequence_terms": [
+         "missense_variant"
+        ],
+        "refseq_transcript_ids": [
+         "NM_001407603.1",
+         "NM_001407968.1",
+         "NM_001407652.1",
+         "NM_001407598.1",
+         "NM_001407602.1",
+         "NM_007294.4"
+        ],
+        "strand": -1,
+        "protein_start": 61,
+        "impact": "MODERATE",
+        "sift_prediction": "deleterious",
+        "uniprot_isoform": [
+         "P38398-1"
+        ],
+        "exon": "4/23",
+        "sift_score": 0,
+        "polyphen_score": 0.027,
+        "protein_id": "ENSP00000350283",
+        "gene_symbol_source": "HGNC",
+        "transcript_id": "ENST00000357654",
+        "hgnc_id": "HGNC:1100",
+        "variant_allele": "G",
+        "cds_end": 181,
+        "biotype": "protein_coding",
+        "codons": "Tgt/Ggt",
+        "uniparc": [
+         "UPI0000126AC8"
+        ],
+        "polyphen_prediction": "benign",
+        "swissprot": [
+         "P38398.282"
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "NM_007294.4:c.181A>G": {
+    "status": 400,
+    "body": {
+     "error": "Unable to parse HGVS notation 'NM_007294.4:c.181A>G':  : Reference allele extracted from NM_007294.4:43106487-43106487 (T) does not match reference allele given by HGVS notation NM_007294.4:c.181A>G (A)"
+    }
+   },
+   "NM_007294.3:c.181T>G": {
+    "status": 400,
+    "body": {
+     "error": "Unable to parse HGVS notation 'NM_007294.3:c.181T>G': Could not get a Transcript object for 'NM_007294.3'"
+    }
+   },
+   "NC_000017.10:g.41258504A>C": {
+    "status": 400,
+    "body": {
+     "error": "Unable to parse HGVS notation 'NC_000017.10:g.41258504A>C'"
+    }
+   },
+   "NC_000017.11:g.43104108A>G": {
+    "status": 200,
+    "body": [
+     {
+      "allele_string": "A/G",
+      "start": 43104108,
+      "most_severe_consequence": "intron_variant",
+      "input": "NC_000017.11:g.43104108A>G",
+      "id": "NC_000017.11:g.43104108A>G",
+      "strand": 1,
+      "vcf_string": "17-43104108-A-G",
+      "seq_region_name": "17",
+      "assembly_name": "GRCh38",
+      "end": 43104108,
+      "transcript_consequences": [
+       {
+        "variant_allele": "G",
+        "gene_symbol": "BRCA1",
+        "protein_id": "ENSP00000350283",
+        "strand": -1,
+        "refseq_transcript_ids": [
+         "NM_001407603.1",
+         "NM_001407968.1",
+         "NM_001407652.1",
+         "NM_001407598.1",
+         "NM_001407602.1",
+         "NM_007294.4"
+        ],
+        "uniparc": [
+         "UPI0000126AC8"
+        ],
+        "swissprot": [
+         "P38398.282"
+        ],
+        "hgnc_id": "HGNC:1100",
+        "gene_id": "ENSG00000012048",
+        "transcript_id": "ENST00000357654",
+        "uniprot_isoform": [
+         "P38398-1"
+        ],
+        "impact": "MODIFIER",
+        "consequence_terms": [
+         "intron_variant"
+        ],
+        "biotype": "protein_coding",
+        "intron": "6/22",
+        "gene_symbol_source": "HGNC",
+        "canonical": 1
+       }
+      ]
+     }
+    ]
+   }
+  },
+  "gnomad_variant": {
+   "17-43106487-A-C": {
+    "status": 200,
+    "body": {
+     "data": {
+      "variant": {
+       "variantId": "17-43106487-A-C",
+       "rsids": [
+        "rs28897672"
+       ],
+       "chrom": "17",
+       "pos": 43106487,
+       "ref": "A",
+       "alt": "C",
+       "exome": {
+        "ac": 25,
+        "an": 1452604,
+        "af": 1.721047167707097e-05,
+        "ac_hom": 0,
+        "populations": [
+         {
+          "id": "remaining",
+          "ac": 1,
+          "an": 60012,
+          "ac_hom": 0
+         },
+         {
+          "id": "remaining_XX",
+          "ac": 1,
+          "an": 31590,
+          "ac_hom": 0
+         },
+         {
+          "id": "remaining_XY",
+          "ac": 0,
+          "an": 28422,
+          "ac_hom": 0
+         },
+         {
+          "id": "amr",
+          "ac": 0,
+          "an": 44670,
+          "ac_hom": 0
+         },
+         {
+          "id": "amr_XX",
+          "ac": 0,
+          "an": 25662,
+          "ac_hom": 0
+         },
+         {
+          "id": "amr_XY",
+          "ac": 0,
+          "an": 19008,
+          "ac_hom": 0
+         },
+         {
+          "id": "fin",
+          "ac": 1,
+          "an": 53354,
+          "ac_hom": 0
+         },
+         {
+          "id": "fin_XX",
+          "ac": 0,
+          "an": 27600,
+          "ac_hom": 0
+         },
+         {
+          "id": "fin_XY",
+          "ac": 1,
+          "an": 25754,
+          "ac_hom": 0
+         },
+         {
+          "id": "mid",
+          "ac": 0,
+          "an": 5540,
+          "ac_hom": 0
+         },
+         {
+          "id": "mid_XX",
+          "ac": 0,
+          "an": 2378,
+          "ac_hom": 0
+         },
+         {
+          "id": "mid_XY",
+          "ac": 0,
+          "an": 3162,
+          "ac_hom": 0
+         },
+         {
+          "id": "nfe",
+          "ac": 23,
+          "an": 1104550,
+          "ac_hom": 0
+         },
+         {
+          "id": "nfe_XX",
+          "ac": 10,
+          "an": 568074,
+          "ac_hom": 0
+         },
+         {
+          "id": "nfe_XY",
+          "ac": 13,
+          "an": 536476,
+          "ac_hom": 0
+         },
+         {
+          "id": "sas",
+          "ac": 0,
+          "an": 85584,
+          "ac_hom": 0
+         },
+         {
+          "id": "sas_XX",
+          "ac": 0,
+          "an": 21848,
+          "ac_hom": 0
+         },
+         {
+          "id": "sas_XY",
+          "ac": 0,
+          "an": 63736,
+          "ac_hom": 0
+         },
+         {
+          "id": "asj",
+          "ac": 0,
+          "an": 26052,
+          "ac_hom": 0
+         },
+         {
+          "id": "asj_XX",
+          "ac": 0,
+          "an": 12594,
+          "ac_hom": 0
+         },
+         {
+          "id": "asj_XY",
+          "ac": 0,
+          "an": 13458,
+          "ac_hom": 0
+         },
+         {
+          "id": "eas",
+          "ac": 0,
+          "an": 39562,
+          "ac_hom": 0
+         },
+         {
+          "id": "eas_XX",
+          "ac": 0,
+          "an": 20636,
+          "ac_hom": 0
+         },
+         {
+          "id": "eas_XY",
+          "ac": 0,
+          "an": 18926,
+          "ac_hom": 0
+         },
+         {
+          "id": "afr",
+          "ac": 0,
+          "an": 33280,
+          "ac_hom": 0
+         },
+         {
+          "id": "afr_XX",
+          "ac": 0,
+          "an": 19200,
+          "ac_hom": 0
+         },
+         {
+          "id": "afr_XY",
+          "ac": 0,
+          "an": 14080,
+          "ac_hom": 0
+         },
+         {
+          "id": "XX",
+          "ac": 11,
+          "an": 729582,
+          "ac_hom": 0
+         },
+         {
+          "id": "XY",
+          "ac": 14,
+          "an": 723022,
+          "ac_hom": 0
+         }
+        ]
+       },
+       "genome": {
+        "ac": 5,
+        "an": 152214,
+        "af": 3.284848962644697e-05,
+        "ac_hom": 0,
+        "populations": [
+         {
+          "id": "remaining",
+          "ac": 0,
+          "an": 2094,
+          "ac_hom": 0
+         },
+         {
+          "id": "remaining_XX",
+          "ac": 0,
+          "an": 1034,
+          "ac_hom": 0
+         },
+         {
+          "id": "remaining_XY",
+          "ac": 0,
+          "an": 1060,
+          "ac_hom": 0
+         },
+         {
+          "id": "amr",
+          "ac": 0,
+          "an": 15270,
+          "ac_hom": 0
+         },
+         {
+          "id": "amr_XX",
+          "ac": 0,
+          "an": 6786,
+          "ac_hom": 0
+         },
+         {
+          "id": "amr_XY",
+          "ac": 0,
+          "an": 8484,
+          "ac_hom": 0
+         },
+         {
+          "id": "fin",
+          "ac": 0,
+          "an": 10624,
+          "ac_hom": 0
+         },
+         {
+          "id": "fin_XX",
+          "ac": 0,
+          "an": 2568,
+          "ac_hom": 0
+         },
+         {
+          "id": "fin_XY",
+          "ac": 0,
+          "an": 8056,
+          "ac_hom": 0
+         },
+         {
+          "id": "ami",
+          "ac": 0,
+          "an": 912,
+          "ac_hom": 0
+         },
+         {
+          "id": "ami_XX",
+          "ac": 0,
+          "an": 470,
+          "ac_hom": 0
+         },
+         {
+          "id": "ami_XY",
+          "ac": 0,
+          "an": 442,
+          "ac_hom": 0
+         },
+         {
+          "id": "eas",
+          "ac": 0,
+          "an": 5204,
+          "ac_hom": 0
+         },
+         {
+          "id": "eas_XX",
+          "ac": 0,
+          "an": 2278,
+          "ac_hom": 0
+         },
+         {
+          "id": "eas_XY",
+          "ac": 0,
+          "an": 2926,
+          "ac_hom": 0
+         },
+         {
+          "id": "mid",
+          "ac": 0,
+          "an": 316,
+          "ac_hom": 0
+         },
+         {
+          "id": "mid_XX",
+          "ac": 0,
+          "an": 164,
+          "ac_hom": 0
+         },
+         {
+          "id": "mid_XY",
+          "ac": 0,
+          "an": 152,
+          "ac_hom": 0
+         },
+         {
+          "id": "sas",
+          "ac": 0,
+          "an": 4834,
+          "ac_hom": 0
+         },
+         {
+          "id": "sas_XX",
+          "ac": 0,
+          "an": 1166,
+          "ac_hom": 0
+         },
+         {
+          "id": "sas_XY",
+          "ac": 0,
+          "an": 3668,
+          "ac_hom": 0
+         },
+         {
+          "id": "asj",
+          "ac": 0,
+          "an": 3472,
+          "ac_hom": 0
+         },
+         {
+          "id": "asj_XX",
+          "ac": 0,
+          "an": 1868,
+          "ac_hom": 0
+         },
+         {
+          "id": "asj_XY",
+          "ac": 0,
+          "an": 1604,
+          "ac_hom": 0
+         },
+         {
+          "id": "afr",
+          "ac": 0,
+          "an": 41450,
+          "ac_hom": 0
+         },
+         {
+          "id": "afr_XX",
+          "ac": 0,
+          "an": 22158,
+          "ac_hom": 0
+         },
+         {
+          "id": "afr_XY",
+          "ac": 0,
+          "an": 19292,
+          "ac_hom": 0
+         },
+         {
+          "id": "nfe",
+          "ac": 5,
+          "an": 68038,
+          "ac_hom": 0
+         },
+         {
+          "id": "nfe_XX",
+          "ac": 1,
+          "an": 39362,
+          "ac_hom": 0
+         },
+         {
+          "id": "nfe_XY",
+          "ac": 4,
+          "an": 28676,
+          "ac_hom": 0
+         },
+         {
+          "id": "XX",
+          "ac": 1,
+          "an": 77854,
+          "ac_hom": 0
+         },
+         {
+          "id": "XY",
+          "ac": 4,
+          "an": 74360,
+          "ac_hom": 0
+         }
+        ]
+       }
+      }
+     }
+    }
+   },
+   "13-32355250-T-C": {
+    "status": 200,
+    "body": {
+     "data": {
+      "variant": {
+       "variantId": "13-32355250-T-C",
+       "rsids": [
+        "rs169547"
+       ],
+       "chrom": "13",
+       "pos": 32355250,
+       "ref": "T",
+       "alt": "C",
+       "exome": {
+        "ac": 1458237,
+        "an": 1461288,
+        "af": 0.9979121158868067,
+        "ac_hom": 727677,
+        "populations": [
+         {
+          "id": "remaining",
+          "ac": 60101,
+          "an": 60362,
+          "ac_hom": 29923
+         },
+         {
+          "id": "remaining_XX",
+          "ac": 31635,
+          "an": 31778,
+          "ac_hom": 15748
+         },
+         {
+          "id": "remaining_XY",
+          "ac": 28466,
+          "an": 28584,
+          "ac_hom": 14175
+         },
+         {
+          "id": "amr",
+          "ac": 44527,
+          "an": 44720,
+          "ac_hom": 22167
+         },
+         {
+          "id": "amr_XX",
+          "ac": 25583,
+          "an": 25690,
+          "ac_hom": 12738
+         },
+         {
+          "id": "amr_XY",
+          "ac": 18944,
+          "an": 19030,
+          "ac_hom": 9429
+         },
+         {
+          "id": "fin",
+          "ac": 53414,
+          "an": 53414,
+          "ac_hom": 26707
+         },
+         {
+          "id": "fin_XX",
+          "ac": 27644,
+          "an": 27644,
+          "ac_hom": 13822
+         },
+         {
+          "id": "fin_XY",
+          "ac": 25770,
+          "an": 25770,
+          "ac_hom": 12885
+         },
+         {
+          "id": "mid",
+          "ac": 5734,
+          "an": 5764,
+          "ac_hom": 2852
+         },
+         {
+          "id": "mid_XX",
+          "ac": 2495,
+          "an": 2506,
+          "ac_hom": 1242
+         },
+         {
+          "id": "mid_XY",
+          "ac": 3239,
+          "an": 3258,
+          "ac_hom": 1610
+         },
+         {
+          "id": "nfe",
+          "ac": 1111380,
+          "an": 1111588,
+          "ac_hom": 555586
+         },
+         {
+          "id": "nfe_XX",
+          "ac": 571929,
+          "an": 572028,
+          "ac_hom": 285915
+         },
+         {
+          "id": "nfe_XY",
+          "ac": 539451,
+          "an": 539560,
+          "ac_hom": 269671
+         },
+         {
+          "id": "sas",
+          "ac": 86208,
+          "an": 86222,
+          "ac_hom": 43097
+         },
+         {
+          "id": "sas_XX",
+          "ac": 22026,
+          "an": 22028,
+          "ac_hom": 11012
+         },
+         {
+          "id": "sas_XY",
+          "ac": 64182,
+          "an": 64194,
+          "ac_hom": 32085
+         },
+         {
+          "id": "asj",
+          "ac": 26125,
+          "an": 26126,
+          "ac_hom": 13062
+         },
+         {
+          "id": "asj_XX",
+          "ac": 12632,
+          "an": 12632,
+          "ac_hom": 6316
+         },
+         {
+          "id": "asj_XY",
+          "ac": 13493,
+          "an": 13494,
+          "ac_hom": 6746
+         },
+         {
+          "id": "eas",
+          "ac": 39634,
+          "an": 39634,
+          "ac_hom": 19817
+         },
+         {
+          "id": "eas_XX",
+          "ac": 20680,
+          "an": 20680,
+          "ac_hom": 10340
+         },
+         {
+          "id": "eas_XY",
+          "ac": 18954,
+          "an": 18954,
+          "ac_hom": 9477
+         },
+         {
+          "id": "afr",
+          "ac": 31114,
+          "an": 33458,
+          "ac_hom": 14466
+         },
+         {
+          "id": "afr_XX",
+          "ac": 17952,
+          "an": 19310,
+          "ac_hom": 8343
+         },
+         {
+          "id": "afr_XY",
+          "ac": 13162,
+          "an": 14148,
+          "ac_hom": 6123
+         },
+         {
+          "id": "XX",
+          "ac": 732576,
+          "an": 734296,
+          "ac_hom": 365476
+         },
+         {
+          "id": "XY",
+          "ac": 725661,
+          "an": 726992,
+          "ac_hom": 362201
+         }
+        ]
+       },
+       "genome": {
+        "ac": 149351,
+        "an": 152310,
+        "af": 0.9805725165780317,
+        "ac_hom": 73292,
+        "populations": [
+         {
+          "id": "remaining",
+          "ac": 2083,
+          "an": 2114,
+          "ac_hom": 1027
+         },
+         {
+          "id": "remaining_XX",
+          "ac": 1028,
+          "an": 1048,
+          "ac_hom": 504
+         },
+         {
+          "id": "remaining_XY",
+          "ac": 1055,
+          "an": 1066,
+          "ac_hom": 523
+         },
+         {
+          "id": "amr",
+          "ac": 15199,
+          "an": 15306,
+          "ac_hom": 7547
+         },
+         {
+          "id": "amr_XX",
+          "ac": 6749,
+          "an": 6798,
+          "ac_hom": 3350
+         },
+         {
+          "id": "amr_XY",
+          "ac": 8450,
+          "an": 8508,
+          "ac_hom": 4197
+         },
+         {
+          "id": "fin",
+          "ac": 10626,
+          "an": 10626,
+          "ac_hom": 5313
+         },
+         {
+          "id": "fin_XX",
+          "ac": 2572,
+          "an": 2572,
+          "ac_hom": 1286
+         },
+         {
+          "id": "fin_XY",
+          "ac": 8054,
+          "an": 8054,
+          "ac_hom": 4027
+         },
+         {
+          "id": "ami",
+          "ac": 910,
+          "an": 910,
+          "ac_hom": 455
+         },
+         {
+          "id": "ami_XX",
+          "ac": 470,
+          "an": 470,
+          "ac_hom": 235
+         },
+         {
+          "id": "ami_XY",
+          "ac": 440,
+          "an": 440,
+          "ac_hom": 220
+         },
+         {
+          "id": "eas",
+          "ac": 5177,
+          "an": 5178,
+          "ac_hom": 2588
+         },
+         {
+          "id": "eas_XX",
+          "ac": 2272,
+          "an": 2272,
+          "ac_hom": 1136
+         },
+         {
+          "id": "eas_XY",
+          "ac": 2905,
+          "an": 2906,
+          "ac_hom": 1452
+         },
+         {
+          "id": "mid",
+          "ac": 287,
+          "an": 294,
+          "ac_hom": 140
+         },
+         {
+          "id": "mid_XX",
+          "ac": 141,
+          "an": 144,
+          "ac_hom": 69
+         },
+         {
+          "id": "mid_XY",
+          "ac": 146,
+          "an": 150,
+          "ac_hom": 71
+         },
+         {
+          "id": "sas",
+          "ac": 4828,
+          "an": 4830,
+          "ac_hom": 2413
+         },
+         {
+          "id": "sas_XX",
+          "ac": 1153,
+          "an": 1154,
+          "ac_hom": 576
+         },
+         {
+          "id": "sas_XY",
+          "ac": 3675,
+          "an": 3676,
+          "ac_hom": 1837
+         },
+         {
+          "id": "asj",
+          "ac": 3472,
+          "an": 3472,
+          "ac_hom": 1736
+         },
+         {
+          "id": "asj_XX",
+          "ac": 1868,
+          "an": 1868,
+          "ac_hom": 934
+         },
+         {
+          "id": "asj_XY",
+          "ac": 1604,
+          "an": 1604,
+          "ac_hom": 802
+         },
+         {
+          "id": "afr",
+          "ac": 38754,
+          "an": 41548,
+          "ac_hom": 18074
+         },
+         {
+          "id": "afr_XX",
+          "ac": 20674,
+          "an": 22150,
+          "ac_hom": 9646
+         },
+         {
+          "id": "afr_XY",
+          "ac": 18080,
+          "an": 19398,
+          "ac_hom": 8428
+         },
+         {
+          "id": "nfe",
+          "ac": 68015,
+          "an": 68032,
+          "ac_hom": 33999
+         },
+         {
+          "id": "nfe_XX",
+          "ac": 39351,
+          "an": 39358,
+          "ac_hom": 19672
+         },
+         {
+          "id": "nfe_XY",
+          "ac": 28664,
+          "an": 28674,
+          "ac_hom": 14327
+         },
+         {
+          "id": "XX",
+          "ac": 76278,
+          "an": 77834,
+          "ac_hom": 37408
+         },
+         {
+          "id": "XY",
+          "ac": 73073,
+          "an": 74476,
+          "ac_hom": 35884
+         }
+        ]
+       }
+      }
+     }
+    }
+   },
+   "17-43106487-A-T": {
+    "status": 200,
+    "body": {
+     "errors": [
+      {
+       "message": "Variant not found"
+      }
+     ],
+     "data": {
+      "variant": null
+     }
+    }
+   },
+   "17-43106487-T-G": {
+    "status": 200,
+    "body": {
+     "errors": [
+      {
+       "message": "Variant not found"
+      }
+     ],
+     "data": {
+      "variant": null
+     }
+    }
+   },
+   "17-43124027-ACT-A": {
+    "status": 200,
+    "body": {
+     "data": {
+      "variant": {
+       "variantId": "17-43124027-ACT-A",
+       "rsids": [
+        "rs80357914"
+       ],
+       "chrom": "17",
+       "pos": 43124027,
+       "ref": "ACT",
+       "alt": "A",
+       "exome": {
+        "ac": 169,
+        "an": 1459934,
+        "af": 0.00011575865758315102,
+        "ac_hom": 0,
+        "populations": [
+         {
+          "id": "remaining",
+          "ac": 20,
+          "an": 60304,
+          "ac_hom": 0
+         },
+         {
+          "id": "remaining_XX",
+          "ac": 9,
+          "an": 31748,
+          "ac_hom": 0
+         },
+         {
+          "id": "remaining_XY",
+          "ac": 11,
+          "an": 28556,
+          "ac_hom": 0
+         },
+         {
+          "id": "amr",
+          "ac": 2,
+          "an": 44718,
+          "ac_hom": 0
+         },
+         {
+          "id": "amr_XX",
+          "ac": 0,
+          "an": 25686,
+          "ac_hom": 0
+         },
+         {
+          "id": "amr_XY",
+          "ac": 2,
+          "an": 19032,
+          "ac_hom": 0
+         },
+         {
+          "id": "fin",
+          "ac": 0,
+          "an": 53414,
+          "ac_hom": 0
+         },
+         {
+          "id": "fin_XX",
+          "ac": 0,
+          "an": 27646,
+          "ac_hom": 0
+         },
+         {
+          "id": "fin_XY",
+          "ac": 0,
+          "an": 25768,
+          "ac_hom": 0
+         },
+         {
+          "id": "mid",
+          "ac": 1,
+          "an": 5762,
+          "ac_hom": 0
+         },
+         {
+          "id": "mid_XX",
+          "ac": 0,
+          "an": 2502,
+          "ac_hom": 0
+         },
+         {
+          "id": "mid_XY",
+          "ac": 1,
+          "an": 3260,
+          "ac_hom": 0
+         },
+         {
+          "id": "nfe",
+          "ac": 37,
+          "an": 1110344,
+          "ac_hom": 0
+         },
+         {
+          "id": "nfe_XX",
+          "ac": 11,
+          "an": 571314,
+          "ac_hom": 0
+         },
+         {
+          "id": "nfe_XY",
+          "ac": 26,
+          "an": 539030,
+          "ac_hom": 0
+         },
+         {
+          "id": "sas",
+          "ac": 5,
+          "an": 86210,
+          "ac_hom": 0
+         },
+         {
+          "id": "sas_XX",
+          "ac": 1,
+          "an": 22016,
+          "ac_hom": 0
+         },
+         {
+          "id": "sas_XY",
+          "ac": 4,
+          "an": 64194,
+          "ac_hom": 0
+         },
+         {
+          "id": "asj",
+          "ac": 104,
+          "an": 26112,
+          "ac_hom": 0
+         },
+         {
+          "id": "asj_XX",
+          "ac": 45,
+          "an": 12626,
+          "ac_hom": 0
+         },
+         {
+          "id": "asj_XY",
+          "ac": 59,
+          "an": 13486,
+          "ac_hom": 0
+         },
+         {
+          "id": "eas",
+          "ac": 0,
+          "an": 39644,
+          "ac_hom": 0
+         },
+         {
+          "id": "eas_XX",
+          "ac": 0,
+          "an": 20684,
+          "ac_hom": 0
+         },
+         {
+          "id": "eas_XY",
+          "ac": 0,
+          "an": 18960,
+          "ac_hom": 0
+         },
+         {
+          "id": "afr",
+          "ac": 0,
+          "an": 33426,
+          "ac_hom": 0
+         },
+         {
+          "id": "afr_XX",
+          "ac": 0,
+          "an": 19296,
+          "ac_hom": 0
+         },
+         {
+          "id": "afr_XY",
+          "ac": 0,
+          "an": 14130,
+          "ac_hom": 0
+         },
+         {
+          "id": "XX",
+          "ac": 66,
+          "an": 733518,
+          "ac_hom": 0
+         },
+         {
+          "id": "XY",
+          "ac": 103,
+          "an": 726416,
+          "ac_hom": 0
+         }
+        ]
+       },
+       "genome": {
+        "ac": 22,
+        "an": 152150,
+        "af": 0.00014459415050936574,
+        "ac_hom": 0,
+        "populations": [
+         {
+          "id": "remaining",
+          "ac": 0,
+          "an": 2090,
+          "ac_hom": 0
+         },
+         {
+          "id": "remaining_XX",
+          "ac": 0,
+          "an": 1032,
+          "ac_hom": 0
+         },
+         {
+          "id": "remaining_XY",
+          "ac": 0,
+          "an": 1058,
+          "ac_hom": 0
+         },
+         {
+          "id": "amr",
+          "ac": 1,
+          "an": 15278,
+          "ac_hom": 0
+         },
+         {
+          "id": "amr_XX",
+          "ac": 1,
+          "an": 6788,
+          "ac_hom": 0
+         },
+         {
+          "id": "amr_XY",
+          "ac": 0,
+          "an": 8490,
+          "ac_hom": 0
+         },
+         {
+          "id": "fin",
+          "ac": 0,
+          "an": 10604,
+          "ac_hom": 0
+         },
+         {
+          "id": "fin_XX",
+          "ac": 0,
+          "an": 2568,
+          "ac_hom": 0
+         },
+         {
+          "id": "fin_XY",
+          "ac": 0,
+          "an": 8036,
+          "ac_hom": 0
+         },
+         {
+          "id": "ami",
+          "ac": 0,
+          "an": 912,
+          "ac_hom": 0
+         },
+         {
+          "id": "ami_XX",
+          "ac": 0,
+          "an": 470,
+          "ac_hom": 0
+         },
+         {
+          "id": "ami_XY",
+          "ac": 0,
+          "an": 442,
+          "ac_hom": 0
+         },
+         {
+          "id": "eas",
+          "ac": 0,
+          "an": 5200,
+          "ac_hom": 0
+         },
+         {
+          "id": "eas_XX",
+          "ac": 0,
+          "an": 2278,
+          "ac_hom": 0
+         },
+         {
+          "id": "eas_XY",
+          "ac": 0,
+          "an": 2922,
+          "ac_hom": 0
+         },
+         {
+          "id": "mid",
+          "ac": 0,
+          "an": 316,
+          "ac_hom": 0
+         },
+         {
+          "id": "mid_XX",
+          "ac": 0,
+          "an": 164,
+          "ac_hom": 0
+         },
+         {
+          "id": "mid_XY",
+          "ac": 0,
+          "an": 152,
+          "ac_hom": 0
+         },
+         {
+          "id": "sas",
+          "ac": 0,
+          "an": 4834,
+          "ac_hom": 0
+         },
+         {
+          "id": "sas_XX",
+          "ac": 0,
+          "an": 1166,
+          "ac_hom": 0
+         },
+         {
+          "id": "sas_XY",
+          "ac": 0,
+          "an": 3668,
+          "ac_hom": 0
+         },
+         {
+          "id": "asj",
+          "ac": 19,
+          "an": 3466,
+          "ac_hom": 0
+         },
+         {
+          "id": "asj_XX",
+          "ac": 10,
+          "an": 1866,
+          "ac_hom": 0
+         },
+         {
+          "id": "asj_XY",
+          "ac": 9,
+          "an": 1600,
+          "ac_hom": 0
+         },
+         {
+          "id": "afr",
+          "ac": 0,
+          "an": 41428,
+          "ac_hom": 0
+         },
+         {
+          "id": "afr_XX",
+          "ac": 0,
+          "an": 22138,
+          "ac_hom": 0
+         },
+         {
+          "id": "afr_XY",
+          "ac": 0,
+          "an": 19290,
+          "ac_hom": 0
+         },
+         {
+          "id": "nfe",
+          "ac": 2,
+          "an": 68022,
+          "ac_hom": 0
+         },
+         {
+          "id": "nfe_XX",
+          "ac": 1,
+          "an": 39348,
+          "ac_hom": 0
+         },
+         {
+          "id": "nfe_XY",
+          "ac": 1,
+          "an": 28674,
+          "ac_hom": 0
+         },
+         {
+          "id": "XX",
+          "ac": 12,
+          "an": 77818,
+          "ac_hom": 0
+         },
+         {
+          "id": "XY",
+          "ac": 10,
+          "an": 74332,
+          "ac_hom": 0
+         }
+        ]
+       }
+      }
+     }
+    }
+   },
+   "7-117559591-TCTT-T": {
+    "status": 200,
+    "body": {
+     "errors": [
+      {
+       "message": "Variant not found"
+      }
+     ],
+     "data": {
+      "variant": null
+     }
+    }
+   },
+   "7-117559590-ATCT-A": {
+    "status": 200,
+    "body": {
+     "data": {
+      "variant": {
+       "variantId": "7-117559590-ATCT-A",
+       "rsids": [
+        "rs113993960"
+       ],
+       "chrom": "7",
+       "pos": 117559590,
+       "ref": "ATCT",
+       "alt": "A",
+       "exome": {
+        "ac": 18037,
+        "an": 1460114,
+        "af": 0.012353145028401891,
+        "ac_hom": 57,
+        "populations": [
+         {
+          "id": "remaining",
+          "ac": 609,
+          "an": 60344,
+          "ac_hom": 6
+         },
+         {
+          "id": "remaining_XX",
+          "ac": 315,
+          "an": 31762,
+          "ac_hom": 3
+         },
+         {
+          "id": "remaining_XY",
+          "ac": 294,
+          "an": 28582,
+          "ac_hom": 3
+         },
+         {
+          "id": "amr",
+          "ac": 177,
+          "an": 44718,
+          "ac_hom": 1
+         },
+         {
+          "id": "amr_XX",
+          "ac": 94,
+          "an": 25690,
+          "ac_hom": 0
+         },
+         {
+          "id": "amr_XY",
+          "ac": 83,
+          "an": 19028,
+          "ac_hom": 1
+         },
+         {
+          "id": "fin",
+          "ac": 147,
+          "an": 53322,
+          "ac_hom": 1
+         },
+         {
+          "id": "fin_XX",
+          "ac": 70,
+          "an": 27598,
+          "ac_hom": 0
+         },
+         {
+          "id": "fin_XY",
+          "ac": 77,
+          "an": 25724,
+          "ac_hom": 1
+         },
+         {
+          "id": "mid",
+          "ac": 10,
+          "an": 5764,
+          "ac_hom": 0
+         },
+         {
+          "id": "mid_XX",
+          "ac": 3,
+          "an": 2506,
+          "ac_hom": 0
+         },
+         {
+          "id": "mid_XY",
+          "ac": 7,
+          "an": 3258,
+          "ac_hom": 0
+         },
+         {
+          "id": "nfe",
+          "ac": 16638,
+          "an": 1110560,
+          "ac_hom": 48
+         },
+         {
+          "id": "nfe_XX",
+          "ac": 8585,
+          "an": 571456,
+          "ac_hom": 23
+         },
+         {
+          "id": "nfe_XY",
+          "ac": 8053,
+          "an": 539104,
+          "ac_hom": 25
+         },
+         {
+          "id": "sas",
+          "ac": 213,
+          "an": 86228,
+          "ac_hom": 0
+         },
+         {
+          "id": "sas_XX",
+          "ac": 46,
+          "an": 22028,
+          "ac_hom": 0
+         },
+         {
+          "id": "sas_XY",
+          "ac": 167,
+          "an": 64200,
+          "ac_hom": 0
+         },
+         {
+          "id": "asj",
+          "ac": 165,
+          "an": 26112,
+          "ac_hom": 0
+         },
+         {
+          "id": "asj_XX",
+          "ac": 82,
+          "an": 12626,
+          "ac_hom": 0
+         },
+         {
+          "id": "asj_XY",
+          "ac": 83,
+          "an": 13486,
+          "ac_hom": 0
+         },
+         {
+          "id": "eas",
+          "ac": 1,
+          "an": 39622,
+          "ac_hom": 0
+         },
+         {
+          "id": "eas_XX",
+          "ac": 1,
+          "an": 20672,
+          "ac_hom": 0
+         },
+         {
+          "id": "eas_XY",
+          "ac": 0,
+          "an": 18950,
+          "ac_hom": 0
+         },
+         {
+          "id": "afr",
+          "ac": 77,
+          "an": 33444,
+          "ac_hom": 1
+         },
+         {
+          "id": "afr_XX",
+          "ac": 47,
+          "an": 19306,
+          "ac_hom": 1
+         },
+         {
+          "id": "afr_XY",
+          "ac": 30,
+          "an": 14138,
+          "ac_hom": 0
+         },
+         {
+          "id": "XX",
+          "ac": 9243,
+          "an": 733644,
+          "ac_hom": 27
+         },
+         {
+          "id": "XY",
+          "ac": 8794,
+          "an": 726470,
+          "ac_hom": 30
+         }
+        ]
+       },
+       "genome": {
+        "ac": 1200,
+        "an": 152206,
+        "af": 0.007884051877061352,
+        "ac_hom": 1,
+        "populations": [
+         {
+          "id": "remaining",
+          "ac": 16,
+          "an": 2110,
+          "ac_hom": 0
+         },
+         {
+          "id": "remaining_XX",
+          "ac": 7,
+          "an": 1044,
+          "ac_hom": 0
+         },
+         {
+          "id": "remaining_XY",
+          "ac": 9,
+          "an": 1066,
+          "ac_hom": 0
+         },
+         {
+          "id": "amr",
+          "ac": 57,
+          "an": 15290,
+          "ac_hom": 0
+         },
+         {
+          "id": "amr_XX",
+          "ac": 27,
+          "an": 6786,
+          "ac_hom": 0
+         },
+         {
+          "id": "amr_XY",
+          "ac": 30,
+          "an": 8504,
+          "ac_hom": 0
+         },
+         {
+          "id": "fin",
+          "ac": 16,
+          "an": 10612,
+          "ac_hom": 0
+         },
+         {
+          "id": "fin_XX",
+          "ac": 6,
+          "an": 2572,
+          "ac_hom": 0
+         },
+         {
+          "id": "fin_XY",
+          "ac": 10,
+          "an": 8040,
+          "ac_hom": 0
+         },
+         {
+          "id": "ami",
+          "ac": 1,
+          "an": 912,
+          "ac_hom": 0
+         },
+         {
+          "id": "ami_XX",
+          "ac": 1,
+          "an": 470,
+          "ac_hom": 0
+         },
+         {
+          "id": "ami_XY",
+          "ac": 0,
+          "an": 442,
+          "ac_hom": 0
+         },
+         {
+          "id": "eas",
+          "ac": 0,
+          "an": 5180,
+          "ac_hom": 0
+         },
+         {
+          "id": "eas_XX",
+          "ac": 0,
+          "an": 2268,
+          "ac_hom": 0
+         },
+         {
+          "id": "eas_XY",
+          "ac": 0,
+          "an": 2912,
+          "ac_hom": 0
+         },
+         {
+          "id": "mid",
+          "ac": 1,
+          "an": 294,
+          "ac_hom": 0
+         },
+         {
+          "id": "mid_XX",
+          "ac": 1,
+          "an": 144,
+          "ac_hom": 0
+         },
+         {
+          "id": "mid_XY",
+          "ac": 0,
+          "an": 150,
+          "ac_hom": 0
+         },
+         {
+          "id": "sas",
+          "ac": 15,
+          "an": 4826,
+          "ac_hom": 0
+         },
+         {
+          "id": "sas_XX",
+          "ac": 4,
+          "an": 1152,
+          "ac_hom": 0
+         },
+         {
+          "id": "sas_XY",
+          "ac": 11,
+          "an": 3674,
+          "ac_hom": 0
+         },
+         {
+          "id": "asj",
+          "ac": 14,
+          "an": 3472,
+          "ac_hom": 0
+         },
+         {
+          "id": "asj_XX",
+          "ac": 11,
+          "an": 1868,
+          "ac_hom": 0
+         },
+         {
+          "id": "asj_XY",
+          "ac": 3,
+          "an": 1604,
+          "ac_hom": 0
+         },
+         {
+          "id": "afr",
+          "ac": 108,
+          "an": 41556,
+          "ac_hom": 0
+         },
+         {
+          "id": "afr_XX",
+          "ac": 45,
+          "an": 22156,
+          "ac_hom": 0
+         },
+         {
+          "id": "afr_XY",
+          "ac": 63,
+          "an": 19400,
+          "ac_hom": 0
+         },
+         {
+          "id": "nfe",
+          "ac": 972,
+          "an": 67954,
+          "ac_hom": 1
+         },
+         {
+          "id": "nfe_XX",
+          "ac": 561,
+          "an": 39326,
+          "ac_hom": 1
+         },
+         {
+          "id": "nfe_XY",
+          "ac": 411,
+          "an": 28628,
+          "ac_hom": 0
+         },
+         {
+          "id": "XX",
+          "ac": 663,
+          "an": 77786,
+          "ac_hom": 1
+         },
+         {
+          "id": "XY",
+          "ac": 537,
+          "an": 74420,
+          "ac_hom": 0
+         }
+        ]
+       }
+      }
+     }
+    }
+   },
+   "17-43057063-G-GG": {
+    "status": 200,
+    "body": {
+     "errors": [
+      {
+       "message": "Variant not found"
+      }
+     ],
+     "data": {
+      "variant": null
+     }
+    }
+   },
+   "17-43057062-T-TG": {
+    "status": 200,
+    "body": {
+     "data": {
+      "variant": {
+       "variantId": "17-43057062-T-TG",
+       "rsids": [
+        "rs80357906"
+       ],
+       "chrom": "17",
+       "pos": 43057062,
+       "ref": "T",
+       "alt": "TG",
+       "exome": {
+        "ac": 101,
+        "an": 1461732,
+        "af": 6.909611337782849e-05,
+        "ac_hom": 0,
+        "populations": [
+         {
+          "id": "remaining",
+          "ac": 9,
+          "an": 60388,
+          "ac_hom": 0
+         },
+         {
+          "id": "remaining_XX",
+          "ac": 6,
+          "an": 31798,
+          "ac_hom": 0
+         },
+         {
+          "id": "remaining_XY",
+          "ac": 3,
+          "an": 28590,
+          "ac_hom": 0
+         },
+         {
+          "id": "amr",
+          "ac": 0,
+          "an": 44722,
+          "ac_hom": 0
+         },
+         {
+          "id": "amr_XX",
+          "ac": 0,
+          "an": 25688,
+          "ac_hom": 0
+         },
+         {
+          "id": "amr_XY",
+          "ac": 0,
+          "an": 19034,
+          "ac_hom": 0
+         },
+         {
+          "id": "fin",
+          "ac": 0,
+          "an": 53414,
+          "ac_hom": 0
+         },
+         {
+          "id": "fin_XX",
+          "ac": 0,
+          "an": 27646,
+          "ac_hom": 0
+         },
+         {
+          "id": "fin_XY",
+          "ac": 0,
+          "an": 25768,
+          "ac_hom": 0
+         },
+         {
+          "id": "mid",
+          "ac": 0,
+          "an": 5768,
+          "ac_hom": 0
+         },
+         {
+          "id": "mid_XX",
+          "ac": 0,
+          "an": 2506,
+          "ac_hom": 0
+         },
+         {
+          "id": "mid_XY",
+          "ac": 0,
+          "an": 3262,
+          "ac_hom": 0
+         },
+         {
+          "id": "nfe",
+          "ac": 60,
+          "an": 1111888,
+          "ac_hom": 0
+         },
+         {
+          "id": "nfe_XX",
+          "ac": 17,
+          "an": 572218,
+          "ac_hom": 0
+         },
+         {
+          "id": "nfe_XY",
+          "ac": 43,
+          "an": 539670,
+          "ac_hom": 0
+         },
+         {
+          "id": "sas",
+          "ac": 0,
+          "an": 86254,
+          "ac_hom": 0
+         },
+         {
+          "id": "sas_XX",
+          "ac": 0,
+          "an": 22038,
+          "ac_hom": 0
+         },
+         {
+          "id": "sas_XY",
+          "ac": 0,
+          "an": 64216,
+          "ac_hom": 0
+         },
+         {
+          "id": "asj",
+          "ac": 31,
+          "an": 26128,
+          "ac_hom": 0
+         },
+         {
+          "id": "asj_XX",
+          "ac": 15,
+          "an": 12630,
+          "ac_hom": 0
+         },
+         {
+          "id": "asj_XY",
+          "ac": 16,
+          "an": 13498,
+          "ac_hom": 0
+         },
+         {
+          "id": "eas",
+          "ac": 0,
+          "an": 39696,
+          "ac_hom": 0
+         },
+         {
+          "id": "eas_XX",
+          "ac": 0,
+          "an": 20710,
+          "ac_hom": 0
+         },
+         {
+          "id": "eas_XY",
+          "ac": 0,
+          "an": 18986,
+          "ac_hom": 0
+         },
+         {
+          "id": "afr",
+          "ac": 1,
+          "an": 33474,
+          "ac_hom": 0
+         },
+         {
+          "id": "afr_XX",
+          "ac": 1,
+          "an": 19322,
+          "ac_hom": 0
+         },
+         {
+          "id": "afr_XY",
+          "ac": 0,
+          "an": 14152,
+          "ac_hom": 0
+         },
+         {
+          "id": "XX",
+          "ac": 39,
+          "an": 734556,
+          "ac_hom": 0
+         },
+         {
+          "id": "XY",
+          "ac": 62,
+          "an": 727176,
+          "ac_hom": 0
+         }
+        ]
+       },
+       "genome": {
+        "ac": 8,
+        "an": 152180,
+        "af": 5.2569325798396634e-05,
+        "ac_hom": 0,
+        "populations": [
+         {
+          "id": "remaining",
+          "ac": 0,
+          "an": 2092,
+          "ac_hom": 0
+         },
+         {
+          "id": "remaining_XX",
+          "ac": 0,
+          "an": 1032,
+          "ac_hom": 0
+         },
+         {
+          "id": "remaining_XY",
+          "ac": 0,
+          "an": 1060,
+          "ac_hom": 0
+         },
+         {
+          "id": "amr",
+          "ac": 0,
+          "an": 15270,
+          "ac_hom": 0
+         },
+         {
+          "id": "amr_XX",
+          "ac": 0,
+          "an": 6782,
+          "ac_hom": 0
+         },
+         {
+          "id": "amr_XY",
+          "ac": 0,
+          "an": 8488,
+          "ac_hom": 0
+         },
+         {
+          "id": "fin",
+          "ac": 0,
+          "an": 10614,
+          "ac_hom": 0
+         },
+         {
+          "id": "fin_XX",
+          "ac": 0,
+          "an": 2574,
+          "ac_hom": 0
+         },
+         {
+          "id": "fin_XY",
+          "ac": 0,
+          "an": 8040,
+          "ac_hom": 0
+         },
+         {
+          "id": "ami",
+          "ac": 0,
+          "an": 912,
+          "ac_hom": 0
+         },
+         {
+          "id": "ami_XX",
+          "ac": 0,
+          "an": 470,
+          "ac_hom": 0
+         },
+         {
+          "id": "ami_XY",
+          "ac": 0,
+          "an": 442,
+          "ac_hom": 0
+         },
+         {
+          "id": "eas",
+          "ac": 0,
+          "an": 5192,
+          "ac_hom": 0
+         },
+         {
+          "id": "eas_XX",
+          "ac": 0,
+          "an": 2278,
+          "ac_hom": 0
+         },
+         {
+          "id": "eas_XY",
+          "ac": 0,
+          "an": 2914,
+          "ac_hom": 0
+         },
+         {
+          "id": "mid",
+          "ac": 0,
+          "an": 316,
+          "ac_hom": 0
+         },
+         {
+          "id": "mid_XX",
+          "ac": 0,
+          "an": 164,
+          "ac_hom": 0
+         },
+         {
+          "id": "mid_XY",
+          "ac": 0,
+          "an": 152,
+          "ac_hom": 0
+         },
+         {
+          "id": "sas",
+          "ac": 0,
+          "an": 4826,
+          "ac_hom": 0
+         },
+         {
+          "id": "sas_XX",
+          "ac": 0,
+          "an": 1162,
+          "ac_hom": 0
+         },
+         {
+          "id": "sas_XY",
+          "ac": 0,
+          "an": 3664,
+          "ac_hom": 0
+         },
+         {
+          "id": "asj",
+          "ac": 4,
+          "an": 3464,
+          "ac_hom": 0
+         },
+         {
+          "id": "asj_XX",
+          "ac": 4,
+          "an": 1862,
+          "ac_hom": 0
+         },
+         {
+          "id": "asj_XY",
+          "ac": 0,
+          "an": 1602,
+          "ac_hom": 0
+         },
+         {
+          "id": "afr",
+          "ac": 0,
+          "an": 41456,
+          "ac_hom": 0
+         },
+         {
+          "id": "afr_XX",
+          "ac": 0,
+          "an": 22154,
+          "ac_hom": 0
+         },
+         {
+          "id": "afr_XY",
+          "ac": 0,
+          "an": 19302,
+          "ac_hom": 0
+         },
+         {
+          "id": "nfe",
+          "ac": 4,
+          "an": 68038,
+          "ac_hom": 0
+         },
+         {
+          "id": "nfe_XX",
+          "ac": 3,
+          "an": 39358,
+          "ac_hom": 0
+         },
+         {
+          "id": "nfe_XY",
+          "ac": 1,
+          "an": 28680,
+          "ac_hom": 0
+         },
+         {
+          "id": "XX",
+          "ac": 7,
+          "an": 77836,
+          "ac_hom": 0
+         },
+         {
+          "id": "XY",
+          "ac": 1,
+          "an": 74344,
+          "ac_hom": 0
+         }
+        ]
+       }
+      }
+     }
+    }
+   },
+   "17-43104108-A-G": {
+    "status": 200,
+    "body": {
+     "data": {
+      "variant": {
+       "variantId": "17-43104108-A-G",
+       "rsids": [
+        "rs750353662"
+       ],
+       "chrom": "17",
+       "pos": 43104108,
+       "ref": "A",
+       "alt": "G",
+       "exome": {
+        "ac": 0,
+        "an": 1458040,
+        "af": 0,
+        "ac_hom": 0,
+        "populations": [
+         {
+          "id": "remaining",
+          "ac": 0,
+          "an": 60270,
+          "ac_hom": 0
+         },
+         {
+          "id": "remaining_XX",
+          "ac": 0,
+          "an": 31728,
+          "ac_hom": 0
+         },
+         {
+          "id": "remaining_XY",
+          "ac": 0,
+          "an": 28542,
+          "ac_hom": 0
+         },
+         {
+          "id": "amr",
+          "ac": 0,
+          "an": 44378,
+          "ac_hom": 0
+         },
+         {
+          "id": "amr_XX",
+          "ac": 0,
+          "an": 25454,
+          "ac_hom": 0
+         },
+         {
+          "id": "amr_XY",
+          "ac": 0,
+          "an": 18924,
+          "ac_hom": 0
+         },
+         {
+          "id": "fin",
+          "ac": 0,
+          "an": 53128,
+          "ac_hom": 0
+         },
+         {
+          "id": "fin_XX",
+          "ac": 0,
+          "an": 27476,
+          "ac_hom": 0
+         },
+         {
+          "id": "fin_XY",
+          "ac": 0,
+          "an": 25652,
+          "ac_hom": 0
+         },
+         {
+          "id": "mid",
+          "ac": 0,
+          "an": 5752,
+          "ac_hom": 0
+         },
+         {
+          "id": "mid_XX",
+          "ac": 0,
+          "an": 2496,
+          "ac_hom": 0
+         },
+         {
+          "id": "mid_XY",
+          "ac": 0,
+          "an": 3256,
+          "ac_hom": 0
+         },
+         {
+          "id": "nfe",
+          "ac": 0,
+          "an": 1109920,
+          "ac_hom": 0
+         },
+         {
+          "id": "nfe_XX",
+          "ac": 0,
+          "an": 571114,
+          "ac_hom": 0
+         },
+         {
+          "id": "nfe_XY",
+          "ac": 0,
+          "an": 538806,
+          "ac_hom": 0
+         },
+         {
+          "id": "sas",
+          "ac": 0,
+          "an": 85520,
+          "ac_hom": 0
+         },
+         {
+          "id": "sas_XX",
+          "ac": 0,
+          "an": 21896,
+          "ac_hom": 0
+         },
+         {
+          "id": "sas_XY",
+          "ac": 0,
+          "an": 63624,
+          "ac_hom": 0
+         },
+         {
+          "id": "asj",
+          "ac": 0,
+          "an": 26090,
+          "ac_hom": 0
+         },
+         {
+          "id": "asj_XX",
+          "ac": 0,
+          "an": 12612,
+          "ac_hom": 0
+         },
+         {
+          "id": "asj_XY",
+          "ac": 0,
+          "an": 13478,
+          "ac_hom": 0
+         },
+         {
+          "id": "eas",
+          "ac": 0,
+          "an": 39670,
+          "ac_hom": 0
+         },
+         {
+          "id": "eas_XX",
+          "ac": 0,
+          "an": 20696,
+          "ac_hom": 0
+         },
+         {
+          "id": "eas_XY",
+          "ac": 0,
+          "an": 18974,
+          "ac_hom": 0
+         },
+         {
+          "id": "afr",
+          "ac": 0,
+          "an": 33312,
+          "ac_hom": 0
+         },
+         {
+          "id": "afr_XX",
+          "ac": 0,
+          "an": 19204,
+          "ac_hom": 0
+         },
+         {
+          "id": "afr_XY",
+          "ac": 0,
+          "an": 14108,
+          "ac_hom": 0
+         },
+         {
+          "id": "XX",
+          "ac": 0,
+          "an": 732676,
+          "ac_hom": 0
+         },
+         {
+          "id": "XY",
+          "ac": 0,
+          "an": 725364,
+          "ac_hom": 0
+         }
+        ]
+       },
+       "genome": {
+        "ac": 1,
+        "an": 151840,
+        "af": 6.585879873551107e-06,
+        "ac_hom": 0,
+        "populations": [
+         {
+          "id": "remaining",
+          "ac": 0,
+          "an": 2088,
+          "ac_hom": 0
+         },
+         {
+          "id": "remaining_XX",
+          "ac": 0,
+          "an": 1032,
+          "ac_hom": 0
+         },
+         {
+          "id": "remaining_XY",
+          "ac": 0,
+          "an": 1056,
+          "ac_hom": 0
+         },
+         {
+          "id": "amr",
+          "ac": 0,
+          "an": 15234,
+          "ac_hom": 0
+         },
+         {
+          "id": "amr_XX",
+          "ac": 0,
+          "an": 6764,
+          "ac_hom": 0
+         },
+         {
+          "id": "amr_XY",
+          "ac": 0,
+          "an": 8470,
+          "ac_hom": 0
+         },
+         {
+          "id": "fin",
+          "ac": 0,
+          "an": 10490,
+          "ac_hom": 0
+         },
+         {
+          "id": "fin_XX",
+          "ac": 0,
+          "an": 2532,
+          "ac_hom": 0
+         },
+         {
+          "id": "fin_XY",
+          "ac": 0,
+          "an": 7958,
+          "ac_hom": 0
+         },
+         {
+          "id": "ami",
+          "ac": 0,
+          "an": 910,
+          "ac_hom": 0
+         },
+         {
+          "id": "ami_XX",
+          "ac": 0,
+          "an": 468,
+          "ac_hom": 0
+         },
+         {
+          "id": "ami_XY",
+          "ac": 0,
+          "an": 442,
+          "ac_hom": 0
+         },
+         {
+          "id": "eas",
+          "ac": 0,
+          "an": 5190,
+          "ac_hom": 0
+         },
+         {
+          "id": "eas_XX",
+          "ac": 0,
+          "an": 2276,
+          "ac_hom": 0
+         },
+         {
+          "id": "eas_XY",
+          "ac": 0,
+          "an": 2914,
+          "ac_hom": 0
+         },
+         {
+          "id": "mid",
+          "ac": 0,
+          "an": 316,
+          "ac_hom": 0
+         },
+         {
+          "id": "mid_XX",
+          "ac": 0,
+          "an": 164,
+          "ac_hom": 0
+         },
+         {
+          "id": "mid_XY",
+          "ac": 0,
+          "an": 152,
+          "ac_hom": 0
+         },
+         {
+          "id": "sas",
+          "ac": 0,
+          "an": 4818,
+          "ac_hom": 0
+         },
+         {
+          "id": "sas_XX",
+          "ac": 0,
+          "an": 1164,
+          "ac_hom": 0
+         },
+         {
+          "id": "sas_XY",
+          "ac": 0,
+          "an": 3654,
+          "ac_hom": 0
+         },
+         {
+          "id": "asj",
+          "ac": 0,
+          "an": 3468,
+          "ac_hom": 0
+         },
+         {
+          "id": "asj_XX",
+          "ac": 0,
+          "an": 1868,
+          "ac_hom": 0
+         },
+         {
+          "id": "asj_XY",
+          "ac": 0,
+          "an": 1600,
+          "ac_hom": 0
+         },
+         {
+          "id": "afr",
+          "ac": 0,
+          "an": 41356,
+          "ac_hom": 0
+         },
+         {
+          "id": "afr_XX",
+          "ac": 0,
+          "an": 22094,
+          "ac_hom": 0
+         },
+         {
+          "id": "afr_XY",
+          "ac": 0,
+          "an": 19262,
+          "ac_hom": 0
+         },
+         {
+          "id": "nfe",
+          "ac": 1,
+          "an": 67970,
+          "ac_hom": 0
+         },
+         {
+          "id": "nfe_XX",
+          "ac": 0,
+          "an": 39316,
+          "ac_hom": 0
+         },
+         {
+          "id": "nfe_XY",
+          "ac": 1,
+          "an": 28654,
+          "ac_hom": 0
+         },
+         {
+          "id": "XX",
+          "ac": 0,
+          "an": 77678,
+          "ac_hom": 0
+         },
+         {
+          "id": "XY",
+          "ac": 1,
+          "an": 74162,
+          "ac_hom": 0
+         }
+        ]
+       }
+      }
+     }
+    }
+   },
+   "17-43105117-T-C": {
+    "status": 200,
+    "body": {
+     "data": {
+      "variant": {
+       "variantId": "17-43105117-T-C",
+       "rsids": [
+        "rs799912"
+       ],
+       "chrom": "17",
+       "pos": 43105117,
+       "ref": "T",
+       "alt": "C",
+       "exome": null,
+       "genome": {
+        "ac": 74859,
+        "an": 152120,
+        "af": 0.49210491717065474,
+        "ac_hom": 21819,
+        "populations": [
+         {
+          "id": "remaining",
+          "ac": 979,
+          "an": 2110,
+          "ac_hom": 232
+         },
+         {
+          "id": "remaining_XX",
+          "ac": 504,
+          "an": 1050,
+          "ac_hom": 123
+         },
+         {
+          "id": "remaining_XY",
+          "ac": 475,
+          "an": 1060,
+          "ac_hom": 109
+         },
+         {
+          "id": "amr",
+          "ac": 5992,
+          "an": 15276,
+          "ac_hom": 1207
+         },
+         {
+          "id": "amr_XX",
+          "ac": 2655,
+          "an": 6782,
+          "ac_hom": 541
+         },
+         {
+          "id": "amr_XY",
+          "ac": 3337,
+          "an": 8494,
+          "ac_hom": 666
+         },
+         {
+          "id": "fin",
+          "ac": 4291,
+          "an": 10578,
+          "ac_hom": 876
+         },
+         {
+          "id": "fin_XX",
+          "ac": 1041,
+          "an": 2572,
+          "ac_hom": 218
+         },
+         {
+          "id": "fin_XY",
+          "ac": 3250,
+          "an": 8006,
+          "ac_hom": 658
+         },
+         {
+          "id": "ami",
+          "ac": 260,
+          "an": 912,
+          "ac_hom": 41
+         },
+         {
+          "id": "ami_XX",
+          "ac": 129,
+          "an": 470,
+          "ac_hom": 19
+         },
+         {
+          "id": "ami_XY",
+          "ac": 131,
+          "an": 442,
+          "ac_hom": 22
+         },
+         {
+          "id": "eas",
+          "ac": 1905,
+          "an": 5172,
+          "ac_hom": 351
+         },
+         {
+          "id": "eas_XX",
+          "ac": 857,
+          "an": 2264,
+          "ac_hom": 161
+         },
+         {
+          "id": "eas_XY",
+          "ac": 1048,
+          "an": 2908,
+          "ac_hom": 190
+         },
+         {
+          "id": "mid",
+          "ac": 134,
+          "an": 294,
+          "ac_hom": 28
+         },
+         {
+          "id": "mid_XX",
+          "ac": 64,
+          "an": 144,
+          "ac_hom": 12
+         },
+         {
+          "id": "mid_XY",
+          "ac": 70,
+          "an": 150,
+          "ac_hom": 16
+         },
+         {
+          "id": "sas",
+          "ac": 2520,
+          "an": 4820,
+          "ac_hom": 691
+         },
+         {
+          "id": "sas_XX",
+          "ac": 595,
+          "an": 1154,
+          "ac_hom": 162
+         },
+         {
+          "id": "sas_XY",
+          "ac": 1925,
+          "an": 3666,
+          "ac_hom": 529
+         },
+         {
+          "id": "asj",
+          "ac": 1265,
+          "an": 3470,
+          "ac_hom": 219
+         },
+         {
+          "id": "asj_XX",
+          "ac": 686,
+          "an": 1866,
+          "ac_hom": 127
+         },
+         {
+          "id": "asj_XY",
+          "ac": 579,
+          "an": 1604,
+          "ac_hom": 92
+         },
+         {
+          "id": "afr",
+          "ac": 34234,
+          "an": 41510,
+          "ac_hom": 14166
+         },
+         {
+          "id": "afr_XX",
+          "ac": 18213,
+          "an": 22128,
+          "ac_hom": 7538
+         },
+         {
+          "id": "afr_XY",
+          "ac": 16021,
+          "an": 19382,
+          "ac_hom": 6628
+         },
+         {
+          "id": "nfe",
+          "ac": 23279,
+          "an": 67978,
+          "ac_hom": 4008
+         },
+         {
+          "id": "nfe_XX",
+          "ac": 13512,
+          "an": 39328,
+          "ac_hom": 2324
+         },
+         {
+          "id": "nfe_XY",
+          "ac": 9767,
+          "an": 28650,
+          "ac_hom": 1684
+         },
+         {
+          "id": "XX",
+          "ac": 38256,
+          "an": 77758,
+          "ac_hom": 11225
+         },
+         {
+          "id": "XY",
+          "ac": 36603,
+          "an": 74362,
+          "ac_hom": 10594
+         },
+         {
+          "id": "hgdp:japanese",
+          "ac": 14,
+          "an": 56,
+          "ac_hom": 2
+         },
+         {
+          "id": "hgdp:japanese_XX",
+          "ac": 5,
+          "an": 16,
+          "ac_hom": 1
+         },
+         {
+          "id": "hgdp:japanese_XY",
+          "ac": 9,
+          "an": 40,
+          "ac_hom": 1
+         },
+         {
+          "id": "hgdp:adygei",
+          "ac": 14,
+          "an": 34,
+          "ac_hom": 2
+         },
+         {
+          "id": "hgdp:adygei_XX",
+          "ac": 8,
+          "an": 20,
+          "ac_hom": 1
+         },
+         {
+          "id": "hgdp:adygei_XY",
+          "ac": 6,
+          "an": 14,
+          "ac_hom": 1
+         },
+         {
+          "id": "hgdp:orcadian",
+          "ac": 8,
+          "an": 28,
+          "ac_hom": 0
+         },
+         {
+          "id": "hgdp:orcadian_XX",
+          "ac": 5,
+          "an": 16,
+          "ac_hom": 0
+         },
+         {
+          "id": "hgdp:orcadian_XY",
+          "ac": 3,
+          "an": 12,
+          "ac_hom": 0
+         },
+         {
+          "id": "hgdp:bantusouthafrica",
+          "ac": 15,
+          "an": 16,
+          "ac_hom": 7
+         },
+         {
+          "id": "hgdp:bantusouthafrica_XX",
+          "ac": 0,
+          "an": 0,
+          "ac_hom": 0
+         },
+         {
+          "id": "hgdp:bantusouthafrica_XY",
+          "ac": 15,
+          "an": 16,
+          "ac_hom": 7
+         },
+         {
+          "id": "hgdp:yakut",
+          "ac": 14,
+          "an": 50,
+          "ac_hom": 1
+         },
+         {
+          "id": "hgdp:yakut_XX",
+          "ac": 4,
+          "an": 14,
+          "ac_hom": 0
+         },
+         {
+          "id": "hgdp:yakut_XY",
+          "ac": 10,
+          "an": 36,
+          "ac_hom": 1
+         },
+         {
+          "id": "hgdp:han",
+          "ac": 24,
+          "an": 66,
+          "ac_hom": 4
+         },
+         {
+          "id": "hgdp:han_XX",
+          "ac": 15,
+          "an": 36,
+          "ac_hom": 3
+         },
+         {
+          "id": "hgdp:han_XY",
+          "ac": 9,
+          "an": 30,
+          "ac_hom": 1
+         },
+         {
+          "id": "hgdp:uygur",
+          "ac": 7,
+          "an": 12,
+          "ac_hom": 1
+         },
+         {
+          "id": "hgdp:uygur_XX",
+          "ac": 2,
+          "an": 4,
+          "ac_hom": 0
+         },
+         {
+          "id": "hgdp:uygur_XY",
+          "ac": 5,
+          "an": 8,
+          "ac_hom": 1
+         },
+         {
+          "id": "hgdp:balochi",
+          "ac": 23,
+          "an": 46,
+          "ac_hom": 7
+         },
+         {
+          "id": "hgdp:balochi_XX",
+          "ac": 0,
+          "an": 0,
+          "ac_hom": 0
+         },
+         {
+          "id": "hgdp:balochi_XY",
+          "ac": 23,
+          "an": 46,
+          "ac_hom": 7
+         },
+         {
+          "id": "hgdp:bedouin",
+          "ac": 32,
+          "an": 84,
+          "ac_hom": 6
+         },
+         {
+          "id": "hgdp:bedouin_XX",
+          "ac": 14,
+          "an": 34,
+          "ac_hom": 3
+         },
+         {
+          "id": "hgdp:bedouin_XY",
+          "ac": 18,
+          "an": 50,
+          "ac_hom": 3
+         },
+         {
+          "id": "hgdp:russian",
+          "ac": 16,
+          "an": 50,
+          "ac_hom": 3
+         },
+         {
+          "id": "hgdp:russian_XX",
+          "ac": 6,
+          "an": 18,
+          "ac_hom": 1
+         },
+         {
+          "id": "hgdp:russian_XY",
+          "ac": 10,
+          "an": 32,
+          "ac_hom": 2
+         },
+         {
+          "id": "hgdp:daur",
+          "ac": 5,
+          "an": 18,
+          "ac_hom": 0
+         },
+         {
+          "id": "hgdp:daur_XX",
+          "ac": 1,
+          "an": 4,
+          "ac_hom": 0
+         },
+         {
+          "id": "hgdp:daur_XY",
+          "ac": 4,
+          "an": 14,
+          "ac_hom": 0
+         },
+         {
+          "id": "hgdp:pima",
+          "ac": 13,
+          "an": 22,
+          "ac_hom": 5
+         },
+         {
+          "id": "hgdp:pima_XX",
+          "ac": 8,
+          "an": 10,
+          "ac_hom": 3
+         },
+         {
+          "id": "hgdp:pima_XY",
+          "ac": 5,
+          "an": 12,
+          "ac_hom": 2
+         },
+         {
+          "id": "hgdp:hezhen",
+          "ac": 3,
+          "an": 16,
+          "ac_hom": 0
+         },
+         {
+          "id": "hgdp:hezhen_XX",
+          "ac": 1,
+          "an": 4,
+          "ac_hom": 0
+         },
+         {
+          "id": "hgdp:hezhen_XY",
+          "ac": 2,
+          "an": 12,
+          "ac_hom": 0
+         },
+         {
+          "id": "hgdp:biaka",
+          "ac": 44,
+          "an": 44,
+          "ac_hom": 22
+         },
+         {
+          "id": "hgdp:biaka_XX",
+          "ac": 0,
+          "an": 0,
+          "ac_hom": 0
+         },
+         {
+          "id": "hgdp:biaka_XY",
+          "ac": 44,
+          "an": 44,
+          "ac_hom": 22
+         },
+         {
+          "id": "hgdp:miao",
+          "ac": 10,
+          "an": 20,
+          "ac_hom": 1
+         },
+         {
+          "id": "hgdp:miao_XX",
+          "ac": 3,
+          "an": 6,
+          "ac_hom": 0
+         },
+         {
+          "id": "hgdp:miao_XY",
+          "ac": 7,
+          "an": 14,
+          "ac_hom": 1
+         },
+         {
+          "id": "hgdp:sindhi",
+          "ac": 25,
+          "an": 44,
+          "ac_hom": 7
+         },
+         {
+          "id": "hgdp:sindhi_XX",
+          "ac": 3,
+          "an": 8,
+          "ac_hom": 1
+         },
+         {
+          "id": "hgdp:sindhi_XY",
+          "ac": 22,
+          "an": 36,
+          "ac_hom": 6
+         },
+         {
+          "id": "hgdp:northernhan",
+          "ac": 8,
+          "an": 20,
+          "ac_hom": 1
+         },
+         {
+          "id": "hgdp:northernhan_XX",
+          "ac": 3,
+          "an": 4,
+          "ac_hom": 1
+         },
+         {
+          "id": "hgdp:northernhan_XY",
+          "ac": 5,
+          "an": 16,
+          "ac_hom": 0
+         },
+         {
+          "id": "hgdp:oroqen",
+          "ac": 4,
+          "an": 16,
+          "ac_hom": 1
+         },
+         {
+          "id": "hgdp:oroqen_XX",
+          "ac": 1,
+          "an": 6,
+          "ac_hom": 0
+         },
+         {
+          "id": "hgdp:oroqen_XY",
+          "ac": 3,
+          "an": 10,
+          "ac_hom": 1
+         },
+         {
+          "id": "hgdp:san",
+          "ac": 12,
+          "an": 12,
+          "ac_hom": 6
+         },
+         {
+          "id": "hgdp:san_XX",
+          "ac": 0,
+          "an": 0,
+          "ac_hom": 0
+         },
+         {
+          "id": "hgdp:san_XY",
+          "ac": 12,
+          "an": 12,
+          "ac_hom": 6
+         },
+         {
+          "id": "hgdp:tu",
+          "ac": 8,
+          "an": 20,
+          "ac_hom": 1
+         },
+         {
+          "id": "hgdp:tu_XX",
+          "ac": 1,
+          "an": 6,
+          "ac_hom": 0
+         },
+         {
+          "id": "hgdp:tu_XY",
+          "ac": 7,
+          "an": 14,
+          "ac_hom": 1
+         },
+         {
+          "id": "hgdp:tuscan",
+          "ac": 5,
+          "an": 16,
+          "ac_hom": 2
+         },
+         {
+          "id": "hgdp:tuscan_XX",
+          "ac": 0,
+          "an": 4,
+          "ac_hom": 0
+         },
+         {
+          "id": "hgdp:tuscan_XY",
+          "ac": 5,
+          "an": 12,
+          "ac_hom": 2
+         },
+         {
+          "id": "hgdp:mbuti",
+          "ac": 24,
+          "an": 24,
+          "ac_hom": 12
+         },
+         {
+          "id": "hgdp:mbuti_XX",
+          "ac": 4,
+          "an": 4,
+          "ac_hom": 2
+         },
+         {
+          "id": "hgdp:mbuti_XY",
+          "ac": 20,
+          "an": 20,
+          "ac_hom": 10
+         },
+         {
+          "id": "hgdp:palestinian",
+          "ac": 36,
+          "an": 76,
+          "ac_hom": 7
+         },
+         {
+          "id": "hgdp:palestinian_XX",
+          "ac": 23,
+          "an": 50,
+          "ac_hom": 4
+         },
+         {
+          "id": "hgdp:palestinian_XY",
+          "ac": 13,
+          "an": 26,
+          "ac_hom": 3
+         },
+         {
+          "id": "hgdp:tujia",
+          "ac": 6,
+          "an": 20,
+          "ac_hom": 0
+         },
+         {
+          "id": "hgdp:tujia_XX",
+          "ac": 1,
+          "an": 2,
+          "ac_hom": 0
+         },
+         {
+          "id": "hgdp:tujia_XY",
+          "ac": 5,
+          "an": 18,
+          "ac_hom": 0
+         },
+         {
+          "id": "hgdp:druze",
+          "ac": 30,
+          "an": 70,
+          "ac_hom": 8
+         },
+         {
+          "id": "hgdp:druze_XX",
+          "ac": 20,
+          "an": 48,
+          "ac_hom": 5
+         },
+         {
+          "id": "hgdp:druze_XY",
+          "ac": 10,
+          "an": 22,
+          "ac_hom": 3
+         },
+         {
+          "id": "hgdp:pathan",
+          "ac": 19,
+          "an": 48,
+          "ac_hom": 4
+         },
+         {
+          "id": "hgdp:pathan_XX",
+          "ac": 4,
+          "an": 10,
+          "ac_hom": 1
+         },
+         {
+          "id": "hgdp:pathan_XY",
+          "ac": 15,
+          "an": 38,
+          "ac_hom": 3
+         },
+         {
+          "id": "hgdp:basque",
+          "ac": 19,
+          "an": 44,
+          "ac_hom": 4
+         },
+         {
+          "id": "hgdp:basque_XX",
+          "ac": 6,
+          "an": 14,
+          "ac_hom": 1
+         },
+         {
+          "id": "hgdp:basque_XY",
+          "ac": 13,
+          "an": 30,
+          "ac_hom": 3
+         },
+         {
+          "id": "hgdp:makrani",
+          "ac": 23,
+          "an": 44,
+          "ac_hom": 7
+         },
+         {
+          "id": "hgdp:makrani_XX",
+          "ac": 3,
+          "an": 8,
+          "ac_hom": 0
+         },
+         {
+          "id": "hgdp:makrani_XY",
+          "ac": 20,
+          "an": 36,
+          "ac_hom": 7
+         },
+         {
+          "id": "hgdp:burusho",
+          "ac": 21,
+          "an": 48,
+          "ac_hom": 4
+         },
+         {
+          "id": "hgdp:burusho_XX",
+          "ac": 3,
+          "an": 8,
+          "ac_hom": 0
+         },
+         {
+          "id": "hgdp:burusho_XY",
+          "ac": 18,
+          "an": 40,
+          "ac_hom": 4
+         },
+         {
+          "id": "hgdp:mongolian",
+          "ac": 8,
+          "an": 20,
+          "ac_hom": 2
+         },
+         {
+          "id": "hgdp:mongolian_XX",
+          "ac": 3,
+          "an": 6,
+          "ac_hom": 1
+         },
+         {
+          "id": "hgdp:mongolian_XY",
+          "ac": 5,
+          "an": 14,
+          "ac_hom": 1
+         },
+         {
+          "id": "hgdp:bougainville",
+          "ac": 15,
+          "an": 22,
+          "ac_hom": 5
+         },
+         {
+          "id": "hgdp:bougainville_XX",
+          "ac": 11,
+          "an": 14,
+          "ac_hom": 4
+         },
+         {
+          "id": "hgdp:bougainville_XY",
+          "ac": 4,
+          "an": 8,
+          "ac_hom": 1
+         },
+         {
+          "id": "hgdp:papuansepik",
+          "ac": 1,
+          "an": 2,
+          "ac_hom": 0
+         },
+         {
+          "id": "hgdp:papuansepik_XX",
+          "ac": 1,
+          "an": 2,
+          "ac_hom": 0
+         },
+         {
+          "id": "hgdp:papuansepik_XY",
+          "ac": 0,
+          "an": 0,
+          "ac_hom": 0
+         },
+         {
+          "id": "hgdp:yi",
+          "ac": 6,
+          "an": 20,
+          "ac_hom": 1
+         },
+         {
+          "id": "hgdp:yi_XX",
+          "ac": 0,
+          "an": 2,
+          "ac_hom": 0
+         },
+         {
+          "id": "hgdp:yi_XY",
+          "ac": 6,
+          "an": 18,
+          "ac_hom": 1
+         },
+         {
+          "id": "hgdp:naxi",
+          "ac": 8,
+          "an": 14,
+          "ac_hom": 3
+         },
+         {
+          "id": "hgdp:naxi_XX",
+          "ac": 3,
+          "an": 4,
+          "ac_hom": 1
+         },
+         {
+          "id": "hgdp:naxi_XY",
+          "ac": 5,
+          "an": 10,
+          "ac_hom": 2
+         },
+         {
+          "id": "hgdp:lahu",
+          "ac": 5,
+          "an": 10,
+          "ac_hom": 2
+         },
+         {
+          "id": "hgdp:lahu_XX",
+          "ac": 0,
+          "an": 2,
+          "ac_hom": 0
+         },
+         {
+          "id": "hgdp:lahu_XY",
+          "ac": 5,
+          "an": 8,
+          "ac_hom": 2
+         },
+         {
+          "id": "hgdp:sardinian",
+          "ac": 14,
+          "an": 54,
+          "ac_hom": 3
+         },
+         {
+          "id": "hgdp:sardinian_XX",
+          "ac": 7,
+          "an": 24,
+          "ac_hom": 2
+         },
+         {
+          "id": "hgdp:sardinian_XY",
+          "ac": 7,
+          "an": 30,
+          "ac_hom": 1
+         },
+         {
+          "id": "hgdp:karitiana",
+          "ac": 12,
+          "an": 20,
+          "ac_hom": 3
+         },
+         {
+          "id": "hgdp:karitiana_XX",
+          "ac": 6,
+          "an": 12,
+          "ac_hom": 1
+         },
+         {
+          "id": "hgdp:karitiana_XY",
+          "ac": 6,
+          "an": 8,
+          "ac_hom": 2
+         },
+         {
+          "id": "hgdp:mozabite",
+          "ac": 32,
+          "an": 50,
+          "ac_hom": 9
+         },
+         {
+          "id": "hgdp:mozabite_XX",
+          "ac": 8,
+          "an": 14,
+          "ac_hom": 1
+         },
+         {
+          "id": "hgdp:mozabite_XY",
+          "ac": 24,
+          "an": 36,
+          "ac_hom": 8
+         },
+         {
+          "id": "hgdp:yoruba",
+          "ac": 42,
+          "an": 42,
+          "ac_hom": 21
+         },
+         {
+          "id": "hgdp:yoruba_XX",
+          "ac": 20,
+          "an": 20,
+          "ac_hom": 10
+         },
+         {
+          "id": "hgdp:yoruba_XY",
+          "ac": 22,
+          "an": 22,
+          "ac_hom": 11
+         },
+         {
+          "id": "hgdp:dai",
+          "ac": 8,
+          "an": 18,
+          "ac_hom": 1
+         },
+         {
+          "id": "hgdp:dai_XX",
+          "ac": 3,
+          "an": 6,
+          "ac_hom": 0
+         },
+         {
+          "id": "hgdp:dai_XY",
+          "ac": 5,
+          "an": 12,
+          "ac_hom": 1
+         },
+         {
+          "id": "hgdp:bergamoitalian",
+          "ac": 9,
+          "an": 22,
+          "ac_hom": 2
+         },
+         {
+          "id": "hgdp:bergamoitalian_XX",
+          "ac": 1,
+          "an": 8,
+          "ac_hom": 0
+         },
+         {
+          "id": "hgdp:bergamoitalian_XY",
+          "ac": 8,
+          "an": 14,
+          "ac_hom": 2
+         },
+         {
+          "id": "hgdp:cambodian",
+          "ac": 8,
+          "an": 20,
+          "ac_hom": 2
+         },
+         {
+          "id": "hgdp:cambodian_XX",
+          "ac": 2,
+          "an": 8,
+          "ac_hom": 0
+         },
+         {
+          "id": "hgdp:cambodian_XY",
+          "ac": 6,
+          "an": 12,
+          "ac_hom": 2
+         },
+         {
+          "id": "hgdp:french",
+          "ac": 17,
+          "an": 54,
+          "ac_hom": 4
+         },
+         {
+          "id": "hgdp:french_XX",
+          "ac": 11,
+          "an": 32,
+          "ac_hom": 4
+         },
+         {
+          "id": "hgdp:french_XY",
+          "ac": 6,
+          "an": 22,
+          "ac_hom": 0
+         },
+         {
+          "id": "hgdp:mandenka",
+          "ac": 37,
+          "an": 40,
+          "ac_hom": 17
+         },
+         {
+          "id": "hgdp:mandenka_XX",
+          "ac": 13,
+          "an": 14,
+          "ac_hom": 6
+         },
+         {
+          "id": "hgdp:mandenka_XY",
+          "ac": 24,
+          "an": 26,
+          "ac_hom": 11
+         },
+         {
+          "id": "hgdp:surui",
+          "ac": 5,
+          "an": 14,
+          "ac_hom": 1
+         },
+         {
+          "id": "hgdp:surui_XX",
+          "ac": 4,
+          "an": 8,
+          "ac_hom": 1
+         },
+         {
+          "id": "hgdp:surui_XY",
+          "ac": 1,
+          "an": 6,
+          "ac_hom": 0
+         },
+         {
+          "id": "hgdp:brahui",
+          "ac": 17,
+          "an": 44,
+          "ac_hom": 2
+         },
+         {
+          "id": "hgdp:brahui_XX",
+          "ac": 0,
+          "an": 0,
+          "ac_hom": 0
+         },
+         {
+          "id": "hgdp:brahui_XY",
+          "ac": 17,
+          "an": 44,
+          "ac_hom": 2
+         },
+         {
+          "id": "hgdp:hazara",
+          "ac": 17,
+          "an": 32,
+          "ac_hom": 4
+         },
+         {
+          "id": "hgdp:hazara_XX",
+          "ac": 0,
+          "an": 0,
+          "ac_hom": 0
+         },
+         {
+          "id": "hgdp:hazara_XY",
+          "ac": 17,
+          "an": 32,
+          "ac_hom": 4
+         },
+         {
+          "id": "hgdp:kalash",
+          "ac": 15,
+          "an": 42,
+          "ac_hom": 1
+         },
+         {
+          "id": "hgdp:kalash_XX",
+          "ac": 4,
+          "an": 8,
+          "ac_hom": 0
+         },
+         {
+          "id": "hgdp:kalash_XY",
+          "ac": 11,
+          "an": 34,
+          "ac_hom": 1
+         },
+         {
+          "id": "hgdp:papuanhighlands",
+          "ac": 1,
+          "an": 4,
+          "ac_hom": 0
+         },
+         {
+          "id": "hgdp:papuanhighlands_XX",
+          "ac": 1,
+          "an": 2,
+          "ac_hom": 0
+         },
+         {
+          "id": "hgdp:papuanhighlands_XY",
+          "ac": 0,
+          "an": 2,
+          "ac_hom": 0
+         },
+         {
+          "id": "hgdp:xibo",
+          "ac": 9,
+          "an": 18,
+          "ac_hom": 3
+         },
+         {
+          "id": "hgdp:xibo_XX",
+          "ac": 0,
+          "an": 2,
+          "ac_hom": 0
+         },
+         {
+          "id": "hgdp:xibo_XY",
+          "ac": 9,
+          "an": 16,
+          "ac_hom": 3
+         },
+         {
+          "id": "hgdp:colombian",
+          "ac": 3,
+          "an": 6,
+          "ac_hom": 1
+         },
+         {
+          "id": "hgdp:colombian_XX",
+          "ac": 1,
+          "an": 4,
+          "ac_hom": 0
+         },
+         {
+          "id": "hgdp:colombian_XY",
+          "ac": 2,
+          "an": 2,
+          "ac_hom": 1
+         },
+         {
+          "id": "hgdp:bantukenya",
+          "ac": 16,
+          "an": 20,
+          "ac_hom": 6
+         },
+         {
+          "id": "hgdp:bantukenya_XX",
+          "ac": 1,
+          "an": 2,
+          "ac_hom": 0
+         },
+         {
+          "id": "hgdp:bantukenya_XY",
+          "ac": 15,
+          "an": 18,
+          "ac_hom": 6
+         },
+         {
+          "id": "hgdp:she",
+          "ac": 7,
+          "an": 18,
+          "ac_hom": 1
+         },
+         {
+          "id": "hgdp:she_XX",
+          "ac": 2,
+          "an": 6,
+          "ac_hom": 0
+         },
+         {
+          "id": "hgdp:she_XY",
+          "ac": 5,
+          "an": 12,
+          "ac_hom": 1
+         },
+         {
+          "id": "hgdp:maya",
+          "ac": 13,
+          "an": 38,
+          "ac_hom": 1
+         },
+         {
+          "id": "hgdp:maya_XX",
+          "ac": 12,
+          "an": 34,
+          "ac_hom": 1
+         },
+         {
+          "id": "hgdp:maya_XY",
+          "ac": 1,
+          "an": 4,
+          "ac_hom": 0
+         },
+         {
+          "id": "hgdp:XX",
+          "ac": 258,
+          "an": 588,
+          "ac_hom": 59
+         },
+         {
+          "id": "hgdp:XY",
+          "ac": 549,
+          "an": 1120,
+          "ac_hom": 161
+         },
+         {
+          "id": "1kg:esn",
+          "ac": 196,
+          "an": 206,
+          "ac_hom": 94
+         },
+         {
+          "id": "1kg:esn_XX",
+          "ac": 91,
+          "an": 94,
+          "ac_hom": 44
+         },
+         {
+          "id": "1kg:esn_XY",
+          "ac": 105,
+          "an": 112,
+          "ac_hom": 50
+         },
+         {
+          "id": "1kg:pur",
+          "ac": 78,
+          "an": 198,
+          "ac_hom": 19
+         },
+         {
+          "id": "1kg:pur_XX",
+          "ac": 39,
+          "an": 94,
+          "ac_hom": 8
+         },
+         {
+          "id": "1kg:pur_XY",
+          "ac": 39,
+          "an": 104,
+          "ac_hom": 11
+         },
+         {
+          "id": "1kg:pjl",
+          "ac": 95,
+          "an": 192,
+          "ac_hom": 22
+         },
+         {
+          "id": "1kg:pjl_XX",
+          "ac": 46,
+          "an": 92,
+          "ac_hom": 12
+         },
+         {
+          "id": "1kg:pjl_XY",
+          "ac": 49,
+          "an": 100,
+          "ac_hom": 10
+         },
+         {
+          "id": "1kg:clm",
+          "ac": 97,
+          "an": 188,
+          "ac_hom": 29
+         },
+         {
+          "id": "1kg:clm_XX",
+          "ac": 52,
+          "an": 102,
+          "ac_hom": 15
+         },
+         {
+          "id": "1kg:clm_XY",
+          "ac": 45,
+          "an": 86,
+          "ac_hom": 14
+         },
+         {
+          "id": "1kg:jpt",
+          "ac": 55,
+          "an": 204,
+          "ac_hom": 8
+         },
+         {
+          "id": "1kg:jpt_XX",
+          "ac": 24,
+          "an": 92,
+          "ac_hom": 3
+         },
+         {
+          "id": "1kg:jpt_XY",
+          "ac": 31,
+          "an": 112,
+          "ac_hom": 5
+         },
+         {
+          "id": "1kg:chb",
+          "ac": 71,
+          "an": 204,
+          "ac_hom": 15
+         },
+         {
+          "id": "1kg:chb_XX",
+          "ac": 49,
+          "an": 114,
+          "ac_hom": 13
+         },
+         {
+          "id": "1kg:chb_XY",
+          "ac": 22,
+          "an": 90,
+          "ac_hom": 2
+         },
+         {
+          "id": "1kg:stu",
+          "ac": 106,
+          "an": 196,
+          "ac_hom": 29
+         },
+         {
+          "id": "1kg:stu_XX",
+          "ac": 44,
+          "an": 84,
+          "ac_hom": 12
+         },
+         {
+          "id": "1kg:stu_XY",
+          "ac": 62,
+          "an": 112,
+          "ac_hom": 17
+         },
+         {
+          "id": "1kg:itu",
+          "ac": 114,
+          "an": 204,
+          "ac_hom": 31
+         },
+         {
+          "id": "1kg:itu_XX",
+          "ac": 44,
+          "an": 84,
+          "ac_hom": 14
+         },
+         {
+          "id": "1kg:itu_XY",
+          "ac": 70,
+          "an": 120,
+          "ac_hom": 17
+         },
+         {
+          "id": "1kg:tsi",
+          "ac": 84,
+          "an": 206,
+          "ac_hom": 16
+         },
+         {
+          "id": "1kg:tsi_XX",
+          "ac": 37,
+          "an": 100,
+          "ac_hom": 7
+         },
+         {
+          "id": "1kg:tsi_XY",
+          "ac": 47,
+          "an": 106,
+          "ac_hom": 9
+         },
+         {
+          "id": "1kg:mxl",
+          "ac": 52,
+          "an": 124,
+          "ac_hom": 14
+         },
+         {
+          "id": "1kg:mxl_XX",
+          "ac": 22,
+          "an": 60,
+          "ac_hom": 6
+         },
+         {
+          "id": "1kg:mxl_XY",
+          "ac": 30,
+          "an": 64,
+          "ac_hom": 8
+         },
+         {
+          "id": "1kg:ceu",
+          "ac": 84,
+          "an": 238,
+          "ac_hom": 13
+         },
+         {
+          "id": "1kg:ceu_XX",
+          "ac": 43,
+          "an": 118,
+          "ac_hom": 6
+         },
+         {
+          "id": "1kg:ceu_XY",
+          "ac": 41,
+          "an": 120,
+          "ac_hom": 7
+         },
+         {
+          "id": "1kg:msl",
+          "ac": 149,
+          "an": 160,
+          "ac_hom": 69
+         },
+         {
+          "id": "1kg:msl_XX",
+          "ac": 74,
+          "an": 80,
+          "ac_hom": 34
+         },
+         {
+          "id": "1kg:msl_XY",
+          "ac": 75,
+          "an": 80,
+          "ac_hom": 35
+         },
+         {
+          "id": "1kg:beb",
+          "ac": 102,
+          "an": 198,
+          "ac_hom": 29
+         },
+         {
+          "id": "1kg:beb_XX",
+          "ac": 51,
+          "an": 102,
+          "ac_hom": 14
+         },
+         {
+          "id": "1kg:beb_XY",
+          "ac": 51,
+          "an": 96,
+          "ac_hom": 15
+         },
+         {
+          "id": "1kg:yri",
+          "ac": 217,
+          "an": 232,
+          "ac_hom": 101
+         },
+         {
+          "id": "1kg:yri_XX",
+          "ac": 107,
+          "an": 114,
+          "ac_hom": 50
+         },
+         {
+          "id": "1kg:yri_XY",
+          "ac": 110,
+          "an": 118,
+          "ac_hom": 51
+         },
+         {
+          "id": "1kg:fin",
+          "ac": 71,
+          "an": 196,
+          "ac_hom": 15
+         },
+         {
+          "id": "1kg:fin_XX",
+          "ac": 35,
+          "an": 120,
+          "ac_hom": 8
+         },
+         {
+          "id": "1kg:fin_XY",
+          "ac": 36,
+          "an": 76,
+          "ac_hom": 7
+         },
+         {
+          "id": "1kg:khv",
+          "ac": 75,
+          "an": 200,
+          "ac_hom": 13
+         },
+         {
+          "id": "1kg:khv_XX",
+          "ac": 39,
+          "an": 106,
+          "ac_hom": 7
+         },
+         {
+          "id": "1kg:khv_XY",
+          "ac": 36,
+          "an": 94,
+          "ac_hom": 6
+         },
+         {
+          "id": "1kg:cdx",
+          "ac": 88,
+          "an": 176,
+          "ac_hom": 24
+         },
+         {
+          "id": "1kg:cdx_XX",
+          "ac": 47,
+          "an": 92,
+          "ac_hom": 13
+         },
+         {
+          "id": "1kg:cdx_XY",
+          "ac": 41,
+          "an": 84,
+          "ac_hom": 11
+         },
+         {
+          "id": "1kg:lwk",
+          "ac": 154,
+          "an": 172,
+          "ac_hom": 70
+         },
+         {
+          "id": "1kg:lwk_XX",
+          "ac": 82,
+          "an": 92,
+          "ac_hom": 37
+         },
+         {
+          "id": "1kg:lwk_XY",
+          "ac": 72,
+          "an": 80,
+          "ac_hom": 33
+         },
+         {
+          "id": "1kg:acb",
+          "ac": 157,
+          "an": 184,
+          "ac_hom": 68
+         },
+         {
+          "id": "1kg:acb_XX",
+          "ac": 83,
+          "an": 94,
+          "ac_hom": 37
+         },
+         {
+          "id": "1kg:acb_XY",
+          "ac": 74,
+          "an": 90,
+          "ac_hom": 31
+         },
+         {
+          "id": "1kg:asw",
+          "ac": 80,
+          "an": 102,
+          "ac_hom": 31
+         },
+         {
+          "id": "1kg:asw_XX",
+          "ac": 40,
+          "an": 56,
+          "ac_hom": 13
+         },
+         {
+          "id": "1kg:asw_XY",
+          "ac": 40,
+          "an": 46,
+          "ac_hom": 18
+         },
+         {
+          "id": "1kg:ibs",
+          "ac": 78,
+          "an": 208,
+          "ac_hom": 17
+         },
+         {
+          "id": "1kg:ibs_XX",
+          "ac": 38,
+          "an": 104,
+          "ac_hom": 8
+         },
+         {
+          "id": "1kg:ibs_XY",
+          "ac": 40,
+          "an": 104,
+          "ac_hom": 9
+         },
+         {
+          "id": "1kg:gbr",
+          "ac": 57,
+          "an": 174,
+          "ac_hom": 12
+         },
+         {
+          "id": "1kg:gbr_XX",
+          "ac": 33,
+          "an": 84,
+          "ac_hom": 8
+         },
+         {
+          "id": "1kg:gbr_XY",
+          "ac": 24,
+          "an": 90,
+          "ac_hom": 4
+         },
+         {
+          "id": "1kg:pel",
+          "ac": 68,
+          "an": 170,
+          "ac_hom": 12
+         },
+         {
+          "id": "1kg:pel_XX",
+          "ac": 31,
+          "an": 86,
+          "ac_hom": 5
+         },
+         {
+          "id": "1kg:pel_XY",
+          "ac": 37,
+          "an": 84,
+          "ac_hom": 7
+         },
+         {
+          "id": "1kg:gih",
+          "ac": 102,
+          "an": 200,
+          "ac_hom": 26
+         },
+         {
+          "id": "1kg:gih_XX",
+          "ac": 42,
+          "an": 92,
+          "ac_hom": 12
+         },
+         {
+          "id": "1kg:gih_XY",
+          "ac": 60,
+          "an": 108,
+          "ac_hom": 14
+         },
+         {
+          "id": "1kg:chs",
+          "ac": 74,
+          "an": 204,
+          "ac_hom": 14
+         },
+         {
+          "id": "1kg:chs_XX",
+          "ac": 38,
+          "an": 102,
+          "ac_hom": 7
+         },
+         {
+          "id": "1kg:chs_XY",
+          "ac": 36,
+          "an": 102,
+          "ac_hom": 7
+         },
+         {
+          "id": "1kg:gwd",
+          "ac": 211,
+          "an": 230,
+          "ac_hom": 96
+         },
+         {
+          "id": "1kg:gwd_XX",
+          "ac": 109,
+          "an": 116,
+          "ac_hom": 51
+         },
+         {
+          "id": "1kg:gwd_XY",
+          "ac": 102,
+          "an": 114,
+          "ac_hom": 45
+         },
+         {
+          "id": "1kg:XX",
+          "ac": 1340,
+          "an": 2474,
+          "ac_hom": 444
+         },
+         {
+          "id": "1kg:XY",
+          "ac": 1375,
+          "an": 2492,
+          "ac_hom": 443
+         }
+        ]
+       }
+      }
+     }
+    }
+   }
+  },
+  "gnomad_constraint": {
+   "BRCA1": {
+    "status": 200,
+    "body": {
+     "data": {
+      "gene": {
+       "gnomad_constraint": {
+        "pLI": 5.517117679826177e-38,
+        "loeuf": 0.927589724465447,
+        "mis_z": 1.73357180717296,
+        "oe_lof_upper": 0.927589724465447
+       }
+      }
+     }
+    }
+   },
+   "BRCA2": {
+    "status": 200,
+    "body": {
+     "data": {
+      "gene": {
+       "gnomad_constraint": {
+        "pLI": 3.3178956399653213e-49,
+        "loeuf": 0.8240908463710617,
+        "mis_z": -0.03383847954469542,
+        "oe_lof_upper": 0.8240908463710617
+       }
+      }
+     }
+    }
+   },
+   "CFTR": {
+    "status": 200,
+    "body": {
+     "data": {
+      "gene": {
+       "gnomad_constraint": {
+        "pLI": 3.7662138794205147e-65,
+        "loeuf": 1.193105532032236,
+        "mis_z": -2.388431586995513,
+        "oe_lof_upper": 1.193105532032236
+       }
+      }
+     }
+    }
+   },
+   "TP53": {
+    "status": 200,
+    "body": {
+     "data": {
+      "gene": {
+       "gnomad_constraint": {
+        "pLI": 0.999595868281925,
+        "loeuf": 0.4183620979251529,
+        "mis_z": 1.121638987172852,
+        "oe_lof_upper": 0.4183620979251529
+       }
+      }
+     }
+    }
+   }
+  },
+  "alphafold_prediction": {
+   "P38398": {
+    "status": 200,
+    "body": [
+     {
+      "uniprotAccession": "P38398",
+      "modelEntityId": "AF-P38398-F1",
+      "entryId": "AF-P38398-F1",
+      "gene": "BRCA1",
+      "latestVersion": 6,
+      "amAnnotationsUrl": "https://alphafold.ebi.ac.uk/files/AF-P38398-F1-aa-substitutions.csv"
+     },
+     {
+      "uniprotAccession": "P38398-8",
+      "modelEntityId": "AF-P38398-8-F1",
+      "entryId": "AF-P38398-8-F1",
+      "gene": "BRCA1",
+      "latestVersion": 6
+     }
+    ]
+   },
+   "P04637": {
+    "status": 200,
+    "body": [
+     {
+      "uniprotAccession": "P04637",
+      "modelEntityId": "AF-P04637-F1",
+      "entryId": "AF-P04637-F1",
+      "gene": "TP53",
+      "latestVersion": 6,
+      "amAnnotationsUrl": "https://alphafold.ebi.ac.uk/files/AF-P04637-F1-aa-substitutions.csv"
+     },
+     {
+      "uniprotAccession": "P04637-9",
+      "modelEntityId": "AF-P04637-9-F1",
+      "entryId": "AF-P04637-9-F1",
+      "gene": "TP53",
+      "latestVersion": 6
+     }
+    ]
+   },
+   "P51587": {
+    "status": 404,
+    "body": {}
+   }
+  },
+  "alphamissense_csv": {
+   "P38398": {
+    "status": 200,
+    "url": "https://alphafold.ebi.ac.uk/files/AF-P38398-F1-aa-substitutions.csv",
+    "text": "protein_variant,am_pathogenicity,am_class\nC61A,0.998,LPath\nC61G,0.9904,LPath\nC61S,0.9979,LPath\n"
+   },
+   "P04637": {
+    "status": 200,
+    "url": "https://alphafold.ebi.ac.uk/files/AF-P04637-F1-aa-substitutions.csv",
+    "text": "protein_variant,am_pathogenicity,am_class\nR248W,0.9968,LPath\n"
+   }
+  }
+ }
+}

@@ -258,8 +258,9 @@ If you ran it via `uvx` without installing, use
 `alphafold-sovereign` script is only on PATH after a pip/uv install).
 
 `--self-test` runs fully offline: it checks the deterministic ACMG-evidence
-helpers (VEP, gnomAD, and AlphaMissense mapped to ACMG criteria) against a
-built-in `BRCA1:c.5266dupC` fixture. Returns exit code 0 on PASS, non-zero on
+helpers (the VEP consequence signal, the strand-aware gnomAD variant ID, and
+that allele frequency and AlphaMissense scores carry no ACMG criterion) against
+a built-in `BRCA1:c.5266dupC` fixture. Returns exit code 0 on PASS, non-zero on
 FAIL. No network calls, no credentials required.
 
 ### Configure Claude Desktop
@@ -370,7 +371,9 @@ The server searches ClinVar, gnomAD, AlphaMissense (via AlphaFold DB),
 Open Targets disease evidence, ChEMBL and Ensembl VEP, and returns a
 source-attributed research report with unreviewed computational signals.
 The gene-relative example above is a candidate search: it cannot borrow a
-ClinVar record's classification as though it proved allele identity. Use a
+ClinVar record's classification as though it proved allele identity, and
+gnomAD allele frequency is looked up only for a versioned `NM_…:c.` or
+`NC_…:g.` expression (for example `NM_007294.4:c.181T>G`). Use a
 versioned transcript expression for strict transcript-title matching; even
 then, additional validation is required for clinical allele identity. The
 client does not automatically perform a variant-specific experimental-

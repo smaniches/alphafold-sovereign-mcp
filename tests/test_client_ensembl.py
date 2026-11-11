@@ -166,6 +166,99 @@ async def test_vep_hgvs_parses_transcript_consequences(
     assert rows[0]["gene_symbol"] == "BRCA1"
     assert rows[0]["refseq_transcript_ids"] == ["NM_007294.4"]
     assert rows[0]["canonical"] is True
+    # Variant-level fields of the hit are passed through; absent ones are None.
+    assert rows[0]["locus"] == {
+        "input": "BRCA1:c.181T>G",
+        "assembly_name": None,
+        "seq_region_name": None,
+        "start": None,
+        "end": None,
+        "strand": None,
+        "allele_string": None,
+        "vcf_string": None,
+    }
+
+
+@pytest.mark.parametrize(
+    ("consequences", "source", "terms", "impact", "transcript_id"),
+    [
+        (
+            {
+                "transcript_consequences": [
+                    {
+                        "transcript_id": "ENST1",
+                        "consequence_terms": ["missense_variant"],
+                        "impact": "MODERATE",
+                    }
+                ],
+                # Not read when the hit has a transcript consequence.
+                "intergenic_consequences": [
+                    {"consequence_terms": ["intergenic_variant"], "impact": "MODIFIER"}
+                ],
+            },
+            "transcript_consequences",
+            ["missense_variant"],
+            "MODERATE",
+            "ENST1",
+        ),
+        (
+            {
+                "intergenic_consequences": [
+                    {
+                        "consequence_terms": ["intergenic_variant"],
+                        "impact": "MODIFIER",
+                        "variant_allele": "C",
+                    }
+                ]
+            },
+            "intergenic_consequences",
+            ["intergenic_variant"],
+            "MODIFIER",
+            "",
+        ),
+        (
+            {
+                "regulatory_feature_consequences": [
+                    {"consequence_terms": ["regulatory_region_variant"], "impact": "MODIFIER"}
+                ]
+            },
+            None,
+            [],
+            "",
+            "",
+        ),
+        ({"transcript_consequences": [], "intergenic_consequences": []}, None, [], "", ""),
+    ],
+    ids=["transcript", "intergenic", "regulatory_only", "empty_lists"],
+)
+async def test_vep_hgvs_rows_name_the_consequences_they_were_read_from(
+    respx_mock: respx.MockRouter,
+    consequences: dict[str, Any],
+    source: str | None,
+    terms: list[str],
+    impact: str,
+    transcript_id: str,
+) -> None:
+    """A hit without transcript consequences keeps what VEP reports, and no transcript."""
+    respx_mock.get("https://rest.ensembl.org/vep/human/hgvs/NC_000005.10:g.1T>C").mock(
+        return_value=httpx.Response(
+            200,
+            json=[{"input": "NC_000005.10:g.1T>C", "vcf_string": "5-1-T-C", **consequences}],
+        )
+    )
+    async with EnsemblClient() as client:
+        rows = await client.vep_hgvs("NC_000005.10:g.1T>C")
+    assert [
+        (
+            row["consequence_source"],
+            row["consequence_terms"],
+            row["impact"],
+            row["transcript_id"],
+            row["canonical"],
+            row["locus"]["vcf_string"],
+        )
+        for row in rows
+    ] == [(source, terms, impact, transcript_id, False, "5-1-T-C")]
 
 
 async def test_vep_hgvs_non_list_payload_returns_empty(
@@ -188,6 +281,7 @@ async def test_vep_hgvs_canonical_false_kwarg(
         assert await client.vep_hgvs("X:c.1A>T", canonical=False) == []
     assert "canonical=0" in str(route.calls.last.request.url)
     assert "uniprot=1" in str(route.calls.last.request.url)
+    assert "vcf_string=1" in str(route.calls.last.request.url)
 
 
 async def test_vep_hgvs_error_returns_empty(respx_mock: respx.MockRouter) -> None:

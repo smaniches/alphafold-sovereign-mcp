@@ -171,6 +171,65 @@ A gnomAD response flagged `found: false` or `constraint_available: false`
 is `no_data`, even if it includes other metadata. Absence must not be
 presented as available population or gene-constraint evidence.
 
+gnomAD allele frequency is looked up only when the query pins one genomic
+allele: a versioned RefSeq coding (`NM_…:c.`) or genomic (`NC_…:g.`) HGVS
+expression that Ensembl VEP maps to a single GRCh38 single-nucleotide
+change or simple insertion/deletion, or a `chrom-pos-ref-alt` variant ID.
+The variant ID is VEP's forward-strand `vcf_string`, accepted only when
+VEP's reply names the queried expression as its `input` and the
+`vcf_string` agrees with VEP's own coordinates, strand and allele string.
+`unassessed_evidence.population_frequency` reports that ID, the exome and
+genome counts separately, and a `lookup_status`:
+
+| `lookup_status` | Meaning |
+|---|---|
+| `found` | gnomAD holds the variant; counts are given per cohort |
+| `no_frequency_data` | a response without a usable allele frequency |
+| `not_found` | single-nucleotide variant without a gnomAD record; site coverage is not checked |
+| `not_found_representation_unverified` | insertion/deletion without a record under the looked-up representation (VEP's, or the ID the caller supplied); gnomAD stores left-aligned alleles, so absence cannot be concluded |
+| `not_attempted` | gene-relative, protein-level, Ensembl-transcript, unversioned or multi-nucleotide input, or no single verified mapping; if the VEP request failed or its response was invalid, `detail` says so |
+| `failed`, `invalid_response` | the gnomAD request failed or its content was rejected |
+
+A variant without a gnomAD record is never reported as allele frequency 0.
+`population_genetics.global_*` summarise the cohort named in
+`population_genetics.cohort` (the exome cohort when gnomAD reports one,
+otherwise the genome cohort); the other cohort can hold carriers that the
+summary does not show. `population_genetics.populations` lists the
+population records of that cohort with the counts gnomAD reports. Records
+that split the cohort, one of its subsets or another listed record by sex
+(`XX`, `XY`, `<record>_XX`, `<record>_XY`, also after a subset prefix) are
+left out, because they count the same alleles a second time; no other
+record is removed. For a genome cohort gnomAD can also return populations
+of its HGDP and 1000 Genomes subsets (`hgdp:…`, `1kg:…`); they are listed
+under those identifiers. The identifiers without a prefix already sum to
+the cohort, so prefixed rows must not be added to them. A cohort allele
+frequency is accepted only when it equals its allele count divided by its
+allele number; a response whose values contradict one another is reported
+as `failed`, not as a frequency. A homozygote count is passed on only as a
+non-negative whole number that its allele count allows: no more homozygotes
+than alleles and, on an autosome, where every genotype is diploid, no more
+than half as many. No ploidy is assumed on X or Y, and a count gnomAD does
+not report stays `null`. Allele frequency and predictor outputs carry no
+ACMG criterion: BA1, BS1, PM2, PP3 and BP4 are `NOT_ASSESSED`.
+`tests/fixtures/variant_frequency_path_20261110.json` is a sanitised
+capture of the live Ensembl VEP, gnomAD and AlphaFold DB responses
+(requests and retrieval times in its `meta` block) that
+`tests/test_variant_frequency_path_recorded.py` replays through the
+clients.
+
+Both tools read an Ensembl VEP reply only when every hit names the queried
+expression as its `input`. A reply that names another input, or none, is
+reported as `data_sources_status.ensembl_vep: invalid_response` and nothing
+is taken from it: no consequence, predictor output, candidate signal, gene
+context or genomic mapping, and AlphaMissense is `skipped_upstream_invalid`.
+ClinVar is queried independently and is unaffected, as is the gnomAD lookup
+of a variant ID supplied by the caller.
+
+For a variant that VEP places outside every transcript,
+`functional_consequence` gives the consequence terms and impact of VEP's
+`intergenic_consequences`. No transcript is named, the transcript-level
+fields stay empty, and no ACMG signal is derived from them.
+
 For versioned RefSeq HGVS input, the report and ACMG research tool may
 recover gene context from the parenthetical input gene, an exact ClinVar
 transcript-text match, or an Ensembl VEP consequence explicitly linked to the queried versioned

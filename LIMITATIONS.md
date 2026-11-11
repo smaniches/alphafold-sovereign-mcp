@@ -12,14 +12,16 @@ labelled ``limitation``.
 ## L1 — ACMG criterion mapping is not independently validated
 
 **Module:** ``src/alphafold_sovereign/tools/precision_medicine.py``
-(``_am_to_acmg_evidence``, ``_gnomad_to_acmg``, ``_vep_to_acmg``, and
-related helpers).
+(``_vep_to_acmg``, ``_unassessed_evidence``, and related helpers).
 
-**Description:** The mapping from AlphaMissense scores, gnomAD allele
-frequencies, and VEP consequence terms onto ACMG criteria (PVS1, PS1,
-PM1, …) is implemented from a reading of Richards et al. 2015 by the
-project author. No clinical geneticist has signed off on the
-criterion-by-criterion mapping.
+**Description:** The mapping from VEP consequence terms onto candidate
+ACMG criteria (PVS1, BP7) is implemented from a reading of Richards et
+al. 2015 by the project author. No clinical geneticist has signed off on
+it. gnomAD allele frequencies and predictor outputs (AlphaMissense, SIFT,
+PolyPhen, CADD) are not mapped onto criteria: they are returned as
+observations with BA1, BS1, PM2, PP3 and BP4 marked ``NOT_ASSESSED``,
+because those criteria depend on disorder-specific frequency thresholds
+and predictor-specific calibration that this project does not evaluate.
 
 **Impact:** Computational evidence could be mistaken for established
 clinical criteria if source attribution or the unassessed state is lost.

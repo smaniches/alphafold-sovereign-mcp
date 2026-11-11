@@ -40,6 +40,25 @@ _HGVS_GENE_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Variant-level fields of a VEP hit. ``start``/``end`` are forward-strand
+# coordinates; ``allele_string`` is written on ``strand`` (the transcript
+# strand for c. HGVS input); ``vcf_string`` is the forward-strand
+# ``chrom-pos-ref-alt`` form and is returned only when requested.
+_VEP_LOCUS_FIELDS = (
+    "input",
+    "assembly_name",
+    "seq_region_name",
+    "start",
+    "end",
+    "strand",
+    "allele_string",
+    "vcf_string",
+)
+
+# The fields of a VEP hit that consequence rows are read from, in order of
+# preference: a hit with transcript consequences is described by them alone.
+_VEP_CONSEQUENCE_FIELDS = ("transcript_consequences", "intergenic_consequences")
+
 
 def _first_uniprot(value: Any) -> str:
     """Normalise a VEP ``swissprot`` cross-reference to one accession.
@@ -108,6 +127,17 @@ class EnsemblClient(BaseAsyncClient):
             ``protein_id``, ``protein_start``, ``amino_acids``, ``codons``,
             ``polyphen_score``, ``sift_score``, ``cadd_phred``,
             ``sift_prediction``, ``polyphen_prediction``, ``swissprot``.
+            Each dict also carries ``locus``: the genomic mapping VEP reports
+            for the hit the consequence belongs to (``input``,
+            ``assembly_name``, ``seq_region_name``, ``start``, ``end``,
+            ``strand``, ``allele_string``, ``vcf_string``), passed through
+            unvalidated; an absent field is ``None``. ``consequence_source``
+            names the VEP field a dict was read from. A hit without transcript
+            consequences keeps its ``locus``: an intergenic variant gives the
+            ``consequence_terms`` and ``impact`` of its
+            ``intergenic_consequences`` with empty transcript fields and
+            ``canonical`` false; a hit with neither gives one empty dict
+            whose ``consequence_source`` is ``None``.
         """
         params: dict[str, Any] = {
             "canonical": int(canonical),
@@ -116,6 +146,7 @@ class EnsemblClient(BaseAsyncClient):
             "uniprot": 1,
             "xref_refseq": 1,
             "Genoverse": 0,
+            "vcf_string": 1,
         }
         try:
             data = await self._get(
@@ -129,8 +160,15 @@ class EnsemblClient(BaseAsyncClient):
         results: list[dict[str, Any]] = []
         any_data: Any = data
         for hit in any_data if isinstance(any_data, list) else []:
-            for tc in hit.get("transcript_consequences", []):
-                results.append(self._parse_tc(tc))
+            locus = {name: hit.get(name) for name in _VEP_LOCUS_FIELDS}
+            # A hit without transcript consequences (an intergenic variant) is
+            # read from the consequences VEP does report for it, so that its
+            # locus, terms and impact are kept; no transcript is filled in.
+            source = next((name for name in _VEP_CONSEQUENCE_FIELDS if hit.get(name)), None)
+            for tc in hit[source] if source else [{}]:
+                results.append(
+                    {**self._parse_tc(tc), "consequence_source": source, "locus": dict(locus)}
+                )
         return results
 
     # ------------------------------------------------------------------
