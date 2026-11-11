@@ -194,12 +194,31 @@ class AlphaFoldClient(BaseAsyncClient):
             advertises no PDB file; ``record`` is then whatever
             ``get_prediction`` returned, which is an empty dict when
             AlphaFold DB has no model for the accession.
+
+        An error from either request propagates unchanged, so an HTTP 404
+        raised here does not say which request it answered. A caller that
+        must tell "no model" from "the advertised file was not retrieved"
+        calls ``get_prediction`` and ``get_pdb_file`` separately.
         """
         meta = await self.get_prediction(uniprot_id)
-        pdb_url = meta.get("pdbUrl", "")
+        return meta, await self.get_pdb_file(meta)
+
+    async def get_pdb_file(self, record: Mapping[str, Any]) -> bytes:
+        """Download the PDB-format file that a prediction record advertises.
+
+        One file request and no metadata request, so the coordinates belong
+        to the record the caller already holds.
+
+        Args:
+            record: A prediction record as returned by ``get_prediction``.
+
+        Returns:
+            The file content; empty when the record advertises no PDB file.
+        """
+        pdb_url = record.get("pdbUrl", "")
         if not pdb_url:
-            return meta, b""
-        return meta, await self._get_bytes(_validate_af_file_url(pdb_url))
+            return b""
+        return await self._get_bytes(_validate_af_file_url(pdb_url))
 
     async def get_pdb_bytes(self, uniprot_id: str) -> bytes:
         """Download the PDB-format structure file for a UniProt accession."""

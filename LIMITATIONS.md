@@ -325,10 +325,12 @@ eight statistics of the finite H₀ bar lifetimes and eight of the finite H₁ b
 lifetimes of a Vietoris-Rips complex on the Cα atoms, truncated at 15 Å. The
 other 48 slots are always zero: H₂ is not computed, and slots 24 to 63 are
 padding. Without GUDHI the vector holds eight distance and contact statistics
-and no persistent homology. A model with more than 500 Cα atoms is reduced to
-500 evenly spaced ones before the complex is built, so its values describe that
-subsample. The distance the tools report is the L2 distance between
-length-normalised vectors.
+and no persistent homology. With GUDHI, a model with more than 500 Cα atoms is
+reduced to 500 evenly spaced ones before the complex is built, so its values
+describe that subsample. The fallback is not subsampled: it uses every residue
+and builds the full pairwise distance matrix, so its memory and time grow with
+the square of the model length. The distance the tools report is the L2
+distance between length-normalised vectors.
 
 In the same internal audit (GUDHI 3.13) the Betti numbers and bar lengths were
 correct on analytic point clouds and unchanged by a rigid motion.
@@ -353,8 +355,9 @@ would be affected only if no three of its sampled Cα atoms lay within 15 Å of
 one another.
 
 **Impact:** "64 components" overstated the information in the vector. The
-distance is not a measure of fold similarity, homology or function, and values
-for models longer than 500 residues are not comparable with full-chain values.
+distance is not a measure of fold similarity, homology or function, and GUDHI
+values for models longer than 500 residues are not comparable with full-chain
+values.
 The earlier description of `compare_proteins_topologically` listed possible
 uses (drug-repurposing triage, off-target screening, cross-species comparison)
 that no evidence supports.

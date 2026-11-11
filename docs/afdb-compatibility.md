@@ -179,12 +179,24 @@ An empty AFDB REST API response must not be interpreted as definitive
 absence of a predicted model: the >2700-aa human-protein fragments are
 provided by the FTP proteome archive, not the usual web API.
 
-When no model is retrieved, the structure tools return
-`structure_available: false` and say why in `retrieval_status`.
-`no_prediction_returned` means the API answered without a model for the
-accession (HTTP 404 or no matching record). `request_failed` means the
-request was blocked by offline mode or failed, for example on a timeout
-or a server error; that is not evidence that no prediction exists.
+When no model is retrieved, the structure tools that take one accession
+return `structure_available: false` and say why in `retrieval_status`.
+`no_prediction_returned` means the prediction endpoint answered without a
+model for the accession (HTTP 404 from that endpoint, or no matching
+record). `request_failed` means a request was blocked by offline mode or
+failed, for example on a timeout or a server error; that is not evidence
+that no prediction exists. It also covers a failed request for the
+coordinate file that a returned record advertises, HTTP 404 included:
+the record exists, so that 404 is not an answer about the prediction.
+`compare_proteins_topologically` makes the same distinction for each
+accession in `proteins_failed`.
+
+With `include_coordinates`, `get_protein_structure` embeds the file that
+the reported record advertises (`file_urls.pdb`) and makes no second
+prediction request. `coordinates_status` is `retrieved`,
+`no_coordinates_returned` or `request_failed`. `coordinates_pdb` is empty
+unless the status is `retrieved`; when it is empty, `coordinates_error`
+gives the reason.
 
 ## Modeled residues and intrinsic-disorder segments
 

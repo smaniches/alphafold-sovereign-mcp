@@ -127,8 +127,9 @@ A Python MCP server that:
   Betti numbers; H₂ is not computed. The fallback reports a 4-Å contact
   graph component count and geometric features, not persistent homology.
   The 64-slot vector holds at most 16 statistics (eight in the fallback);
-  the other slots are zero. A model longer than 500 residues is reduced to
-  500 evenly spaced Cα atoms before persistent homology is computed.
+  the other slots are zero. With GUDHI, a model longer than 500 residues is
+  reduced to 500 evenly spaced Cα atoms before persistent homology is
+  computed; the fallback uses every residue.
   L2 distance between those feature vectors is not a calibrated measure
   of protein homology or biological function (see
   [LIMITATIONS L12](LIMITATIONS.md)).
@@ -300,7 +301,7 @@ guidance. The previous illustrative clinical-session transcripts were retired.
 ALPHAFOLD_OFFLINE=1 alphafold-sovereign-mcp
 ```
 
-Refuses outbound HTTP before a socket is opened (raising `AirGapError`), except to hosts you explicitly allowlist via `ALPHAFOLD_ALLOW_HOSTS`. The knowledge-graph query and export tools still answer from the local SQLite store. The upstream-querying tools have no local cache and report their source as unavailable. The structure tools report the AlphaFold DB request as failed (`retrieval_status: "request_failed"`), which is not a statement that no model exists.
+Refuses outbound HTTP before a socket is opened (raising `AirGapError`), except to hosts you explicitly allowlist via `ALPHAFOLD_ALLOW_HOSTS`. The knowledge-graph query and export tools still answer from the local SQLite store. The upstream-querying tools have no local cache; depending on the tool, the call fails with an error or returns a result that reports the affected lookups as failed or not assessed. Of the structure tools, `get_protein_structure`, `analyze_structural_confidence`, `compute_topology_fingerprint`, `score_binding_pocket_geometry` and `detect_intrinsically_disordered` report the blocked AlphaFold DB request as `retrieval_status: "request_failed"`, which is not a statement that no model exists. `compare_proteins_topologically` lists each accession under `proteins_failed` with the reason instead. `find_evolutionary_structural_shifts` queries Ensembl first and fails with an error when that request is blocked; with Ensembl allowlisted but not AlphaFold DB, it returns sequence identity only and does not say that the AlphaFold DB request was blocked.
 
 ---
 
@@ -345,7 +346,7 @@ original attribution; clinical interpretation requires independent review.
 | Tool | What it does |
 |---|---|
 | `analyze_structural_confidence` | mean pLDDT + confidence tier + PAE summary with positions of locally elevated PAE; domains are not assessed |
-| `compute_topology_fingerprint` | 64-slot exploratory vector holding at most 16 statistics; GUDHI computes H₀/H₁ at filtration endpoint; H₂ unavailable; models over 500 residues are subsampled |
+| `compute_topology_fingerprint` | 64-slot exploratory vector holding at most 16 statistics; GUDHI computes H₀/H₁ at filtration endpoint; H₂ unavailable; with GUDHI, models over 500 residues are subsampled (the fallback uses every residue) |
 | `compare_proteins_topologically` | Pairwise L2 fingerprint-distance matrix for 2–10 proteins; exploratory, no validated similarity threshold |
 | `find_evolutionary_structural_shifts` | Ensembl sequence identity + method-labeled structural feature distances; no mixed-scale risk ranking |
 | `score_binding_pocket_geometry` | Geometric clusters of core residues + uncalibrated geometry score; not a validated pocket detector, no druggability class |

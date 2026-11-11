@@ -12,10 +12,11 @@ AlphaFold DB) and derive a small set of summaries from them:
   statistics. Optional GUDHI computes H₀/H₁ at the final 15-Å
   Vietoris-Rips filtration step and contributes eight bar-lifetime
   statistics for each; H₂ is not computed and the other 48 slots are
-  zero. Models longer than 500 residues are reduced to 500 evenly
-  spaced Cα atoms first. Without GUDHI, the fallback fills eight slots
-  with distance and contact statistics, one of them the 4-Å
-  contact-graph component count, and computes no persistent homology,
+  zero. With GUDHI, models longer than 500 residues are reduced to 500
+  evenly spaced Cα atoms first. Without GUDHI, the fallback uses every
+  residue: it fills eight slots with distance and contact statistics,
+  one of them the 4-Å contact-graph component count, and computes no
+  persistent homology,
 * a pairwise distance matrix between TDA fingerprints (the
   implementation is an L2 distance on length-normalised fingerprint
   vectors — it is **not** an optimal-transport Wasserstein distance;
@@ -26,9 +27,13 @@ AlphaFold DB) and derive a small set of summaries from them:
 * an intrinsic-disorder-region map.
 
 All tools are read-only. Tools that require outbound HTTP fail closed when
-``ALPHAFOLD_OFFLINE=1``: the client raises ``AirGapError`` and the tool
-reports the AlphaFold DB request as failed, not as a missing model. There
-is no local structure cache.
+``ALPHAFOLD_OFFLINE=1``: the client raises ``AirGapError`` before a socket
+is opened. The five tools that take one accession then return
+``retrieval_status: "request_failed"``, not a missing model.
+``compare_proteins_topologically`` lists each accession under
+``proteins_failed`` with the reason instead, and
+``find_evolutionary_structural_shifts`` queries Ensembl first and lets that
+client's ``AirGapError`` propagate. There is no local structure cache.
 
 Tool inventory:
   1. analyze_structural_confidence       — pLDDT + PAE confidence summary
@@ -197,12 +202,16 @@ _HTTP_NOT_FOUND = 404
 
 
 def _unretrieved(exc: Exception) -> _RequestFailed | None:
-    """Classify an error raised by an AlphaFold DB call.
+    """Classify an error raised by an AlphaFold DB prediction-metadata request.
 
-    HTTP 404 is how AlphaFold DB answers for an accession it serves no model
-    for, so it maps to ``None``. Anything else (offline mode, an open circuit
-    breaker, a timeout, a server error, an unreadable body) is a request that
-    failed, and says nothing about whether a model exists.
+    HTTP 404 is how the prediction endpoint answers for an accession it
+    serves no model for, so it maps to ``None``. Anything else (offline mode,
+    an open circuit breaker, a timeout, a server error, an unreadable body) is
+    a request that failed, and says nothing about whether a model exists.
+
+    Only the metadata request is classified here. A 404 for a file that a
+    returned record advertises is not this answer; ``_fetch_af_coordinates``
+    reports every failure of that request as a request that failed.
     """
     if isinstance(exc, UpstreamError) and exc.status == _HTTP_NOT_FOUND:
         return None
@@ -212,21 +221,45 @@ def _unretrieved(exc: Exception) -> _RequestFailed | None:
 async def _fetch_af_structure(uniprot_id: str) -> dict[str, Any] | _RequestFailed | None:
     """Fetch AlphaFold structure coordinates for a UniProt accession.
 
-    Routes through AlphaFoldClient, so the request shares the client's
+    Routes through AlphaFoldClient, so the requests share the client's
     rate limiter, retry policy, circuit breaker, air-gap enforcement,
-    and the advertised-file-URL host guard. Returns None when AlphaFold DB
-    answers without a model for the accession, and a falsy
-    ``_RequestFailed`` when the request did not complete.
-    ``model_version`` is the version the prediction record reports for the
-    file (None if it reports none).
+    and the advertised-file-URL host guard. The prediction record is
+    requested first and its PDB file second, and the two are classified
+    apart. Returns None when AlphaFold DB answers without a model for the
+    accession, and a falsy ``_RequestFailed`` when either request did not
+    complete. ``model_version`` is the version the prediction record
+    reports for the file (None if it reports none).
     """
     try:
-        record, pdb_bytes = await _alphafold().get_pdb_model(uniprot_id)
+        record = await _alphafold().get_prediction(uniprot_id)
     except (UniProtVerificationError, AlphaFoldPredictionSchemaError):
         raise
     except Exception as exc:
         logger.warning("af.fetch.failed", uniprot_id=uniprot_id, exc=str(exc))
         return _unretrieved(exc)
+    return await _fetch_af_coordinates(uniprot_id, record)
+
+
+async def _fetch_af_coordinates(
+    uniprot_id: str, record: dict[str, Any]
+) -> dict[str, Any] | _RequestFailed | None:
+    """Download the PDB file that one prediction record advertises.
+
+    No further metadata request is made, so the coordinates belong to
+    ``record`` and ``model_version`` is that record's version. Every
+    failure of the file request is a request that failed, HTTP 404
+    included: the record was returned and names the file, so a 404 here is
+    not AlphaFold DB answering that it has no model. Returns None when the
+    record advertises no PDB file, or the file is empty.
+    """
+    try:
+        pdb_bytes = await _alphafold().get_pdb_file(record)
+    except Exception as exc:
+        logger.warning("af.fetch.failed", uniprot_id=uniprot_id, request="pdb_file", exc=str(exc))
+        return _RequestFailed(
+            "the prediction record was returned, but the request for its PDB file "
+            f"failed: {type(exc).__name__}: {exc}"
+        )
     if not pdb_bytes:
         return None
     return {
@@ -317,9 +350,9 @@ def _no_structure_response(uniprot_id: str, fetched: object = None) -> dict[str,
 
     AlphaFold DB does not contain a model for every UniProt accession.
     When a structure or prediction fetch returns nothing, every
-    structure tool returns this same shape, so an LLM or a human
-    receives one clear, consistent explanation rather than a terse or
-    silent failure.
+    structure tool that takes one accession returns this same shape, so
+    an LLM or a human receives one clear, consistent explanation rather
+    than a terse or silent failure.
 
     The two reasons are kept apart in ``retrieval_status``.
     ``no_prediction_returned``: AlphaFold DB answered and returned no model.
@@ -377,6 +410,34 @@ def _missing_model_reason(fetched: object) -> str:
             "evidence that no model exists."
         )
     return "No AlphaFold model for this accession."
+
+
+def _embedded_coordinates(fetched: dict[str, Any] | _RequestFailed | None) -> dict[str, str]:
+    """Return the coordinate fields of ``get_protein_structure``.
+
+    ``coordinates_pdb`` keeps its earlier values: the PDB text, or an empty
+    string when there is none. ``coordinates_status`` says which of the two
+    happened, and ``coordinates_error`` gives the reason for an empty string.
+    """
+    if isinstance(fetched, _RequestFailed):
+        return {
+            "coordinates_pdb": "",
+            "coordinates_status": "request_failed",
+            "coordinates_error": (
+                f"Coordinates were not embedded: {fetched.reason}. This is not "
+                "evidence that the model has no coordinate file."
+            ),
+        }
+    if fetched is None:
+        return {
+            "coordinates_pdb": "",
+            "coordinates_status": "no_coordinates_returned",
+            "coordinates_error": (
+                "Coordinates were not embedded: the prediction record advertises no "
+                "PDB file, or the file it advertises is empty."
+            ),
+        }
+    return {"coordinates_pdb": fetched["pdb_text"], "coordinates_status": "retrieved"}
 
 
 def _find_high_pae_pairs(pae: np.ndarray, threshold: float = 15.0) -> list[dict[str, Any]]:
@@ -488,11 +549,12 @@ def _compute_tda_fingerprint(
     unavailable, never as zero. Without GUDHI the distance-statistics
     fallback computes only the exact 4-Å graph component count.
 
-    A model with more than 500 Cα atoms is reduced to 500 evenly spaced
-    ones before the complex is built. The Betti numbers and statistics
-    then describe that subsample, whose neighbour spacing is wider than
-    the chain's, and can differ from the values for all residues;
-    ``subsampled`` and ``n_residues_total`` report when this happened.
+    On the GUDHI path, a model with more than 500 Cα atoms is reduced to
+    500 evenly spaced ones before the complex is built. The Betti numbers
+    and statistics then describe that subsample, whose neighbour spacing
+    is wider than the chain's, and can differ from the values for all
+    residues; ``subsampled`` and ``n_residues_total`` report when this
+    happened. The fallback is never subsampled.
 
     Args:
         ca_coords: (N, 3) array of Cα coordinates.
@@ -835,11 +897,13 @@ async def compute_topology_fingerprint(
     installed, H0 and H1 are computed on the 15-Å Vietoris-Rips 2-skeleton
     and the vector holds 16 summary statistics of their finite bar
     lifetimes (eight each); the other 48 slots are zero. H2 is NOT
-    computed. Models longer than 500 residues are reduced to 500 evenly
-    spaced Cα atoms first, so their Betti numbers and statistics describe
-    that subsample (``subsampled`` is then true). Without GUDHI the vector
-    holds eight distance and contact statistics, one of them a 4-Å
-    contact-graph component count, and no persistent homology is computed.
+    computed. On this GUDHI path, models longer than 500 residues are
+    reduced to 500 evenly spaced Cα atoms first, so their Betti numbers
+    and statistics describe that subsample (``subsampled`` is then true).
+    Without GUDHI the fallback uses every residue, with no subsampling:
+    the vector holds eight distance and contact statistics, one of them a
+    4-Å contact-graph component count, and no persistent homology is
+    computed.
     Betti numbers describe this chosen filtration, not protein domains,
     β-barrels, drug cavities, molecular function, or an experimental structure.
 
@@ -910,10 +974,15 @@ async def compare_proteins_topologically(
     is **not** a Wasserstein distance between persistence diagrams.
 
     The vectors hold at most 16 statistics (see
-    ``compute_topology_fingerprint``), and a model longer than 500
-    residues is compared on 500 evenly spaced Cα atoms. In an internal
-    audit of 23 AlphaFold models, nearly all of each normalised vector lay
-    in its two total-persistence components, so the distance mostly tracks
+    ``compute_topology_fingerprint``). With GUDHI (the optional ``[tda]``
+    extra), a model longer than 500 residues is compared on
+    500 evenly spaced Cα atoms. Without GUDHI the fallback uses every
+    residue of every model, with no subsampling, and builds each model's
+    full pairwise distance matrix, so its cost grows with the square of
+    the model length. ``protein_metadata`` reports ``n_residues_used`` and
+    ``subsampled`` for each model. In an internal audit of 23 AlphaFold
+    models run with GUDHI, nearly all of each normalised vector lay in
+    its two total-persistence components, so the distance mostly tracks
     one ratio: total H1 over total H0 persistence. It has no validated
     threshold for fold similarity and is not a functional,
     sequence-similarity or binding-site measure (LIMITATIONS.md L12).
@@ -1443,6 +1512,13 @@ async def get_protein_structure(
     the request was blocked (offline mode) or failed, which is not evidence that no
     prediction exists.
 
+    With ``include_coordinates``, ``coordinates_pdb`` is the file that this same
+    record advertises (``file_urls.pdb``); no second prediction lookup is made.
+    ``coordinates_status`` is ``retrieved``, ``no_coordinates_returned`` (the record
+    advertises no PDB file, or the file is empty) or ``request_failed`` (the request
+    for that file failed, HTTP 404 included). ``coordinates_pdb`` is empty unless the
+    status is ``retrieved``; when it is empty, ``coordinates_error`` gives the reason.
+
     Input fields:
         params.uniprot_id: UniProt accession to retrieve, e.g. 'P38398' (BRCA1).
         params.include_coordinates: Embed the full PDB coordinate text (large);
@@ -1510,8 +1586,9 @@ async def get_protein_structure(
     }
 
     if params.include_coordinates:
-        structure = await _fetch_af_structure(uid)
-        result["coordinates_pdb"] = structure["pdb_text"] if structure else ""
+        # Download the file this record advertises (``file_urls.pdb``). A second
+        # prediction lookup could return another record than the one reported.
+        result.update(_embedded_coordinates(await _fetch_af_coordinates(uid, meta)))
 
     log.info("complete", entry_id=result["entry_id"])
     return result

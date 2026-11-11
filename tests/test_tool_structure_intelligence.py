@@ -812,7 +812,7 @@ def _fake_af(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
     """
     fake = MagicMock()
     fake.get_prediction = AsyncMock(return_value={})
-    fake.get_pdb_model = AsyncMock(return_value=({}, b""))
+    fake.get_pdb_file = AsyncMock(return_value=b"")
     fake.get_pae = AsyncMock(return_value={})
     monkeypatch.setattr(si, "_alphafold", lambda: fake)
     return fake
@@ -843,18 +843,24 @@ def test_alphafold_client_is_a_cached_singleton() -> None:
 async def test_fetch_af_structure_success(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_text = _make_pdb(5)
     af = _fake_af(monkeypatch)
-    af.get_pdb_model.return_value = ({**_af_meta(), "latestVersion": 4}, fake_text.encode("utf-8"))
+    record = {**_af_meta(), "latestVersion": 4}
+    af.get_prediction.return_value = record
+    af.get_pdb_file.return_value = fake_text.encode("utf-8")
     out = await _fetch_af_structure("P12345")
     assert out is not None
     assert out["pdb_text"] == fake_text
     assert out["uniprot_id"] == "P12345"
     # AF-10: the version comes from the record that advertised the file.
     assert out["model_version"] == 4
+    # One prediction lookup, and the file is requested for that record.
+    af.get_prediction.assert_awaited_once_with("P12345")
+    af.get_pdb_file.assert_awaited_once_with(record)
 
 
 async def test_fetch_af_structure_record_without_version(monkeypatch: pytest.MonkeyPatch) -> None:
     af = _fake_af(monkeypatch)
-    af.get_pdb_model.return_value = (_af_meta(), _make_pdb(5).encode("utf-8"))
+    af.get_prediction.return_value = _af_meta()
+    af.get_pdb_file.return_value = _make_pdb(5).encode("utf-8")
     out = await _fetch_af_structure("P12345")
     assert out is not None
     assert out["model_version"] is None
@@ -862,7 +868,7 @@ async def test_fetch_af_structure_record_without_version(monkeypatch: pytest.Mon
 
 async def test_fetch_af_structure_no_model(monkeypatch: pytest.MonkeyPatch) -> None:
     """An accession with no AlphaFold model yields empty PDB bytes."""
-    _fake_af(monkeypatch)  # get_pdb_model default returns ({}, b"")
+    _fake_af(monkeypatch)  # defaults: an empty record, which advertises no file
     assert await _fetch_af_structure("P00000") is None
 
 
@@ -873,7 +879,7 @@ async def test_fetch_af_structure_client_raises(monkeypatch: pytest.MonkeyPatch)
     holds no model for the accession.
     """
     af = _fake_af(monkeypatch)
-    af.get_pdb_model.side_effect = RuntimeError("network down")
+    af.get_prediction.side_effect = RuntimeError("network down")
     fetched = await _fetch_af_structure("P12345")
     assert isinstance(fetched, si._RequestFailed)
     assert fetched.reason == "RuntimeError: network down"
@@ -882,10 +888,44 @@ async def test_fetch_af_structure_client_raises(monkeypatch: pytest.MonkeyPatch)
 
 
 async def test_fetch_af_structure_not_found_is_no_model(monkeypatch: pytest.MonkeyPatch) -> None:
-    """HTTP 404 is AlphaFold DB answering that it serves no model."""
+    """HTTP 404 from the prediction endpoint is AlphaFold DB serving no model."""
     af = _fake_af(monkeypatch)
-    af.get_pdb_model.side_effect = UpstreamError("AlphaFold DB", 404, "Not Found")
+    af.get_prediction.side_effect = UpstreamError("AlphaFold DB", 404, "Not Found")
     assert await _fetch_af_structure("Q8WZ42") is None
+    af.get_pdb_file.assert_not_awaited()
+
+
+async def test_fetch_af_structure_file_not_found_is_a_failed_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """HTTP 404 for the file a returned record advertises is not "no model".
+
+    Before this was told apart, the same 404 from either request came back
+    as ``None``, and the tools answered "No structure prediction returned".
+    """
+    af = _fake_af(monkeypatch)
+    af.get_prediction.return_value = _af_meta()
+    af.get_pdb_file.side_effect = UpstreamError("AlphaFold DB", 404, "Not Found")
+    fetched = await _fetch_af_structure("P12345")
+    assert isinstance(fetched, si._RequestFailed)
+    assert fetched.reason == (
+        "the prediction record was returned, but the request for its PDB file failed: "
+        "UpstreamError: AlphaFold DB HTTP 404: Not Found"
+    )
+    assert not fetched
+
+
+async def test_fetch_af_coordinates_reads_the_file_of_the_given_record(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No prediction lookup: the coordinates and version belong to the record passed in."""
+    af = _fake_af(monkeypatch)
+    record = {**_af_meta(), "latestVersion": 4}
+    af.get_pdb_file.return_value = _make_pdb(5).encode("utf-8")
+    out = await si._fetch_af_coordinates("P12345", record)
+    assert out == {"pdb_text": _make_pdb(5), "uniprot_id": "P12345", "model_version": 4}
+    af.get_pdb_file.assert_awaited_once_with(record)
+    af.get_prediction.assert_not_awaited()
 
 
 # --- _fetch_af_plddt --------------------------------------------------------
@@ -2183,34 +2223,57 @@ async def test_get_protein_structure_current_schema(monkeypatch: pytest.MonkeyPa
 
 async def test_get_protein_structure_with_coordinates(monkeypatch: pytest.MonkeyPatch) -> None:
     af = _fake_af(monkeypatch)
-    af.get_prediction.return_value = _full_af_meta()
+    record = _full_af_meta()
+    af.get_prediction.return_value = record
     pdb_text = _make_pdb(6)
-
-    async def fake_struct(uid: str) -> dict[str, Any]:
-        return {"pdb_text": pdb_text, "uniprot_id": uid}
-
-    monkeypatch.setattr(si, "_fetch_af_structure", fake_struct)
+    af.get_pdb_file.return_value = pdb_text.encode("utf-8")
     out = await get_protein_structure(
         StructureRetrievalInput(uniprot_id="P38398", include_coordinates=True)
     )
     assert out["coordinates_pdb"] == pdb_text
+    assert out["coordinates_status"] == "retrieved"
+    assert "coordinates_error" not in out
+    # One prediction lookup; the file requested is the one that record advertises.
+    af.get_prediction.assert_awaited_once_with("P38398")
+    af.get_pdb_file.assert_awaited_once_with(record)
 
 
 async def test_get_protein_structure_coordinates_unavailable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """include_coordinates=True but the structure fetch returns None → empty string."""
+    """include_coordinates=True but the advertised file is empty → empty string, with a reason."""
     af = _fake_af(monkeypatch)
-    af.get_prediction.return_value = _full_af_meta()
-
-    async def fake_struct(uid: str) -> None:
-        return None
-
-    monkeypatch.setattr(si, "_fetch_af_structure", fake_struct)
+    af.get_prediction.return_value = _full_af_meta()  # get_pdb_file default returns b""
     out = await get_protein_structure(
         StructureRetrievalInput(uniprot_id="P38398", include_coordinates=True)
     )
     assert out["coordinates_pdb"] == ""
+    assert out["coordinates_status"] == "no_coordinates_returned"
+    assert out["coordinates_error"] == (
+        "Coordinates were not embedded: the prediction record advertises no PDB file, "
+        "or the file it advertises is empty."
+    )
+
+
+async def test_get_protein_structure_coordinates_request_failed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failed file request is reported; the metadata of the record still stands."""
+    af = _fake_af(monkeypatch)
+    af.get_prediction.return_value = _full_af_meta()
+    af.get_pdb_file.side_effect = RuntimeError("network down")
+    out = await get_protein_structure(
+        StructureRetrievalInput(uniprot_id="P38398", include_coordinates=True)
+    )
+    assert out["structure_available"] is True
+    assert out["entry_id"] == "AF-P38398-F1"
+    assert out["coordinates_pdb"] == ""
+    assert out["coordinates_status"] == "request_failed"
+    assert out["coordinates_error"] == (
+        "Coordinates were not embedded: the prediction record was returned, but the "
+        "request for its PDB file failed: RuntimeError: network down. This is not "
+        "evidence that the model has no coordinate file."
+    )
 
 
 async def test_get_protein_structure_non_numeric_plddt(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -64,6 +64,7 @@ against 1.5.12 should review the fields below.
 | `analyze_structural_confidence` | `domain_boundaries.candidate_positions`, `domain_boundaries.n_putative_domains` | up to ten positions and a domain count; `[]` and `null` without a PAE matrix | always `[]` and `null` |
 | `score_binding_pocket_geometry` | `druggability_label` of each `putative_pockets` entry | `EXCELLENT`, `GOOD`, `MODERATE` or `POOR` | always `NOT_ASSESSED` |
 | `analyze_structural_confidence`, `compute_topology_fingerprint`, `score_binding_pocket_geometry`, `detect_intrinsically_disordered`, `get_protein_structure` | `error` and `note` when `structure_available` is `false` | one text, whatever the cause | unchanged when AlphaFold DB has no model; they name the cause when the request failed |
+| `get_protein_structure` | `coordinates_pdb`, returned with `include_coordinates` | PDB text read through a second prediction lookup; `""` when none was retrieved, whatever the cause | the file that the reported record advertises (`file_urls.pdb`), with no second lookup; `""` when none was retrieved, and `coordinates_status` and `coordinates_error` say why |
 
 Both `status` fields already answered `error` to input the tool could not
 interpret; `partial` is a new value. Explanatory texts (`interpretation`,
@@ -84,7 +85,8 @@ Deprecated, and still returned so that existing clients keep working:
   and are not domain boundaries.
 
 New fields stand beside the existing ones, among them `retrieval_status`,
-`lookup_summary`, `diseases_requested`, `diseases_failed`, `local_high_pae`,
+`coordinates_status`, `coordinates_error`, `lookup_summary`,
+`diseases_requested`, `diseases_failed`, `local_high_pae`,
 `core_residue_clusters`, `fingerprint_layout` and `cadd_phred_note`. ClinVar
 conditions, which 1.5.12 returned empty for current ClinVar records, and the
 `hgvsp` of the variant report, which it always returned empty, are filled
