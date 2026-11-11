@@ -7,6 +7,14 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.5.12](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.5.11...v1.5.12) (2026-11-11)
+
+
+### Bug Fixes
+
+* **science:** correct review findings on the variant frequency path ([d96b170](https://github.com/smaniches/alphafold-sovereign-mcp/commit/d96b1708d0839d793458dcda43d1193ea6796bf1))
+* **science:** verify gnomAD variant identity, drop threshold ACMG labels ([9f0870f](https://github.com/smaniches/alphafold-sovereign-mcp/commit/9f0870f00251f98ff9ffd442de724c0568f1ae1f))
+
 ## [1.5.11](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.5.10...v1.5.11) (2026-11-06)
 
 
