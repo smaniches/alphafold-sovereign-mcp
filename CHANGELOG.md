@@ -7,6 +7,20 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.6.0](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.5.12...v1.6.0) (2026-11-11)
+
+
+### Features
+
+* **tools:** add status fields, deprecate legacy pocket and domain keys ([f582104](https://github.com/smaniches/alphafold-sovereign-mcp/commit/f582104f3c87d78ea46fc87be6d7bea4568dd2e1))
+
+
+### Bug Fixes
+
+* **science:** address AlphaFold PR [#329](https://github.com/smaniches/alphafold-sovereign-mcp/issues/329) review findings ([5d264ba](https://github.com/smaniches/alphafold-sovereign-mcp/commit/5d264ba4ba40852fa49b91684439cc96ee43f404))
+* **science:** retract unsupported structure claims, close audit findings ([a4a6cf0](https://github.com/smaniches/alphafold-sovereign-mcp/commit/a4a6cf09c396a28a1663361bfd107355a697d65f))
+* **science:** retract unsupported structure claims, close audit findings ([f582104](https://github.com/smaniches/alphafold-sovereign-mcp/commit/f582104f3c87d78ea46fc87be6d7bea4568dd2e1))
+
 ## [1.5.12](https://github.com/smaniches/alphafold-sovereign-mcp/compare/v1.5.11...v1.5.12) (2026-11-11)
 
 
