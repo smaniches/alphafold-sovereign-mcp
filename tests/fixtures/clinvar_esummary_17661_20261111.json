@@ -1,0 +1,296 @@
+{
+ "meta": {
+  "source": "NCBI E-utilities esummary, db=clinvar",
+  "request": "GET https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=clinvar&id=17661&retmode=json",
+  "retrieved_at": "2026-11-11T07:31:44Z",
+  "record": "VCV000017661.166, NM_007294.4(BRCA1):c.181T>G (p.Cys61Gly)",
+  "sha256_of_response_body": "80923a8d2bd2aeab03c81d0b1277e1820ad1291d9e6ca1b188e6feb67625a424",
+  "sanitisation": "None: the response is stored complete, re-indented only. A second retrieval at 2026-11-11T08:41:42Z returned the same bytes.",
+  "purpose": "Shape of a current ClinVar esummary record: the conditions are listed under germline_classification.trait_set and the record has no top-level trait_set."
+ },
+ "response": {
+  "header": {
+   "type": "esummary",
+   "version": "0.3"
+  },
+  "result": {
+   "uids": [
+    "17661"
+   ],
+   "17661": {
+    "uid": "17661",
+    "obj_type": "single nucleotide variant",
+    "accession": "VCV000017661",
+    "accession_version": "VCV000017661.166",
+    "title": "NM_007294.4(BRCA1):c.181T>G (p.Cys61Gly)",
+    "variation_set": [
+     {
+      "measure_id": "32700",
+      "variation_xrefs": [
+       {
+        "db_source": "BRCA1-HCI",
+        "db_id": "BRCA1_00099"
+       },
+       {
+        "db_source": "ClinGen",
+        "db_id": "CA001182"
+       },
+       {
+        "db_source": "UniProtKB",
+        "db_id": "P38398#VAR_007757"
+       },
+       {
+        "db_source": "OMIM",
+        "db_id": "113705.0002"
+       },
+       {
+        "db_source": "dbSNP",
+        "db_id": "28897672"
+       }
+      ],
+      "variation_name": "NM_007294.4(BRCA1):c.181T>G (p.Cys61Gly)",
+      "cdna_change": "c.181T>G",
+      "aliases": [
+       "p.C61G:TGT>GGT",
+       "NP_009225.1:p.Cys61Gly",
+       "300T>G"
+      ],
+      "variation_loc": [
+       {
+        "status": "current",
+        "assembly_name": "GRCh38",
+        "chr": "17",
+        "band": "17q21.31",
+        "start": "43106487",
+        "stop": "43106487",
+        "inner_start": "",
+        "inner_stop": "",
+        "outer_start": "",
+        "outer_stop": "",
+        "display_start": "43106487",
+        "display_stop": "43106487",
+        "assembly_acc_ver": "GCF_000001405.38",
+        "annotation_release": "",
+        "alt": "",
+        "ref": ""
+       },
+       {
+        "status": "previous",
+        "assembly_name": "GRCh37",
+        "chr": "17",
+        "band": "17q21.31",
+        "start": "41258504",
+        "stop": "41258504",
+        "inner_start": "",
+        "inner_stop": "",
+        "outer_start": "",
+        "outer_stop": "",
+        "display_start": "41258504",
+        "display_stop": "41258504",
+        "assembly_acc_ver": "GCF_000001405.25",
+        "annotation_release": "",
+        "alt": "",
+        "ref": ""
+       }
+      ],
+      "allele_freq_set": [
+       {
+        "source": "The Genome Aggregation Database (gnomAD), exomes",
+        "value": "0.00002",
+        "minor_allele": ""
+       },
+       {
+        "source": "Trans-Omics for Precision Medicine (TOPMed)",
+        "value": "0.00002",
+        "minor_allele": ""
+       },
+       {
+        "source": "The Genome Aggregation Database (gnomAD)",
+        "value": "0.00003",
+        "minor_allele": ""
+       },
+       {
+        "source": "The Genome Aggregation Database (gnomAD), exomes",
+        "value": "0.00003",
+        "minor_allele": ""
+       },
+       {
+        "source": "The Genome Aggregation Database (gnomAD)",
+        "value": "0.00004",
+        "minor_allele": ""
+       },
+       {
+        "source": "Exome Aggregation Consortium (ExAC)",
+        "value": "0.00007",
+        "minor_allele": ""
+       }
+      ],
+      "variant_type": "single nucleotide variant",
+      "canonical_spdi": "NC_000017.11:43106486:A:C",
+      "common_name": ""
+     }
+    ],
+    "supporting_submissions": {
+     "scv": [
+      "SCV000244308",
+      "SCV000144574",
+      "SCV000109295",
+      "SCV001140644",
+      "SCV000271313",
+      "SCV001930367",
+      "SCV002009412",
+      "SCV002580059",
+      "SCV000186957",
+      "SCV000195877",
+      "SCV000492470",
+      "SCV000492590",
+      "SCV000540933",
+      "SCV000587024",
+      "SCV000588026",
+      "SCV000733679",
+      "SCV001430694",
+      "SCV001499631",
+      "SCV001905937",
+      "SCV001970107",
+      "SCV002026038",
+      "SCV002538052",
+      "SCV000325150",
+      "SCV002762793",
+      "SCV000296283",
+      "SCV004212709",
+      "SCV000893455",
+      "SCV000230340",
+      "SCV001749337",
+      "SCV000292141",
+      "SCV000677634",
+      "SCV006109959",
+      "SCV001242516",
+      "SCV002024711",
+      "SCV006582311",
+      "SCV007599474",
+      "SCV007664727",
+      "SCV008086739",
+      "SCV000564349",
+      "SCV000679704",
+      "SCV000698888",
+      "SCV000039517",
+      "SCV000839890",
+      "SCV000923767",
+      "SCV000296762",
+      "SCV001449773",
+      "SCV001451772",
+      "SCV000591246",
+      "SCV001959679",
+      "SCV002037008",
+      "SCV002587105",
+      "SCV002589065",
+      "SCV002070498",
+      "SCV000210067",
+      "SCV004100885",
+      "SCV005045920",
+      "SCV005199759",
+      "SCV004823691",
+      "SCV000778779",
+      "SCV005848150",
+      "SCV000602706",
+      "SCV001448168",
+      "SCV004174179",
+      "SCV002104282",
+      "SCV002104292",
+      "SCV006303525",
+      "SCV006336692",
+      "SCV007097383",
+      "SCV002765087",
+      "SCV002551068",
+      "SCV000075610",
+      "SCV007540194",
+      "SCV007580147",
+      "SCV001251421",
+      "SCV007843480",
+      "SCV008017038",
+      "SCV001249217"
+     ],
+     "rcv": [
+      "RCV000019229",
+      "RCV000047597",
+      "RCV000131902",
+      "RCV000159935",
+      "RCV000239114",
+      "RCV000415051",
+      "RCV000412714",
+      "RCV000785199",
+      "RCV001270967",
+      "RCV004802937",
+      "RCV005003390",
+      "RCV005646760",
+      "RCV006879033",
+      "RCV006748266"
+     ]
+    },
+    "germline_classification": {
+     "description": "Pathogenic",
+     "last_evaluated": "2015/08/10 00:00",
+     "review_status": "reviewed by expert panel",
+     "fda_recognized_database": "",
+     "trait_set": [
+      {
+       "trait_xrefs": [
+        {
+         "db_source": "Orphanet",
+         "db_id": "145"
+        },
+        {
+         "db_source": "MedGen",
+         "db_id": "C2676676"
+        },
+        {
+         "db_source": "MONDO",
+         "db_id": "MONDO:0011450"
+        },
+        {
+         "db_source": "OMIM",
+         "db_id": "604370"
+        }
+       ],
+       "trait_name": "Breast-ovarian cancer, familial, susceptibility to, 1"
+      }
+     ]
+    },
+    "clinical_impact_classification": {
+     "description": "",
+     "last_evaluated": "1/01/01 00:00",
+     "review_status": "",
+     "fda_recognized_database": "",
+     "trait_set": []
+    },
+    "oncogenicity_classification": {
+     "description": "",
+     "last_evaluated": "1/01/01 00:00",
+     "review_status": "",
+     "fda_recognized_database": "",
+     "trait_set": []
+    },
+    "record_status": "",
+    "gene_sort": "BRCA1",
+    "chr_sort": "17",
+    "location_sort": "00000000000043106487",
+    "variation_set_name": "",
+    "variation_set_id": "",
+    "genes": [
+     {
+      "symbol": "BRCA1",
+      "geneid": "672",
+      "strand": "-",
+      "source": "submitted"
+     }
+    ],
+    "molecular_consequence_list": [
+     "missense variant",
+     "non-coding transcript variant"
+    ],
+    "protein_change": "C61G, C14G",
+    "fda_recognized_database": ""
+   }
+  }
+ }
+}

@@ -1,0 +1,304 @@
+{
+ "meta": {
+  "source": "Ensembl REST, VEP by HGVS notation",
+  "request": "GET https://rest.ensembl.org/vep/human/hgvs/{hgvs}?canonical=1&numbers=1&protein=1&uniprot=1&xref_refseq=1&Genoverse=0&vcf_string=1&hgvs=1",
+  "request_targets": {
+   "NM_007294.4:c.181T>G": "/vep/human/hgvs/NM_007294.4:c.181T%3EG?canonical=1&numbers=1&protein=1&uniprot=1&xref_refseq=1&Genoverse=0&vcf_string=1&hgvs=1",
+   "NM_000546.6:c.375G>A": "/vep/human/hgvs/NM_000546.6:c.375G%3EA?canonical=1&numbers=1&protein=1&uniprot=1&xref_refseq=1&Genoverse=0&vcf_string=1&hgvs=1",
+   "NM_007294.4:c.135-1G>T": "/vep/human/hgvs/NM_007294.4:c.135-1G%3ET?canonical=1&numbers=1&protein=1&uniprot=1&xref_refseq=1&Genoverse=0&vcf_string=1&hgvs=1",
+   "NM_007294.4:c.68_69del": "/vep/human/hgvs/NM_007294.4:c.68_69del?canonical=1&numbers=1&protein=1&uniprot=1&xref_refseq=1&Genoverse=0&vcf_string=1&hgvs=1"
+  },
+  "retrieved_at": "2026-11-11T08:52:22Z/2026-11-11T08:54:59Z",
+  "sanitisation": "Verbatim subsets of live responses. Each hit keeps every variant-level field and the transcript consequences flagged canonical; colocated_variants and non-canonical transcript consequences are removed. 'dropped' counts what was removed per response and 'live_body_sha256' is the SHA-256 of each complete live body.",
+  "dropped": {
+   "NM_007294.4:c.181T>G": {
+    "non_canonical_transcript_consequences": 52,
+    "colocated_variants": 5
+   },
+   "NM_000546.6:c.375G>A": {
+    "non_canonical_transcript_consequences": 38,
+    "colocated_variants": 8
+   },
+   "NM_007294.4:c.135-1G>T": {
+    "non_canonical_transcript_consequences": 52,
+    "colocated_variants": 4
+   },
+   "NM_007294.4:c.68_69del": {
+    "non_canonical_transcript_consequences": 68,
+    "colocated_variants": 1
+   }
+  },
+  "live_body_sha256": {
+   "NM_007294.4:c.181T>G": "158b3747164d9b805c49efc89d2f15706013b749f7e89c25de969557e798fc3c",
+   "NM_000546.6:c.375G>A": "593bed42d7caaa87446172a864e5e730a85ccf49c0db6bd667652638df0ce1b3",
+   "NM_007294.4:c.135-1G>T": "53ca87cf78d13a2340c4e647e25328631e759822880ab85b8dd23a4a6c788f1b",
+   "NM_007294.4:c.68_69del": "72eeb7a18bad782c38aee29966fc8e23d65b715c8f4bc075ff7e118861bb4dc8"
+  },
+  "purpose": "Responses as returned when hgvs=1 is requested: VEP adds hgvsc and, where it reports one, hgvsp to each transcript consequence. The fixture variant_frequency_path_20261110.json was recorded without that parameter."
+ },
+ "responses": {
+  "NM_007294.4:c.181T>G": {
+   "status": 200,
+   "body": [
+    {
+     "assembly_name": "GRCh38",
+     "start": 43106487,
+     "strand": -1,
+     "end": 43106487,
+     "seq_region_name": "17",
+     "allele_string": "T/G",
+     "id": "NM_007294.4:c.181T>G",
+     "input": "NM_007294.4:c.181T>G",
+     "most_severe_consequence": "missense_variant",
+     "vcf_string": "17-43106487-A-C",
+     "transcript_consequences": [
+      {
+       "hgvsp": "ENSP00000350283.3:p.Cys61Gly",
+       "canonical": 1,
+       "uniprot_isoform": [
+        "P38398-1"
+       ],
+       "refseq_transcript_ids": [
+        "NM_001407603.1",
+        "NM_001407968.1",
+        "NM_001407652.1",
+        "NM_001407598.1",
+        "NM_001407602.1",
+        "NM_007294.4"
+       ],
+       "cds_end": 181,
+       "protein_end": 61,
+       "consequence_terms": [
+        "missense_variant"
+       ],
+       "sift_score": 0,
+       "biotype": "protein_coding",
+       "cds_start": 181,
+       "polyphen_score": 0.027,
+       "hgvsc": "ENST00000357654.9:c.181T>G",
+       "polyphen_prediction": "benign",
+       "strand": -1,
+       "impact": "MODERATE",
+       "variant_allele": "G",
+       "protein_start": 61,
+       "exon": "4/23",
+       "swissprot": [
+        "P38398.282"
+       ],
+       "hgnc_id": "HGNC:1100",
+       "codons": "Tgt/Ggt",
+       "transcript_id": "ENST00000357654",
+       "gene_id": "ENSG00000012048",
+       "amino_acids": "C/G",
+       "protein_id": "ENSP00000350283",
+       "gene_symbol": "BRCA1",
+       "uniparc": [
+        "UPI0000126AC8"
+       ],
+       "gene_symbol_source": "HGNC",
+       "cdna_end": 294,
+       "cdna_start": 294,
+       "sift_prediction": "deleterious"
+      }
+     ]
+    }
+   ]
+  },
+  "NM_000546.6:c.375G>A": {
+   "status": 200,
+   "body": [
+    {
+     "start": 7675994,
+     "most_severe_consequence": "splice_region_variant",
+     "strand": -1,
+     "id": "NM_000546.6:c.375G>A",
+     "end": 7675994,
+     "allele_string": "G/A",
+     "input": "NM_000546.6:c.375G>A",
+     "seq_region_name": "17",
+     "assembly_name": "GRCh38",
+     "vcf_string": "17-7675994-C-T",
+     "transcript_consequences": [
+      {
+       "refseq_transcript_ids": [
+        "NM_001126112.3",
+        "NM_000546.6"
+       ],
+       "variant_allele": "A",
+       "uniparc": [
+        "UPI000002ED67"
+       ],
+       "swissprot": [
+        "P04637.312"
+       ],
+       "cds_end": 375,
+       "canonical": 1,
+       "codons": "acG/acA",
+       "cdna_start": 517,
+       "gene_symbol_source": "HGNC",
+       "gene_symbol": "TP53",
+       "trembl": [
+        "K7PPA8.97"
+       ],
+       "protein_end": 125,
+       "exon": "4/11",
+       "amino_acids": "T",
+       "impact": "LOW",
+       "transcript_id": "ENST00000269305",
+       "biotype": "protein_coding",
+       "gene_id": "ENSG00000141510",
+       "consequence_terms": [
+        "splice_region_variant",
+        "synonymous_variant"
+       ],
+       "strand": -1,
+       "hgvsp": "ENSP00000269305.4:p.Thr125=",
+       "uniprot_isoform": [
+        "P04637-1"
+       ],
+       "protein_start": 125,
+       "cds_start": 375,
+       "hgnc_id": "HGNC:11998",
+       "protein_id": "ENSP00000269305",
+       "cdna_end": 517,
+       "hgvsc": "ENST00000269305.9:c.375G>A"
+      }
+     ]
+    }
+   ]
+  },
+  "NM_007294.4:c.135-1G>T": {
+   "status": 200,
+   "body": [
+    {
+     "end": 43106534,
+     "start": 43106534,
+     "seq_region_name": "17",
+     "vcf_string": "17-43106534-C-A",
+     "allele_string": "G/T",
+     "strand": -1,
+     "most_severe_consequence": "splice_acceptor_variant",
+     "id": "NM_007294.4:c.135-1G>T",
+     "input": "NM_007294.4:c.135-1G>T",
+     "assembly_name": "GRCh38",
+     "transcript_consequences": [
+      {
+       "uniparc": [
+        "UPI0000126AC8"
+       ],
+       "gene_symbol_source": "HGNC",
+       "uniprot_isoform": [
+        "P38398-1"
+       ],
+       "gene_symbol": "BRCA1",
+       "transcript_id": "ENST00000357654",
+       "strand": -1,
+       "hgnc_id": "HGNC:1100",
+       "protein_id": "ENSP00000350283",
+       "gene_id": "ENSG00000012048",
+       "refseq_transcript_ids": [
+        "NM_001407603.1",
+        "NM_001407968.1",
+        "NM_001407652.1",
+        "NM_001407598.1",
+        "NM_001407602.1",
+        "NM_007294.4"
+       ],
+       "biotype": "protein_coding",
+       "intron": "3/22",
+       "consequence_terms": [
+        "splice_acceptor_variant"
+       ],
+       "impact": "HIGH",
+       "swissprot": [
+        "P38398.282"
+       ],
+       "hgvsc": "ENST00000357654.9:c.135-1G>T",
+       "canonical": 1,
+       "variant_allele": "T"
+      }
+     ]
+    }
+   ]
+  },
+  "NM_007294.4:c.68_69del": {
+   "status": 200,
+   "body": [
+    {
+     "end": 43124029,
+     "input": "NM_007294.4:c.68_69del",
+     "seq_region_name": "17",
+     "allele_string": "AG/-",
+     "start": 43124028,
+     "strand": -1,
+     "assembly_name": "GRCh38",
+     "most_severe_consequence": "frameshift_variant",
+     "id": "NM_007294.4:c.68_69del",
+     "vcf_string": "17-43124027-ACT-A",
+     "transcript_consequences": [
+      {
+       "hgvsp": "ENSP00000350283.3:p.Glu23ValfsTer17",
+       "gene_symbol": "BRCA1",
+       "cds_start": 68,
+       "protein_end": 23,
+       "gene_id": "ENSG00000012048",
+       "cdna_start": 181,
+       "amino_acids": "E/X",
+       "hgvsc": "ENST00000357654.9:c.68_69del",
+       "canonical": 1,
+       "cdna_end": 182,
+       "exon": "2/23",
+       "uniprot_isoform": [
+        "P38398-1"
+       ],
+       "consequence_terms": [
+        "frameshift_variant"
+       ],
+       "refseq_transcript_ids": [
+        "NM_001407603.1",
+        "NM_001407968.1",
+        "NM_001407652.1",
+        "NM_001407598.1",
+        "NM_001407602.1",
+        "NM_007294.4"
+       ],
+       "strand": -1,
+       "protein_start": 23,
+       "impact": "HIGH",
+       "hgnc_id": "HGNC:1100",
+       "variant_allele": "-",
+       "cds_end": 69,
+       "protein_id": "ENSP00000350283",
+       "gene_symbol_source": "HGNC",
+       "transcript_id": "ENST00000357654",
+       "codons": "gAG/g",
+       "uniparc": [
+        "UPI0000126AC8"
+       ],
+       "swissprot": [
+        "P38398.282"
+       ],
+       "biotype": "protein_coding"
+      },
+      {
+       "variant_allele": "-",
+       "hgnc_id": "HGNC:20691",
+       "gene_symbol": "NBR2",
+       "gene_id": "ENSG00000198496",
+       "transcript_id": "ENST00000657841",
+       "gene_symbol_source": "HGNC",
+       "canonical": 1,
+       "distance": 1522,
+       "impact": "MODIFIER",
+       "strand": 1,
+       "consequence_terms": [
+        "upstream_gene_variant"
+       ],
+       "biotype": "lncRNA"
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

@@ -7,7 +7,8 @@ surfaces drift apart: the package version, the Zenodo deposition metadata,
 the citation files, and the headline claims in the README and docs (tool
 count, module count, data-source count and names, DOI, and the install
 command). It also enforces that no surface publishes an exact, volatile
-test count.
+test count, and that the registered tool annotations say which tools query
+an upstream service.
 
 They are the mechanical guard that replaces the manual "fix stale counts"
 cleanup releases (see the 1.1.8-1.1.10 entries in CHANGELOG.md). Every claim
@@ -20,12 +21,18 @@ identically on the Linux and macOS CI runners and on a Windows checkout.
 
 from __future__ import annotations
 
+import importlib
 import json
+import pkgutil
 import re
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 import pytest
+
+import alphafold_sovereign.clients as clients_package
+from alphafold_sovereign.clients._base import BaseAsyncClient
 
 # Importing the tool modules runs their @mcp.tool decorators against the shared
 # FastMCP instance, so mcp.list_tools() reports the full live tool registry.
@@ -314,6 +321,47 @@ async def test_tool_count_and_module_count_match_readme() -> None:
     )
 
 
+# Every documentation surface that states how many tools the server exposes.
+_TOOL_COUNT_SURFACES = ("README.md", "AGENTS.md", "ARCHITECTURE.md", "docs/tools/index.md")
+_TOOL_COUNT_PATTERN = r"\b(\d+)\s+(?:public\s+)?(?:MCP\s+)?tools\b"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("relative", _TOOL_COUNT_SURFACES)
+async def test_every_documented_tool_count_matches_the_registry(relative: str) -> None:
+    """AGENTS.md and the tool reference said 30 while the server registered 29."""
+    live_count = len(await mcp.list_tools())
+    stated = [int(number) for number in re.findall(_TOOL_COUNT_PATTERN, _read(relative))]
+    assert stated, f"{relative} no longer states a tool count; update _TOOL_COUNT_SURFACES"
+    assert set(stated) == {live_count}, (
+        f"{relative} states {sorted(set(stated))} tools; the server registers {live_count}"
+    )
+
+
+@pytest.mark.unit
+async def test_open_world_hint_marks_every_tool_that_queries_an_upstream_service() -> None:
+    """Only the knowledge-graph tools, which read the local SQLite store, are closed-world.
+
+    Every other tool requests data from an upstream service (AlphaFold DB, Open
+    Targets, Ensembl, ...), so a client must not be told its world is closed.
+    """
+    tools = await mcp.list_tools()
+    local_only = {
+        tool.name for tool in tools if tool.fn.__module__ == knowledge_graph_tools.__name__
+    }
+    assert len(local_only) == 5
+
+    # Read the hint under its wire name, which every supported FastMCP shares.
+    hints = {
+        tool.name: tool.annotations.model_dump(by_alias=True).get("openWorldHint") for tool in tools
+    }
+    closed_world = {name for name, hint in hints.items() if hint is False}
+    open_world = {name for name, hint in hints.items() if hint is True}
+
+    assert closed_world == local_only
+    assert open_world == set(hints) - local_only
+
+
 @pytest.mark.unit
 def test_data_sources_count_and_names() -> None:
     readme = _read("README.md")
@@ -351,6 +399,48 @@ def test_data_sources_count_and_names() -> None:
         assert source in table_text, f"{source} missing from README data-sources table"
         assert source in citation_text, f"{source} missing from CITATION abstract"
         assert source in zenodo_text, f"{source} missing from .zenodo.json description"
+
+
+def _configured_upstream_hosts() -> set[str]:
+    """Host of every upstream client's configured base URL.
+
+    Every module of the clients package is imported first, so a client that no
+    tool uses yet is still counted. Classes defined outside the package (test
+    doubles) are ignored.
+    """
+    prefix = f"{clients_package.__name__}."
+    for module in pkgutil.iter_modules(clients_package.__path__):
+        importlib.import_module(prefix + module.name)
+
+    hosts: set[str] = set()
+    pending = BaseAsyncClient.__subclasses__()
+    while pending:
+        client = pending.pop()
+        pending.extend(client.__subclasses__())
+        if client.__module__.startswith(prefix):
+            host = urlsplit(client.config.base_url).hostname
+            assert host, f"{client.__name__} has no host in its base URL"
+            hosts.add(host)
+    return hosts
+
+
+@pytest.mark.unit
+def test_privacy_host_table_matches_the_configured_upstream_clients() -> None:
+    """PRIVACY.md lists exactly the hosts the upstream clients can contact.
+
+    The table once named three services that no client contacts, gave a wrong
+    host for a fourth and omitted three that are contacted, so it is recomputed
+    from the client configuration.
+    """
+    section = re.search(r"## Outbound Network Calls\n(.*?)\n##", _read("PRIVACY.md"), re.DOTALL)
+    assert section, "PRIVACY.md must have an Outbound Network Calls section"
+    documented = set(re.findall(r"^\| `([^`]+)` \|", section.group(1), re.MULTILINE))
+
+    configured = _configured_upstream_hosts()
+    assert documented == configured, (
+        f"PRIVACY.md lists {sorted(documented - configured)} that no client contacts "
+        f"and omits {sorted(configured - documented)}"
+    )
 
 
 @pytest.mark.unit

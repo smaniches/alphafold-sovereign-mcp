@@ -80,10 +80,41 @@ class Contract(unittest.TestCase):
 
     def test_sequence_identity(self):
         sequence = "A" * 494 + "W" + "A" * 5
-        payload = {"primaryAccession": "Q8VH51", "sequence": {"value": sequence, "version": 2}}
+        # Field layout of a UniProtKB REST entry: the sequence version is an
+        # ``entryAudit`` field and ``sequence`` carries no version.
+        payload = {
+            "primaryAccession": "Q8VH51",
+            "entryAudit": {"entryVersion": 202, "sequenceVersion": 2},
+            "sequence": {"value": sequence, "length": len(sequence)},
+        }
         self.assertEqual(audit.check_sequence(payload)["status"], "PASS")
         payload["sequence"]["value"] = "A" * 500
         self.assertEqual(audit.check_sequence(payload)["status"], "CONFLICT")
+
+    def test_sequence_version_is_read_from_entry_audit(self):
+        sequence = "A" * 494 + "W" + "A" * 5
+        base = {"primaryAccession": "Q8VH51", "sequence": {"value": sequence}}
+        for extra, expected in (
+            ({"entryAudit": {"entryVersion": 202, "sequenceVersion": 2}}, 2),
+            ({"entryAudit": {"sequenceVersion": 3}}, 3),
+            ({}, None),
+            ({"entryAudit": None}, None),
+            ({"entryAudit": {}}, None),
+            ({"entryAudit": [{"sequenceVersion": 2}]}, None),
+            ({"entryAudit": {"sequenceVersion": "2"}}, None),
+            ({"entryAudit": {"sequenceVersion": 2.0}}, None),
+            ({"entryAudit": {"sequenceVersion": True}}, None),
+        ):
+            with self.subTest(extra=extra):
+                result = audit.check_sequence({**base, **extra})
+                assert result["status"] == "PASS", result
+                assert type(result["sequence_version"]) is type(expected), result
+                assert result["sequence_version"] == expected, result
+        # ``sequence.version`` is not a UniProtKB field. The audit used to read
+        # it, so every live report carried ``sequence_version: null``.
+        legacy = {"primaryAccession": "Q8VH51", "sequence": {"value": sequence, "version": 2}}
+        result = audit.check_sequence(legacy)
+        assert result["sequence_version"] is None, result
 
     def test_publications_not_counted_as_independent_rows(self):
         item = {

@@ -379,6 +379,8 @@ class GnomADClient(BaseAsyncClient):
               Fraction): < 0.35 = highly constrained (LoF intolerant).
             - ``pLI`` ≥ 0.9 = LoF depletion; haploinsufficiency is not established.
             - ``mis_z`` ≥ 3.09 = missense-intolerant.
+            - ``interpretation`` reads the LOEUF band and nothing else; see
+              ``_interpret_constraint`` for what a high LOEUF does not show.
         """
         data = await self._graphql(
             self._GQL_PATH,
@@ -400,7 +402,22 @@ class GnomADClient(BaseAsyncClient):
 
 
 def _interpret_constraint(c: dict[str, Any]) -> str:
-    """Return a human-readable constraint interpretation."""
+    """Describe which LOEUF band a gene falls in.
+
+    LOEUF measures how strongly loss-of-function (LoF) variants are depleted
+    in gnomAD. A low value is evidence of selection against them. A high
+    value is not evidence that LoF variants in the gene are harmless:
+    constraint is most informative for dominant disease, carriers of
+    recessive disease variants are present in gnomAD, and variation whose
+    effect appears late in life may not be depleted (Gudmundsson et al.,
+    Hum Mutat 43:1012-1030, doi:10.1002/humu.24309). BRCA1 and CFTR fell in
+    the highest band when audited in November 2026 (LOEUF 0.93 and 1.19).
+
+    The 0.35 and 0.6 band edges are fixed conventions of this client. gnomAD
+    encourages reading LOEUF as a continuous value and has suggested
+    release-specific cut-offs where one is needed: below 0.35 for v2, 0.6
+    for v4.0 and 0.45 for v4.1.1 (gnomAD news, March 2024 and March 2026).
+    """
     loeuf = c.get("loeuf")
     if loeuf is None:
         return "Constraint data unavailable."
@@ -414,6 +431,8 @@ def _interpret_constraint(c: dict[str, Any]) -> str:
             f"Moderately constrained (LOEUF={loeuf:.3f}): partial intolerance to loss-of-function."
         )
     return (
-        f"Tolerant to loss-of-function (LOEUF={loeuf:.3f}): "
-        "LoF variants are tolerated in the population."
+        f"Not constrained by this metric (LOEUF={loeuf:.3f}, at or above 0.6): strong "
+        "depletion of loss-of-function variants is not established in gnomAD. This is not "
+        "evidence that such variants are benign; genes for recessive or late-onset disease "
+        "can be unconstrained."
     )

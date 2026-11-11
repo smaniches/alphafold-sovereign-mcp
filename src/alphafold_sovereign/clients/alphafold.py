@@ -17,13 +17,16 @@ from __future__ import annotations
 import csv
 import io
 import os
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import urlsplit
 
 import structlog
 
 from alphafold_sovereign.clients._base import BaseAsyncClient, UpstreamConfig, UpstreamError
 from alphafold_sovereign.clients._isoform import UniProtIsoformClient, UniProtVerificationError
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Mapping
 
 logger = structlog.get_logger(__name__)
 
@@ -52,6 +55,37 @@ def _prediction_sequence(metadata: dict[str, Any]) -> str:
     if not isinstance(value, str):
         value = metadata.get("uniprotSequence")
     return value if isinstance(value, str) else ""
+
+
+def _prediction_version(metadata: Mapping[str, Any]) -> int | None:
+    """Read the model version AlphaFold DB reports for a prediction record.
+
+    The record carries it as the integer ``latestVersion`` (6 for a
+    ``model_v6`` file). ``None`` means the record does not report a
+    positive integer there; no version is assumed in its place.
+    """
+    value = metadata.get("latestVersion")
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        return None
+    return value
+
+
+def _afdb_version_label(versions: Iterable[int | None]) -> str:
+    """Name the AlphaFold DB model version(s) a result was derived from.
+
+    Pass one entry per prediction record that was actually retrieved: its
+    ``_prediction_version``, or ``None`` when the record reported none.
+    The label lists the distinct reported versions in ascending order
+    (``"v6"``, ``"v4/v6"``), adds ``"version-unreported"`` when any record
+    gave none, and is ``"not-retrieved"`` when no record was retrieved.
+    """
+    seen = list(versions)
+    if not seen:
+        return "not-retrieved"
+    labels = [f"v{version}" for version in sorted({v for v in seen if v is not None})]
+    if None in seen:
+        labels.append("version-unreported")
+    return "/".join(labels)
 
 
 class AlphaFoldPredictionSchemaError(ValueError):
@@ -148,13 +182,29 @@ class AlphaFoldClient(BaseAsyncClient):
             return {}
         return records[0] if records else {}
 
-    async def get_pdb_bytes(self, uniprot_id: str) -> bytes:
-        """Download the PDB-format structure file for a UniProt accession."""
+    async def get_pdb_model(self, uniprot_id: str) -> tuple[dict[str, Any], bytes]:
+        """Return a prediction record together with its PDB-format file.
+
+        One metadata request and one file request. The record is returned
+        with the coordinates so a caller can report the identity and model
+        version of the file it received, not an assumed one.
+
+        Returns:
+            ``(record, pdb_bytes)``. ``pdb_bytes`` is empty when the record
+            advertises no PDB file; ``record`` is then whatever
+            ``get_prediction`` returned, which is an empty dict when
+            AlphaFold DB has no model for the accession.
+        """
         meta = await self.get_prediction(uniprot_id)
         pdb_url = meta.get("pdbUrl", "")
         if not pdb_url:
-            return b""
-        return await self._get_bytes(_validate_af_file_url(pdb_url))
+            return meta, b""
+        return meta, await self._get_bytes(_validate_af_file_url(pdb_url))
+
+    async def get_pdb_bytes(self, uniprot_id: str) -> bytes:
+        """Download the PDB-format structure file for a UniProt accession."""
+        _record, pdb_bytes = await self.get_pdb_model(uniprot_id)
+        return pdb_bytes
 
     async def get_pae(self, uniprot_id: str) -> dict[str, Any]:
         """Fetch the Predicted Aligned Error (PAE) JSON for a UniProt accession.

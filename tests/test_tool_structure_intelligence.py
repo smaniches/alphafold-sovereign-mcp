@@ -4,12 +4,18 @@
 
 from __future__ import annotations
 
+import json
+import math
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import numpy as np
 import pytest
 
+from alphafold_sovereign.clients import _base
+from alphafold_sovereign.clients._base import AirGapError, CircuitOpenError, UpstreamError
+from alphafold_sovereign.clients.alphafold import AlphaFoldClient
 from alphafold_sovereign.tools import structure_intelligence as si
 from alphafold_sovereign.tools.structure_intelligence import (
     BindingPocketInput,
@@ -18,9 +24,9 @@ from alphafold_sovereign.tools.structure_intelligence import (
     StructureRetrievalInput,
     UniProtInput,
     _classify_idr_segment,
+    _cluster_core_residues,
     _compute_tda_fingerprint,
     _cross_reactivity_risk,
-    _detect_domain_boundaries,
     _detect_idr_segments,
     _drift_interpretation,
     _extract_plddt_from_pdb,
@@ -31,15 +37,16 @@ from alphafold_sovereign.tools.structure_intelligence import (
     _find_high_pae_pairs,
     _find_most_similar_pair,
     _fingerprint_distance,
-    _geometric_pocket_detection,
+    _fingerprint_method_label,
+    _geometry_score,
+    _geometry_score_components,
     _interpret_tda,
+    _local_high_pae_onsets,
     _parse_ca_coords_from_pdb,
     _parse_pdb_full,
     _plddt_tier,
     _plddt_tier_explanation,
-    _pocket_druggability_components,
-    _pocket_druggability_index,
-    _pocket_druggability_label,
+    _pocket_subscores,
     _provenance,
     analyze_structural_confidence,
     compare_proteins_topologically,
@@ -91,10 +98,17 @@ def test_structural_schema_rejects_invalid_accession(model_type: Any, accession:
 # ---------------------------------------------------------------------------
 
 
+def _provenance_fields(out: dict[str, Any]) -> dict[str, str]:
+    """The ``key=value`` fields of a tool result's provenance footer."""
+    footer = out["provenance"].rstrip("*").rsplit(" · ", 1)[-1]
+    return dict(field.split("=", 1) for field in footer.split(", "))
+
+
 def test_provenance_filters_empty() -> None:
     p = _provenance(alphafold_db="v4", empty="")
     assert "alphafold_db=v4" in p
     assert "empty" not in p
+    assert _provenance_fields({"provenance": p}) == {"alphafold_db": "v4"}
 
 
 @pytest.mark.parametrize(
@@ -138,6 +152,35 @@ def test_interpret_tda_fallback_does_not_infer_loops() -> None:
     out = _interpret_tda({"betti_numbers": [2, None, None], "gudhi_available": False})
     assert "β₁ not computed" in out
     assert "4-Å contact graph" in out
+    assert "subsample" not in out
+
+
+def test_interpret_tda_says_when_betti_numbers_describe_a_subsample() -> None:
+    out = _interpret_tda(
+        {
+            "betti_numbers": [1, 9, None],
+            "gudhi_available": True,
+            "subsampled": True,
+            "n_residues_used": 500,
+            "n_residues_total": 1210,
+        }
+    )
+    assert out.endswith(
+        "Computed on 500 evenly spaced C\u03b1 atoms of 1210; the values describe that subsample."
+    )
+
+
+@pytest.mark.parametrize(
+    ("flags", "expected"),
+    [
+        ([], "not-computed"),
+        ([True, True], "VR-persistent-homology"),
+        ([True, False], "geometric-proxy"),
+        ([False], "geometric-proxy"),
+    ],
+)
+def test_fingerprint_method_label(flags: list[bool], expected: str) -> None:
+    assert _fingerprint_method_label(flags) == expected
 
 
 def test_drift_interpretation_none() -> None:
@@ -267,26 +310,25 @@ def test_extract_plddt_from_pdb_skip_bad() -> None:
     assert out == []
 
 
-def test_pocket_druggability_index_label() -> None:
+def test_geometry_score_is_positive_for_a_compact_cluster() -> None:
+    cluster = {
+        "n_residues": 8,
+        "radius_of_gyration_angstrom": 5.0,
+        "mean_plddt": 85.0,
+        "centroid_offset_angstrom": 20.0,
+    }
+    assert _geometry_score(cluster) > 0
+
+
+def test_geometry_score_components_sum_to_score() -> None:
+    """The four sub-scores decompose the 0–100 score exactly (to rounding)."""
     pocket = {
         "n_residues": 8,
         "radius_of_gyration_angstrom": 5.0,
         "mean_plddt": 85.0,
         "centroid_offset_angstrom": 20.0,
     }
-    pdi = _pocket_druggability_index(pocket)
-    assert pdi > 0
-
-
-def test_pocket_druggability_components_sum_to_index() -> None:
-    """The four sub-scores decompose the 0–100 index exactly (to rounding)."""
-    pocket = {
-        "n_residues": 8,
-        "radius_of_gyration_angstrom": 5.0,
-        "mean_plddt": 85.0,
-        "centroid_offset_angstrom": 20.0,
-    }
-    components = _pocket_druggability_components(pocket)
+    components = _geometry_score_components(pocket)
     assert set(components) == {
         "residue_count",
         "radius_of_gyration",
@@ -297,30 +339,17 @@ def test_pocket_druggability_components_sum_to_index() -> None:
     assert components["radius_of_gyration"] == 25.0
     assert components["mean_plddt"] == 21.25
     assert components["centroid_offset"] == 25.0
-    assert _pocket_druggability_index(pocket) == round(sum(components.values()), 1)
+    assert _geometry_score(pocket) == round(sum(components.values()), 1)
 
 
-def test_pocket_druggability_components_defaults() -> None:
+def test_geometry_score_components_defaults() -> None:
     """Missing geometry keys default to zero sub-scores without error."""
-    assert _pocket_druggability_components({}) == {
+    assert _geometry_score_components({}) == {
         "residue_count": 0.0,
         "radius_of_gyration": 0.0,
         "mean_plddt": 0.0,
         "centroid_offset": 0.0,
     }
-
-
-@pytest.mark.parametrize(
-    ("pdi", "expected"),
-    [
-        (90.0, "EXCELLENT"),
-        (60.0, "GOOD"),
-        (40.0, "MODERATE"),
-        (10.0, "POOR"),
-    ],
-)
-def test_pocket_druggability_label(pdi: float, expected: str) -> None:
-    assert _pocket_druggability_label(pdi) == expected
 
 
 def test_detect_idr_segments_terminal() -> None:
@@ -401,17 +430,64 @@ def test_find_high_pae_pairs_close_residues_filtered() -> None:
     assert pairs == []
 
 
-def test_detect_domain_boundaries() -> None:
-    n = 100
-    pae = np.zeros((n, n)) + 5.0
-    pae[50:60, 50:60] = 25.0  # local PAE spike
-    boundaries = _detect_domain_boundaries(pae, window=10)
-    assert len(boundaries) >= 0  # may or may not find depending on threshold
+# AF-2: the near-diagonal PAE statistic. The expected values of the first three
+# tests are what release 1.5.12 returned for the same matrices: the measurement
+# is unchanged, only what it is called and what is derived from it.
 
 
-def test_detect_domain_boundaries_too_short() -> None:
+def _pae_two_domains(n: int = 200, split: int = 100) -> np.ndarray:
+    """Two confident domains (PAE 2 Å) whose relative placement is uncertain (25 Å)."""
+    pae = np.full((n, n), 25.0)
+    pae[:split, :split] = 2.0
+    pae[split:, split:] = 2.0
+    return pae
+
+
+def test_local_high_pae_onsets_do_not_see_a_two_domain_boundary() -> None:
+    """Uncertainty between domains lies off the diagonal, so nothing is flagged.
+
+    Release 1.5.12 turned this empty result into ``n_putative_domains == 1``.
+    """
+    assert _local_high_pae_onsets(_pae_two_domains()) == []
+
+
+def test_local_high_pae_onsets_flag_a_locally_uncertain_patch() -> None:
+    pae = np.full((100, 100), 5.0)
+    pae[50:60, 50:60] = 25.0
+    assert _local_high_pae_onsets(pae) == [48]
+
+
+def test_local_high_pae_onsets_flag_a_floppy_linker() -> None:
+    """A linker is flagged for its own local uncertainty, not as a domain border."""
+    pae = _pae_two_domains(n=240, split=120)
+    pae[110:130, :] = 28.0
+    pae[:, 110:130] = 28.0
+    assert _local_high_pae_onsets(pae) == [117]
+
+
+@pytest.mark.parametrize("tail", [5, 12, 30])
+def test_local_high_pae_onset_is_clipped_to_the_first_scanned_index(tail: int) -> None:
+    """An uncertain N-terminal tail of any length is reported at index 10.
+
+    The audit saw this value for CA2, LYZ, PPIA and PKM.
+    """
+    pae = np.full((150, 150), 2.0)
+    pae[:tail, :] = 20.0
+    pae[:, :tail] = 20.0
+    assert _local_high_pae_onsets(pae) == [10]
+
+
+def test_local_high_pae_onsets_report_at_most_ten() -> None:
+    pae = np.full((700, 700), 2.0)
+    for start in range(30, 630, 50):  # twelve separate uncertain patches
+        pae[start : start + 10, start : start + 10] = 30.0
+    onsets = _local_high_pae_onsets(pae)
+    assert onsets == [28, 78, 128, 178, 228, 278, 328, 378, 428, 478]
+
+
+def test_local_high_pae_onsets_too_short() -> None:
     pae = np.zeros((5, 5))
-    out = _detect_domain_boundaries(pae, window=10)
+    out = _local_high_pae_onsets(pae, window=10)
     assert out == []
 
 
@@ -474,6 +550,11 @@ def test_compute_tda_fingerprint_with_gudhi(monkeypatch: pytest.MonkeyPatch) -> 
     assert len(out["fingerprint_vector"]) == 64
     # First dim has intervals → landscape entry filled
     assert out["persistence_landscapes"][0]["n_intervals"] >= 1
+    # AF-4: eight statistics per homology dimension, then zero padding.
+    assert out["fingerprint_vector"][:8] == [1.5, 0.5, 2.0, 1.0, 1.5, 1.75, 1.25, 3.0]
+    assert out["fingerprint_vector"][24:] == [0.0] * 40
+    assert out["fingerprint_layout"] == si._TDA_FINGERPRINT_LAYOUT
+    assert (out["n_residues_used"], out["n_residues_total"], out["subsampled"]) == (20, 20, False)
 
 
 def test_compute_tda_fingerprint_with_gudhi_subsamples(
@@ -484,6 +565,11 @@ def test_compute_tda_fingerprint_with_gudhi_subsamples(
     coords = np.random.RandomState(42).randn(600, 3) * 10
     out = _compute_tda_fingerprint(coords)
     assert out["n_residues_used"] == 500
+    # AF-4: the subsampling is disclosed, in the result and in its reading.
+    assert out["n_residues_total"] == 600
+    assert out["subsampled"] is True
+    assert "500 evenly spaced" in out["methodology"]
+    assert "500 evenly spaced C\u03b1 atoms of 600" in _interpret_tda(out)
 
 
 def test_compute_tda_fingerprint_with_gudhi_empty_intervals(
@@ -512,6 +598,11 @@ def test_compute_tda_fingerprint_fallback(monkeypatch: pytest.MonkeyPatch) -> No
     coords = np.array([[i * 1.0, 0.0, 0.0] for i in range(10)])
     out = _compute_tda_fingerprint(coords)
     assert out["gudhi_available"] is False
+    # AF-4: eight statistics, then zeros; no subsampling in the fallback.
+    assert all(value != 0.0 for value in out["fingerprint_vector"][:8])
+    assert out["fingerprint_vector"][8:] == [0.0] * 56
+    assert out["fingerprint_layout"] == si._FALLBACK_FINGERPRINT_LAYOUT
+    assert (out["n_residues_used"], out["n_residues_total"], out["subsampled"]) == (10, 10, False)
 
 
 def test_fallback_tda_fingerprint_few_residues() -> None:
@@ -519,6 +610,8 @@ def test_fallback_tda_fingerprint_few_residues() -> None:
     out = _fallback_tda_fingerprint(coords)
     assert out["fingerprint_vector"] == [0.0] * 64
     assert out["betti_numbers"] == [1, None, None]
+    assert out["fingerprint_layout"] == si._FALLBACK_FINGERPRINT_LAYOUT
+    assert (out["n_residues_total"], out["subsampled"]) == (1, False)
 
 
 def test_fallback_tda_fingerprint_empty() -> None:
@@ -538,40 +631,137 @@ def test_fallback_tda_fingerprint_normal() -> None:
     assert len(out["fingerprint_vector"]) == 64
 
 
-def test_geometric_pocket_detection_too_short() -> None:
+def test_cluster_core_residues_too_short() -> None:
     coords = np.array([[1.0, 0.0, 0.0]])
     residues = [{"chain": "A", "resnum": 1, "resname": "ALA", "plddt": 80.0}]
-    pockets = _geometric_pocket_detection(coords, residues, min_residues=4)
-    assert pockets == []
+    clusters = _cluster_core_residues(coords, residues, min_residues=4)
+    assert clusters == []
 
 
-def test_geometric_pocket_detection_normal() -> None:
-    """Build a 3D blob of points to find a pocket."""
+def test_cluster_core_residues_normal() -> None:
+    """A 3D blob of points yields clusters of core residues only."""
     rng = np.random.RandomState(0)
     n = 50
     coords = rng.randn(n, 3) * 10
     residues = [{"chain": "A", "resnum": i + 1, "resname": "ALA", "plddt": 80.0} for i in range(n)]
-    pockets = _geometric_pocket_detection(coords, residues, min_residues=4)
-    assert isinstance(pockets, list)
+    clusters = _cluster_core_residues(coords, residues, min_residues=4)
+    assert clusters
+    distance = np.linalg.norm(coords - coords.mean(axis=0), axis=1)
+    core = {i + 1 for i in np.flatnonzero(distance < np.percentile(distance, 60))}
+    for cluster in clusters:
+        assert set(cluster["residue_numbers"]) <= core
+    assert [cluster["cluster_id"] for cluster in clusters] == list(range(1, len(clusters) + 1))
 
 
-def test_geometric_pocket_detection_low_plddt() -> None:
-    """Low pLDDT pockets are excluded."""
+def test_cluster_core_residues_low_plddt() -> None:
+    """Clusters of low model confidence are excluded."""
     rng = np.random.RandomState(1)
     n = 50
     coords = rng.randn(n, 3) * 10
     residues = [{"chain": "A", "resnum": i + 1, "resname": "ALA", "plddt": 30.0} for i in range(n)]
-    pockets = _geometric_pocket_detection(coords, residues, min_residues=4)
-    assert pockets == []
+    clusters = _cluster_core_residues(coords, residues, min_residues=4)
+    assert clusters == []
 
 
-def test_geometric_pocket_detection_no_buried() -> None:
-    """Not enough buried residues after surface filtering → returns empty list."""
-    # 20 residues, min_residues=15. Buried ~ 40% = 8 < 15.
+def test_cluster_core_residues_too_few_core_residues() -> None:
+    """Fewer core residues than the minimum cluster size → empty list."""
+    # 20 residues, min_residues=15: the core holds 12 of them.
     coords = np.array([[i * 5.0, 0.0, 0.0] for i in range(20)])
     residues = [{"chain": "A", "resnum": i + 1, "resname": "ALA", "plddt": 80.0} for i in range(20)]
-    pockets = _geometric_pocket_detection(coords, residues, min_residues=15)
-    assert pockets == []
+    clusters = _cluster_core_residues(coords, residues, min_residues=15)
+    assert clusters == []
+
+
+# AF-3: a solid block without any cavity. Release 1.5.12 reported its clusters as
+# "putative pockets" labelled EXCELLENT, GOOD and MODERATE (recorded in the fixture).
+_LATTICE_1_5_12 = json.loads(
+    (Path(__file__).parent / "fixtures" / "core_residue_clusters_lattice_1_5_12.json").read_text(
+        encoding="utf-8"
+    )
+)["clusters"]
+
+
+def _lattice_pdb() -> str:
+    """A 6x6x6 cubic lattice of alpha carbons, 4 Å apart: no cavity anywhere."""
+    names = ("ALA", "GLY", "LEU", "SER")
+    lines = []
+    for i in range(216):
+        x, y, z = 4.0 * (i // 36), 4.0 * (i // 6 % 6), 4.0 * (i % 6)
+        lines.append(
+            f"ATOM  {i + 1:5d}  CA  {names[i % 4]} A{i + 1:4d}    "
+            f"{x:8.3f}{y:8.3f}{z:8.3f}  1.00{60.0 + i % 40:6.2f}           C"
+        )
+    return "\n".join(lines)
+
+
+_SCORE_STEP = 0.1
+"""Reporting step of the score, which is rounded to one decimal."""
+
+
+def _same_score(reported: float, recorded: float) -> bool:
+    """Whether two reported scores are equal or one reporting step apart.
+
+    The score is ``round(sum(sub-scores), 1)`` and the fixture was recorded on
+    Python 3.12, where ``sum`` of floats is compensated; Python 3.11 adds them
+    in order. The sub-scores of lattice cluster 8 are 12.5, 18.55, 19.625 and
+    10.275, whose sum is exactly the rounding boundary 60.95: Python 3.12 and
+    later report 61.0 and Python 3.11 reports 60.9. Release 1.5.12 does the
+    same on each interpreter, so one step is the agreement a recorded score
+    supports. Every other recorded number is compared exactly.
+    """
+    return abs(reported - recorded) <= _SCORE_STEP + 1e-9
+
+
+def test_cluster_measurements_are_unchanged_from_1_5_12() -> None:
+    """The correction renames and re-describes; it does not change a number."""
+    coords, residues = _parse_pdb_full(_lattice_pdb())
+    clusters = _cluster_core_residues(coords, residues, min_residues=4)
+
+    assert len(clusters) == len(_LATTICE_1_5_12) == 12
+    measured = (
+        "n_residues",
+        "residue_numbers",
+        "residue_names",
+        "mean_plddt",
+        "radius_of_gyration_angstrom",
+        "centroid_offset_angstrom",
+        "estimated_volume_angstrom3",
+    )
+    for cluster, recorded in zip(clusters, _LATTICE_1_5_12, strict=True):
+        assert cluster["cluster_id"] == recorded["pocket_id"]
+        assert {key: cluster[key] for key in measured} == {key: recorded[key] for key in measured}
+        assert _geometry_score_components(cluster) == recorded["druggability_components"]
+        # The recorded score is a rounding of the exact sum of the sub-scores,
+        # whichever way the interpreter adds them (see ``_same_score``).
+        exact = math.fsum(_pocket_subscores(cluster).values())
+        assert abs(exact - recorded["druggability_index"]) <= _SCORE_STEP / 2 + 1e-9
+        assert _same_score(_geometry_score(cluster), recorded["druggability_index"])
+
+
+def test_only_the_boundary_cluster_can_differ_from_the_recorded_score() -> None:
+    """The one-step allowance is used by a single cluster, for a stated reason."""
+    coords, residues = _parse_pdb_full(_lattice_pdb())
+    clusters = _cluster_core_residues(coords, residues, min_residues=4)
+
+    at_boundary = []
+    for cluster, recorded in zip(clusters, _LATTICE_1_5_12, strict=True):
+        exact = math.fsum(_pocket_subscores(cluster).values())
+        if abs(abs(exact - recorded["druggability_index"]) - _SCORE_STEP / 2) < 1e-9:
+            at_boundary.append(cluster["cluster_id"])
+        else:
+            assert _geometry_score(cluster) == recorded["druggability_index"]
+    assert at_boundary == [8]
+    assert math.fsum(_pocket_subscores(clusters[7]).values()) == 60.95
+    assert _geometry_score(clusters[7]) in (60.9, 61.0)
+
+
+def test_a_block_without_cavities_was_labelled_druggable_by_1_5_12() -> None:
+    """Why the labels were retracted: they were assigned where no pocket exists."""
+    assert sorted({recorded["druggability_label"] for recorded in _LATTICE_1_5_12}) == [
+        "EXCELLENT",
+        "GOOD",
+        "MODERATE",
+    ]
 
 
 def test_find_most_similar_pair_too_few() -> None:
@@ -622,7 +812,7 @@ def _fake_af(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
     """
     fake = MagicMock()
     fake.get_prediction = AsyncMock(return_value={})
-    fake.get_pdb_bytes = AsyncMock(return_value=b"")
+    fake.get_pdb_model = AsyncMock(return_value=({}, b""))
     fake.get_pae = AsyncMock(return_value={})
     monkeypatch.setattr(si, "_alphafold", lambda: fake)
     return fake
@@ -653,23 +843,49 @@ def test_alphafold_client_is_a_cached_singleton() -> None:
 async def test_fetch_af_structure_success(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_text = _make_pdb(5)
     af = _fake_af(monkeypatch)
-    af.get_pdb_bytes.return_value = fake_text.encode("utf-8")
+    af.get_pdb_model.return_value = ({**_af_meta(), "latestVersion": 4}, fake_text.encode("utf-8"))
     out = await _fetch_af_structure("P12345")
     assert out is not None
     assert out["pdb_text"] == fake_text
     assert out["uniprot_id"] == "P12345"
+    # AF-10: the version comes from the record that advertised the file.
+    assert out["model_version"] == 4
+
+
+async def test_fetch_af_structure_record_without_version(monkeypatch: pytest.MonkeyPatch) -> None:
+    af = _fake_af(monkeypatch)
+    af.get_pdb_model.return_value = (_af_meta(), _make_pdb(5).encode("utf-8"))
+    out = await _fetch_af_structure("P12345")
+    assert out is not None
+    assert out["model_version"] is None
 
 
 async def test_fetch_af_structure_no_model(monkeypatch: pytest.MonkeyPatch) -> None:
     """An accession with no AlphaFold model yields empty PDB bytes."""
-    _fake_af(monkeypatch)  # get_pdb_bytes default returns b""
+    _fake_af(monkeypatch)  # get_pdb_model default returns ({}, b"")
     assert await _fetch_af_structure("P00000") is None
 
 
 async def test_fetch_af_structure_client_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A request that fails is reported as failed, not as a missing model.
+
+    Release 1.5.12 returned ``None`` here, the value that means AlphaFold DB
+    holds no model for the accession.
+    """
     af = _fake_af(monkeypatch)
-    af.get_pdb_bytes.side_effect = RuntimeError("network down")
-    assert await _fetch_af_structure("P12345") is None
+    af.get_pdb_model.side_effect = RuntimeError("network down")
+    fetched = await _fetch_af_structure("P12345")
+    assert isinstance(fetched, si._RequestFailed)
+    assert fetched.reason == "RuntimeError: network down"
+    # Falsy, so a caller that only needs a model takes its "no model" path.
+    assert not fetched
+
+
+async def test_fetch_af_structure_not_found_is_no_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    """HTTP 404 is AlphaFold DB answering that it serves no model."""
+    af = _fake_af(monkeypatch)
+    af.get_pdb_model.side_effect = UpstreamError("AlphaFold DB", 404, "Not Found")
+    assert await _fetch_af_structure("Q8WZ42") is None
 
 
 # --- _fetch_af_plddt --------------------------------------------------------
@@ -687,6 +903,9 @@ async def test_fetch_af_plddt_success(monkeypatch: pytest.MonkeyPatch) -> None:
     assert out["sequence_length"] == 4
     assert out["pae_mean"] == 1.75
     assert out["pae_status"] == "available"
+    assert out["local_high_pae_positions"] == []
+    assert out["local_high_pae_scanned"] == 0  # a 4-residue model is never scanned
+    assert out["model_version"] is None  # this legacy record reports no version
 
 
 async def test_fetch_af_plddt_current_schema(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -703,9 +922,132 @@ async def test_fetch_af_plddt_current_schema(monkeypatch: pytest.MonkeyPatch) ->
 
 
 async def test_fetch_af_plddt_prediction_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A failed prediction request is reported as failed, not as a missing model."""
     af = _fake_af(monkeypatch)
     af.get_prediction.side_effect = RuntimeError("network down")
-    assert await _fetch_af_plddt("P12345") is None
+    fetched = await _fetch_af_plddt("P12345")
+    assert isinstance(fetched, si._RequestFailed)
+    assert fetched.reason == "RuntimeError: network down"
+    assert not fetched
+
+
+async def test_fetch_af_plddt_not_found_is_no_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    af = _fake_af(monkeypatch)
+    af.get_prediction.side_effect = UpstreamError("AlphaFold DB", 404, "Not Found")
+    assert await _fetch_af_plddt("Q8WZ42") is None
+
+
+# --- a failed request is not a missing model ---------------------------------
+
+
+@pytest.mark.parametrize(
+    ("exc", "reason"),
+    [
+        (
+            AirGapError("Air-gap mode active: outbound request to 'alphafold.ebi.ac.uk' blocked."),
+            "AirGapError: Air-gap mode active: outbound request to 'alphafold.ebi.ac.uk' blocked.",
+        ),
+        (
+            CircuitOpenError("Circuit open for AlphaFold DB; retry after cooldown."),
+            "CircuitOpenError: Circuit open for AlphaFold DB; retry after cooldown.",
+        ),
+        (
+            UpstreamError("AlphaFold DB", 503, "Service Unavailable"),
+            "UpstreamError: AlphaFold DB HTTP 503: Service Unavailable",
+        ),
+        (TimeoutError("timed out"), "TimeoutError: timed out"),
+    ],
+)
+def test_unretrieved_reports_a_request_that_did_not_complete(exc: Exception, reason: str) -> None:
+    failed = si._unretrieved(exc)
+    assert isinstance(failed, si._RequestFailed)
+    assert failed.reason == reason
+    assert not failed
+
+
+def test_unretrieved_reads_http_404_as_an_answer() -> None:
+    """Only a 404 is AlphaFold DB saying it serves no model for the accession."""
+    assert si._unretrieved(UpstreamError("AlphaFold DB", 404, "Not Found")) is None
+
+
+def test_no_structure_response_for_a_request_that_was_answered() -> None:
+    out = si._no_structure_response("P00000")
+    assert out["structure_available"] is False
+    assert out["retrieval_status"] == "no_prediction_returned"
+    assert out["error"].startswith("No structure prediction returned by the AlphaFold DB REST API")
+    assert out["note"].startswith("An empty API response does not prove that no prediction exists")
+
+
+def test_no_structure_response_for_a_failed_request_claims_no_absence() -> None:
+    failed = si._RequestFailed("AirGapError: Air-gap mode active")
+    out = si._no_structure_response("P00000", failed)
+    assert out == {
+        "uniprot_id": "P00000",
+        "structure_available": False,
+        "retrieval_status": "request_failed",
+        "error": (
+            "The AlphaFold DB request for this UniProt accession did not complete: "
+            "AirGapError: Air-gap mode active"
+        ),
+        "note": out["note"],
+    }
+    assert "not evidence that AlphaFold DB has no prediction" in out["note"]
+    assert "No structure prediction returned" not in json.dumps(out)
+
+
+_SINGLE_ACCESSION_TOOLS = [
+    (analyze_structural_confidence, UniProtInput),
+    (compute_topology_fingerprint, UniProtInput),
+    (score_binding_pocket_geometry, BindingPocketInput),
+    (detect_intrinsically_disordered, UniProtInput),
+    (get_protein_structure, StructureRetrievalInput),
+]
+
+
+@pytest.mark.parametrize(("tool", "model"), _SINGLE_ACCESSION_TOOLS)
+async def test_air_gapped_request_is_not_reported_as_a_missing_prediction(
+    monkeypatch: pytest.MonkeyPatch, tool: Any, model: Any
+) -> None:
+    """Offline mode refuses the request before a socket opens; nothing was learned.
+
+    The real client runs with the air gap on. Release 1.5.12 answered "No
+    structure prediction returned by the AlphaFold DB REST API" here.
+    """
+    monkeypatch.setattr(_base, "_OFFLINE_MODE", True)
+    client = AlphaFoldClient()
+    monkeypatch.setattr(si, "_alphafold", lambda: client)
+    try:
+        out = await tool(model(uniprot_id="P69905"))
+    finally:
+        await client.__aexit__(None, None, None)
+
+    assert out["uniprot_id"] == "P69905"
+    assert out["structure_available"] is False
+    assert out["retrieval_status"] == "request_failed"
+    assert out["error"].startswith(
+        "The AlphaFold DB request for this UniProt accession did not complete: AirGapError: "
+        "Air-gap mode active: outbound request to 'alphafold.ebi.ac.uk' blocked."
+    )
+    assert "not evidence that AlphaFold DB has no prediction" in out["note"]
+    assert "No structure prediction returned" not in json.dumps(out)
+
+
+async def test_disorder_tool_reports_a_failed_coordinate_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The confidence summary arrives but the coordinate file request fails."""
+
+    async def fake_plddt(uid: str) -> dict[str, Any]:
+        return {"uniprot_id": uid, "mean_plddt": 80.0}
+
+    async def fake_structure(uid: str) -> si._RequestFailed:
+        return si._RequestFailed("UpstreamError: AlphaFold DB HTTP 503: Service Unavailable")
+
+    monkeypatch.setattr(si, "_fetch_af_plddt", fake_plddt)
+    monkeypatch.setattr(si, "_fetch_af_structure", fake_structure)
+    out = await detect_intrinsically_disordered(UniProtInput(uniprot_id="P12345"))
+    assert out["retrieval_status"] == "request_failed"
+    assert "HTTP 503" in out["error"]
 
 
 async def test_fetch_af_plddt_no_entry_id(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -766,6 +1108,7 @@ async def test_fetch_af_plddt_invalid_pae_is_not_summarized(
     assert out is not None
     assert out["pae_status"] == status
     assert "pae_mean" not in out
+    assert "local_high_pae_positions" not in out
     assert "domain_boundaries" not in out
 
 
@@ -781,6 +1124,9 @@ async def test_analyze_structural_confidence_does_not_report_missing_pae_as_zero
     assert out["pae_summary"]["available"] is False
     assert out["pae_summary"]["mean_pae_angstrom"] is None
     assert out["pae_summary"]["max_pae_angstrom"] is None
+    assert out["local_high_pae"]["status"] == "pae_unavailable"
+    assert out["local_high_pae"]["positions"] == []
+    assert out["local_high_pae"]["n_indices_scanned"] == 0
     assert out["domain_boundaries"]["n_putative_domains"] is None
 
 
@@ -800,7 +1146,9 @@ async def test_analyze_structural_confidence_success(
             "pae_mean": 5.0,
             "pae_max": 30.0,
             "high_pae_pairs": [{"residue_a": 1, "residue_b": 100}],
-            "domain_boundaries": [100],
+            "local_high_pae_positions": [100],
+            "local_high_pae_scanned": 180,
+            "model_version": 4,
             "model_url": "http://x",
         }
 
@@ -810,6 +1158,70 @@ async def test_analyze_structural_confidence_success(
     assert out["confidence_tier"] == "HIGH"
     assert out["mean_plddt"] == 85.0
     assert "HIGHER MODEL CONFIDENCE" in out["druggability_pre_screen"]["structural_suitability"]
+    # AF-2: the position is a local high-PAE onset, never a domain boundary.
+    assert out["local_high_pae"] == {
+        "status": "computed",
+        "positions": [100],
+        "n_indices_scanned": 180,
+        "definition": si._LOCAL_HIGH_PAE_DEFINITION,
+    }
+    assert out["domain_boundaries"] == {
+        "status": "NOT_ASSESSED",
+        "candidate_positions": [],
+        "n_putative_domains": None,
+        "note": si._DOMAIN_BOUNDARIES_NOT_ASSESSED,
+    }
+    # AF-10: both provenance fields name the version of the record that was read.
+    assert _provenance_fields(out)["alphafold_db"] == "v4"
+    assert _provenance_fields(out)["plddt_version"] == "v4"
+
+
+async def test_analyze_structural_confidence_assigns_no_domain_count(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """AF-2 end to end: a two-domain PAE is no longer reported as one domain."""
+    af = _fake_af(monkeypatch)
+    af.get_prediction.return_value = {
+        **_af_meta(),
+        "uniprotSequence": "M" * 200,
+        "latestVersion": 6,
+    }
+    af.get_pae.return_value = {"predicted_aligned_error": _pae_two_domains().tolist()}
+
+    out = await analyze_structural_confidence(UniProtInput(uniprot_id="P12345"))
+
+    assert out["pae_summary"]["available"] is True
+    assert out["pae_summary"]["mean_pae_angstrom"] == 13.5
+    assert out["pae_summary"]["max_pae_angstrom"] == 25.0
+    assert out["local_high_pae"]["status"] == "computed"
+    assert out["local_high_pae"]["positions"] == []
+    assert out["local_high_pae"]["n_indices_scanned"] == 180
+    assert out["domain_boundaries"]["status"] == "NOT_ASSESSED"
+    assert out["domain_boundaries"]["candidate_positions"] == []
+    assert out["domain_boundaries"]["n_putative_domains"] is None
+    assert out["domain_boundaries"]["note"].startswith("NOT_ASSESSED")
+    assert _provenance_fields(out)["alphafold_db"] == "v6"
+    assert _provenance_fields(out)["plddt_version"] == "v6"
+
+
+async def test_analyze_structural_confidence_keeps_the_pae_measurement(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The onset 1.5.12 listed as a domain-boundary candidate is still reported."""
+    af = _fake_af(monkeypatch)
+    af.get_prediction.return_value = {**_af_meta(), "uniprotSequence": "M" * 100}
+    pae = np.full((100, 100), 5.0)
+    pae[50:60, 50:60] = 25.0
+    af.get_pae.return_value = {"predicted_aligned_error": pae.tolist()}
+
+    out = await analyze_structural_confidence(UniProtInput(uniprot_id="P12345"))
+
+    assert out["local_high_pae"]["positions"] == [48]
+    assert out["local_high_pae"]["n_indices_scanned"] == 80
+    assert out["domain_boundaries"]["candidate_positions"] == []
+    assert out["domain_boundaries"]["n_putative_domains"] is None
+    # The record reports no version, and none is assumed.
+    assert _provenance_fields(out)["alphafold_db"] == "version-unreported"
 
 
 async def test_analyze_structural_confidence_not_found(
@@ -937,6 +1349,21 @@ async def test_compute_topology_fingerprint_success(
     out = await compute_topology_fingerprint(UniProtInput(uniprot_id="P12345"))
     assert out["n_residues"] == 20
     assert "topological_fingerprint" in out
+    assert out["topological_fingerprint"]["subsampled"] is False
+    assert _provenance_fields(out)["alphafold_db"] == "version-unreported"
+
+
+async def test_compute_topology_fingerprint_reports_the_retrieved_model_version(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """AF-10: provenance names the version of the record, not a constant."""
+
+    async def fake_fetch(uid: str) -> dict[str, Any]:
+        return {"pdb_text": _make_pdb(20), "uniprot_id": uid, "model_version": 4}
+
+    monkeypatch.setattr(si, "_fetch_af_structure", fake_fetch)
+    out = await compute_topology_fingerprint(UniProtInput(uniprot_id="P12345"))
+    assert _provenance_fields(out)["alphafold_db"] == "v4"
 
 
 async def test_compute_topology_fingerprint_no_structure(
@@ -977,6 +1404,53 @@ async def test_compare_proteins_topologically_success(
     monkeypatch.setattr(si, "_fetch_af_structure", fake_fetch)
     out = await compare_proteins_topologically(MultiProteinInput(uniprot_ids=["P12345", "P67890"]))
     assert "distance_matrix" in out
+    assert out["protein_metadata"]["P12345"]["n_residues_used"] == 10
+    assert out["protein_metadata"]["P12345"]["subsampled"] is False
+    assert _provenance_fields(out)["alphafold_db"] == "version-unreported"
+
+
+async def test_compare_proteins_provenance_names_what_actually_ran(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """AF-4 / AF-10: no persistent homology or model version is claimed by default."""
+    versions = {"P12345": 4, "P67890": 6}
+
+    async def fake_fetch(uid: str) -> dict[str, Any]:
+        return {"pdb_text": _make_pdb(12), "uniprot_id": uid, "model_version": versions[uid]}
+
+    monkeypatch.setattr(si, "_fetch_af_structure", fake_fetch)
+    monkeypatch.setattr(si, "_compute_tda_fingerprint", si._fallback_tda_fingerprint)
+    out = await compare_proteins_topologically(MultiProteinInput(uniprot_ids=["P12345", "P67890"]))
+    assert _provenance_fields(out)["alphafold_db"] == "v4/v6"
+    assert _provenance_fields(out)["methodology"] == "geometric-proxy"
+
+
+async def test_compare_proteins_with_gudhi_discloses_subsampling(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_gudhi(monkeypatch, [(0, (0.0, 1.0)), (1, (2.0, 3.0))])
+    lengths = {"P12345": 600, "P67890": 40}
+
+    async def fake_fetch(uid: str) -> dict[str, Any]:
+        return {"pdb_text": _make_pdb(lengths[uid]), "uniprot_id": uid, "model_version": 6}
+
+    monkeypatch.setattr(si, "_fetch_af_structure", fake_fetch)
+    out = await compare_proteins_topologically(MultiProteinInput(uniprot_ids=["P12345", "P67890"]))
+    long_model, short_model = out["protein_metadata"]["P12345"], out["protein_metadata"]["P67890"]
+    assert (long_model["n_residues"], long_model["n_residues_used"]) == (600, 500)
+    assert long_model["subsampled"] is True
+    assert short_model["subsampled"] is False
+    assert _provenance_fields(out)["alphafold_db"] == "v6"
+    assert _provenance_fields(out)["methodology"] == "VR-persistent-homology"
+
+
+def test_compare_proteins_description_lists_no_applications() -> None:
+    """AF-4: the unsupported uses were removed from the tool description."""
+    doc = compare_proteins_topologically.__doc__ or ""
+    for claim in ("Applications", "repurposing", "Off-target", "Possible uses"):
+        assert claim not in doc
+    assert "at most 16 statistics" in doc
+    assert "500 evenly spaced" in doc
 
 
 async def test_compare_proteins_topologically_mix_errors(
@@ -989,7 +1463,32 @@ async def test_compare_proteins_topologically_mix_errors(
 
     monkeypatch.setattr(si, "_fetch_af_structure", fake_fetch)
     out = await compare_proteins_topologically(MultiProteinInput(uniprot_ids=["P12345", "P67890"]))
-    assert "P67890" in out["proteins_failed"]
+    assert out["proteins_failed"] == {"P67890": "No AlphaFold model for this accession."}
+
+
+async def test_compare_proteins_topologically_failed_request_is_not_a_missing_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A blocked request and an answered "no model" get different explanations."""
+
+    async def fake_fetch(uid: str) -> dict[str, Any] | si._RequestFailed | None:
+        if uid == "P12345":
+            return {"pdb_text": _make_pdb(10), "uniprot_id": uid}
+        if uid == "P67890":
+            return si._RequestFailed("AirGapError: Air-gap mode active")
+        return None
+
+    monkeypatch.setattr(si, "_fetch_af_structure", fake_fetch)
+    out = await compare_proteins_topologically(
+        MultiProteinInput(uniprot_ids=["P12345", "P67890", "Q8WZ42"])
+    )
+    assert out["proteins_failed"] == {
+        "P67890": (
+            "AlphaFold model retrieval failed (AirGapError: Air-gap mode active); "
+            "this is not evidence that no model exists."
+        ),
+        "Q8WZ42": "No AlphaFold model for this accession.",
+    }
 
 
 async def test_compare_proteins_topologically_no_ca(
@@ -1013,7 +1512,15 @@ async def test_compare_proteins_topologically_exception(
 
     monkeypatch.setattr(si, "_fetch_af_structure", fake_fetch)
     out = await compare_proteins_topologically(MultiProteinInput(uniprot_ids=["P12345", "P67890"]))
-    assert out["proteins_failed"]
+    # An exception from the fetch is a failed retrieval, never "no model".
+    reason = (
+        "AlphaFold model retrieval failed (RuntimeError: fetch fail); "
+        "this is not evidence that no model exists."
+    )
+    assert out["proteins_failed"] == {"P12345": reason, "P67890": reason}
+    # Nothing was retrieved or computed, and provenance says so.
+    assert _provenance_fields(out)["alphafold_db"] == "not-retrieved"
+    assert _provenance_fields(out)["methodology"] == "not-computed"
 
 
 # ---------------------------------------------------------------------------
@@ -1069,6 +1576,8 @@ async def test_evolutionary_shifts_no_uniprot(monkeypatch: pytest.MonkeyPatch) -
 
     out = await find_evolutionary_structural_shifts(EvolutionaryInput(gene_symbol="BRCA1"))
     assert out["human_uniprot_id"] == ""
+    # AF-10: no AlphaFold DB record was read, so no version is stated.
+    assert _provenance_fields(out)["alphafold_db"] == "not-retrieved"
 
 
 async def test_evolutionary_shifts_no_human_structure(
@@ -1128,10 +1637,15 @@ async def test_evolutionary_shifts_ortholog_no_gene_id(
     assert out["evolutionary_profile"][0]["divergence_method"] == "sequence_identity"
 
 
-async def test_evolutionary_shifts_tda_comparison(
+async def test_evolutionary_shifts_without_gudhi_report_a_geometric_proxy(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """When ortholog has AF structure, use TDA fingerprint distance."""
+    """Without GUDHI the distance is labelled a geometric proxy, never TDA.
+
+    AF-8: the fallback is selected explicitly, so the test asserts the same
+    thing whether or not the optional ``gudhi`` package is installed.
+    """
+    monkeypatch.setattr(si, "_compute_tda_fingerprint", si._fallback_tda_fingerprint)
     mock_ensembl = MagicMock()
     mock_ensembl.orthologs = AsyncMock(
         return_value=[{"species": "mus_musculus", "gene_id": "ENSMUSG1", "identity": 85.0}]
@@ -1140,8 +1654,10 @@ async def test_evolutionary_shifts_tda_comparison(
     mock_ensembl._get = AsyncMock(return_value=[{"primary_id": "Q62469"}])
     monkeypatch.setattr(si, "EnsemblClient", lambda: mock_ensembl)
 
+    versions = {"P12345": 6, "Q62469": 4}
+
     async def fake_fetch(uid: str) -> dict[str, Any]:
-        return {"pdb_text": _make_pdb(15), "uniprot_id": uid}
+        return {"pdb_text": _make_pdb(15), "uniprot_id": uid, "model_version": versions[uid]}
 
     monkeypatch.setattr(si, "_fetch_af_structure", fake_fetch)
     out = await find_evolutionary_structural_shifts(EvolutionaryInput(gene_symbol="BRCA1"))
@@ -1153,6 +1669,9 @@ async def test_evolutionary_shifts_tda_comparison(
     assert out["geometric_proxy_comparisons"] == 1
     assert out["sequence_identity_fallbacks"] == 0
     assert out["most_conserved_species"] is None
+    # AF-10: both retrieved models are named; AF-4: subsampling is disclosed.
+    assert _provenance_fields(out)["alphafold_db"] == "v4/v6"
+    assert "500 evenly spaced" in out["methodology_note"]
 
 
 async def test_evolutionary_shifts_ortholog_no_uniprot(
@@ -1338,7 +1857,9 @@ async def test_score_binding_pocket_normal(monkeypatch: pytest.MonkeyPatch) -> N
 
     monkeypatch.setattr(si, "_fetch_af_structure", fake_fetch)
     out = await score_binding_pocket_geometry(BindingPocketInput(uniprot_id="P12345"))
+    # The keys an existing client reads are still present and still filled.
     assert "putative_pockets" in out
+    assert out["putative_pockets"]
     for pocket in out["putative_pockets"]:
         assert set(pocket["druggability_components"]) == {
             "residue_count",
@@ -1349,6 +1870,108 @@ async def test_score_binding_pocket_normal(monkeypatch: pytest.MonkeyPatch) -> N
         assert pocket["druggability_index"] == round(
             sum(pocket["druggability_components"].values()), 1
         )
+    assert _provenance_fields(out)["alphafold_db"] == "version-unreported"
+
+
+async def test_core_residue_clusters_carry_no_druggability_class(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """AF-3: clusters of a block without cavities are reported, never classified."""
+
+    async def fake_fetch(uid: str) -> dict[str, Any]:
+        return {"pdb_text": _lattice_pdb(), "uniprot_id": uid, "model_version": 6}
+
+    monkeypatch.setattr(si, "_fetch_af_structure", fake_fetch)
+    out = await score_binding_pocket_geometry(BindingPocketInput(uniprot_id="P12345"))
+
+    clusters = out["core_residue_clusters"]
+    assert out["n_core_residue_clusters"] == 12
+    assert len(clusters) == 10  # at most ten are returned
+    assert out["assessment_status"].startswith("NOT_ASSESSED")
+    assert "Not a validated binding-pocket detector" in out["note"]
+    assert "not a cavity volume" in out["methodology"]
+
+    # Ordered by the same numbers 1.5.12 called the druggability index.
+    recorded = sorted((r["druggability_index"] for r in _LATTICE_1_5_12), reverse=True)[:10]
+    scores = [cluster["geometry_score"] for cluster in clusters]
+    assert scores == sorted(scores, reverse=True)
+    assert all(_same_score(score, record) for score, record in zip(scores, recorded, strict=True))
+    # Only the tie described in ``_same_score`` can differ, and only on Python 3.11.
+    differing = [score for score, record in zip(scores, recorded, strict=True) if score != record]
+    assert differing in ([], [60.9])
+
+    for cluster in clusters:
+        # No pocket or druggability vocabulary in the accurately named entries.
+        assert not any("pocket" in key or "druggab" in key for key in cluster)
+        # The score is the rounded sum of the unrounded sub-scores, so the
+        # rounded components add up to it only to within rounding.
+        assert cluster["geometry_score"] == pytest.approx(
+            sum(cluster["geometry_score_components"].values()), abs=0.07
+        )
+
+    assert _provenance_fields(out)["alphafold_db"] == "v6"
+
+
+async def test_legacy_pocket_keys_keep_the_1_5_12_shape_and_numbers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Compatibility: an existing client finds every key it read, with the same values.
+
+    Only ``druggability_label`` differs from what release 1.5.12 returned for
+    the same model on the same interpreter: the retracted class is
+    ``NOT_ASSESSED``.
+    """
+
+    async def fake_fetch(uid: str) -> dict[str, Any]:
+        return {"pdb_text": _lattice_pdb(), "uniprot_id": uid, "model_version": 6}
+
+    monkeypatch.setattr(si, "_fetch_af_structure", fake_fetch)
+    out = await score_binding_pocket_geometry(BindingPocketInput(uniprot_id="P12345"))
+
+    # Release 1.5.12 returned its ten highest-scoring clusters, in this order.
+    recorded = sorted(_LATTICE_1_5_12, key=lambda r: r["druggability_index"], reverse=True)[:10]
+    assert {r["druggability_label"] for r in recorded} == {"EXCELLENT", "GOOD"}
+    expected = [{**r, "druggability_label": "NOT_ASSESSED"} for r in recorded]
+
+    def without_score(entry: dict[str, Any]) -> dict[str, Any]:
+        return {key: value for key, value in entry.items() if key != "druggability_index"}
+
+    # Everything but the score is identical; the score is identical too, except
+    # where the interpreter's float sum decides a rounding tie (``_same_score``).
+    assert [without_score(entry) for entry in out["putative_pockets"]] == [
+        without_score(entry) for entry in expected
+    ]
+    for entry, record in zip(out["putative_pockets"], expected, strict=True):
+        assert _same_score(entry["druggability_index"], record["druggability_index"])
+    assert out["n_pockets_found"] == out["n_core_residue_clusters"] == len(_LATTICE_1_5_12)
+
+    # Each legacy entry is the same cluster as its accurately named counterpart.
+    assert out["deprecated_aliases"] == {
+        "putative_pockets": "core_residue_clusters",
+        "n_pockets_found": "n_core_residue_clusters",
+        "pocket_id": "cluster_id",
+        "druggability_index": "geometry_score",
+        "druggability_components": "geometry_score_components",
+    }
+    for legacy, cluster in zip(out["putative_pockets"], out["core_residue_clusters"], strict=True):
+        assert legacy["pocket_id"] == cluster["cluster_id"]
+        assert legacy["druggability_index"] == cluster["geometry_score"]
+        assert legacy["druggability_components"] == cluster["geometry_score_components"]
+        assert legacy["residue_numbers"] == cluster["residue_numbers"]
+
+
+def test_cluster_tool_description_makes_no_pocket_or_druggability_claim() -> None:
+    doc = score_binding_pocket_geometry.__doc__ or ""
+    assert "Not a validated binding-pocket detector" in doc
+    assert "4 of the 18 proteins" in doc
+    assert "air-gapped" not in doc  # the model is fetched from AlphaFold DB
+
+    accession = BindingPocketInput.model_fields["uniprot_id"].description or ""
+    assert "AlphaFold DB model is clustered" in accession
+    minimum = BindingPocketInput.model_fields["min_pocket_residues"].description or ""
+    assert minimum.startswith("Minimum cluster size")
+    assert "8 Å" in minimum
+    assert "not validated pockets" in minimum
 
 
 # ---------------------------------------------------------------------------
@@ -1401,6 +2024,22 @@ async def test_detect_intrinsically_disordered_ordered(
     assert out["low_plddt_fraction"] == 0.0
     assert out["low_plddt_residue_count"] == 0
     assert out["low_plddt_segments"] == []
+    assert _provenance_fields(out)["alphafold_db"] == "version-unreported"
+
+
+async def test_detect_intrinsically_disordered_reports_the_retrieved_model_version(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_plddt(uid: str) -> dict[str, Any]:
+        return {"uniprot_id": uid, "model_version": 4}
+
+    async def fake_struct(uid: str) -> dict[str, Any]:
+        return {"pdb_text": _make_pdb(40, plddt=80.0), "uniprot_id": uid, "model_version": 4}
+
+    monkeypatch.setattr(si, "_fetch_af_plddt", fake_plddt)
+    monkeypatch.setattr(si, "_fetch_af_structure", fake_struct)
+    out = await detect_intrinsically_disordered(UniProtInput(uniprot_id="P12345"))
+    assert _provenance_fields(out)["alphafold_db"] == "v4"
 
 
 async def test_detect_intrinsically_disordered_disordered(
@@ -1514,6 +2153,10 @@ async def test_get_protein_structure_metadata_only(monkeypatch: pytest.MonkeyPat
     assert "coordinates_pdb" not in out  # default: metadata only
     assert out["sequence_start"] is None
     assert out["residue_mapping_status"].startswith("Model sequence interval")
+    # AF-10: this fixture reports version 4 while its file names say v6; the
+    # provenance follows the record's own version field.
+    assert out["model_version"] == 4
+    assert _provenance_fields(out)["alphafold_db"] == "v4"
 
 
 async def test_get_protein_structure_current_schema(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1586,14 +2229,30 @@ async def test_get_protein_structure_no_model(monkeypatch: pytest.MonkeyPatch) -
     out = await get_protein_structure(StructureRetrievalInput(uniprot_id="P00000"))
     assert out["structure_available"] is False
     assert "error" in out
+    assert out["retrieval_status"] == "no_prediction_returned"
 
 
 async def test_get_protein_structure_prediction_raises(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A prediction-fetch exception is swallowed and reported as no structure."""
+    """A failed prediction request is reported as failed, not as no structure."""
     af = _fake_af(monkeypatch)
     af.get_prediction.side_effect = RuntimeError("boom")
     out = await get_protein_structure(StructureRetrievalInput(uniprot_id="P38398"))
     assert out["structure_available"] is False
+    assert out["retrieval_status"] == "request_failed"
+    assert out["error"].endswith("did not complete: RuntimeError: boom")
+    assert "No structure prediction returned" not in out["error"]
+
+
+async def test_get_protein_structure_not_found_is_no_prediction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """AlphaFold DB answers 404 for an accession it serves no model for."""
+    af = _fake_af(monkeypatch)
+    af.get_prediction.side_effect = UpstreamError("AlphaFold DB", 404, "Not Found")
+    out = await get_protein_structure(StructureRetrievalInput(uniprot_id="Q8WZ42"))
+    assert out["structure_available"] is False
+    assert out["retrieval_status"] == "no_prediction_returned"
+    assert out["error"].startswith("No structure prediction returned by the AlphaFold DB REST API")
 
 
 def test_gudhi_finite_bars_not_betti_numbers(monkeypatch: pytest.MonkeyPatch) -> None:

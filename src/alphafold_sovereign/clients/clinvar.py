@@ -103,6 +103,16 @@ def _query_reference(prefix: str) -> tuple[str, str] | None:
     return (ref.group(1), ref.group(2) or "")
 
 
+def _trait_names(trait_set: Any) -> list[str]:
+    """Return the ``trait_name`` of each entry of an esummary ``trait_set``, in order."""
+    names: list[str] = []
+    for trait in trait_set if isinstance(trait_set, list) else []:
+        name = trait.get("trait_name") if isinstance(trait, dict) else None
+        if isinstance(name, str) and name:
+            names.append(name)
+    return names
+
+
 class ClinVarClient(BaseAsyncClient):
     """
     Async client for ClinVar variant interpretation data.
@@ -376,12 +386,10 @@ class ClinVarClient(BaseAsyncClient):
             "clinical_significance", {}
         ).get("review_status", "")
 
-        # Conditions
-        conditions: list[str] = []
-        for cond in raw.get("trait_set", []):
-            trait_name = cond.get("trait_name", "")
-            if trait_name:
-                conditions.append(trait_name)
+        # Conditions of the germline classification. Current esummary records
+        # nest the trait set under ``germline_classification``; a top-level
+        # ``trait_set`` is the earlier shape and remains the fallback.
+        conditions = _trait_names(germline.get("trait_set")) or _trait_names(raw.get("trait_set"))
 
         # Molecular consequence. ``variation_set`` may be absent OR present but
         # empty ([]); ``or [{}]`` covers both so the [0] index never raises.

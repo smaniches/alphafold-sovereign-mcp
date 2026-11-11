@@ -238,6 +238,29 @@ def test_pr_proof_job_is_required_by_the_all_green_gate() -> None:
     assert "needs.release-path-proof.result" in _run_blob(all_checks)
 
 
+# ── ci.yml: the documented [tda] extra is tested ─────────────────────────────────────────────
+
+
+def test_tda_extra_job_runs_the_suite_with_gudhi_from_the_lock() -> None:
+    """Without this job no CI run executes the GUDHI code path."""
+    blob = _run_blob(CI["jobs"]["test-tda"])
+    assert "uv sync --python 3.12 --extra dev --extra tda --locked" in blob
+    assert "import gudhi" in blob
+    assert "pytest tests/" in blob
+    assert "--cov-fail-under=100" in blob
+
+
+def test_tda_extra_job_is_required_by_the_all_green_gate() -> None:
+    all_checks = CI["jobs"]["all-checks"]
+    assert "test-tda" in all_checks["needs"]
+    assert "needs.test-tda.result" in _run_blob(all_checks)
+
+
+def test_tda_extra_job_holds_no_elevated_permissions() -> None:
+    assert "permissions" not in CI["jobs"]["test-tda"]
+    assert CI["permissions"] == {"contents": "read"}
+
+
 def test_pr_proof_and_release_execute_the_same_script_chain() -> None:
     # Parity guard: the pre-merge proof must not drift from the release path.
     proof_blob = _run_blob(CI["jobs"]["release-path-proof"])

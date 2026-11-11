@@ -15,9 +15,11 @@ import respx
 from alphafold_sovereign.clients._base import UpstreamError
 from alphafold_sovereign.clients.alphafold import (
     AlphaFoldClient,
+    _afdb_version_label,
     _parse_alphamissense_csv,
     _prediction_model_id,
     _prediction_sequence,
+    _prediction_version,
     _validate_af_file_url,
 )
 
@@ -43,6 +45,46 @@ def test_prediction_metadata_legacy_fallback() -> None:
     assert _prediction_sequence(metadata) == "MKTV"
     assert _prediction_model_id({}) == ""
     assert _prediction_sequence({}) == ""
+
+
+# ---------------------------------------------------------------------------
+# AF-10: the model version is read from the record, never assumed
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("record", "expected"),
+    [
+        ({"latestVersion": 6}, 6),
+        ({"latestVersion": 4}, 4),
+        ({}, None),
+        ({"latestVersion": None}, None),
+        ({"latestVersion": "6"}, None),  # only the integer AlphaFold DB sends is accepted
+        ({"latestVersion": True}, None),
+        ({"latestVersion": 0}, None),
+        ({"latestVersion": -1}, None),
+        ({"latestVersion": 6.0}, None),
+    ],
+)
+def test_prediction_version_reads_only_a_positive_integer(
+    record: dict[str, object], expected: int | None
+) -> None:
+    assert _prediction_version(record) == expected
+
+
+@pytest.mark.parametrize(
+    ("versions", "expected"),
+    [
+        ([6], "v6"),
+        ([6, 6], "v6"),
+        ([6, 4], "v4/v6"),
+        ([None], "version-unreported"),
+        ([6, None], "v6/version-unreported"),
+        ([], "not-retrieved"),
+    ],
+)
+def test_afdb_version_label(versions: list[int | None], expected: str) -> None:
+    assert _afdb_version_label(versions) == expected
 
 
 # ---------------------------------------------------------------------------
@@ -199,6 +241,39 @@ async def test_get_pdb_bytes_when_pdb_url_missing(respx_mock: respx.MockRouter) 
     async with AlphaFoldClient() as client:
         body = await client.get_pdb_bytes("NONE")
     assert body == b""
+
+
+async def test_get_pdb_model_returns_the_record_with_its_file(
+    respx_mock: respx.MockRouter,
+) -> None:
+    """AF-10: one metadata request and one file request, returned together."""
+    record = {
+        "uniprotAccession": "P04637",
+        "modelEntityId": "AF-P04637-F1",
+        "latestVersion": 6,
+        "pdbUrl": "https://alphafold.ebi.ac.uk/files/AF-P04637-F1-model_v6.pdb",
+    }
+    respx_mock.get("https://alphafold.ebi.ac.uk/api/prediction/P04637").mock(
+        return_value=httpx.Response(200, json=[record]),
+    )
+    respx_mock.get("https://alphafold.ebi.ac.uk/files/AF-P04637-F1-model_v6.pdb").mock(
+        return_value=httpx.Response(200, content=b"ATOM 1 N MET A 1"),
+    )
+    async with AlphaFoldClient() as client:
+        returned, body = await client.get_pdb_model("P04637")
+    assert returned == record
+    assert body == b"ATOM 1 N MET A 1"
+    assert _prediction_version(returned) == 6
+    assert len(respx_mock.calls) == 2
+
+
+async def test_get_pdb_model_without_a_model(respx_mock: respx.MockRouter) -> None:
+    respx_mock.get("https://alphafold.ebi.ac.uk/api/prediction/P04637").mock(
+        return_value=httpx.Response(200, json=[]),
+    )
+    async with AlphaFoldClient() as client:
+        assert await client.get_pdb_model("P04637") == ({}, b"")
+    assert len(respx_mock.calls) == 1  # no file request without an advertised URL
 
 
 # ---------------------------------------------------------------------------

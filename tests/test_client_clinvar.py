@@ -4,6 +4,10 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+from typing import Any
+
 import httpx
 import pytest
 import respx
@@ -12,8 +16,11 @@ from alphafold_sovereign.clients.clinvar import (
     ClinVarClient,
     _canonical_change,
     _parse_classification,
+    _trait_names,
 )
 from alphafold_sovereign.domain.disease import PathogenicityClass
+
+_FIXTURES = Path(__file__).parent / "fixtures"
 
 # ---------------------------------------------------------------------------
 # _parse_classification
@@ -348,6 +355,127 @@ async def test_parse_summary_skips_non_dict_payload(
         rows = await client.search_by_hgvs("BRCA1:c.1A>T")
     assert len(rows) == 1
     assert rows[0]["variation_id"] == "1"
+
+
+# ---------------------------------------------------------------------------
+# AF-6: conditions are read from the germline classification's trait set
+# ---------------------------------------------------------------------------
+
+_GERMLINE_TRAIT = "Breast-ovarian cancer, familial, susceptibility to, 1"
+
+
+def _recorded_esummary() -> dict[str, Any]:
+    """The esummary response for VCV000017661 recorded on 2026-11-11."""
+    path = _FIXTURES / "clinvar_esummary_17661_20261111.json"
+    recorded: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))["response"]
+    return recorded
+
+
+def test_recorded_summary_lists_its_condition() -> None:
+    """A current record reports the condition its classification refers to."""
+    record = _recorded_esummary()["result"]["17661"]
+    # Fail-before: release 1.5.12 read only a top-level ``trait_set``, which a
+    # current record does not have, and so reported no condition at all.
+    assert "trait_set" not in record
+    assert [t["trait_name"] for t in record["germline_classification"]["trait_set"]] == [
+        _GERMLINE_TRAIT
+    ]
+
+    parsed = ClinVarClient._parse_summary(record)
+
+    assert parsed["conditions"] == [_GERMLINE_TRAIT]
+    assert parsed["variation_id"] == "17661"
+    assert parsed["name"] == "NM_007294.4(BRCA1):c.181T>G (p.Cys61Gly)"
+    assert parsed["gene_symbol"] == "BRCA1"
+    assert parsed["classification"] == PathogenicityClass.PATHOGENIC.value
+    assert parsed["review_status"] == "reviewed by expert panel"
+    assert parsed["last_evaluated"] == "2015/08/10 00:00"
+
+
+async def test_get_variant_returns_conditions_of_a_recorded_response(
+    respx_mock: respx.MockRouter,
+) -> None:
+    """The same record through the HTTP path the tools use."""
+    respx_mock.get(
+        "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi",
+    ).mock(return_value=httpx.Response(200, json=_recorded_esummary()))
+
+    async with ClinVarClient() as client:
+        variant = await client.get_variant("17661")
+
+    assert variant["conditions"] == [_GERMLINE_TRAIT]
+
+
+def test_germline_trait_set_takes_precedence_over_a_top_level_one() -> None:
+    parsed = ClinVarClient._parse_summary(
+        {
+            "uid": "1",
+            "germline_classification": {
+                "description": "Pathogenic",
+                "trait_set": [{"trait_name": "Germline condition"}, {"trait_name": "Second"}],
+            },
+            "trait_set": [{"trait_name": "Top-level condition"}],
+        }
+    )
+    assert parsed["conditions"] == ["Germline condition", "Second"]
+
+
+@pytest.mark.parametrize(
+    "germline",
+    [
+        {"description": "Pathogenic"},  # no trait_set key: the earlier record shape
+        {"description": "Pathogenic", "trait_set": []},
+        {"description": "Pathogenic", "trait_set": [{"trait_name": ""}]},
+        {"description": "Pathogenic", "trait_set": None},
+    ],
+)
+def test_top_level_trait_set_remains_the_fallback(germline: dict[str, Any]) -> None:
+    parsed = ClinVarClient._parse_summary(
+        {
+            "uid": "1",
+            "germline_classification": germline,
+            "trait_set": [{"trait_name": "Top-level condition"}],
+        }
+    )
+    assert parsed["conditions"] == ["Top-level condition"]
+
+
+def test_somatic_trait_sets_are_not_reported_as_conditions() -> None:
+    """The conditions belong to the classification the client reports, the germline one."""
+    parsed = ClinVarClient._parse_summary(
+        {
+            "uid": "1",
+            "germline_classification": {"description": "", "trait_set": []},
+            "oncogenicity_classification": {
+                "description": "Oncogenic",
+                "trait_set": [{"trait_name": "Somatic condition"}],
+            },
+            "clinical_impact_classification": {
+                "description": "Tier I - Strong",
+                "trait_set": [{"trait_name": "Another somatic condition"}],
+            },
+        }
+    )
+    assert parsed["conditions"] == []
+
+
+@pytest.mark.parametrize(
+    ("trait_set", "expected"),
+    [
+        (None, []),
+        ({"trait_name": "not a list"}, []),
+        ("Hereditary cancer", []),
+        (7, []),
+        ([], []),
+        (["a string entry", None, 3, ["nested"]], []),
+        ([{"trait_name": None}, {"trait_name": 5}, {"trait_name": ""}, {}], []),
+        ([{"trait_name": "A"}, "noise", {"trait_name": "B"}, {"other": "C"}], ["A", "B"]),
+        ([{"trait_name": "B"}, {"trait_name": "A"}, {"trait_name": "B"}], ["B", "A", "B"]),
+    ],
+)
+def test_trait_names_tolerates_malformed_trait_sets(trait_set: Any, expected: list[str]) -> None:
+    """Order is preserved and nothing but non-empty string names is returned."""
+    assert _trait_names(trait_set) == expected
 
 
 # ---------------------------------------------------------------------------

@@ -22,7 +22,7 @@ when a code change modifies a published contract; avoid duplicated claims.
 ## Safe development
 
 1. Inspect production modules and tests before modifying behavior.
-2. Keep the current 30 public MCP tools backwards compatible unless a
+2. Keep the current 29 public MCP tools backwards compatible unless a
    deliberately versioned protocol change is justified.
 3. Preserve meaningful identifier provenance: UniProt accession and
    isoform, model entity, source release/version, publication, and

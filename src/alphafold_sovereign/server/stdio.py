@@ -52,6 +52,9 @@ def run_stdio() -> None:
     ``ALPHAFOLD_ALLOW_HOSTS`` (comma-separated allowlist for sovereign
     air-gap deployments).  Logs server start at INFO so operators can
     correlate against upstream tool-invocation logs.
+
+    In offline mode FastMCP's own start-up update check is turned off
+    first, so the process starts without a name lookup or a connection.
     """
     offline = os.environ.get("ALPHAFOLD_OFFLINE", "").lower() in {"1", "true", "yes"}
     logger.info(
@@ -62,8 +65,27 @@ def run_stdio() -> None:
     )
     _seed_kg_at_startup()
     server = _build_server()
+    if offline:
+        _disable_framework_update_check()
     # FastMCP exposes ``.run()`` for synchronous stdio loop.
     server.run()  # type: ignore[attr-defined]
+
+
+def _disable_framework_update_check() -> None:
+    """Stop FastMCP from asking PyPI for its latest release at start-up.
+
+    FastMCP looks up its newest version on ``pypi.org`` while it prints the
+    start-up banner. That request does not pass through the upstream clients,
+    so the air gap cannot refuse it. Offline mode therefore overrides the
+    FastMCP setting, including an explicit ``FASTMCP_CHECK_FOR_UPDATES``.
+
+    FastMCP validates the assignment. A FastMCP release without this setting
+    raises here, so the server does not start offline with a request it cannot
+    rule out.
+    """
+    import fastmcp  # noqa: PLC0415
+
+    fastmcp.settings.check_for_updates = "off"
 
 
 def _seed_kg_at_startup() -> None:

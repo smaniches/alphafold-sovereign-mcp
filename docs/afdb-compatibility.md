@@ -87,6 +87,15 @@ the same schema, that every fragment is handled, or that a clinical
 interpretation is scientifically valid. This repository has no continuously
 executed live AlphaFold DB compatibility suite; see `STATUS.md`.
 
+## Model version reported in provenance
+
+Provenance footers name the AlphaFold DB model version of the record a
+result was computed from, read from that record's `latestVersion` field
+(for example `alphafold_db=v6`, or `v4/v6` when a comparison used models
+of both versions). `version-unreported` means a record carried no such
+field, and `not-retrieved` means no record was retrieved. The version is
+not assumed.
+
 ## Scientific interpretation boundary
 
 AlphaFold DB serves **predicted** structure models. Their atomic coordinates
@@ -157,15 +166,25 @@ The implementation accepts a PAE matrix only when it is a finite,
 nonnegative square numeric array. Where a selected model advertises a
 sequence, PAE dimensions must match its **model-local sequence length**.
 Invalid or missing PAE is reported with an explicit status rather than
-a fabricated mean error of zero. PAE positions and domain-candidate
-indices are local to the predicted model, not automatically UniProt or
-experimental PDB residue coordinates. The domain-boundary heuristic and
-the mean-pLDDT-based ordered-fraction proxy are not independently
-validated domain annotations or biophysical disorder measurements.
+a fabricated mean error of zero. PAE positions, including the
+`local_high_pae.positions` indices, are local to the predicted model, not
+automatically UniProt or experimental PDB residue coordinates. Those
+indices mark where near-diagonal PAE is locally elevated. They are not
+domain boundaries: the tool does not assess domains and reports its
+legacy `domain_boundaries` block as `NOT_ASSESSED` (`LIMITATIONS.md` L10).
+Mean pLDDT is likewise not a biophysical disorder measurement, and the
+ordered fraction is reported as not assessed.
 
 An empty AFDB REST API response must not be interpreted as definitive
 absence of a predicted model: the >2700-aa human-protein fragments are
 provided by the FTP proteome archive, not the usual web API.
+
+When no model is retrieved, the structure tools return
+`structure_available: false` and say why in `retrieval_status`.
+`no_prediction_returned` means the API answered without a model for the
+accession (HTTP 404 or no matching record). `request_failed` means the
+request was blocked by offline mode or failed, for example on a timeout
+or a server error; that is not evidence that no prediction exists.
 
 ## Modeled residues and intrinsic-disorder segments
 

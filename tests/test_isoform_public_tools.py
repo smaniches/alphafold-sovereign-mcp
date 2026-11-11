@@ -22,7 +22,7 @@ from alphafold_sovereign.tools import structure_intelligence as si
     [
         ("get_prediction", "get_protein_structure"),
         ("get_prediction", "_fetch_af_plddt"),
-        ("get_pdb_bytes", "_fetch_af_structure"),
+        ("get_pdb_model", "_fetch_af_structure"),
     ],
 )
 async def test_structural_tools_propagate_unavailable_isoform_verification(

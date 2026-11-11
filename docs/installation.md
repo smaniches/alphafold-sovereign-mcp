@@ -72,8 +72,13 @@ looks like.
 
 ## Offline / air-gap mode
 
-Set `ALPHAFOLD_OFFLINE=1` to refuse all outbound HTTP and serve only
-from the local SQLite cache:
+Set `ALPHAFOLD_OFFLINE=1` to refuse all outbound HTTP. The
+knowledge-graph tools still answer from the local SQLite store. Tools
+that query an upstream service have no local cache. Depending on the
+tool, the call fails with an error or returns a result that reports the
+affected lookups as failed or not assessed. The structure tools report
+the AlphaFold DB request as failed (`retrieval_status: "request_failed"`),
+which is not a statement that no model exists.
 
 ```bash
 ALPHAFOLD_OFFLINE=1 alphafold-sovereign-mcp

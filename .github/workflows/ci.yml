@@ -100,6 +100,36 @@ jobs:
         env:
           PYTHONPATH: src
 
+  # ── Optional [tda] extra ─────────────────────────────────────────────────────────────
+  # The matrix above installs no GUDHI, so it runs the topology tools only
+  # through their geometric fallback and skips tests/test_tda_gudhi.py. This
+  # job installs the documented `[tda]` extra from the lock and runs the same
+  # suite with the same coverage gate, so the persistent-homology path is
+  # executed on every change.
+  test-tda:
+    name: Tests with the [tda] extra (Python 3.12, GUDHI)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "latest"
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+      - name: Install dependencies with the tda extra from the lock
+        run: uv sync --python 3.12 --extra dev --extra tda --locked
+      - name: Verify GUDHI is installed
+        run: uv run python -c "import gudhi; print('gudhi', gudhi.__version__)"
+      - name: Run unit tests with GUDHI installed
+        run: |
+          uv run pytest tests/ -m "unit or not integration" \
+            --cov=src/alphafold_sovereign \
+            --cov-report=term-missing \
+            --cov-fail-under=100 \
+            -v --tb=short
+        env:
+          PYTHONPATH: src
+
   # ── Security scanning ───────────────────────────────────────────────────────────────
   security:
     name: Security Scan
@@ -359,6 +389,7 @@ jobs:
         lint,
         typecheck,
         test,
+        test-tda,
         security,
         mcp-validate,
         build,
@@ -376,6 +407,7 @@ jobs:
           if [[ "${{ needs.lint.result }}" != "success" ]] || \
              [[ "${{ needs.typecheck.result }}" != "success" ]] || \
              [[ "${{ needs.test.result }}" != "success" ]] || \
+             [[ "${{ needs.test-tda.result }}" != "success" ]] || \
              [[ "${{ needs.security.result }}" != "success" ]] || \
              [[ "${{ needs.mcp-validate.result }}" != "success" ]] || \
              [[ "${{ needs.version-coherence.result }}" != "success" ]] || \

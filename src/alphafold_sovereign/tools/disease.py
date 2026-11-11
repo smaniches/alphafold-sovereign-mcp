@@ -533,7 +533,11 @@ async def get_gene_phenotype_profile(params: GenePhenotypeInput) -> str:
     Returns:
     - HPO phenotypes linked to the gene (from HPO association database)
     - gnomAD LOEUF / pLI constraint scores
-    - Interpretation of constraint (haploinsufficient / tolerant / moderate)
+    - A one-line reading of the LOEUF band (highly constrained, moderately
+      constrained, or not constrained by this metric). It reports depletion
+      of loss-of-function variants in gnomAD; it does not establish
+      haploinsufficiency, and an unconstrained gene can still carry
+      pathogenic loss-of-function variants
 
     Example: ``get_gene_phenotype_profile(gene_symbol='SCN1A')``
     """
@@ -706,7 +710,7 @@ async def get_target_diseases(params: TargetDiseaseInput) -> str:
         "title": "Common Disease Target Profile",
         "readOnlyHint": True,
         "idempotentHint": True,
-        "openWorldHint": False,
+        "openWorldHint": True,
     }
 )
 async def get_common_disease_targets(params: CommonDiseaseInput) -> str:
@@ -719,11 +723,16 @@ async def get_common_disease_targets(params: CommonDiseaseInput) -> str:
     ``get_disease_targets`` instead — this tool is its category-level,
     multi-disease counterpart and does not accept a raw MONDO ID.
 
-    Queries Open Targets live. Returns a JSON string with the ``category``, the
-    number of diseases profiled, and a ``profile`` object mapping each disease to
-    its MONDO ID and top targets (per-disease errors are reported inline, not
-    raised). Returns a JSON error object listing the valid values when the category
-    — or a ``disease_name`` filter within it — is not recognised.
+    Queries Open Targets live. Returns a JSON string with the ``category`` and a
+    ``profile`` object mapping each disease to its MONDO ID and top targets. A
+    lookup that fails is reported inline as that disease's ``error``, not raised.
+    ``status`` summarises the lookups: ``success`` when every one answered,
+    ``partial`` when some failed, ``error`` when all failed and no targets were
+    retrieved. ``diseases_requested``, ``diseases_profiled`` (lookups that
+    succeeded) and ``diseases_failed`` give the counts. A failed lookup is not
+    evidence that a disease has no associated targets. Returns a JSON error
+    object listing the valid values when the category — or a ``disease_name``
+    filter within it — is not recognised.
 
     Input fields:
         params.category: Disease area to profile. One of: cardiovascular, oncology,
@@ -769,8 +778,10 @@ async def get_common_disease_targets(params: CommonDiseaseInput) -> str:
         results = await asyncio.gather(*tasks.values(), return_exceptions=True)
 
     profile: dict[str, Any] = {}
+    failed = 0
     for (disease_name, mondo_id), result in zip(disease_map.items(), results):
         if isinstance(result, Exception):
+            failed += 1
             profile[disease_name] = {"error": str(result), "mondo_id": mondo_id}
         else:
             profile[disease_name] = {
@@ -778,20 +789,44 @@ async def get_common_disease_targets(params: CommonDiseaseInput) -> str:
                 "top_targets": [t.to_dict() for t in result],  # type: ignore[union-attr]
             }
 
-    return json.dumps(
-        {
-            "status": "success",
-            "category": cat,
-            "diseases_profiled": len(profile),
-            "profile": profile,
-        },
-        indent=2,
-    ) + _provenance(open_targets="OT-platform-live-release-unverified")
+    # The status follows the lookups: "success" with no lookup answered would
+    # present a retrieval failure as a result.
+    requested = len(profile)
+    if not failed:
+        status = "success"
+    elif failed < requested:
+        status = "partial"
+    else:
+        status = "error"
+    payload: dict[str, Any] = {
+        "status": status,
+        "category": cat,
+        "diseases_requested": requested,
+        "diseases_profiled": requested - failed,
+        "diseases_failed": failed,
+        "profile": profile,
+    }
+    if status == "error":
+        payload["error"] = (
+            f"All {requested} Open Targets lookups failed, so no targets were retrieved. "
+            "This is a retrieval failure, not evidence that these diseases have no "
+            "associated targets. Each profile entry gives its reason."
+        )
+
+    return json.dumps(payload, indent=2) + _provenance(
+        open_targets="OT-platform-live-release-unverified"
+    )
 
 
 # ---------------------------------------------------------------------------
 # Tool 8: Variant 3-D triage
 # ---------------------------------------------------------------------------
+
+# ``data_sources_status`` values of an attempted lookup that returned nothing
+# usable: it raised, or its response was not a JSON object. Every other value
+# of an attempted lookup is an answer, including ``no_data`` and
+# ``candidate_only``.
+_LOOKUP_FAILED = frozenset({"failed", "invalid_response"})
 
 
 @mcp.tool(
@@ -829,6 +864,18 @@ async def triage_variant_3d(params: VariantTriageInput) -> str:
     pathogenicity section; they are not converted into a local risk tier.
     Gene-relative candidates remain explicitly unverified. AlphaMissense
     is not wired into this particular tool. The report is not a calibrated risk estimate.
+
+    ``status`` summarises the evidence lookups that were attempted:
+    ``success`` when none failed, ``partial`` when some failed and some
+    answered, ``error`` when all failed and no source evidence was retrieved.
+    ``data_sources_status`` gives each source's state, and ``lookup_summary``
+    groups the sources into ``attempted``, ``answered``, ``failed`` and
+    ``skipped`` with a reason for each failure. A lookup that finds nothing
+    (``no_data``) is an answer. gnomAD is skipped, and counts neither way,
+    when ``include_gnomad`` is false or a transcript's gene could not be
+    verified. A failed lookup is not evidence about the variant: the fields
+    it feeds keep their defaults (``clinvar_classification`` "Not provided",
+    empty ``population_genetics``).
 
     Example: ``triage_variant_3d(hgvs='BRCA1:c.181T>G')``
     """
@@ -931,9 +978,29 @@ async def triage_variant_3d(params: VariantTriageInput) -> str:
                 return "no_data"
             return "ok"
 
+        def _failure_reason(source: str) -> str:
+            value = results[source]
+            if isinstance(value, BaseException):
+                return f"{type(value).__name__}: {value}"
+            return f"expected a JSON object, received {type(value).__name__}"
+
         clinvar_data: dict[str, Any] = _ok(results.get("clinvar"))
         gnomad_data: dict[str, Any] = _ok(results.get("gnomad"))
         disease_data: dict[str, Any] = _ok(results.get("disease"))
+
+        # The status follows the lookups: "success" with no lookup answered
+        # would present a retrieval failure as a result. A skipped source was
+        # not attempted and counts neither way. ClinVar is always attempted.
+        source_status = {source: _source_status(source) for source in ("clinvar", "gnomad")}
+        skipped = [s for s, state in source_status.items() if state.startswith("skipped")]
+        failed = [s for s, state in source_status.items() if state in _LOOKUP_FAILED]
+        answered = [s for s in source_status if s not in skipped and s not in failed]
+        if not failed:
+            status = "success"
+        elif answered:
+            status = "partial"
+        else:
+            status = "error"
 
         # -- Step 3: Pathogenicity tier ---------------------------------
         clinvar_cls_raw = clinvar_data.get("classification", "Not provided")
@@ -942,7 +1009,7 @@ async def triage_variant_3d(params: VariantTriageInput) -> str:
         tier = _compute_tier(clinvar_cls, am_score)
 
         report: dict[str, Any] = {
-            "status": "success",
+            "status": status,
             "hgvs": hgvs,
             "gene_symbol": gene_symbol,
             "pathogenicity_tier": tier,
@@ -964,11 +1031,22 @@ async def triage_variant_3d(params: VariantTriageInput) -> str:
             "clinvar_unverified_candidate": clinvar_data.get("clinvar_unverified_candidate"),
             "disease_context": disease_data,
             "sources_queried": sources,
-            "data_sources_status": {
-                "clinvar": _source_status("clinvar"),
-                "gnomad": _source_status("gnomad"),
+            "data_sources_status": source_status,
+            "lookup_summary": {
+                "attempted": [s for s in source_status if s not in skipped],
+                "answered": answered,
+                "failed": failed,
+                "skipped": skipped,
+                "failure_reasons": {s: _failure_reason(s) for s in failed},
             },
         }
+        if status == "error":
+            report["error"] = (
+                f"Every attempted evidence lookup failed ({', '.join(failed)}), so no "
+                "source evidence was retrieved. This is a retrieval failure, not evidence "
+                "about the variant: the pathogenicity and population fields hold their "
+                "defaults. lookup_summary.failure_reasons gives each reason."
+            )
 
         # Structural context note (full integration in Wave 3 when the
         # existing alphafold_mcp tools are migrated to the new module layout)
