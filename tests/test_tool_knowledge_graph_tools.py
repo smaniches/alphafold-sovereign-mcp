@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -150,6 +151,29 @@ async def test_export_research_dataset_specific(kg_db_path: Path) -> None:
         await kg.store_variant(hgvs="X:c.1T>G", gene_symbol="X", clinical_tier="HIGH")
     out = await export_research_dataset(ExportInput(tables=["variants"]))
     assert len(out["data"]["variants"]) == 1
+
+
+async def test_export_tables_description_matches_the_tables_the_tool_accepts(
+    kg_db_path: Path,
+) -> None:
+    """A client reads the parameter description; release 1.5.12 named six of eleven tables."""
+    description = ExportInput.model_fields["tables"].description
+    assert description is not None
+    listed = re.fullmatch(
+        r"Tables to export\. Leave empty for the default tables: (?P<default>[a-z_, ]+)\. "
+        r"Also accepted: (?P<other>[a-z_, ]+)\. Any other name is rejected\.",
+        description,
+    )
+    assert listed is not None
+    default = listed["default"].split(", ")
+    other = listed["other"].split(", ")
+
+    assert sorted(default + other) == sorted(kg_mod._ALLOWED_TABLES)
+    assert (await export_research_dataset(ExportInput()))["tables_exported"] == default
+    everything = await export_research_dataset(ExportInput(tables=default + other))
+    assert everything["tables_exported"] == default + other
+    with pytest.raises(ValueError, match="Unknown table 'sqlite_master'"):
+        await export_research_dataset(ExportInput(tables=["sqlite_master"]))
 
 
 # ---------------------------------------------------------------------------

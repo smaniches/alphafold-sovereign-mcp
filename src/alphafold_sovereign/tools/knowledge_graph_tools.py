@@ -90,8 +90,10 @@ class ExportInput(BaseModel):
     tables: list[str] = Field(
         default_factory=list,
         description=(
-            "Tables to export. Leave empty for all entity tables. "
-            "Options: proteins, variants, diseases, drugs, protein_disease, protein_drug."
+            "Tables to export. Leave empty for the default tables: proteins, variants, "
+            "diseases, drugs, protein_disease, protein_drug. Also accepted: genes, "
+            "phenotypes, variant_disease, gene_phenotype, tool_invocations. "
+            "Any other name is rejected."
         ),
     )
     limit_per_table: int = Field(
@@ -265,7 +267,7 @@ async def export_research_dataset(
 ) -> dict[str, Any]:
     """Export the stored knowledge-graph data for downstream analysis.
 
-    Returns all stored entities as JSON-serialisable dicts, suitable for:
+    Returns the selected tables as JSON-serialisable dicts, suitable for:
     - Loading into pandas DataFrames for ML feature engineering
     - Importing into R or Julia for statistical analysis
     - Feeding into downstream bioinformatics pipelines
@@ -278,7 +280,8 @@ async def export_research_dataset(
         high_tier = df[df["clinical_tier"] == "HIGH"]
 
     Input fields:
-        params.tables: Tables to export (empty = all entity tables).
+        params.tables: Tables to export (empty = the default tables; the field
+            description lists them and every other accepted name).
         params.limit_per_table: Maximum rows per table.
     """
     async with get_knowledge_graph() as kg:

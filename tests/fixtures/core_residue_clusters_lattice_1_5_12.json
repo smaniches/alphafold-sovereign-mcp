@@ -1,0 +1,385 @@
+{
+  "meta": {
+    "generated_with": "alphafold-sovereign-mcp 1.5.12 as published on PyPI: tools.structure_intelligence._geometric_pocket_detection(min_residues=4), _pocket_druggability_index, _pocket_druggability_components and _pocket_druggability_label",
+    "generated_on": "2026-11-11",
+    "recorded_on": "Python 3.12.3, numpy 2.5.4, Linux x86_64",
+    "interpreter_note": "druggability_index is round(sum(sub-scores), 1). The sub-scores of pocket 8 (12.5, 18.55, 19.625, 10.275) add up to exactly 60.95, a rounding boundary: Python 3.12 and later, whose float sum is compensated, give 61.0 as recorded here, and Python 3.11 gives 60.9. No other recorded number depends on the interpreter.",
+    "input": "Synthetic. A 6x6x6 cubic lattice of C-alpha positions with 4 Angstrom spacing (x-major order): a solid block that contains no cavity. Residue i (1-based) has pLDDT 60 + ((i - 1) mod 40) and residue name ALA, GLY, LEU or SER by (i - 1) mod 4.",
+    "purpose": "Pins the cluster measurements and scores that the correction following 1.5.12 leaves unchanged, and records the labels (EXCELLENT, GOOD, MODERATE) that 1.5.12 assigned to the clusters of a structure without any cavity."
+  },
+  "clusters": [
+    {
+      "pocket_id": 1,
+      "n_residues": 13,
+      "residue_numbers": [
+        15,
+        16,
+        21,
+        22,
+        44,
+        45,
+        46,
+        50,
+        51,
+        52,
+        56,
+        57,
+        58
+      ],
+      "residue_names": [
+        "ALA",
+        "GLY",
+        "LEU",
+        "SER"
+      ],
+      "mean_plddt": 72.31,
+      "radius_of_gyration_angstrom": 4.73,
+      "centroid_offset_angstrom": 7.49,
+      "estimated_volume_angstrom3": 442.4,
+      "druggability_index": 76.1,
+      "druggability_components": {
+        "residue_count": 25.0,
+        "radius_of_gyration": 23.65,
+        "mean_plddt": 18.08,
+        "centroid_offset": 9.36
+      },
+      "druggability_label": "EXCELLENT"
+    },
+    {
+      "pocket_id": 2,
+      "n_residues": 8,
+      "residue_numbers": [
+        47,
+        53,
+        76,
+        82,
+        83,
+        88,
+        89,
+        90
+      ],
+      "residue_names": [
+        "ALA",
+        "GLY",
+        "LEU",
+        "SER"
+      ],
+      "mean_plddt": 70.0,
+      "radius_of_gyration_angstrom": 4.21,
+      "centroid_offset_angstrom": 7.37,
+      "estimated_volume_angstrom3": 313.2,
+      "druggability_index": 64.4,
+      "druggability_components": {
+        "residue_count": 16.67,
+        "radius_of_gyration": 21.05,
+        "mean_plddt": 17.5,
+        "centroid_offset": 9.21
+      },
+      "druggability_label": "GOOD"
+    },
+    {
+      "pocket_id": 3,
+      "n_residues": 8,
+      "residue_numbers": [
+        59,
+        64,
+        65,
+        94,
+        95,
+        96,
+        100,
+        101
+      ],
+      "residue_names": [
+        "ALA",
+        "GLY",
+        "LEU",
+        "SER"
+      ],
+      "mean_plddt": 78.25,
+      "radius_of_gyration_angstrom": 3.84,
+      "centroid_offset_angstrom": 7.3,
+      "estimated_volume_angstrom3": 237.3,
+      "druggability_index": 64.6,
+      "druggability_components": {
+        "residue_count": 16.67,
+        "radius_of_gyration": 19.2,
+        "mean_plddt": 19.56,
+        "centroid_offset": 9.12
+      },
+      "druggability_label": "GOOD"
+    },
+    {
+      "pocket_id": 4,
+      "n_residues": 8,
+      "residue_numbers": [
+        62,
+        63,
+        91,
+        92,
+        93,
+        98,
+        99,
+        105
+      ],
+      "residue_names": [
+        "ALA",
+        "GLY",
+        "LEU",
+        "SER"
+      ],
+      "mean_plddt": 76.88,
+      "radius_of_gyration_angstrom": 4.21,
+      "centroid_offset_angstrom": 7.37,
+      "estimated_volume_angstrom3": 313.2,
+      "druggability_index": 66.1,
+      "druggability_components": {
+        "residue_count": 16.67,
+        "radius_of_gyration": 21.05,
+        "mean_plddt": 19.22,
+        "centroid_offset": 9.21
+      },
+      "druggability_label": "GOOD"
+    },
+    {
+      "pocket_id": 5,
+      "n_residues": 8,
+      "residue_numbers": [
+        75,
+        80,
+        81,
+        111,
+        112,
+        116,
+        117,
+        118
+      ],
+      "residue_names": [
+        "ALA",
+        "GLY",
+        "LEU",
+        "SER"
+      ],
+      "mean_plddt": 90.25,
+      "radius_of_gyration_angstrom": 3.94,
+      "centroid_offset_angstrom": 7.78,
+      "estimated_volume_angstrom3": 255.6,
+      "druggability_index": 68.7,
+      "druggability_components": {
+        "residue_count": 16.67,
+        "radius_of_gyration": 19.7,
+        "mean_plddt": 22.56,
+        "centroid_offset": 9.72
+      },
+      "druggability_label": "GOOD"
+    },
+    {
+      "pocket_id": 6,
+      "n_residues": 6,
+      "residue_numbers": [
+        85,
+        86,
+        121,
+        122,
+        127,
+        128
+      ],
+      "residue_names": [
+        "ALA",
+        "GLY",
+        "LEU",
+        "SER"
+      ],
+      "mean_plddt": 63.83,
+      "radius_of_gyration_angstrom": 3.33,
+      "centroid_offset_angstrom": 8.06,
+      "estimated_volume_angstrom3": 155.1,
+      "druggability_index": 55.2,
+      "druggability_components": {
+        "residue_count": 12.5,
+        "radius_of_gyration": 16.65,
+        "mean_plddt": 15.96,
+        "centroid_offset": 10.08
+      },
+      "druggability_label": "GOOD"
+    },
+    {
+      "pocket_id": 7,
+      "n_residues": 5,
+      "residue_numbers": [
+        87,
+        123,
+        124,
+        129,
+        130
+      ],
+      "residue_names": [
+        "ALA",
+        "GLY",
+        "LEU",
+        "SER"
+      ],
+      "mean_plddt": 65.6,
+      "radius_of_gyration_angstrom": 3.2,
+      "centroid_offset_angstrom": 1.33,
+      "estimated_volume_angstrom3": 137.3,
+      "druggability_index": 44.5,
+      "druggability_components": {
+        "residue_count": 10.42,
+        "radius_of_gyration": 16.0,
+        "mean_plddt": 16.4,
+        "centroid_offset": 1.66
+      },
+      "druggability_label": "MODERATE"
+    },
+    {
+      "pocket_id": 8,
+      "n_residues": 6,
+      "residue_numbers": [
+        106,
+        135,
+        136,
+        137,
+        141,
+        142
+      ],
+      "residue_names": [
+        "ALA",
+        "GLY",
+        "LEU",
+        "SER"
+      ],
+      "mean_plddt": 78.5,
+      "radius_of_gyration_angstrom": 3.71,
+      "centroid_offset_angstrom": 8.22,
+      "estimated_volume_angstrom3": 214.2,
+      "druggability_index": 61.0,
+      "druggability_components": {
+        "residue_count": 12.5,
+        "radius_of_gyration": 18.55,
+        "mean_plddt": 19.62,
+        "centroid_offset": 10.28
+      },
+      "druggability_label": "GOOD"
+    },
+    {
+      "pocket_id": 9,
+      "n_residues": 7,
+      "residue_numbers": [
+        119,
+        125,
+        126,
+        154,
+        155,
+        160,
+        161
+      ],
+      "residue_names": [
+        "ALA",
+        "GLY",
+        "LEU",
+        "SER"
+      ],
+      "mean_plddt": 81.86,
+      "radius_of_gyration_angstrom": 3.79,
+      "centroid_offset_angstrom": 7.85,
+      "estimated_volume_angstrom3": 228.1,
+      "druggability_index": 63.8,
+      "druggability_components": {
+        "residue_count": 14.58,
+        "radius_of_gyration": 18.95,
+        "mean_plddt": 20.46,
+        "centroid_offset": 9.81
+      },
+      "druggability_label": "GOOD"
+    },
+    {
+      "pocket_id": 10,
+      "n_residues": 6,
+      "residue_numbers": [
+        131,
+        132,
+        166,
+        167,
+        172,
+        173
+      ],
+      "residue_names": [
+        "ALA",
+        "GLY",
+        "LEU",
+        "SER"
+      ],
+      "mean_plddt": 69.17,
+      "radius_of_gyration_angstrom": 3.83,
+      "centroid_offset_angstrom": 7.83,
+      "estimated_volume_angstrom3": 235.3,
+      "druggability_index": 58.7,
+      "druggability_components": {
+        "residue_count": 12.5,
+        "radius_of_gyration": 19.15,
+        "mean_plddt": 17.29,
+        "centroid_offset": 9.79
+      },
+      "druggability_label": "GOOD"
+    },
+    {
+      "pocket_id": 11,
+      "n_residues": 5,
+      "residue_numbers": [
+        134,
+        164,
+        165,
+        170,
+        171
+      ],
+      "residue_names": [
+        "ALA",
+        "GLY",
+        "LEU",
+        "SER"
+      ],
+      "mean_plddt": 67.8,
+      "radius_of_gyration_angstrom": 3.2,
+      "centroid_offset_angstrom": 8.11,
+      "estimated_volume_angstrom3": 137.3,
+      "druggability_index": 53.5,
+      "druggability_components": {
+        "residue_count": 10.42,
+        "radius_of_gyration": 16.0,
+        "mean_plddt": 16.95,
+        "centroid_offset": 10.14
+      },
+      "druggability_label": "MODERATE"
+    },
+    {
+      "pocket_id": 12,
+      "n_residues": 5,
+      "residue_numbers": [
+        152,
+        153,
+        158,
+        159,
+        195
+      ],
+      "residue_names": [
+        "ALA",
+        "GLY",
+        "LEU",
+        "SER"
+      ],
+      "mean_plddt": 94.4,
+      "radius_of_gyration_angstrom": 3.2,
+      "centroid_offset_angstrom": 8.49,
+      "estimated_volume_angstrom3": 137.3,
+      "druggability_index": 60.6,
+      "druggability_components": {
+        "residue_count": 10.42,
+        "radius_of_gyration": 16.0,
+        "mean_plddt": 23.6,
+        "centroid_offset": 10.61
+      },
+      "druggability_label": "GOOD"
+    }
+  ]
+}

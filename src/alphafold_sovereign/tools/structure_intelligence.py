@@ -5,28 +5,42 @@
 These tools take raw AlphaFold structures (PDB text and PAE arrays from
 AlphaFold DB) and derive a small set of summaries from them:
 
-* pLDDT / PAE confidence-and-domain maps,
-* a 64-component exploratory Cα feature vector. Optional GUDHI computes
-  H₀/H₁ at the final 15-Å Vietoris-Rips filtration step; H₂ is not
-  computed. Without GUDHI, the fallback reports 4-Å graph components
-  and geometry, not persistent homology,
+* pLDDT and PAE confidence summaries, including the positions where
+  near-diagonal PAE is locally elevated. Those positions are not domain
+  boundaries, and no domain count is derived from them,
+* a 64-slot exploratory Cα feature vector that holds at most 16 summary
+  statistics. Optional GUDHI computes H₀/H₁ at the final 15-Å
+  Vietoris-Rips filtration step and contributes eight bar-lifetime
+  statistics for each; H₂ is not computed and the other 48 slots are
+  zero. With GUDHI, models longer than 500 residues are reduced to 500
+  evenly spaced Cα atoms first. Without GUDHI, the fallback uses every
+  residue: it fills eight slots with distance and contact statistics,
+  one of them the 4-Å contact-graph component count, and computes no
+  persistent homology,
 * a pairwise distance matrix between TDA fingerprints (the
   implementation is an L2 distance on length-normalised fingerprint
   vectors — it is **not** an optimal-transport Wasserstein distance;
   see ``_fingerprint_distance``),
-* a geometric pocket-detection heuristic, and
+* geometric clusters of core residues with an uncalibrated geometry
+  score. This is not a validated binding-pocket detector, and no
+  druggability class is assigned, and
 * an intrinsic-disorder-region map.
 
 All tools are read-only. Tools that require outbound HTTP fail closed when
-``ALPHAFOLD_OFFLINE=1`` (they raise ``AirGapError``); there is no local
-structure cache.
+``ALPHAFOLD_OFFLINE=1``: the client raises ``AirGapError`` before a socket
+is opened. The five tools that take one accession then return
+``retrieval_status: "request_failed"``, not a missing model.
+``compare_proteins_topologically`` lists each accession under
+``proteins_failed`` with the reason instead, and
+``find_evolutionary_structural_shifts`` queries Ensembl first and lets that
+client's ``AirGapError`` propagate. There is no local structure cache.
 
 Tool inventory:
-  1. analyze_structural_confidence       — pLDDT + PAE domain map
+  1. analyze_structural_confidence       — pLDDT + PAE confidence summary
   2. compute_topology_fingerprint        — Exploratory Cα features; H₀/H₁ if GUDHI
   3. compare_proteins_topologically      — Pairwise fingerprint-distance matrix
   4. find_evolutionary_structural_shifts — Cross-species TDA fingerprint compare
-  5. score_binding_pocket_geometry       — Heuristic pocket detection + score
+  5. score_binding_pocket_geometry       — Core-residue clusters + geometry score
   6. detect_intrinsically_disordered     — IDR region map
   7. get_protein_structure               — Retrieve AF model metadata, URLs, coordinates
 """
@@ -36,19 +50,22 @@ from __future__ import annotations
 import asyncio
 import datetime
 import math
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import numpy as np
 import structlog
 from pydantic import BaseModel, ConfigDict, Field
 
 from alphafold_sovereign import __version__
+from alphafold_sovereign.clients._base import UpstreamError
 from alphafold_sovereign.clients._isoform import UniProtVerificationError
 from alphafold_sovereign.clients.alphafold import (
     AlphaFoldClient,
     AlphaFoldPredictionSchemaError,
+    _afdb_version_label,
     _prediction_model_id,
     _prediction_sequence,
+    _prediction_version,
 )
 from alphafold_sovereign.clients.ensembl import EnsemblClient
 from alphafold_sovereign.domain.druggability import validated_plddt
@@ -113,14 +130,23 @@ class BindingPocketInput(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
     uniprot_id: str = Field(
         ...,
-        description="UniProt accession for binding-pocket geometry analysis.",
+        description=(
+            "UniProt accession of the protein whose AlphaFold DB model is clustered, "
+            "e.g. 'P24941' (CDK2). Six or ten characters; an isoform suffix such as "
+            "'P04637-2' selects that isoform's model when AlphaFold DB provides one."
+        ),
         pattern=UNIPROT_ISOFORM_PATTERN,
     )
     min_pocket_residues: int = Field(
         default=4,
         ge=3,
         le=20,
-        description="Minimum number of residues to define a pocket.",
+        description=(
+            "Minimum cluster size: a core residue seeds a cluster only when at least this "
+            "many unassigned core Cα atoms, itself included, lie within 8 Å of it. Higher "
+            "values suppress small clusters. The name is historical; clusters are not "
+            "validated pockets."
+        ),
     )
 
 
@@ -154,30 +180,96 @@ def _alphafold() -> AlphaFoldClient:
     return cast("AlphaFoldClient", _CLIENTS["alphafold"])
 
 
-async def _fetch_af_structure(uniprot_id: str) -> dict[str, Any] | None:
+class _RequestFailed:
+    """An AlphaFold DB request that did not complete.
+
+    Distinct from ``None``, which means AlphaFold DB answered and returned no
+    model. An instance is falsy, so code that only needs a model treats the
+    two alike, while a response can still say which one happened: a blocked
+    or failed request is not evidence that no prediction exists.
+    """
+
+    __slots__ = ("reason",)
+
+    def __init__(self, reason: str) -> None:
+        self.reason = reason
+
+    def __bool__(self) -> Literal[False]:
+        return False
+
+
+_HTTP_NOT_FOUND = 404
+
+
+def _unretrieved(exc: Exception) -> _RequestFailed | None:
+    """Classify an error raised by an AlphaFold DB prediction-metadata request.
+
+    HTTP 404 is how the prediction endpoint answers for an accession it
+    serves no model for, so it maps to ``None``. Anything else (offline mode,
+    an open circuit breaker, a timeout, a server error, an unreadable body) is
+    a request that failed, and says nothing about whether a model exists.
+
+    Only the metadata request is classified here. A 404 for a file that a
+    returned record advertises is not this answer; ``_fetch_af_coordinates``
+    reports every failure of that request as a request that failed.
+    """
+    if isinstance(exc, UpstreamError) and exc.status == _HTTP_NOT_FOUND:
+        return None
+    return _RequestFailed(f"{type(exc).__name__}: {exc}")
+
+
+async def _fetch_af_structure(uniprot_id: str) -> dict[str, Any] | _RequestFailed | None:
     """Fetch AlphaFold structure coordinates for a UniProt accession.
 
-    Routes through AlphaFoldClient, so the request shares the client's
+    Routes through AlphaFoldClient, so the requests share the client's
     rate limiter, retry policy, circuit breaker, air-gap enforcement,
-    and the advertised-file-URL host guard. Returns None when the
-    accession has no AlphaFold model.
+    and the advertised-file-URL host guard. The prediction record is
+    requested first and its PDB file second, and the two are classified
+    apart. Returns None when AlphaFold DB answers without a model for the
+    accession, and a falsy ``_RequestFailed`` when either request did not
+    complete. ``model_version`` is the version the prediction record
+    reports for the file (None if it reports none).
     """
     try:
-        pdb_bytes = await _alphafold().get_pdb_bytes(uniprot_id)
+        record = await _alphafold().get_prediction(uniprot_id)
     except (UniProtVerificationError, AlphaFoldPredictionSchemaError):
         raise
     except Exception as exc:
         logger.warning("af.fetch.failed", uniprot_id=uniprot_id, exc=str(exc))
-        return None
+        return _unretrieved(exc)
+    return await _fetch_af_coordinates(uniprot_id, record)
+
+
+async def _fetch_af_coordinates(
+    uniprot_id: str, record: dict[str, Any]
+) -> dict[str, Any] | _RequestFailed | None:
+    """Download the PDB file that one prediction record advertises.
+
+    No further metadata request is made, so the coordinates belong to
+    ``record`` and ``model_version`` is that record's version. Every
+    failure of the file request is a request that failed, HTTP 404
+    included: the record was returned and names the file, so a 404 here is
+    not AlphaFold DB answering that it has no model. Returns None when the
+    record advertises no PDB file, or the file is empty.
+    """
+    try:
+        pdb_bytes = await _alphafold().get_pdb_file(record)
+    except Exception as exc:
+        logger.warning("af.fetch.failed", uniprot_id=uniprot_id, request="pdb_file", exc=str(exc))
+        return _RequestFailed(
+            "the prediction record was returned, but the request for its PDB file "
+            f"failed: {type(exc).__name__}: {exc}"
+        )
     if not pdb_bytes:
         return None
     return {
         "pdb_text": pdb_bytes.decode("utf-8", errors="replace"),
         "uniprot_id": uniprot_id,
+        "model_version": _prediction_version(record),
     }
 
 
-async def _fetch_af_plddt(uniprot_id: str) -> dict[str, Any] | None:
+async def _fetch_af_plddt(uniprot_id: str) -> dict[str, Any] | _RequestFailed | None:
     """Fetch the pLDDT summary and PAE matrix for a UniProt accession.
 
     Routes through AlphaFoldClient. Reads the global pLDDT confidence
@@ -185,9 +277,10 @@ async def _fetch_af_plddt(uniprot_id: str) -> dict[str, Any] | None:
     older ``meanPlddt`` field is absent from the current AlphaFold DB
     schema) and the PAE matrix from the advertised PAE document.
 
-    Returns None when the accession has no AlphaFold model, so callers
-    can distinguish "no structure" from a structure with missing
-    fields.
+    Returns None when AlphaFold DB answers without a model for the
+    accession, so callers can distinguish "no structure" from a structure
+    with missing fields, and a falsy ``_RequestFailed`` when the request
+    did not complete.
     """
     client = _alphafold()
     try:
@@ -196,7 +289,7 @@ async def _fetch_af_plddt(uniprot_id: str) -> dict[str, Any] | None:
         raise
     except Exception as exc:
         logger.warning("af.summary.failed", uniprot_id=uniprot_id, exc=str(exc))
-        return None
+        return _unretrieved(exc)
     if not isinstance(meta, dict) or not _prediction_model_id(meta):
         return None
 
@@ -204,6 +297,7 @@ async def _fetch_af_plddt(uniprot_id: str) -> dict[str, Any] | None:
     result: dict[str, Any] = {
         "uniprot_id": uniprot_id,
         "model_entity_id": _prediction_model_id(meta),
+        "model_version": _prediction_version(meta),
         "mean_plddt": mean_plddt,
         "plddt_status": plddt_status,
         "model_url": meta.get("pdbUrl", ""),
@@ -246,29 +340,54 @@ async def _fetch_af_plddt(uniprot_id: str) -> dict[str, Any] | None:
     result["pae_max"] = float(np.max(pae_matrix))
     # The PAE is directional and indexed in the selected model's local sequence.
     result["high_pae_pairs"] = _find_high_pae_pairs(pae_matrix, threshold=15.0)
-    result["domain_boundaries"] = _detect_domain_boundaries(pae_matrix)
+    result["local_high_pae_positions"] = _local_high_pae_onsets(pae_matrix)
+    result["local_high_pae_scanned"] = max(0, pae_matrix.shape[0] - 2 * _LOCAL_PAE_WINDOW)
     return result
 
 
-def _no_structure_response(uniprot_id: str) -> dict[str, Any]:
-    """Return a uniform, human-readable response when AF DB has no model.
+def _no_structure_response(uniprot_id: str, fetched: object = None) -> dict[str, Any]:
+    """Return a uniform, human-readable response when no model was retrieved.
 
     AlphaFold DB does not contain a model for every UniProt accession.
     When a structure or prediction fetch returns nothing, every
-    structure tool returns this same shape, so an LLM or a human
-    receives one clear, consistent explanation rather than a terse or
-    silent failure.
+    structure tool that takes one accession returns this same shape, so
+    an LLM or a human receives one clear, consistent explanation rather
+    than a terse or silent failure.
+
+    The two reasons are kept apart in ``retrieval_status``.
+    ``no_prediction_returned``: AlphaFold DB answered and returned no model.
+    ``request_failed``: the request was blocked or failed, which is not
+    evidence that no prediction exists.
 
     Args:
         uniprot_id: The accession that was requested.
+        fetched: What the fetch returned: ``None``, or the ``_RequestFailed``
+            that describes why the request did not complete.
 
     Returns:
-        A dict carrying ``structure_available`` set to False, a plain
-        ``error`` line, and an explanatory ``note``.
+        A dict carrying ``structure_available`` set to False,
+        ``retrieval_status``, a plain ``error`` line, and an explanatory
+        ``note``.
     """
+    if isinstance(fetched, _RequestFailed):
+        return {
+            "uniprot_id": uniprot_id,
+            "structure_available": False,
+            "retrieval_status": "request_failed",
+            "error": (
+                "The AlphaFold DB request for this UniProt accession did not "
+                f"complete: {fetched.reason}"
+            ),
+            "note": (
+                "A request that was blocked or failed is not evidence that "
+                "AlphaFold DB has no prediction for this accession. No model was "
+                "examined. Retry when the service is reachable."
+            ),
+        }
     return {
         "uniprot_id": uniprot_id,
         "structure_available": False,
+        "retrieval_status": "no_prediction_returned",
         "error": (
             "No structure prediction returned by the AlphaFold DB REST API "
             "for this UniProt accession."
@@ -281,6 +400,44 @@ def _no_structure_response(uniprot_id: str) -> dict[str, Any]:
             "Check https://alphafold.ebi.ac.uk/ and its FTP documentation."
         ),
     }
+
+
+def _missing_model_reason(fetched: object) -> str:
+    """Say in one line why no model is available for an accession."""
+    if isinstance(fetched, _RequestFailed):
+        return (
+            f"AlphaFold model retrieval failed ({fetched.reason}); this is not "
+            "evidence that no model exists."
+        )
+    return "No AlphaFold model for this accession."
+
+
+def _embedded_coordinates(fetched: dict[str, Any] | _RequestFailed | None) -> dict[str, str]:
+    """Return the coordinate fields of ``get_protein_structure``.
+
+    ``coordinates_pdb`` keeps its earlier values: the PDB text, or an empty
+    string when there is none. ``coordinates_status`` says which of the two
+    happened, and ``coordinates_error`` gives the reason for an empty string.
+    """
+    if isinstance(fetched, _RequestFailed):
+        return {
+            "coordinates_pdb": "",
+            "coordinates_status": "request_failed",
+            "coordinates_error": (
+                f"Coordinates were not embedded: {fetched.reason}. This is not "
+                "evidence that the model has no coordinate file."
+            ),
+        }
+    if fetched is None:
+        return {
+            "coordinates_pdb": "",
+            "coordinates_status": "no_coordinates_returned",
+            "coordinates_error": (
+                "Coordinates were not embedded: the prediction record advertises no "
+                "PDB file, or the file it advertises is empty."
+            ),
+        }
+    return {"coordinates_pdb": fetched["pdb_text"], "coordinates_status": "retrieved"}
 
 
 def _find_high_pae_pairs(pae: np.ndarray, threshold: float = 15.0) -> list[dict[str, Any]]:
@@ -296,35 +453,88 @@ def _find_high_pae_pairs(pae: np.ndarray, threshold: float = 15.0) -> list[dict[
     return [{"residue_a": p[1], "residue_b": p[2], "pae": round(p[0], 2)} for p in pairs_arr[:20]]
 
 
-def _detect_domain_boundaries(pae: np.ndarray, window: int = 10) -> list[int]:
-    """Detect domain boundaries as positions where PAE rises sharply.
+_LOCAL_PAE_WINDOW = 10
+"""Half-width, in residues, of the diagonal PAE block scanned for local uncertainty."""
 
-    Uses a sliding-window mean of the PAE block diagonal to find positions
-    where the local structural certainty drops — indicating a flexible linker
-    or domain boundary.
+_LOCAL_HIGH_PAE_DEFINITION = (
+    "Zero-based model indices (not UniProt positions) where a run of locally elevated "
+    "near-diagonal PAE begins: the mean PAE of the 20x20 diagonal block around the index "
+    "exceeds the whole-matrix mean by more than 1.5 standard deviations of that statistic. "
+    "Approximate to within 10 residues; the first and last 10 indices are not scanned, so "
+    "10 means at or before index 10; at most 10 are reported. A flagged run is a stretch "
+    "much less certain than the model overall, such as a flexible tail. Not a domain "
+    "boundary."
+)
+
+_DOMAIN_BOUNDARIES_NOT_ASSESSED = (
+    "NOT_ASSESSED: this tool does not identify domain boundaries or count domains. The "
+    "positions formerly listed here are reported as local_high_pae.positions. In an "
+    "internal audit of 8 multi-domain proteins they marked no border between two "
+    "annotated UniProtKB domains (LIMITATIONS.md L10). Use curated domain annotations "
+    "such as InterPro for domains."
+)
+
+
+def _local_high_pae_onsets(pae: np.ndarray, window: int = _LOCAL_PAE_WINDOW) -> list[int]:
+    """Return where runs of locally elevated near-diagonal PAE begin.
+
+    For every index ``i`` with ``window <= i < n - window`` the statistic is
+    the mean PAE of the diagonal block ``[i - window, i + window)`` minus the
+    mean of the whole matrix. An index is flagged when that excess is more
+    than 1.5 standard deviations of the statistic over all scanned indices,
+    and the first index of each flagged run is returned (zero-based model
+    indices, at most 10).
+
+    The block sits on the diagonal, so the statistic measures how uncertain
+    residues are relative to their sequence neighbours, and the threshold is
+    relative to the whole matrix: what gets flagged is a short stretch much
+    less certain than the model overall (a flexible tail or linker), and a
+    model with a high overall PAE usually yields nothing. Uncertainty
+    *between* two confidently predicted regions appears off the diagonal and
+    is not measured, so the onsets are not domain boundaries and no domain
+    count follows from them. An onset is approximate to within ``window``
+    residues. The first and last ``window`` indices are never scanned; an
+    onset equal to ``window`` therefore means the run starts at or before
+    that index.
     """
     n = pae.shape[0]
-    boundaries: list[int] = []
+    onsets: list[int] = []
     if n < 2 * window:
-        return boundaries
+        return onsets
     global_mean = float(np.mean(pae))
     scores = []
     for i in range(window, n - window):
         local = float(np.mean(pae[i - window : i + window, i - window : i + window]))
         scores.append((i, local - global_mean))
-    # Peak detection: residues where local PAE >> global mean
     threshold = float(np.std([s for _, s in scores])) * 1.5
     prev_over = False
     for pos, score in scores:
         if score > threshold and not prev_over:
-            boundaries.append(pos)
+            onsets.append(pos)
             prev_over = True
         elif score <= threshold:
             prev_over = False
-    return boundaries[:10]  # Max 10 boundary candidates
+    return onsets[:10]
 
 
 # ── TDA fingerprint computation ───────────────────────────────────────────────
+
+_TDA_MAX_RESIDUES = 500
+"""Cα atoms the Rips complex is built on; longer models are subsampled evenly."""
+
+_TDA_FINGERPRINT_LAYOUT = (
+    "64 slots, at most 16 non-zero. Slots 0-7 and 8-15: mean, standard deviation, "
+    "maximum, minimum, median, 75th percentile, 25th percentile and sum of the finite "
+    "H0 and H1 bar lifetimes. Slots 16-23: zero (H2 is not computed). Slots 24-63: "
+    "zero padding."
+)
+
+_FALLBACK_FINGERPRINT_LAYOUT = (
+    "64 slots, at most 8 non-zero. Slots 0-7: mean, standard deviation and minimum of "
+    "the pairwise Cα distances, largest distance below 30 Å, mean number of contacts "
+    "within 4 Å, 10th and 90th distance percentiles, and the 4-Å contact-graph "
+    "component count. Slots 8-63: zero padding. No persistent homology is computed."
+)
 
 
 def _compute_tda_fingerprint(
@@ -339,24 +549,36 @@ def _compute_tda_fingerprint(
     unavailable, never as zero. Without GUDHI the distance-statistics
     fallback computes only the exact 4-Å graph component count.
 
+    On the GUDHI path, a model with more than 500 Cα atoms is reduced to
+    500 evenly spaced ones before the complex is built. The Betti numbers
+    and statistics then describe that subsample, whose neighbour spacing
+    is wider than the chain's, and can differ from the values for all
+    residues; ``subsampled`` and ``n_residues_total`` report when this
+    happened. The fallback is never subsampled.
+
     Args:
         ca_coords: (N, 3) array of Cα coordinates.
         max_dimension: Maximum homology dimension (default 2: β₀, β₁, β₂).
 
     Returns:
         Dict with Betti numbers, a (truncated) persistence summary, and
-        a 64-dimensional fingerprint vector. The fingerprint vector is
-        a fixed-length feature used for downstream pairwise comparison;
-        it is not a published embedding from a peer-reviewed method.
+        a 64-slot fingerprint vector. Slots 0-7 and 8-15 hold eight
+        statistics of the finite H0 and H1 bar lifetimes (mean, standard
+        deviation, maximum, minimum, median, 75th percentile, 25th
+        percentile, sum). GUDHI computes no H2 for a 2-skeleton, so slots
+        16-23 stay zero, and slots 24-63 are zero padding: the vector
+        carries at most 16 statistics. It is a fixed-length feature used
+        for downstream pairwise comparison, not a published embedding
+        from a peer-reviewed method.
     """
     try:
         import gudhi
     except ImportError:
         return _fallback_tda_fingerprint(ca_coords)
 
-    # Subsample for efficiency (max 500 residues → dense enough for topology)
-    if len(ca_coords) > 500:
-        idx = np.linspace(0, len(ca_coords) - 1, 500, dtype=int)
+    n_total = len(ca_coords)
+    if n_total > _TDA_MAX_RESIDUES:
+        idx = np.linspace(0, n_total - 1, _TDA_MAX_RESIDUES, dtype=int)
         ca_coords = ca_coords[idx]
 
     # Build Rips complex
@@ -421,11 +643,14 @@ def _compute_tda_fingerprint(
         "persistence_landscapes": landscapes,
         "fingerprint_vector": [round(f, 6) for f in fingerprint],
         "fingerprint_dimension": 64,
+        "fingerprint_layout": _TDA_FINGERPRINT_LAYOUT,
         "n_residues_used": len(ca_coords),
+        "n_residues_total": n_total,
+        "subsampled": n_total > _TDA_MAX_RESIDUES,
         "max_filtration_length_angstrom": max_edge_length,
         "methodology": (
-            "Vietoris-Rips 2-skeleton via GUDHI; H0/H1 at the terminal 15-Å "
-            "filtration; H2 not computed."
+            "Vietoris-Rips 2-skeleton via GUDHI on the Cα atoms (500 evenly spaced ones "
+            "when the model has more); H0/H1 at the terminal 15-Å filtration; H2 not computed."
         ),
         "gudhi_available": True,
     }
@@ -437,14 +662,18 @@ def _fallback_tda_fingerprint(ca_coords: np.ndarray) -> dict[str, Any]:
     Computes distance-matrix statistics and the connected-component count
     of the 4-Å contact graph. This is NOT persistent homology: H1 and H2
     are unknown (None), not zero. Install gudhi with the [tda] extra
-    for H0/H1 persistence.
+    for H0/H1 persistence. All residues are used (no subsampling), and
+    the 64-slot vector carries eight statistics followed by zeros.
     """
     if len(ca_coords) < 2:
         return {
             "betti_numbers": [len(ca_coords), None, None],
             "fingerprint_vector": [0.0] * 64,
             "fingerprint_dimension": 64,
+            "fingerprint_layout": _FALLBACK_FINGERPRINT_LAYOUT,
             "n_residues_used": len(ca_coords),
+            "n_residues_total": len(ca_coords),
+            "subsampled": False,
             "gudhi_available": False,
         }
 
@@ -486,10 +715,20 @@ def _fallback_tda_fingerprint(ca_coords: np.ndarray) -> dict[str, Any]:
         "betti_numbers": [b0, None, None],
         "fingerprint_vector": [round(f, 6) for f in fingerprint],
         "fingerprint_dimension": 64,
+        "fingerprint_layout": _FALLBACK_FINGERPRINT_LAYOUT,
         "n_residues_used": len(ca_coords),
+        "n_residues_total": len(ca_coords),
+        "subsampled": False,
         "gudhi_available": False,
         "note": "Install gudhi for full persistent-homology computation: pip install alphafold-sovereign-mcp[tda]",
     }
+
+
+def _fingerprint_method_label(gudhi_flags: list[bool]) -> str:
+    """Name the fingerprint method that ran, one flag per fingerprint computed."""
+    if not gudhi_flags:
+        return "not-computed"
+    return "VR-persistent-homology" if all(gudhi_flags) else "geometric-proxy"
 
 
 def _fingerprint_distance(fp_a: list[float], fp_b: list[float]) -> float:
@@ -547,8 +786,16 @@ async def analyze_structural_confidence(
     Returns a structural reliability summary (not a per-residue profile):
     - **pLDDT**: the model's mean confidence (AlphaFold DB ``globalMetricValue``)
       plus a coarse confidence tier
-    - **PAE** (predicted aligned error): mean and max inter-residue uncertainty
-      and PAE-derived domain boundaries
+    - **PAE** (predicted aligned error): mean and maximum; up to five
+      residue pairs more than 10 positions apart with PAE above 15 Å
+      (one-based model indices); and ``local_high_pae``, the approximate
+      zero-based model indices where a run of locally elevated
+      near-diagonal PAE begins (a short stretch much less certain than
+      the model as a whole, such as a flexible tail or linker)
+    - **Domains**: NOT assessed. Near-diagonal PAE does not locate domain
+      boundaries; the legacy ``domain_boundaries`` block is kept for
+      existing clients with ``n_putative_domains`` null and no candidate
+      positions
     - **Druggability pre-screen**: model confidence limitations; actual
       ordered fraction and ligand suitability are NOT assessed
 
@@ -565,13 +812,13 @@ async def analyze_structural_confidence(
     result = await _fetch_af_plddt(uid)
 
     if not result:
-        return _no_structure_response(uid)
+        return _no_structure_response(uid, result)
 
     plddt, plddt_status = validated_plddt(result.get("mean_plddt"))
     if plddt_status == "missing" and result.get("plddt_status") == "invalid_response":
         plddt_status = "invalid_response"
     confidence_tier = _plddt_tier(plddt)
-    domain_boundaries = result.get("domain_boundaries", [])
+    model_version = _afdb_version_label([result.get("model_version")])
 
     return {
         "uniprot_id": uid,
@@ -594,14 +841,19 @@ async def analyze_structural_confidence(
             "max_pae_angstrom": (round(result["pae_max"], 2) if "pae_max" in result else None),
             "high_uncertainty_pairs": result.get("high_pae_pairs", [])[:5],
         },
+        "local_high_pae": {
+            "status": "computed" if "pae_mean" in result else "pae_unavailable",
+            "positions": result.get("local_high_pae_positions", []),
+            "n_indices_scanned": result.get("local_high_pae_scanned", 0),
+            "definition": _LOCAL_HIGH_PAE_DEFINITION,
+        },
+        # Legacy block, kept so existing clients find the keys. It carries the
+        # not-assessed state earlier releases already used when PAE was missing.
         "domain_boundaries": {
-            "candidate_positions": domain_boundaries,
-            "n_putative_domains": (len(domain_boundaries) + 1 if "pae_mean" in result else None),
-            "note": (
-                "Candidates are zero-based LOCAL model-array indices, not UniProt positions. "
-                "This PAE heuristic is not a validated domain assignment; compare to "
-                "InterPro or experimentally established domain annotations."
-            ),
+            "status": "NOT_ASSESSED",
+            "candidate_positions": [],
+            "n_putative_domains": None,
+            "note": _DOMAIN_BOUNDARIES_NOT_ASSESSED,
         },
         "druggability_pre_screen": {
             "ordered_fraction": None,
@@ -620,7 +872,7 @@ async def analyze_structural_confidence(
             ),
         },
         "model_url": result.get("model_url", ""),
-        "provenance": _provenance(alphafold_db="v6", plddt_version="v6"),
+        "provenance": _provenance(alphafold_db=model_version, plddt_version=model_version),
     }
 
 
@@ -632,29 +884,36 @@ async def analyze_structural_confidence(
         "title": "Compute Topological Fingerprint (TDA)",
         "readOnlyHint": True,
         "idempotentHint": True,
-        "openWorldHint": False,
+        "openWorldHint": True,
     }
 )
 async def compute_topology_fingerprint(
     params: UniProtInput,
 ) -> dict[str, Any]:
-    """Compute a rotation-invariant topological fingerprint of a protein's fold.
+    """Compute an exploratory, rotation-invariant Cα summary vector for an AlphaFold model.
 
     Fetches the AlphaFold model for ``uniprot_id`` and derives an
-    exploratory 64-dimensional geometric/topological feature vector from
-    Cα coordinates. With GUDHI installed, H0 and H1 are computed on the
-    15-Å Vietoris-Rips 2-skeleton. H2 is NOT computed. Without GUDHI
-    only a 4-Å graph component count and geometric statistics are available.
+    exploratory 64-slot feature vector from its Cα coordinates. With GUDHI
+    installed, H0 and H1 are computed on the 15-Å Vietoris-Rips 2-skeleton
+    and the vector holds 16 summary statistics of their finite bar
+    lifetimes (eight each); the other 48 slots are zero. H2 is NOT
+    computed. On this GUDHI path, models longer than 500 residues are
+    reduced to 500 evenly spaced Cα atoms first, so their Betti numbers
+    and statistics describe that subsample (``subsampled`` is then true).
+    Without GUDHI the fallback uses every residue, with no subsampling:
+    the vector holds eight distance and contact statistics, one of them a
+    4-Å contact-graph component count, and no persistent homology is
+    computed.
     Betti numbers describe this chosen filtration, not protein domains,
     β-barrels, drug cavities, molecular function, or an experimental structure.
 
-    Returns the fingerprint vector, the Betti numbers, the residue count, and which
-    method ran. Full persistent homology needs the optional ``[tda]`` extra
-    (``gudhi``); without it a coarse fallback runs that does NOT compute persistent
-    homology, and the result flags this. Returns a no-structure result when
-    AlphaFold DB has no model for the accession. This is a coarse, geometry-only
-    summary — not a substitute for sequence alignment, RMSD, or functional-homology
-    assessment.
+    Returns the fingerprint vector and its slot layout, the Betti numbers, the
+    residue counts, and which method ran. Full persistent homology needs the
+    optional ``[tda]`` extra (``gudhi``); without it a coarse fallback runs that
+    does NOT compute persistent homology, and the result flags this. Returns a
+    no-structure result when AlphaFold DB has no model for the accession. This is
+    a coarse, geometry-only summary — not a substitute for sequence alignment,
+    RMSD, or functional-homology assessment.
 
     Input fields:
         params.uniprot_id: UniProt accession of the protein to fingerprint,
@@ -666,7 +925,7 @@ async def compute_topology_fingerprint(
 
     structure = await _fetch_af_structure(uid)
     if not structure:
-        return _no_structure_response(uid)
+        return _no_structure_response(uid, structure)
 
     ca_coords = _parse_ca_coords_from_pdb(structure["pdb_text"])
     if ca_coords.shape[0] == 0:
@@ -685,7 +944,8 @@ async def compute_topology_fingerprint(
             "functional identity, binding-site equivalence, or a diagnostic endpoint."
         ),
         "provenance": _provenance(
-            alphafold_db="v6", methodology=tda.get("methodology", "geometric-proxy")
+            alphafold_db=_afdb_version_label([structure.get("model_version")]),
+            methodology=tda.get("methodology", "geometric-proxy"),
         ),
     }
 
@@ -698,7 +958,7 @@ async def compute_topology_fingerprint(
         "title": "Compare Proteins Topologically (TDA Fingerprint Distance)",
         "readOnlyHint": True,
         "idempotentHint": True,
-        "openWorldHint": False,
+        "openWorldHint": True,
     }
 )
 async def compare_proteins_topologically(
@@ -708,22 +968,24 @@ async def compare_proteins_topologically(
 
     Computes a pairwise distance matrix between the TDA fingerprints of
     the provided proteins.  Distance metric: L2 distance between
-    length-normalised 64-dimensional fingerprint vectors (see
+    length-normalised 64-slot fingerprint vectors (see
     ``_fingerprint_distance``).  Distance = 0 means identical
     fingerprints; larger values mean more divergent fingerprints.  This
     is **not** a Wasserstein distance between persistence diagrams.
 
-    Applications:
-    Possible uses (all of which require independent validation
-    before any downstream use):
-
-    - Drug-repurposing triage: proteins with low fingerprint distance
-      may share gross topology.
-    - Off-target screening: family members with near-zero distance.
-    - Cross-species comparison of the same gene's structure.
-
-    None of these are direct functional or sequence-similarity
-    measures.
+    The vectors hold at most 16 statistics (see
+    ``compute_topology_fingerprint``). With GUDHI (the optional ``[tda]``
+    extra), a model longer than 500 residues is compared on
+    500 evenly spaced Cα atoms. Without GUDHI the fallback uses every
+    residue of every model, with no subsampling, and builds each model's
+    full pairwise distance matrix, so its cost grows with the square of
+    the model length. ``protein_metadata`` reports ``n_residues_used`` and
+    ``subsampled`` for each model. In an internal audit of 23 AlphaFold
+    models run with GUDHI, nearly all of each normalised vector lay in
+    its two total-persistence components, so the distance mostly tracks
+    one ratio: total H1 over total H0 persistence. It has no validated
+    threshold for fold similarity and is not a functional,
+    sequence-similarity or binding-site measure (LIMITATIONS.md L12).
 
     Input fields:
         params.uniprot_ids: 2–10 UniProt accessions.
@@ -742,10 +1004,19 @@ async def compare_proteins_topologically(
     fingerprints: dict[str, list[float]] = {}
     errors: dict[str, str] = {}
     protein_meta: dict[str, dict[str, Any]] = {}
+    model_versions: list[int | None] = []
+    gudhi_flags: list[bool] = []
 
-    for uid, struct in zip(ids, structures):
-        if isinstance(struct, BaseException) or struct is None:
-            errors[uid] = "No AlphaFold model for this accession."
+    for uid, fetched in zip(ids, structures):
+        # gather() hands back what the fetch re-raised (isoform verification
+        # or schema errors). That too is a failed retrieval, not a missing model.
+        struct = (
+            _RequestFailed(f"{type(fetched).__name__}: {fetched}")
+            if isinstance(fetched, BaseException)
+            else fetched
+        )
+        if not struct:
+            errors[uid] = _missing_model_reason(struct)
             continue
         ca = _parse_ca_coords_from_pdb(struct["pdb_text"])
         if ca.shape[0] == 0:
@@ -753,8 +1024,12 @@ async def compare_proteins_topologically(
             continue
         tda = _compute_tda_fingerprint(ca)
         fingerprints[uid] = tda["fingerprint_vector"]
+        model_versions.append(struct.get("model_version"))
+        gudhi_flags.append(tda.get("gudhi_available") is True)
         protein_meta[uid] = {
             "n_residues": int(ca.shape[0]),
+            "n_residues_used": tda.get("n_residues_used"),
+            "subsampled": tda.get("subsampled"),
             "betti_numbers": tda.get("betti_numbers", []),
         }
 
@@ -791,7 +1066,10 @@ async def compare_proteins_topologically(
             "No validated threshold for fold similarity, protein function, "
             "drug repurposing, or off-target effects; verify the calculation method."
         ),
-        "provenance": _provenance(alphafold_db="v6", methodology="VR-persistent-homology"),
+        "provenance": _provenance(
+            alphafold_db=_afdb_version_label(model_versions),
+            methodology=_fingerprint_method_label(gudhi_flags),
+        ),
     }
 
 
@@ -832,7 +1110,9 @@ async def find_evolutionary_structural_shifts(
     human_uniprot = (human_gene.get("uniprot_ids") or [""])[0]
     human_struct = await _fetch_af_structure(human_uniprot) if human_uniprot else None
     human_ca: np.ndarray | None = None
+    model_versions: list[int | None] = []
     if human_struct:
+        model_versions.append(human_struct.get("model_version"))
         human_ca = _parse_ca_coords_from_pdb(human_struct["pdb_text"])
         if human_ca.shape[0] == 0:
             human_ca = None
@@ -862,6 +1142,7 @@ async def find_evolutionary_structural_shifts(
             if orth_uniprot:
                 orth_struct = await _fetch_af_structure(orth_uniprot)
                 if orth_struct:
+                    model_versions.append(orth_struct.get("model_version"))
                     orth_ca = _parse_ca_coords_from_pdb(orth_struct["pdb_text"])
                     if orth_ca.shape[0] > 0:
                         orth_tda = _compute_tda_fingerprint(orth_ca)
@@ -916,53 +1197,122 @@ async def find_evolutionary_structural_shifts(
         "methodology_note": (
             "Sequence identity and exploratory structural distances are separately "
             "reported. GUDHI and geometric-proxy distances are not interchangeable. "
+            "With GUDHI, a model longer than 500 residues is compared on 500 evenly "
+            "spaced Cα atoms. "
             "No cross-method conservation ranking, biological functional inference, "
             "or antibody cross-reactivity risk assessment is supported."
         ),
-        "provenance": _provenance(ensembl="current", alphafold_db="v6"),
+        "provenance": _provenance(
+            ensembl="current", alphafold_db=_afdb_version_label(model_versions)
+        ),
     }
 
 
-# ── Tool 5: Binding pocket geometry ──────────────────────────────────────────
+# ── Tool 5: Core-residue clusters (historical name: binding pocket geometry) ──
+
+_DRUGGABILITY_NOT_ASSESSED = "NOT_ASSESSED"
+"""Value of the legacy ``druggability_label``; ``assessment_status`` gives the reason."""
+
+_POCKET_ASSESSMENT_STATUS = (
+    "NOT_ASSESSED: binding pockets and druggability are not assessed. The clusters are a "
+    "geometric grouping of core residues, not validated binding sites."
+)
+
+_POCKET_DEPRECATED_ALIASES = {
+    "putative_pockets": "core_residue_clusters",
+    "n_pockets_found": "n_core_residue_clusters",
+    "pocket_id": "cluster_id",
+    "druggability_index": "geometry_score",
+    "druggability_components": "geometry_score_components",
+}
+"""Legacy output keys kept for existing clients, mapped to their accurate names."""
+
+
+def _legacy_pocket_entry(cluster: dict[str, Any]) -> dict[str, Any]:
+    """Return a cluster under the key names that releases up to 1.5.12 used.
+
+    The measurements are the same numbers. The druggability class those
+    releases attached to the score is replaced by ``NOT_ASSESSED``.
+    """
+    entry = {
+        ("pocket_id" if key == "cluster_id" else key): value
+        for key, value in cluster.items()
+        if key not in ("geometry_score", "geometry_score_components")
+    }
+    entry["druggability_index"] = cluster["geometry_score"]
+    entry["druggability_components"] = dict(cluster["geometry_score_components"])
+    entry["druggability_label"] = _DRUGGABILITY_NOT_ASSESSED
+    return entry
+
+
+_POCKET_METHODOLOGY = (
+    "Greedy geometric clustering of core Cα atoms. Core residues are those closer to the "
+    "model centroid than the 60th percentile of centroid distances. In sequence order, "
+    "each unassigned core residue seeds a cluster of the unassigned core residues within "
+    "8 Å of it; a seed with fewer than min_pocket_residues such residues forms no "
+    "cluster, and clusters with a mean pLDDT below 50 are discarded. No cavity, "
+    "solvent-accessible surface or ligand is computed. geometry_score is the sum of four "
+    "equally weighted 0 to 25 sub-scores: residue count (saturating at 12), radius of "
+    "gyration (highest at 5 Å), mean pLDDT, and centroid offset (saturating at 20 Å; a "
+    "larger offset means more peripheral geometry, not measured access or ligand "
+    "binding). estimated_volume_angstrom3 is the volume of a sphere whose radius is the "
+    "cluster's radius of gyration, not a cavity volume."
+)
+
+_POCKET_NOTE = (
+    "Not a validated binding-pocket detector. In an internal audit of 19 AlphaFold "
+    "models the top-ranked cluster was enriched for the PDBe-KB ligand-binding site in "
+    "4 of the 18 proteins that had one, and every reported cluster scored 55 or more "
+    "(LIMITATIONS.md L11). To locate binding sites, use a dedicated pocket detector such "
+    "as fpocket or P2Rank and experimental evidence."
+)
 
 
 @mcp.tool(
     annotations={
-        "title": "Score Binding Pocket Geometry",
+        "title": "Cluster Core Residues by Geometry (Unvalidated Pocket Heuristic)",
         "readOnlyHint": True,
         "idempotentHint": True,
-        "openWorldHint": False,
+        "openWorldHint": True,
     }
 )
 async def score_binding_pocket_geometry(
     params: BindingPocketInput,
 ) -> dict[str, Any]:
-    """Identify and score putative binding pockets from AlphaFold geometry.
+    """Cluster the core residues of an AlphaFold model by geometry.
 
-    Detects pockets with a geometry-only heuristic. Residues in the
-    inner 60 percent of the structure by distance from the centroid are
-    taken as the pocket-forming core, then grown greedily into clusters
-    within an 8 Angstrom radius. A cluster is kept as a putative pocket
-    when it has at least ``min_pocket_residues`` members and a mean pLDDT
-    of at least 50.
+    Not a validated binding-pocket detector; no druggability class is
+    assigned. Cα atoms closer to the model centroid than the 60th
+    percentile of centroid distances are grouped greedily: in sequence
+    order, each unassigned core residue seeds a cluster of the unassigned
+    core residues within 8 Å of it. A cluster is reported when it has at
+    least ``min_pocket_residues`` members and a mean pLDDT of at least 50.
+    No cavity, solvent-accessible surface or ligand is computed.
 
-    Each pocket reports a radius of gyration (compactness of the pocket
-    residues), a centroid offset (distance of the pocket centroid from
-    the structure centroid; larger means more peripheral), mean pLDDT,
-    and an uncalibrated geometry score. Centroid offset does not measure
-    solvent exposure, cavity validity, or ligand binding.
-    The druggability index runs 0 to 100 and is the sum of four equally
-    weighted 0 to 25 sub-scores: residue count, radius of gyration, mean
-    pLDDT, and centroid offset.
+    Each of up to 10 clusters reports its residue numbers, mean pLDDT,
+    radius of gyration, centroid offset from the model centroid, and
+    ``geometry_score``: an uncalibrated 0 to 100 sum of four equally
+    weighted sub-scores (residue count, radius of gyration, mean pLDDT,
+    centroid offset) that only orders the clusters.
+    ``estimated_volume_angstrom3`` is the volume of a sphere with the
+    cluster's radius of gyration, not a cavity volume.
 
-    This is a fast, dependency-free pre-screen, not a substitute for a
-    validated pocket detector such as fpocket or P2Rank. It needs no ML
-    model, is fully reproducible from AlphaFold coordinates, and runs in
-    air-gapped deployments.
+    Validation status: in an internal audit of 19 AlphaFold models the
+    top-ranked cluster was enriched for the PDBe-KB ligand-binding site in
+    4 of the 18 proteins that had one, and every reported cluster scored
+    55 or more (LIMITATIONS.md L11). For existing clients the same
+    clusters are also returned under the earlier names, as deprecated
+    aliases: ``putative_pockets`` and ``n_pockets_found``, with entries
+    keyed ``pocket_id``, ``druggability_index`` and
+    ``druggability_components``; their ``druggability_label`` is
+    ``NOT_ASSESSED``. To locate binding sites, use a dedicated pocket
+    detector such as fpocket or P2Rank.
 
     Input fields:
-        params.uniprot_id: UniProt accession.
-        params.min_pocket_residues: Minimum pocket size (residues).
+        params.uniprot_id: UniProt accession of the AlphaFold model to
+            cluster, e.g. 'P24941' (CDK2).
+        params.min_pocket_residues: Minimum cluster size, 3 to 20
+            (default 4).
     """
     uid = params.uniprot_id
     log = logger.bind(uniprot_id=uid, tool="score_binding_pocket_geometry")
@@ -970,7 +1320,7 @@ async def score_binding_pocket_geometry(
 
     structure = await _fetch_af_structure(uid)
     if not structure:
-        return _no_structure_response(uid)
+        return _no_structure_response(uid, structure)
 
     pdb_text = structure["pdb_text"]
     ca_coords, residue_info = _parse_pdb_full(pdb_text)
@@ -978,42 +1328,37 @@ async def score_binding_pocket_geometry(
     if ca_coords.shape[0] < 10:
         return {
             "uniprot_id": uid,
-            "error": "Protein too short for pocket analysis (< 10 residues).",
+            "error": "Model too short for core-residue clustering (< 10 residues).",
         }
 
-    pockets = _geometric_pocket_detection(
+    clusters = _cluster_core_residues(
         ca_coords, residue_info, min_residues=params.min_pocket_residues
     )
 
-    # Score by druggability potential
-    for pocket in pockets:
-        pocket["druggability_index"] = _pocket_druggability_index(pocket)
-        pocket["druggability_components"] = _pocket_druggability_components(pocket)
-        pocket["druggability_label"] = _pocket_druggability_label(pocket["druggability_index"])
+    for cluster in clusters:
+        cluster["geometry_score"] = _geometry_score(cluster)
+        cluster["geometry_score_components"] = _geometry_score_components(cluster)
 
-    pockets.sort(key=lambda p: p["druggability_index"], reverse=True)
+    clusters.sort(key=lambda c: c["geometry_score"], reverse=True)
+    reported = clusters[:10]
 
-    log.info("complete", n_pockets=len(pockets))
+    log.info("complete", n_clusters=len(clusters))
     return {
         "uniprot_id": uid,
         "n_residues": int(ca_coords.shape[0]),
-        "putative_pockets": pockets[:10],
-        "n_pockets_found": len(pockets),
-        "methodology": (
-            "Geometric clustering of core Cα atoms (the inner 60 percent "
-            "of residues by distance from the structure centroid), grown "
-            "greedily within an 8 Angstrom radius. Clusters with fewer "
-            "than min_pocket_residues members or a mean pLDDT below 50 "
-            "are discarded. Druggability index is the sum of four equally "
-            "weighted 0 to 25 sub-scores: residue count, radius of "
-            "gyration, mean pLDDT, and centroid offset (larger offset = more "
-            "peripheral geometry, not measured access or ligand binding)."
+        "core_residue_clusters": reported,
+        "n_core_residue_clusters": len(clusters),
+        "assessment_status": _POCKET_ASSESSMENT_STATUS,
+        # Deprecated aliases: the same clusters in the entry shape of 1.5.12.
+        "putative_pockets": [_legacy_pocket_entry(cluster) for cluster in reported],
+        "n_pockets_found": len(clusters),
+        "deprecated_aliases": dict(_POCKET_DEPRECATED_ALIASES),
+        "methodology": _POCKET_METHODOLOGY,
+        "note": _POCKET_NOTE,
+        "provenance": _provenance(
+            alphafold_db=_afdb_version_label([structure.get("model_version")]),
+            method="geometric-clustering",
         ),
-        "note": (
-            "For production use, validate with fpocket, P2Rank, or DoGSiteScorer. "
-            "This tool provides rapid pocket pre-screening without external software dependencies."
-        ),
-        "provenance": _provenance(alphafold_db="v6", method="geometric-clustering"),
     }
 
 
@@ -1025,7 +1370,7 @@ async def score_binding_pocket_geometry(
         "title": "Detect Intrinsically Disordered Regions",
         "readOnlyHint": True,
         "idempotentHint": True,
-        "openWorldHint": False,
+        "openWorldHint": True,
     }
 )
 async def detect_intrinsically_disordered(
@@ -1058,12 +1403,12 @@ async def detect_intrinsically_disordered(
     result = await _fetch_af_plddt(uid)
 
     if not result:
-        return _no_structure_response(uid)
+        return _no_structure_response(uid, result)
 
     # We can reconstruct per-residue pLDDT from PDB B-factor column
     structure = await _fetch_af_structure(uid)
     if not structure:
-        return _no_structure_response(uid)
+        return _no_structure_response(uid, structure)
 
     residue_records = _extract_plddt_residue_records(structure["pdb_text"])
     per_residue_plddt = [record[3] for record in residue_records]
@@ -1121,7 +1466,12 @@ async def detect_intrinsically_disordered(
         "clinical_implications": None,
         "drug_target_potential": None,
         "reference": "Ruff KM & Pappu RV (2021) J Mol Biol 433:167208. doi:10.1016/j.jmb.2021.167208",
-        "provenance": _provenance(alphafold_db="v6", plddt_cutoff="50"),
+        "provenance": _provenance(
+            alphafold_db=_afdb_version_label(
+                [result.get("model_version"), structure.get("model_version")]
+            ),
+            plddt_cutoff="50",
+        ),
     }
 
 
@@ -1150,13 +1500,24 @@ async def get_protein_structure(
 
     Use the sibling structure tools for *interpretation* rather than retrieval, so
     their scopes don't overlap: ``analyze_structural_confidence`` for a pLDDT/PAE
-    confidence read, ``score_binding_pocket_geometry`` for pockets,
-    ``compute_topology_fingerprint`` for fold topology, and
-    ``detect_intrinsically_disordered`` for disorder. This tool hands you the
+    confidence read, ``score_binding_pocket_geometry`` for geometric clusters
+    of core residues (not validated pockets), ``compute_topology_fingerprint``
+    for an exploratory Cα summary vector, and
+    ``detect_intrinsically_disordered`` for low-pLDDT intervals. This tool hands you the
     structure and its handles; it does not score or interpret the model.
 
-    Returns ``structure_available: false`` with an explanatory note when AlphaFold DB
-    has no model for the accession — an expected coverage gap, not a server fault.
+    Returns ``structure_available: false`` when no model was retrieved, and
+    ``retrieval_status`` says why. ``no_prediction_returned``: AlphaFold DB answered
+    without a model for the accession, an expected coverage gap. ``request_failed``:
+    the request was blocked (offline mode) or failed, which is not evidence that no
+    prediction exists.
+
+    With ``include_coordinates``, ``coordinates_pdb`` is the file that this same
+    record advertises (``file_urls.pdb``); no second prediction lookup is made.
+    ``coordinates_status`` is ``retrieved``, ``no_coordinates_returned`` (the record
+    advertises no PDB file, or the file is empty) or ``request_failed`` (the request
+    for that file failed, HTTP 404 included). ``coordinates_pdb`` is empty unless the
+    status is ``retrieved``; when it is empty, ``coordinates_error`` gives the reason.
 
     Input fields:
         params.uniprot_id: UniProt accession to retrieve, e.g. 'P38398' (BRCA1).
@@ -1167,6 +1528,7 @@ async def get_protein_structure(
     log = logger.bind(uniprot_id=uid, tool="get_protein_structure")
     log.info("start")
 
+    failed: _RequestFailed | None = None
     try:
         meta = await _alphafold().get_prediction(uid)
     except (UniProtVerificationError, AlphaFoldPredictionSchemaError):
@@ -1174,9 +1536,10 @@ async def get_protein_structure(
     except Exception as exc:
         log.warning("prediction.failed", exc=str(exc))
         meta = {}
+        failed = _unretrieved(exc)
 
     if not isinstance(meta, dict) or not _prediction_model_id(meta):
-        return _no_structure_response(uid)
+        return _no_structure_response(uid, failed)
 
     sequence = _prediction_sequence(meta)
     global_metric, plddt_status = validated_plddt(meta.get("globalMetricValue"))
@@ -1216,18 +1579,22 @@ async def get_protein_structure(
             "confidence read. Fetch the coordinate files from file_urls, or pass "
             "include_coordinates=true to embed the PDB text in this response."
         ),
-        "provenance": _provenance(alphafold_db="v6", source="prediction-metadata"),
+        "provenance": _provenance(
+            alphafold_db=_afdb_version_label([_prediction_version(meta)]),
+            source="prediction-metadata",
+        ),
     }
 
     if params.include_coordinates:
-        structure = await _fetch_af_structure(uid)
-        result["coordinates_pdb"] = structure["pdb_text"] if structure else ""
+        # Download the file this record advertises (``file_urls.pdb``). A second
+        # prediction lookup could return another record than the one reported.
+        result.update(_embedded_coordinates(await _fetch_af_coordinates(uid, meta)))
 
     log.info("complete", entry_id=result["entry_id"])
     return result
 
 
-# ── Pocket geometry helpers ───────────────────────────────────────────────────
+# ── Core-residue cluster helpers ──────────────────────────────────────────────
 
 
 def _parse_pdb_full(
@@ -1254,43 +1621,42 @@ def _parse_pdb_full(
     return np.array(coords, dtype=float), residues
 
 
-def _geometric_pocket_detection(
+def _cluster_core_residues(
     ca_coords: np.ndarray,
     residue_info: list[dict[str, Any]],
     min_residues: int = 4,
 ) -> list[dict[str, Any]]:
-    """Detect concave surface regions as putative binding pockets."""
+    """Group the core Cα atoms of a model into greedy distance clusters.
+
+    Core residues are those closer to the model centroid than the 60th
+    percentile of centroid distances. No surface, concavity or cavity is
+    computed: a cluster is a compact group of core residues, not a detected
+    pocket.
+    """
     n = len(ca_coords)
     if n < min_residues:
         return []
 
-    # Centroid of whole structure
     centroid = ca_coords.mean(axis=0)
-
-    # Distance of each residue from centroid
     dist_from_centroid = np.linalg.norm(ca_coords - centroid, axis=1)
-    surface_threshold = np.percentile(dist_from_centroid, 60)
 
-    # Identify surface residues (farther than median from centroid)
-    surface_mask = dist_from_centroid >= surface_threshold
-    buried_mask = ~surface_mask
+    # Core: residues nearer the centroid than the 60th percentile of distances.
+    core_mask = dist_from_centroid < np.percentile(dist_from_centroid, 60)
+    core_coords = ca_coords[core_mask]
+    core_indices = np.where(core_mask)[0]
 
-    # Cluster buried residues into pockets using simple distance clustering
-    buried_coords = ca_coords[buried_mask]
-    buried_indices = np.where(buried_mask)[0]
-
-    if len(buried_coords) < min_residues:
+    if len(core_coords) < min_residues:
         return []
 
-    # Greedy clustering: grow pockets from each buried residue
-    assigned = [False] * len(buried_coords)
-    pockets: list[dict[str, Any]] = []
+    # Greedy clustering in sequence order: each unassigned core residue seeds a
+    # cluster of the unassigned core residues within 8 Å of it.
+    assigned = [False] * len(core_coords)
+    clusters: list[dict[str, Any]] = []
 
-    for seed_idx in range(len(buried_coords)):
+    for seed_idx in range(len(core_coords)):
         if assigned[seed_idx]:
             continue
-        # Find neighbours within 8 Å
-        dists = np.linalg.norm(buried_coords - buried_coords[seed_idx], axis=1)
+        dists = np.linalg.norm(core_coords - core_coords[seed_idx], axis=1)
         neighbour_mask = (dists < 8.0) & ~np.array(assigned)
         if neighbour_mask.sum() < min_residues:
             continue
@@ -1299,44 +1665,44 @@ def _geometric_pocket_detection(
         for m in member_indices:
             assigned[m] = True
 
-        pocket_ca = buried_coords[member_indices]
-        global_indices = buried_indices[member_indices]
-        pocket_residues = [residue_info[i] for i in global_indices if i < len(residue_info)]
-        pocket_plddts = [r["plddt"] for r in pocket_residues]
-        mean_plddt = float(np.mean(pocket_plddts)) if pocket_plddts else 0.0
+        member_ca = core_coords[member_indices]
+        global_indices = core_indices[member_indices]
+        member_residues = [residue_info[i] for i in global_indices if i < len(residue_info)]
+        member_plddts = [r["plddt"] for r in member_residues]
+        mean_plddt = float(np.mean(member_plddts)) if member_plddts else 0.0
 
-        # Only include high-confidence pockets
+        # Discard clusters of low model confidence; their members stay assigned.
         if mean_plddt < 50:
             continue
 
-        # Geometric pocket properties
-        pocket_centroid = pocket_ca.mean(axis=0)
-        rog = float(np.sqrt(np.mean(np.sum((pocket_ca - pocket_centroid) ** 2, axis=1))))
-        # Offset of the pocket centroid from the structure centroid. Larger =
-        # more peripheral (a solvent-accessible cleft); this is NOT solvent burial.
-        centroid_offset = float(np.linalg.norm(pocket_centroid - centroid))
+        cluster_centroid = member_ca.mean(axis=0)
+        rog = float(np.sqrt(np.mean(np.sum((member_ca - cluster_centroid) ** 2, axis=1))))
+        # Distance of the cluster centroid from the model centroid. Larger means
+        # more peripheral geometry; it measures neither solvent access nor burial.
+        centroid_offset = float(np.linalg.norm(cluster_centroid - centroid))
 
-        pockets.append(
+        clusters.append(
             {
-                "pocket_id": len(pockets) + 1,
+                "cluster_id": len(clusters) + 1,
                 "n_residues": len(member_indices),
-                "residue_numbers": sorted({r["resnum"] for r in pocket_residues}),
-                "residue_names": sorted({r["resname"] for r in pocket_residues}),
+                "residue_numbers": sorted({r["resnum"] for r in member_residues}),
+                "residue_names": sorted({r["resname"] for r in member_residues}),
                 "mean_plddt": round(mean_plddt, 2),
                 "radius_of_gyration_angstrom": round(rog, 2),
                 "centroid_offset_angstrom": round(centroid_offset, 2),
+                # Volume of a sphere of radius ``rog``; not a cavity volume.
                 "estimated_volume_angstrom3": round((4 / 3) * math.pi * rog**3, 1),
             }
         )
 
-    return pockets
+    return clusters
 
 
-# ── Pocket druggability sub-score model ──────────────────────────────────────
-# The druggability index is the sum of four equally weighted sub-scores, each in
-# ``[0, POCKET_SUBSCORE_MAX]`` (so the index runs 0–100). The ideal-pocket
-# constants below are geometry-only priors, not a validated pocket model — see
-# the tool's ``note`` field and ``LIMITATIONS.md``.
+# ── Cluster geometry score ───────────────────────────────────────────────────
+# The geometry score is the sum of four equally weighted sub-scores, each in
+# ``[0, POCKET_SUBSCORE_MAX]`` (so the score runs 0–100). The constants below
+# are uncalibrated geometry priors, not a validated pocket or druggability
+# model: the score only orders clusters. See ``LIMITATIONS.md`` L11.
 POCKET_SUBSCORE_MAX = 25.0
 POCKET_IDEAL_RESIDUES = 12.0
 """Residue count at/above which the size sub-score saturates."""
@@ -1347,16 +1713,15 @@ POCKET_ROG_TOLERANCE_ANGSTROM = 5.0
 POCKET_CENTROID_OFFSET_SATURATION_ANGSTROM = 20.0
 """Centroid offset (Å) at/above which the offset sub-score saturates.
 
-The sub-score rises with the pocket's offset from the structure centre. Because
-pockets are detected only among the inner 60 % of residues, a larger offset
-favours the more peripheral, solvent-accessible clefts (the common shape of a
-drug-binding site) over dead-central positions. This is a geometry-only prior,
-not a validated criterion — it does not measure solvent burial.
+The sub-score rises with the cluster's offset from the model centre, so among
+the core residues it ranks more peripheral clusters higher. This is an
+uncalibrated prior: it measures neither solvent access nor burial, and it does
+not indicate ligand binding.
 """
 
 
 def _pocket_subscores(pocket: dict[str, Any]) -> dict[str, float]:
-    """Return the four unrounded 0–25 druggability sub-scores for a pocket."""
+    """Return the four unrounded 0–25 geometry sub-scores for a cluster."""
     n_res: int = pocket.get("n_residues", 0)
     rog: float = pocket.get("radius_of_gyration_angstrom", 0.0)
     plddt: float = pocket.get("mean_plddt", 0.0)
@@ -1376,24 +1741,14 @@ def _pocket_subscores(pocket: dict[str, Any]) -> dict[str, float]:
     }
 
 
-def _pocket_druggability_index(pocket: dict[str, Any]) -> float:
-    """Score 0–100 for druggability based on pocket geometry."""
-    return round(sum(_pocket_subscores(pocket).values()), 1)
+def _geometry_score(cluster: dict[str, Any]) -> float:
+    """Uncalibrated 0–100 geometry score of a cluster (sum of the sub-scores)."""
+    return round(sum(_pocket_subscores(cluster).values()), 1)
 
 
-def _pocket_druggability_components(pocket: dict[str, Any]) -> dict[str, float]:
-    """Per-sub-score breakdown (rounded) so the 0–100 index is auditable."""
-    return {name: round(value, 2) for name, value in _pocket_subscores(pocket).items()}
-
-
-def _pocket_druggability_label(pdi: float) -> str:
-    if pdi >= 75:
-        return "EXCELLENT"
-    if pdi >= 55:
-        return "GOOD"
-    if pdi >= 35:
-        return "MODERATE"
-    return "POOR"
+def _geometry_score_components(cluster: dict[str, Any]) -> dict[str, float]:
+    """Per-sub-score breakdown (rounded) so the 0–100 score is auditable."""
+    return {name: round(value, 2) for name, value in _pocket_subscores(cluster).items()}
 
 
 def _extract_plddt_residue_records(
@@ -1566,7 +1921,13 @@ def _interpret_tda(tda: dict[str, Any]) -> str:
     else:
         parts.append("β₁ not computed")
     parts.append("β₂ not computed; no inference about protein cavities")
-    return "; ".join(parts) + "."
+    text = "; ".join(parts) + "."
+    if tda.get("subsampled"):
+        text += (
+            f" Computed on {tda.get('n_residues_used')} evenly spaced Cα atoms of "
+            f"{tda.get('n_residues_total')}; the values describe that subsample."
+        )
+    return text
 
 
 # ── Evolutionary drift helpers ────────────────────────────────────────────────

@@ -55,7 +55,7 @@ src/alphafold_sovereign/
 │   │                             disease–drug map, drug repurposing  (6)
 │   ├── structure_intelligence.py pLDDT confidence, topology fingerprint,
 │   │                             topological comparison, evolutionary
-│   │                             shifts, pocket geometry, disorder,
+│   │                             shifts, core-residue clusters, disorder,
 │   │                             structure retrieval                    (7)
 │   ├── disease.py                MONDO/HPO lookups, target–disease evidence,
 │   │                             3-D variant triage, ICD-10 resolution  (11)

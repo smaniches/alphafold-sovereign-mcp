@@ -42,7 +42,11 @@ import structlog
 from pydantic import BaseModel, ConfigDict, Field
 
 from alphafold_sovereign import __version__
-from alphafold_sovereign.clients.alphafold import AlphaFoldClient
+from alphafold_sovereign.clients.alphafold import (
+    AlphaFoldClient,
+    _afdb_version_label,
+    _prediction_version,
+)
 from alphafold_sovereign.clients.chembl import ChEMBLClient
 from alphafold_sovereign.clients.clinvar import ClinVarClient
 from alphafold_sovereign.clients.disgenet import DisGeNETClient
@@ -288,6 +292,11 @@ class TargetSelectivityInput(BaseModel):
 
 _NOT_ASSESSED = "NOT_ASSESSED"
 
+_CADD_NOT_RETRIEVED = (
+    "NOT_RETRIEVED: this server does not request CADD scores from Ensembl VEP, so "
+    "cadd_phred is always null."
+)
+
 _PATHOGENIC_MAP = {
     PathogenicityClass.PATHOGENIC: ("P", "Pathogenic"),
     PathogenicityClass.LIKELY_PATHOGENIC: ("LP", "Likely Pathogenic"),
@@ -491,15 +500,18 @@ def _unassessed_evidence(
                 "source_class": am_prediction.get("am_class"),
             },
             "ensembl_vep": {
-                key: canonical_tc.get(key)
-                for key in (
-                    "transcript_id",
-                    "sift_prediction",
-                    "sift_score",
-                    "polyphen_prediction",
-                    "polyphen_score",
-                    "cadd_phred",
-                )
+                **{
+                    key: canonical_tc.get(key)
+                    for key in (
+                        "transcript_id",
+                        "sift_prediction",
+                        "sift_score",
+                        "polyphen_prediction",
+                        "polyphen_score",
+                    )
+                },
+                "cadd_phred": None,
+                "cadd_phred_note": _CADD_NOT_RETRIEVED,
             },
             "acmg_criteria": dict.fromkeys(("PP3", "BP4"), _NOT_ASSESSED),
             "criteria_note": (
@@ -524,7 +536,7 @@ def _unassessed_evidence(
 def _vep_to_acmg(consequences: list[dict[str, Any]]) -> dict[str, str]:
     """Extract provisional VEP consequence signals, not clinical ACMG criteria.
 
-    SIFT, PolyPhen and CADD outputs are not combined into PP3 here; they are
+    SIFT and PolyPhen outputs are not combined into PP3 here; they are
     returned as predictions by :func:`_unassessed_evidence`.
     """
     criteria: dict[str, str] = {}
@@ -732,7 +744,8 @@ async def generate_variant_clinical_report(
     source classifications and computational observations separately; it
     does not assign an independent clinical tier or establish ACMG criteria.
 
-    1. **Ensembl VEP** — functional consequence, SIFT/PolyPhen/CADD predictions
+    1. **Ensembl VEP** — functional consequence, VEP's protein-level HGVS
+       (``hgvsp``), SIFT and PolyPhen predictions
     2. **ClinVar** — clinical pathogenicity classifications and review status
     3. **gnomAD v4** — population allele frequencies (gnomAD v4, ~807k individuals)
     4. **AlphaMissense** — deep-learning missense pathogenicity (Cheng et al. 2023)
@@ -751,9 +764,13 @@ async def generate_variant_clinical_report(
     ``unassessed_evidence.population_frequency`` gives the looked-up variant
     ID, the per-cohort (exome, genome) counts and an explicit ``lookup_status``;
     a variant without a gnomAD record is never reported as allele frequency 0.
-    Allele frequency and predictor scores (AlphaMissense, SIFT, PolyPhen,
-    CADD) are returned as observations: BA1, BS1, PM2, PP3 and BP4 are
-    ``NOT_ASSESSED``.
+    Allele frequency and predictor scores (AlphaMissense, SIFT, PolyPhen)
+    are returned as observations: BA1, BS1, PM2, PP3 and BP4 are
+    ``NOT_ASSESSED``. CADD is not retrieved: ``cadd_phred`` is always null.
+    ``functional_consequence.hgvsp`` is VEP's protein-level HGVS expression
+    for the canonical Ensembl transcript, such as
+    ``ENSP00000350283.3:p.Cys61Gly`` (``p.Thr125=`` for a synonymous change).
+    It is empty when VEP reports none, as for an intronic or splice-site change.
 
     Input fields:
         params.hgvs: HGVS expression. Gene-relative expressions discover
@@ -973,7 +990,8 @@ async def generate_variant_clinical_report(
             "sift_score": canonical_tc.get("sift_score"),
             "polyphen_prediction": canonical_tc.get("polyphen_prediction", ""),
             "polyphen_score": canonical_tc.get("polyphen_score"),
-            "cadd_phred": canonical_tc.get("cadd_phred"),
+            "cadd_phred": None,
+            "cadd_phred_note": _CADD_NOT_RETRIEVED,
         },
         "clinvar": {
             "found": clinvar_record is not None,
@@ -1223,10 +1241,13 @@ async def assess_target_druggability(
     # AlphaFold confidence is an observed [0, 100] measurement or unassessed.
     plddt_mean: float | None = None
     plddt_status = "missing"
+    # Model version of the AlphaFold DB record actually read, for provenance.
+    afdb_versions: list[int | None] = []
     try:
         af_meta: Any = await _alphafold().get_prediction(uid)
         if isinstance(af_meta, dict):
             plddt_mean, plddt_status = validated_plddt(af_meta.get("globalMetricValue"))
+            afdb_versions = [_prediction_version(af_meta)] if af_meta else []
         else:
             plddt_status = "invalid_response"
     except ValueError as exc:
@@ -1319,7 +1340,7 @@ async def assess_target_druggability(
             chembl="v37",
             open_targets="OT-platform-live-release-unverified",
             gnomad="v4",
-            alphafold_db="v6",
+            alphafold_db=_afdb_version_label(afdb_versions),
         ),
     }
 
@@ -1391,10 +1412,13 @@ async def synthesize_protein_dossier(
     dossier_plddt: float | None = None
     dossier_plddt_status = "missing"
     af_gene = ""
+    # Model version of the AlphaFold DB record actually read, for provenance.
+    afdb_versions: list[int | None] = []
     try:
         af_meta: Any = await _alphafold().get_prediction(uid)
         if isinstance(af_meta, dict):
             dossier_plddt, dossier_plddt_status = validated_plddt(af_meta.get("globalMetricValue"))
+            afdb_versions = [_prediction_version(af_meta)] if af_meta else []
             raw_gene = af_meta.get("gene")
             af_gene = raw_gene.strip() if isinstance(raw_gene, str) else ""
         else:
@@ -1667,7 +1691,7 @@ async def synthesize_protein_dossier(
         open_targets="OT-platform-live-release-unverified",
         gnomad="v4",
         chembl="v37",
-        alphafold_db="v6",
+        alphafold_db=_afdb_version_label(afdb_versions),
         clinvar="current",
         ensembl="current",
         disgenet="current",
@@ -1981,8 +2005,9 @@ async def classify_variant_acmg(
         mapped to one GRCh38 single-nucleotide change or simple
         insertion/deletion, or a ``chrom-pos-ref-alt`` ID; a variant without
         a gnomAD record is never reported as allele frequency 0.
-      PP3 / BP4 — AlphaMissense score and class, SIFT, PolyPhen and CADD as
+      PP3 / BP4 — AlphaMissense score and class, SIFT and PolyPhen as
         reported by their sources; no calibrated evidence strength is derived.
+        CADD is not retrieved (``cadd_phred`` is always null).
       ClinVar is returned as independent source context, not as PP5/BP6 evidence.
 
     Input fields:

@@ -19,6 +19,7 @@ from __future__ import annotations
 import math
 import re
 from typing import Any
+from urllib.parse import quote
 
 import structlog
 
@@ -58,6 +59,34 @@ _VEP_LOCUS_FIELDS = (
 # The fields of a VEP hit that consequence rows are read from, in order of
 # preference: a hit with transcript consequences is described by them alone.
 _VEP_CONSEQUENCE_FIELDS = ("transcript_consequences", "intergenic_consequences")
+
+# RFC 3986 section 3.3: besides the unreserved characters, which ``quote``
+# never escapes, a path segment may carry the sub-delimiters, ":" and "@".
+_PATH_SEGMENT_SAFE = "!$&'()*+,;=:@"
+
+
+def _hgvs_path_segment(hgvs: str) -> str:
+    """Percent-encode an HGVS expression as exactly one URL path segment.
+
+    HGVS uses characters that are not literal path data: ``?`` (unknown
+    position or consequence), ``/`` (mosaic and chimeric notation), ``[``
+    and ``]`` (alleles and repeats) and ``>`` (substitutions). Interpolated
+    unescaped, ``?`` would start the query, ``#`` a fragment and ``/`` a new
+    segment, ``%XX`` would be decoded, and a lone ``.`` or ``..`` would be
+    removed by URL normalisation, so the request would not name the
+    expression the caller gave. Every character a path segment may carry
+    literally is left as it is; decoding the segment always returns ``hgvs``.
+
+    This settles what the client sends, not what Ensembl accepts. Observed on
+    2026-11-11, its REST server read an expression only up to an encoded
+    ``/`` and decoded ``%25XX`` a second time, so mosaic and chimeric notation
+    is still not annotated as written. Callers must keep comparing the
+    ``input`` VEP echoes with the expression they asked about.
+    """
+    segment = quote(hgvs, safe=_PATH_SEGMENT_SAFE)
+    if segment in (".", ".."):
+        segment = segment.replace(".", "%2E")
+    return segment
 
 
 def _first_uniprot(value: Any) -> str:
@@ -125,8 +154,17 @@ class EnsemblClient(BaseAsyncClient):
             ``transcript_id``, ``gene_id``, ``gene_symbol``,
             ``biotype``, ``impact``, ``consequence_terms``,
             ``protein_id``, ``protein_start``, ``amino_acids``, ``codons``,
-            ``polyphen_score``, ``sift_score``, ``cadd_phred``,
+            ``hgvsc``, ``hgvsp``, ``polyphen_score``, ``sift_score``,
             ``sift_prediction``, ``polyphen_prediction``, ``swissprot``.
+            ``hgvsc`` and ``hgvsp`` are VEP's own HGVS expressions on the
+            Ensembl transcript and protein of that consequence (for example
+            ``ENSP00000350283.3:p.Cys61Gly``, or ``p.Thr125=`` for a
+            synonymous change), not a restatement of the query. Each is an
+            empty string when VEP reports none: ``hgvsp`` for an intronic or
+            splice-site consequence, both for a consequence on a neighbouring
+            gene such as ``upstream_gene_variant``. ``cadd_phred``,
+            ``cadd_raw`` and ``spliceai_ds_max`` are always ``None``: CADD
+            and SpliceAI are VEP plugins that this client does not request.
             Each dict also carries ``locus``: the genomic mapping VEP reports
             for the hit the consequence belongs to (``input``,
             ``assembly_name``, ``seq_region_name``, ``start``, ``end``,
@@ -147,10 +185,12 @@ class EnsemblClient(BaseAsyncClient):
             "xref_refseq": 1,
             "Genoverse": 0,
             "vcf_string": 1,
+            # Without this flag VEP returns no ``hgvsc`` or ``hgvsp``.
+            "hgvs": 1,
         }
         try:
             data = await self._get(
-                f"/vep/{self.species}/hgvs/{hgvs}",
+                f"/vep/{self.species}/hgvs/{_hgvs_path_segment(hgvs)}",
                 params=params,
             )
         except Exception as exc:
@@ -430,7 +470,6 @@ class EnsemblClient(BaseAsyncClient):
 
     @staticmethod
     def _parse_tc(tc: dict[str, Any]) -> dict[str, Any]:
-        extras = tc.get("extra", {}) or {}
         return {
             "transcript_id": tc.get("transcript_id", ""),
             "gene_id": tc.get("gene_id", ""),
@@ -455,7 +494,10 @@ class EnsemblClient(BaseAsyncClient):
             "sift_prediction": tc.get("sift_prediction", ""),
             "polyphen_score": tc.get("polyphen_score"),
             "polyphen_prediction": tc.get("polyphen_prediction", ""),
-            "cadd_phred": extras.get("CADD_PHRED"),
-            "cadd_raw": extras.get("CADD_raw"),
-            "spliceai_ds_max": extras.get("SpliceAI_pred_DS_max"),
+            # CADD and SpliceAI are VEP plugin outputs that ``vep_hgvs`` does
+            # not request, so there is no value to report. The keys stay so
+            # that the row shape is unchanged.
+            "cadd_phred": None,
+            "cadd_raw": None,
+            "spliceai_ds_max": None,
         }

@@ -423,7 +423,13 @@ _NO_FUNCTIONAL_CONSEQUENCE = {
     "polyphen_prediction": "",
     "polyphen_score": None,
     "cadd_phred": None,
+    "cadd_phred_note": pm._CADD_NOT_RETRIEVED,
 }
+
+
+def _vep_values(predictions: dict[str, Any]) -> set[Any]:
+    """Values read from VEP for the predictor block (the fixed CADD note is not one)."""
+    return {value for key, value in predictions["ensembl_vep"].items() if key != "cadd_phred_note"}
 
 
 def _usable_vep_row(echoed: str | None) -> dict[str, Any]:
@@ -448,6 +454,8 @@ def _usable_vep_row(echoed: str | None) -> dict[str, Any]:
         "sift_score": 0.0,
         "polyphen_prediction": "probably_damaging",
         "polyphen_score": 0.99,
+        # The Ensembl client never reports CADD (it is not requested). The
+        # value is here to show that the tools do not pass one through.
         "cadd_phred": 35.0,
     }
 
@@ -475,7 +483,13 @@ async def test_vep_row_naming_the_query_feeds_every_vep_derived_output(
     predictions = out["unassessed_evidence"]["computational_predictions"]
     assert predictions["ensembl_vep"]["transcript_id"] == "NM_999999.1"
     assert predictions["ensembl_vep"]["sift_prediction"] == "deleterious"
+    # AF-11: CADD is not retrieved, and the output says so instead of a bare null.
+    assert predictions["ensembl_vep"]["cadd_phred"] is None
+    assert predictions["ensembl_vep"]["cadd_phred_note"].startswith("NOT_RETRIEVED")
     if report_kind == "variant":
+        assert out["functional_consequence"]["hgvsp"] == "p.Met1?"
+        assert out["functional_consequence"]["cadd_phred"] is None
+        assert out["functional_consequence"]["cadd_phred_note"].startswith("NOT_RETRIEVED")
         assert out["functional_consequence"]["consequence_terms"] == ["start_lost"]
         assert set(out["acmg_criteria_draft"]["criteria"]) == {"PVS1"}
     else:
@@ -521,7 +535,7 @@ async def test_vep_reply_that_does_not_name_the_query_is_an_invalid_response(
     assert frequency["mapping_basis"] is None
     assert "response could not be validated" in frequency["detail"]
     predictions = evidence["computational_predictions"]
-    assert set(predictions["ensembl_vep"].values()) == {None}
+    assert _vep_values(predictions) == {None}
     assert predictions["alphamissense"] == {
         "status": "skipped_upstream_invalid",
         "protein_variant": None,
@@ -578,7 +592,7 @@ async def test_caller_supplied_variant_id_is_looked_up_whatever_vep_returns(
     assert frequency["lookup_status"] == "found"
     assert "assembly is not verified" in frequency["detail"]
     predictions = out["unassessed_evidence"]["computational_predictions"]
-    assert set(predictions["ensembl_vep"].values()) == {None}
+    assert _vep_values(predictions) == {None}
     sources["alphafold"].alphamissense_score.assert_not_awaited()
     if report_kind == "variant":
         assert out["functional_consequence"] == _NO_FUNCTIONAL_CONSEQUENCE

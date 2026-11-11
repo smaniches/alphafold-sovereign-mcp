@@ -49,9 +49,43 @@ def test_interpret_constraint_moderately_constrained() -> None:
     assert "Moderately constrained" in msg
 
 
-def test_interpret_constraint_tolerant() -> None:
+def test_interpret_constraint_high_loeuf_is_not_called_tolerance() -> None:
+    """AF-7: absence of constraint is not reported as loss-of-function being benign."""
     msg = _interpret_constraint({"loeuf": 0.9})
-    assert "Tolerant to loss-of-function" in msg
+    assert msg.startswith("Not constrained by this metric (LOEUF=0.900, at or above 0.6)")
+    assert "not evidence that such variants are benign" in msg
+    assert "recessive or late-onset disease" in msg
+    assert "olerant" not in msg
+    assert "tolerated" not in msg
+
+
+@pytest.mark.parametrize(
+    ("gene", "loeuf"),
+    # LOEUF returned by the live gnomAD API in the November 2026 audit. Both
+    # genes carry pathogenic loss-of-function variants; release 1.5.12 said of
+    # each that "LoF variants are tolerated in the population".
+    [("BRCA1", 0.927589724465447), ("CFTR", 1.193105532032236)],
+)
+def test_disease_genes_with_high_loeuf_are_not_described_as_lof_tolerant(
+    gene: str, loeuf: float
+) -> None:
+    msg = _interpret_constraint({"loeuf": loeuf})
+    assert msg.startswith(f"Not constrained by this metric (LOEUF={loeuf:.3f}")
+    assert "not evidence that such variants are benign" in msg
+    assert "tolerated" not in msg
+
+
+@pytest.mark.parametrize(
+    ("loeuf", "band"),
+    [
+        (0.3499, "Highly constrained"),
+        (0.35, "Moderately constrained"),
+        (0.5999, "Moderately constrained"),
+        (0.6, "Not constrained by this metric"),
+    ],
+)
+def test_interpret_constraint_band_edges_are_unchanged(loeuf: float, band: str) -> None:
+    assert _interpret_constraint({"loeuf": loeuf}).startswith(band)
 
 
 # ---------------------------------------------------------------------------

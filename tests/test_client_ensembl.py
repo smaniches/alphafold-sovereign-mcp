@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import unquote
 
 import httpx
 import pytest
@@ -14,6 +15,7 @@ from alphafold_sovereign.clients._base import UpstreamError
 from alphafold_sovereign.clients.ensembl import (
     EnsemblClient,
     _first_uniprot,
+    _hgvs_path_segment,
     _optional_percent_identity,
 )
 
@@ -75,24 +77,35 @@ def test_parse_tc_full_payload() -> None:
         "sift_prediction": "deleterious",
         "polyphen_score": 0.95,
         "polyphen_prediction": "probably_damaging",
-        "extra": {
-            "CADD_PHRED": 27.3,
-            "CADD_raw": 4.21,
-            "SpliceAI_pred_DS_max": 0.85,
-        },
     }
     parsed = EnsemblClient._parse_tc(tc)
     assert parsed["canonical"] is True
     assert parsed["refseq_transcript_ids"] == ["NM_007294.4"]
     assert parsed["protein_start"] == 61
     assert parsed["swissprot"] == "P38398.280"
-    assert parsed["cadd_phred"] == 27.3
-    assert parsed["spliceai_ds_max"] == 0.85
+    assert parsed["hgvsp"] == "ENSP1:p.A1B"
+    assert parsed["hgvsc"] == "ENST1:c.1A>B"
 
 
-def test_parse_tc_handles_extra_none() -> None:
-    parsed = EnsemblClient._parse_tc({"transcript_id": "T", "extra": None})
+@pytest.mark.parametrize(
+    "plugin_fields",
+    [
+        {},
+        # What VEP adds to a consequence when its CADD plugin is requested
+        # (recorded 2026-11-11 for NM_007294.4:c.181T>G with ``CADD=1``).
+        {"cadd_phred": 24.5, "cadd_raw": 4.174515},
+        # The shape earlier releases read; the REST API has never sent it.
+        {"extra": {"CADD_PHRED": 27.3, "CADD_raw": 4.21, "SpliceAI_pred_DS_max": 0.85}},
+        {"extra": None},
+    ],
+    ids=["absent", "rest_plugin_shape", "legacy_extra_shape", "extra_none"],
+)
+def test_parse_tc_reports_no_plugin_score(plugin_fields: dict[str, Any]) -> None:
+    """AF-11: CADD and SpliceAI are not requested, so no score is ever reported."""
+    parsed = EnsemblClient._parse_tc({"transcript_id": "T", **plugin_fields})
     assert parsed["cadd_phred"] is None
+    assert parsed["cadd_raw"] is None
+    assert parsed["spliceai_ds_max"] is None
 
 
 # ---------------------------------------------------------------------------
@@ -282,6 +295,10 @@ async def test_vep_hgvs_canonical_false_kwarg(
     assert "canonical=0" in str(route.calls.last.request.url)
     assert "uniprot=1" in str(route.calls.last.request.url)
     assert "vcf_string=1" in str(route.calls.last.request.url)
+    # AF-11: HGVS output is requested; the CADD plugin is not.
+    query = dict(route.calls.last.request.url.params)
+    assert query["hgvs"] == "1"
+    assert "CADD" not in query
 
 
 async def test_vep_hgvs_error_returns_empty(respx_mock: respx.MockRouter) -> None:
@@ -291,6 +308,121 @@ async def test_vep_hgvs_error_returns_empty(respx_mock: respx.MockRouter) -> Non
     async with EnsemblClient() as client:
         with pytest.raises(UpstreamError):
             await client.vep_hgvs("BAD")
+
+
+# ---------------------------------------------------------------------------
+# AF-new: the HGVS expression is exactly one path segment of the request
+# ---------------------------------------------------------------------------
+
+_VEP_PATH_PREFIX = b"/vep/human/hgvs/"
+
+# Expressions release 1.5.12 already transmitted correctly.
+_STANDARD_HGVS = [
+    "NM_007294.4:c.181T>G",
+    "NC_000017.11:g.43106487A>C",
+    "NM_007294.4:c.68_69del",
+    "NM_000492.4:c.1521_1523del",
+    "NM_007294.4:c.5266dup",
+    "NM_007294.4:c.181_182delinsGC",
+    "BRCA1:c.181T>G",
+    "TP53:p.Arg248Trp",
+    "ENST00000357654.8:c.181T>G",
+    "NM_007294.4:c.135-1G>T",
+    "NM_007294.4:c.4185+1G>T",
+    "NM_007294.4:c.*1G>A",
+    "NM_007294.4:c.-19C>T",
+    "NP_009225.1:p.(Cys61Gly)",
+    "ENSP00000269305.4:p.Thr125=",
+]
+
+# Expressions whose unescaped path does not name them: "?" starts the query, "#"
+# a fragment, "/" a further segment, "%3E" is decoded, and dot segments are
+# removed. HGVS itself uses "?" (unknown) and "/" (mosaic notation).
+_RESERVED_HGVS = [
+    "NM_007294.4:c.(?_-1)_(*1_?)del",
+    "ENSP00000350283.3:p.Met1?",
+    "NM_000546.6:c.85=/T>C",
+    "NM_007294.4:c.181T>G#frag",
+    "NM_007294.4:c.76A%3EC",
+    "X/../../lookup/id/ENSG00000012048",
+    "..",
+    ".",
+]
+
+
+def _path_sent(path: str) -> bytes:
+    """The path httpx sends for ``path`` when a query is supplied, as the client does."""
+    with httpx.Client(base_url="https://rest.ensembl.org") as client:
+        request = client.build_request("GET", path, params={"canonical": 1})
+    sent, _, query = request.url.raw_path.partition(b"?")
+    assert query == b"canonical=1"  # nothing from the path leaks into the query
+    return sent
+
+
+def _names_in_one_segment(path: bytes, hgvs: str) -> bool:
+    """Whether ``path`` is the VEP endpoint followed by ``hgvs`` as a single segment."""
+    if not path.startswith(_VEP_PATH_PREFIX):
+        return False
+    segment = path[len(_VEP_PATH_PREFIX) :].decode("ascii")
+    return "/" not in segment and unquote(segment) == hgvs
+
+
+@pytest.mark.parametrize("hgvs", _STANDARD_HGVS)
+def test_standard_hgvs_request_path_is_unchanged(hgvs: str) -> None:
+    """Escaping changes nothing for expressions that were already sent correctly."""
+    before = _path_sent(f"/vep/human/hgvs/{hgvs}")
+    after = _path_sent(f"/vep/human/hgvs/{_hgvs_path_segment(hgvs)}")
+    assert after == before
+    assert _names_in_one_segment(after, hgvs)
+
+
+@pytest.mark.parametrize("hgvs", _RESERVED_HGVS)
+def test_reserved_characters_stay_inside_the_hgvs_segment(hgvs: str) -> None:
+    """The request names the expression given, not a truncated or different path."""
+    # Fail-before: this is the path release 1.5.12 built.
+    assert not _names_in_one_segment(_path_sent(f"/vep/human/hgvs/{hgvs}"), hgvs)
+    assert _names_in_one_segment(_path_sent(f"/vep/human/hgvs/{_hgvs_path_segment(hgvs)}"), hgvs)
+
+
+def test_allele_brackets_are_escaped_without_changing_the_expression() -> None:
+    """Brackets were sent raw before; RFC 3986 does not allow them in a path."""
+    hgvs = "NM_007294.4:c.[181T>G;190T>C]"
+    after = _path_sent(f"/vep/human/hgvs/{_hgvs_path_segment(hgvs)}")
+    assert after == b"/vep/human/hgvs/NM_007294.4:c.%5B181T%3EG;190T%3EC%5D"
+    assert _names_in_one_segment(after, hgvs)
+
+
+def test_hgvs_path_segment_round_trips_every_printable_ascii_character() -> None:
+    for code in range(0x20, 0x7F):
+        hgvs = f"NM_1.1:c.1{chr(code)}2"
+        segment = _hgvs_path_segment(hgvs)
+        assert unquote(segment) == hgvs
+        assert not set(segment) & set("/?#")
+        sent = _path_sent(f"/vep/human/hgvs/{segment}")
+        assert sent == _VEP_PATH_PREFIX + segment.encode("ascii")
+
+
+def test_hgvs_path_segment_encodes_non_ascii_text() -> None:
+    # U+03B1 and U+03B2, written as escapes: their UTF-8 bytes are what is encoded.
+    assert _hgvs_path_segment("NM_1.1:c.1\u03b1>\u03b2") == "NM_1.1:c.1%CE%B1%3E%CE%B2"
+
+
+async def test_vep_hgvs_sends_reserved_characters_as_part_of_the_expression(
+    respx_mock: respx.MockRouter,
+) -> None:
+    """End to end: a ``?`` in the expression no longer starts the query string."""
+    hgvs = "ENSP00000350283.3:p.Met1?"
+    route = respx_mock.get(url__regex=r"^https://rest\.ensembl\.org/vep/human/hgvs/").mock(
+        return_value=httpx.Response(200, json=[{"input": hgvs}])
+    )
+    async with EnsemblClient() as client:
+        rows = await client.vep_hgvs(hgvs)
+
+    request = route.calls.last.request
+    assert request.url.raw_path.startswith(b"/vep/human/hgvs/ENSP00000350283.3:p.Met1%3F?")
+    assert request.url.path == f"/vep/human/hgvs/{hgvs}"
+    assert dict(request.url.params)["vcf_string"] == "1"
+    assert rows[0]["locus"]["input"] == hgvs
 
 
 # ---------------------------------------------------------------------------

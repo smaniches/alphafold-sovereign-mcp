@@ -16,8 +16,8 @@
 A Model Context Protocol server that wraps **AlphaFold DB** and 8
 other public biomedical data sources behind a set of MCP tool calls,
 backed by a local SQLite knowledge graph with query, export, and
-traversal tools. The graph loads a curated boot seed automatically when
-empty and can be extended through its API; there is no automatic
+traversal tools. A fresh installation starts with an empty graph; data
+enters it through explicit writes to its API, and there is no automatic
 per-invocation persistence.
 
 ## What it does
@@ -28,11 +28,11 @@ per-invocation persistence.
   reports, disease–target landscape summaries, drug-repurposing
   candidates, cross-species structural divergence.
 - Ships a local SQLite knowledge graph with query, export, and
-  traversal tools. It loads a curated boot seed automatically when
-  empty (16 entities and 15 relationships; disable with
-  `AFSMCP_DISABLE_KG_SEED=1`) and can be extended through its storage
-  API. There is no automatic per-invocation persistence: the analysis
-  tools do not write to the store on their own.
+  traversal tools. Fresh installations begin without automatically
+  inserted biomedical records (the earlier illustrative boot seed is
+  retired and writes nothing); data is stored by explicit writes through
+  the storage API. There is no automatic per-invocation persistence: the
+  analysis tools do not write to the store on their own.
 
 See [Tool reference](tools/index.md) for the full inventory.
 For current AlphaFold DB prediction field names, isoform-selection behavior,
@@ -46,6 +46,9 @@ and upstream literature annotations, see [AlphaFold DB API compatibility](afdb-c
   surface** of upstream evidence — not a clinical interpretation.
 - The druggability tier returned by the target-assessment tool is a
   **heuristic** — not a validated prediction.
+- The structure tools do **not** identify protein domains, detect
+  binding pockets or assess druggability, and the Cα summary vector is
+  not a validated similarity measure.
 
 See [Limitations](limitations.md) for the itemised gap list.
 

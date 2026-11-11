@@ -15,5 +15,5 @@
   },
   "maturity": "beta",
   "scientific_validation": "unvalidated",
-  "scientific_validation_note": "Engineering-validated (100% line and branch coverage) and exercised end-to-end against the live upstream APIs. Scientific outputs (ACMG draft, druggability tier) have NOT been reviewed by independent domain experts. Not yet deployed in production. See STATUS.md and LIMITATIONS.md."
+  "scientific_validation_note": "Engineering-validated: 100% line and branch coverage, measured on tests that answer every upstream request from mocked or recorded responses. The test suite does not call the live upstream APIs; one narrow live check (a PDBe/SIFTS residue correspondence) runs when its files change or on manual dispatch. No end-to-end validation against real-world cases has been performed. Scientific outputs (ACMG draft, druggability tier) have NOT been reviewed by independent domain experts. Not yet deployed in production. See STATUS.md and LIMITATIONS.md."
 }

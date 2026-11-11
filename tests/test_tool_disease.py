@@ -12,6 +12,7 @@ import pytest
 from fastmcp import Client
 from fastmcp.exceptions import ToolError
 
+from alphafold_sovereign.clients import _base
 from alphafold_sovereign.clients.hpo import DiseaseByPhenotype
 from alphafold_sovereign.domain.disease import (
     DiseaseRecord,
@@ -674,6 +675,11 @@ async def test_get_common_disease_targets_no_filter(monkeypatch: pytest.MonkeyPa
     parsed = json.loads(out.split("---")[0].strip())
     assert parsed["status"] == "success"
     assert parsed["diseases_profiled"] >= 1
+    # Every lookup answered: the counts say so and no error is reported.
+    assert parsed["diseases_requested"] == parsed["diseases_profiled"] == len(parsed["profile"])
+    assert parsed["diseases_failed"] == 0
+    assert "error" not in parsed
+    assert all("top_targets" in entry for entry in parsed["profile"].values())
 
 
 async def test_get_common_disease_targets_filtered_disease(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -694,7 +700,11 @@ async def test_get_common_disease_targets_filtered_disease(monkeypatch: pytest.M
 
 
 async def test_get_common_disease_targets_with_exception(monkeypatch: pytest.MonkeyPatch) -> None:
-    """When ot.associated_targets raises, the exception is captured per disease."""
+    """A lookup that raises is captured per disease, and is not reported as success.
+
+    Release 1.5.12 returned ``status: "success"`` and ``diseases_profiled: 1``
+    here, with the only lookup failed.
+    """
     mock_client = MagicMock()
     mock_client.associated_targets = AsyncMock(side_effect=RuntimeError("ot fail"))
     _patch_client_class(
@@ -705,10 +715,70 @@ async def test_get_common_disease_targets_with_exception(monkeypatch: pytest.Mon
         CommonDiseaseInput(category="rare", disease_name="phenylketonuria")
     )
     parsed = json.loads(out.split("---")[0].strip())
-    assert parsed["status"] == "success"
-    # Each disease should carry an error
-    for entry in parsed["profile"].values():
-        assert "error" in entry
+    assert parsed["status"] == "error"
+    assert parsed["category"] == "rare"
+    assert (parsed["diseases_requested"], parsed["diseases_profiled"]) == (1, 0)
+    assert parsed["diseases_failed"] == 1
+    assert parsed["error"].startswith("All 1 Open Targets lookups failed")
+    assert "not evidence that these diseases have no associated targets" in parsed["error"]
+    # The per-disease reason is kept, with the identifier that was asked for.
+    assert parsed["profile"] == {
+        "phenylketonuria": {"error": "ot fail", "mondo_id": "MONDO:0009861"}
+    }
+
+
+async def test_get_common_disease_targets_all_lookups_failed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Every lookup of a category fails: the answer is an error, not an empty success."""
+    mock_client = MagicMock()
+    mock_client.associated_targets = AsyncMock(side_effect=RuntimeError("upstream down"))
+    _patch_client_class(
+        monkeypatch, "alphafold_sovereign.tools.disease.OpenTargetsClient", mock_client
+    )
+
+    out = await get_common_disease_targets(CommonDiseaseInput(category="rare"))
+    parsed = json.loads(out.split("---")[0].strip())
+    requested = len(COMMON_DISEASE_ROOTS["rare"])
+    assert parsed["status"] == "error"
+    assert parsed["diseases_requested"] == parsed["diseases_failed"] == requested
+    assert parsed["diseases_profiled"] == 0
+    assert parsed["error"].startswith(f"All {requested} Open Targets lookups failed")
+    assert set(parsed["profile"]) == set(COMMON_DISEASE_ROOTS["rare"])
+    assert all(entry["error"] == "upstream down" for entry in parsed["profile"].values())
+    assert not any("top_targets" in entry for entry in parsed["profile"].values())
+
+
+async def test_get_common_disease_targets_some_lookups_failed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Some lookups fail: the status is partial and the counts name both sides."""
+    failing = COMMON_DISEASE_ROOTS["rare"]["cystic_fibrosis"]
+
+    async def associated_targets(mondo_id: str, *, limit: int) -> list[TargetEvidenceScore]:
+        if mondo_id == failing:
+            raise RuntimeError("timed out")
+        return [_evidence_score()]
+
+    mock_client = MagicMock()
+    mock_client.associated_targets = associated_targets
+    _patch_client_class(
+        monkeypatch, "alphafold_sovereign.tools.disease.OpenTargetsClient", mock_client
+    )
+
+    out = await get_common_disease_targets(CommonDiseaseInput(category="rare"))
+    parsed = json.loads(out.split("---")[0].strip())
+    requested = len(COMMON_DISEASE_ROOTS["rare"])
+    assert parsed["status"] == "partial"
+    assert parsed["diseases_requested"] == requested
+    assert parsed["diseases_profiled"] == requested - 1
+    assert parsed["diseases_failed"] == 1
+    # A partial answer carries no top-level error; the failed entry says why.
+    assert "error" not in parsed
+    assert parsed["profile"]["cystic_fibrosis"] == {"error": "timed out", "mondo_id": failing}
+    answered = {name: e for name, e in parsed["profile"].items() if name != "cystic_fibrosis"}
+    assert len(answered) == requested - 1
+    assert all(len(entry["top_targets"]) == 1 for entry in answered.values())
 
 
 # ---------------------------------------------------------------------------
@@ -806,7 +876,21 @@ async def test_triage_variant_3d_disease_only_no_gnomad(
     assert "gnomAD" not in parsed["sources_queried"]
 
 
-async def test_triage_variant_3d_partial_exceptions(monkeypatch: pytest.MonkeyPatch) -> None:
+_TRIAGE_DEFAULT_PATHOGENICITY = {
+    "alphamissense_score": None,
+    "alphamissense_interpretation": "Not available",
+    "clinvar_classification": "Not provided",
+    "clinvar_review_status": "",
+    "clinvar_variation_id": "",
+    "clinvar_conditions": [],
+}
+
+
+async def test_triage_variant_3d_reports_error_when_every_lookup_failed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Release 1.5.12 answered ``status: success`` when both lookups raised."""
+
     async def fake_clinvar(hgvs: str, gene: str) -> dict[str, Any]:
         raise RuntimeError("cv fail")
 
@@ -822,21 +906,134 @@ async def test_triage_variant_3d_partial_exceptions(monkeypatch: pytest.MonkeyPa
 
     out = await triage_variant_3d(VariantTriageInput(hgvs="BRCA1:c.1T>G"))
     parsed = json.loads(out.split("---")[0].strip())
-    # All exceptions captured: source failures explicit; no clinical tier.
-    assert parsed["status"] == "success"
-    assert parsed["pathogenicity_tier"] == "NOT_ASSESSED"
+    assert parsed["status"] == "error"
+    assert parsed["error"] == (
+        "Every attempted evidence lookup failed (clinvar, gnomad), so no source evidence "
+        "was retrieved. This is a retrieval failure, not evidence about the variant: the "
+        "pathogenicity and population fields hold their defaults. "
+        "lookup_summary.failure_reasons gives each reason."
+    )
     assert parsed["data_sources_status"] == {"clinvar": "failed", "gnomad": "failed"}
+    assert parsed["lookup_summary"] == {
+        "attempted": ["clinvar", "gnomad"],
+        "answered": [],
+        "failed": ["clinvar", "gnomad"],
+        "skipped": [],
+        "failure_reasons": {
+            "clinvar": "RuntimeError: cv fail",
+            "gnomad": "RuntimeError: gn fail",
+        },
+    }
+    # The report keeps every field it had; the clinical section is untouched.
+    assert parsed["hgvs"] == "BRCA1:c.1T>G"
+    assert parsed["gene_symbol"] == "BRCA1"
+    assert parsed["pathogenicity_tier"] == "NOT_ASSESSED"
+    assert parsed["pathogenicity"] == _TRIAGE_DEFAULT_PATHOGENICITY
+    assert parsed["population_genetics"] == {}
+    assert parsed["clinvar_unverified_candidate"] is None
+    assert parsed["disease_context"] == {}
+    assert parsed["sources_queried"] == ["ClinVar", "gnomAD"]
+    assert "structure_note" in parsed
+
+
+_CANDIDATE_ONLY = {
+    "clinvar_unverified_candidate": {
+        "variation_id": "900001",
+        "name": "NM_007294.4(BRCA1):c.181T>G",
+        "identity_status": "candidate_text_not_allele_verified",
+    }
+}
 
 
 @pytest.mark.parametrize(
-    ("clinvar_result", "gnomad_result", "expected"),
+    ("clinvar_result", "gnomad_result", "expected", "status", "reasons"),
     [
-        ({}, {}, ("no_data", "no_data")),
-        ({"classification": "Benign"}, {"loeuf": 0.5}, ("ok", "ok")),
-        (RuntimeError("ClinVar unavailable"), {"loeuf": 0.5}, ("failed", "ok")),
-        ({"classification": "Benign"}, RuntimeError("gnomAD timeout"), ("ok", "failed")),
-        ({"classification": "Benign"}, ["malformed"], ("ok", "invalid_response")),
-        ({"classification": "Benign"}, {"constraint_available": False}, ("ok", "no_data")),
+        ({}, {}, ("no_data", "no_data"), "success", {}),
+        ({"classification": "Benign"}, {"loeuf": 0.5}, ("ok", "ok"), "success", {}),
+        (
+            {"classification": "Benign"},
+            {"constraint_available": False},
+            ("ok", "no_data"),
+            "success",
+            {},
+        ),
+        (_CANDIDATE_ONLY, {"loeuf": 0.5}, ("candidate_only", "ok"), "success", {}),
+        (
+            RuntimeError("ClinVar unavailable"),
+            {"loeuf": 0.5},
+            ("failed", "ok"),
+            "partial",
+            {"clinvar": "RuntimeError: ClinVar unavailable"},
+        ),
+        (
+            {"classification": "Benign"},
+            RuntimeError("gnomAD timeout"),
+            ("ok", "failed"),
+            "partial",
+            {"gnomad": "RuntimeError: gnomAD timeout"},
+        ),
+        (
+            {"classification": "Benign"},
+            ["malformed"],
+            ("ok", "invalid_response"),
+            "partial",
+            {"gnomad": "expected a JSON object, received list"},
+        ),
+        (
+            {},
+            RuntimeError("gnomAD timeout"),
+            ("no_data", "failed"),
+            "partial",
+            {"gnomad": "RuntimeError: gnomAD timeout"},
+        ),
+        (
+            _CANDIDATE_ONLY,
+            RuntimeError("gnomAD timeout"),
+            ("candidate_only", "failed"),
+            "partial",
+            {"gnomad": "RuntimeError: gnomAD timeout"},
+        ),
+        (
+            "malformed",
+            {"constraint_available": False},
+            ("invalid_response", "no_data"),
+            "partial",
+            {"clinvar": "expected a JSON object, received str"},
+        ),
+        (
+            RuntimeError("ClinVar unavailable"),
+            ["malformed"],
+            ("failed", "invalid_response"),
+            "error",
+            {
+                "clinvar": "RuntimeError: ClinVar unavailable",
+                "gnomad": "expected a JSON object, received list",
+            },
+        ),
+        (
+            None,
+            TimeoutError("gnomAD timeout"),
+            ("invalid_response", "failed"),
+            "error",
+            {
+                "clinvar": "expected a JSON object, received NoneType",
+                "gnomad": "TimeoutError: gnomAD timeout",
+            },
+        ),
+    ],
+    ids=[
+        "no_data+no_data",
+        "ok+ok",
+        "ok+no_data",
+        "candidate_only+ok",
+        "failed+ok",
+        "ok+failed",
+        "ok+invalid_response",
+        "no_data+failed",
+        "candidate_only+failed",
+        "invalid_response+no_data",
+        "failed+invalid_response",
+        "invalid_response+failed",
     ],
 )
 async def test_triage_variant_3d_source_outcomes(
@@ -844,7 +1041,11 @@ async def test_triage_variant_3d_source_outcomes(
     clinvar_result: Any,
     gnomad_result: Any,
     expected: tuple[str, str],
+    status: str,
+    reasons: dict[str, str],
 ) -> None:
+    """``status`` follows the two lookups; each row states what it should be."""
+
     async def fake_clinvar(hgvs: str, gene: str) -> Any:
         if isinstance(clinvar_result, BaseException):
             raise clinvar_result
@@ -867,8 +1068,18 @@ async def test_triage_variant_3d_source_outcomes(
         )
     )
     parsed = json.loads(out.split("---")[0].strip())
-    assert parsed["status"] == "success"
-    assert parsed["data_sources_status"] == dict(zip(("clinvar", "gnomad"), expected))
+    source_status = dict(zip(("clinvar", "gnomad"), expected))
+    assert parsed["status"] == status
+    assert parsed["data_sources_status"] == source_status
+    failed = list(reasons)
+    assert parsed["lookup_summary"] == {
+        "attempted": ["clinvar", "gnomad"],
+        "answered": [source for source in source_status if source not in failed],
+        "failed": failed,
+        "skipped": [],
+        "failure_reasons": reasons,
+    }
+    assert ("error" in parsed) is (status == "error")
 
 
 async def test_triage_variant_3d_skips_optional_gnomad(
@@ -880,7 +1091,134 @@ async def test_triage_variant_3d_skips_optional_gnomad(
     monkeypatch.setattr("alphafold_sovereign.tools.disease._fetch_clinvar", fake_clinvar)
     out = await triage_variant_3d(VariantTriageInput(hgvs="BRCA1:c.181T>G", include_gnomad=False))
     parsed = json.loads(out.split("---")[0].strip())
+    assert parsed["status"] == "success"
     assert parsed["data_sources_status"] == {"clinvar": "no_data", "gnomad": "skipped"}
+    assert parsed["lookup_summary"] == {
+        "attempted": ["clinvar"],
+        "answered": ["clinvar"],
+        "failed": [],
+        "skipped": ["gnomad"],
+        "failure_reasons": {},
+    }
+    assert "error" not in parsed
+
+
+async def test_triage_variant_3d_skipped_source_does_not_soften_a_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """ClinVar is the only lookup attempted and it fails: nothing was retrieved."""
+
+    async def fake_clinvar(hgvs: str, gene: str) -> dict[str, Any]:
+        raise RuntimeError("ClinVar unavailable")
+
+    monkeypatch.setattr("alphafold_sovereign.tools.disease._fetch_clinvar", fake_clinvar)
+    out = await triage_variant_3d(VariantTriageInput(hgvs="BRCA1:c.181T>G", include_gnomad=False))
+    parsed = json.loads(out.split("---")[0].strip())
+    assert parsed["status"] == "error"
+    assert parsed["error"].startswith("Every attempted evidence lookup failed (clinvar), ")
+    assert parsed["data_sources_status"] == {"clinvar": "failed", "gnomad": "skipped"}
+    assert parsed["lookup_summary"] == {
+        "attempted": ["clinvar"],
+        "answered": [],
+        "failed": ["clinvar"],
+        "skipped": ["gnomad"],
+        "failure_reasons": {"clinvar": "RuntimeError: ClinVar unavailable"},
+    }
+    assert parsed["sources_queried"] == ["ClinVar"]
+
+
+async def test_triage_variant_3d_failed_lookup_leaves_the_clinvar_evidence_unchanged(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A gnomAD failure changes the status and the summary, nothing clinical."""
+    record = {
+        "variation_id": "17661",
+        "gene_symbol": "BRCA1",
+        "classification": "Pathogenic",
+        "review_status": "reviewed by expert panel",
+        "conditions": ["Hereditary breast ovarian cancer syndrome"],
+        "exact_change_match": True,
+    }
+    gnomad: dict[str, Any] = {"outcome": {"gene_symbol": "BRCA1", "loeuf": 0.93}}
+
+    async def fake_clinvar(hgvs: str, gene: str) -> dict[str, Any]:
+        return dict(record)
+
+    async def fake_gnomad(hgvs: str, gene: str) -> dict[str, Any]:
+        if isinstance(gnomad["outcome"], Exception):
+            raise gnomad["outcome"]
+        return gnomad["outcome"]
+
+    monkeypatch.setattr("alphafold_sovereign.tools.disease._fetch_clinvar", fake_clinvar)
+    monkeypatch.setattr("alphafold_sovereign.tools.disease._fetch_gnomad", fake_gnomad)
+
+    async def report() -> dict[str, Any]:
+        out = await triage_variant_3d(
+            VariantTriageInput(hgvs="NM_007294.4(BRCA1):c.181T>G", include_structure=False)
+        )
+        return json.loads(out.split("\n\n---", 1)[0])
+
+    answered = await report()
+    gnomad["outcome"] = RuntimeError("gnomAD timeout")
+    degraded = await report()
+
+    assert answered["status"] == "success"
+    assert degraded["status"] == "partial"
+    assert "error" not in degraded
+    assert degraded["lookup_summary"] == {
+        "attempted": ["clinvar", "gnomad"],
+        "answered": ["clinvar"],
+        "failed": ["gnomad"],
+        "skipped": [],
+        "failure_reasons": {"gnomad": "RuntimeError: gnomAD timeout"},
+    }
+    assert degraded["population_genetics"] == {}
+    clinical = (
+        "pathogenicity_tier",
+        "pathogenicity_tier_explanation",
+        "pathogenicity",
+        "clinvar_unverified_candidate",
+    )
+    assert {key: degraded[key] for key in clinical} == {key: answered[key] for key in clinical}
+    assert degraded["pathogenicity"]["clinvar_classification"] == "Pathogenic"
+    changed = {key for key in answered if answered[key] != degraded.get(key)}
+    assert changed == {"status", "population_genetics", "data_sources_status", "lookup_summary"}
+    assert set(degraded) == set(answered)
+
+
+async def test_triage_variant_3d_offline_reports_the_refused_lookups(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The real clients run with the air gap on, through the MCP protocol.
+
+    Release 1.5.12 answered ``status: success`` here although neither source
+    was reached.
+    """
+    monkeypatch.setattr(_base, "_OFFLINE_MODE", True)
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "triage_variant_3d", {"params": {"hgvs": "BRCA1:c.181T>G"}}, raise_on_error=False
+        )
+
+    assert result.is_error is False
+    report = json.loads(result.content[0].text.split("\n\n---", 1)[0])
+    assert report["status"] == "error"
+    assert report["data_sources_status"] == {"clinvar": "failed", "gnomad": "failed"}
+    assert report["lookup_summary"]["failed"] == ["clinvar", "gnomad"]
+    assert report["lookup_summary"]["failure_reasons"] == {
+        "clinvar": (
+            "AirGapError: Air-gap mode active: outbound request to "
+            "'eutils.ncbi.nlm.nih.gov' blocked. "
+            "Set ALPHAFOLD_OFFLINE=0 or add to ALPHAFOLD_ALLOW_HOSTS."
+        ),
+        "gnomad": (
+            "AirGapError: Air-gap mode active: outbound request to "
+            "'gnomad.broadinstitute.org' blocked. "
+            "Set ALPHAFOLD_OFFLINE=0 or add to ALPHAFOLD_ALLOW_HOSTS."
+        ),
+    }
+    assert report["pathogenicity_tier"] == "NOT_ASSESSED"
+    assert report["pathogenicity"] == _TRIAGE_DEFAULT_PATHOGENICITY
 
 
 async def test_triage_variant_3d_outer_exception(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1521,11 +1859,14 @@ async def test_triage_unmatched_transcript_does_not_guess_gnomad_gene(
 
 
 @pytest.mark.parametrize(
-    ("outcome", "expected_status"),
-    [("exception", "failed"), ("malformed", "invalid_response")],
+    ("outcome", "expected_status", "expected_reason"),
+    [
+        ("exception", "failed", "RuntimeError: fabricated retrieval outage"),
+        ("malformed", "invalid_response", "expected a JSON object, received list"),
+    ],
 )
 async def test_synthetic_transcript_lookup_without_gene_handles_failure(
-    monkeypatch: pytest.MonkeyPatch, outcome: str, expected_status: str
+    monkeypatch: pytest.MonkeyPatch, outcome: str, expected_status: str, expected_reason: str
 ) -> None:
     """A transcript lookup failure never causes a guessed gene-level request."""
 
@@ -1544,9 +1885,17 @@ async def test_synthetic_transcript_lookup_without_gene_handles_failure(
         VariantTriageInput(hgvs="NM_999999.1:c.42A>G", include_structure=False)
     )
     report = json.loads(output.split("---", 1)[0])
-    assert report["status"] == "success"
+    assert report["status"] == "error"
+    assert report["error"].startswith("Every attempted evidence lookup failed (clinvar), ")
     assert report["gene_symbol"] == ""
     assert report["data_sources_status"] == {
         "clinvar": expected_status,
         "gnomad": "skipped_no_verified_gene",
+    }
+    assert report["lookup_summary"] == {
+        "attempted": ["clinvar"],
+        "answered": [],
+        "failed": ["clinvar"],
+        "skipped": ["gnomad"],
+        "failure_reasons": {"clinvar": expected_reason},
     }

@@ -72,8 +72,28 @@ looks like.
 
 ## Offline / air-gap mode
 
-Set `ALPHAFOLD_OFFLINE=1` to refuse all outbound HTTP and serve only
-from the local SQLite cache:
+Set `ALPHAFOLD_OFFLINE=1` to refuse all outbound HTTP. The
+knowledge-graph tools still answer from the local SQLite store. Tools
+that query an upstream service have no local cache. Depending on the
+tool, the call fails with an error or returns a result that reports the
+affected lookups as failed or not assessed.
+
+The structure tools do not all report a blocked AlphaFold DB request the
+same way:
+
+- `get_protein_structure`, `analyze_structural_confidence`,
+  `compute_topology_fingerprint`, `score_binding_pocket_geometry` and
+  `detect_intrinsically_disordered` return
+  `retrieval_status: "request_failed"`, which is not a statement that no
+  model exists.
+- `compare_proteins_topologically` returns no `retrieval_status`. It
+  lists each accession under `proteins_failed`, with the reason the
+  request failed.
+- `find_evolutionary_structural_shifts` queries Ensembl first, and the
+  call fails with an error when that request is blocked. If Ensembl is
+  allowlisted in `ALPHAFOLD_ALLOW_HOSTS` and AlphaFold DB is not, it
+  returns sequence identity only and does not say that the AlphaFold DB
+  request was blocked.
 
 ```bash
 ALPHAFOLD_OFFLINE=1 alphafold-sovereign-mcp

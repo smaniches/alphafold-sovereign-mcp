@@ -126,8 +126,13 @@ A Python MCP server that:
   optional `[tda]` extra (`gudhi`), it reports H₀/H₁ terminal-filtration
   Betti numbers; H₂ is not computed. The fallback reports a 4-Å contact
   graph component count and geometric features, not persistent homology.
+  The 64-slot vector holds at most 16 statistics (eight in the fallback);
+  the other slots are zero. With GUDHI, a model longer than 500 residues is
+  reduced to 500 evenly spaced Cα atoms before persistent homology is
+  computed; the fallback uses every residue.
   L2 distance between those feature vectors is not a calibrated measure
-  of protein homology or biological function.
+  of protein homology or biological function (see
+  [LIMITATIONS L12](LIMITATIONS.md)).
 
 It targets `mcp-spec 2025-06-18` and is CI-tested on Python 3.11–3.13.
 Python 3.10 reached upstream end of life on 1 October 2026 and is no longer
@@ -192,6 +197,13 @@ from absent matches. No cross-transcript equivalence is assumed.
   It is not sequence identity, RMSD, persistence-diagram Wasserstein
   distance, validated homology, or functional equivalence. Methods are
   reported separately rather than sorted on incompatible scales.
+- `analyze_structural_confidence` does **not** identify protein domains,
+  and `score_binding_pocket_geometry` does **not** detect binding pockets
+  or assess druggability. The first reports where near-diagonal PAE is
+  locally elevated; the second groups core residues into geometric
+  clusters. Earlier releases presented these as domain boundaries and as
+  scored pockets with druggability labels; an internal audit did not
+  support either reading (see [LIMITATIONS L10 and L11](LIMITATIONS.md)).
 - The AlphaFold structures consumed here are *predicted* models with
   per-residue pLDDT confidence, not experimental structures. Low-pLDDT
   regions are unreliable; some proteins (BRCA1 among them) are largely
@@ -289,7 +301,7 @@ guidance. The previous illustrative clinical-session transcripts were retired.
 ALPHAFOLD_OFFLINE=1 alphafold-sovereign-mcp
 ```
 
-Refuses outbound HTTP before a socket is opened (raising `AirGapError`), except to hosts you explicitly allowlist via `ALPHAFOLD_ALLOW_HOSTS`. The knowledge-graph query and export tools still answer from the local SQLite store. The upstream-querying tools have no local cache and report their source as unavailable; note that the structure tools currently surface this as a "no AlphaFold model" result rather than an explicit offline error.
+Refuses outbound HTTP before a socket is opened (raising `AirGapError`), except to hosts you explicitly allowlist via `ALPHAFOLD_ALLOW_HOSTS`. The knowledge-graph query and export tools still answer from the local SQLite store. The upstream-querying tools have no local cache; depending on the tool, the call fails with an error or returns a result that reports the affected lookups as failed or not assessed. Of the structure tools, `get_protein_structure`, `analyze_structural_confidence`, `compute_topology_fingerprint`, `score_binding_pocket_geometry` and `detect_intrinsically_disordered` report the blocked AlphaFold DB request as `retrieval_status: "request_failed"`, which is not a statement that no model exists. `compare_proteins_topologically` lists each accession under `proteins_failed` with the reason instead. `find_evolutionary_structural_shifts` queries Ensembl first and fails with an error when that request is blocked; with Ensembl allowlisted but not AlphaFold DB, it returns sequence identity only and does not say that the AlphaFold DB request was blocked.
 
 ---
 
@@ -333,11 +345,11 @@ original attribution; clinical interpretation requires independent review.
 
 | Tool | What it does |
 |---|---|
-| `analyze_structural_confidence` | mean pLDDT + confidence tier + PAE-derived domain boundaries |
-| `compute_topology_fingerprint` | 64-component exploratory vector; GUDHI computes H₀/H₁ at filtration endpoint; H₂ unavailable |
-| `compare_proteins_topologically` | Pairwise L2 fingerprint-distance matrix for 2–10 proteins |
+| `analyze_structural_confidence` | mean pLDDT + confidence tier + PAE summary with positions of locally elevated PAE; domains are not assessed |
+| `compute_topology_fingerprint` | 64-slot exploratory vector holding at most 16 statistics; GUDHI computes H₀/H₁ at filtration endpoint; H₂ unavailable; with GUDHI, models over 500 residues are subsampled (the fallback uses every residue) |
+| `compare_proteins_topologically` | Pairwise L2 fingerprint-distance matrix for 2–10 proteins; exploratory, no validated similarity threshold |
 | `find_evolutionary_structural_shifts` | Ensembl sequence identity + method-labeled structural feature distances; no mixed-scale risk ranking |
-| `score_binding_pocket_geometry` | Geometric pocket detection + heuristic druggability index |
+| `score_binding_pocket_geometry` | Geometric clusters of core residues + uncalibrated geometry score; not a validated pocket detector, no druggability class |
 | `detect_intrinsically_disordered` | Low-pLDDT modeled intervals; no validated disorder, linker, or clinical classification |
 | `get_protein_structure` | Retrieve an AlphaFold model: metadata, download URLs, optional coordinates |
 
@@ -427,8 +439,8 @@ find_evolutionary_structural_shifts(
 ```
 
 For each species: fetches the ortholog (Ensembl), the AlphaFold
-structure, computes the TDA fingerprint, and returns the L2 fingerprint
-distance from the human structure along with sequence identity.
+structure, computes the Cα feature vector, and returns the L2
+distance from the human structure's vector along with sequence identity.
 
 ---
 
@@ -516,7 +528,8 @@ See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the full module map.
   remains a roadmap item.
 
 The full CI matrix (Python 3.11, 3.12, 3.13 × Ubuntu, macOS)
-runs on every push. The coverage percentage above is the number a
+runs on every push, and one further job runs the suite with the optional
+`[tda]` extra installed. The coverage percentage above is the number a
 `git clone && uv run nox -s cov` produces on the current HEAD; if you
 find a divergence, please open an issue.
 

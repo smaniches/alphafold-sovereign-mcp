@@ -20,6 +20,12 @@ Two later corrections are covered by the last two sections: sex-stratified
 population records were listed beside the record they split, and a cohort
 frequency that contradicted its allele count and number was accepted.
 
+The VEP responses were recorded before the client also sent ``hgvs=1``. A
+comparison of both forms for the same fifteen expressions on 2026-11-11 found
+no difference other than the ``hgvsc``, ``hgvsp`` and ``hgvs_offset`` fields
+that the parameter adds, so they remain valid for everything asserted here;
+``test_vep_hgvs_flag_recorded.py`` covers the added fields.
+
 Tests marked synthetic alter a recorded response to exercise a failure that
 cannot be recorded on demand; they say so in their docstring.
 """
@@ -272,6 +278,7 @@ async def test_rare_frequency_and_alphamissense_assign_no_criterion(
         "polyphen_prediction": "benign",
         "polyphen_score": 0.027,
         "cadd_phred": None,
+        "cadd_phred_note": pm._CADD_NOT_RETRIEVED,
     }
     assert predictions["acmg_criteria"] == _NOT_ASSESSED_PREDICTION
     assert out["candidate_criteria"] == {}
@@ -499,6 +506,7 @@ _NO_FUNCTIONAL_CONSEQUENCE = {
     "polyphen_prediction": "",
     "polyphen_score": None,
     "cadd_phred": None,
+    "cadd_phred_note": pm._CADD_NOT_RETRIEVED,
 }
 
 
@@ -556,7 +564,10 @@ async def test_synthetic_vep_reply_that_does_not_name_the_query_is_rejected_by_b
         assert frequency["cohorts"] == {}
         assert "response could not be validated" in frequency["detail"]
         predictions = evidence["computational_predictions"]
-        assert set(predictions["ensembl_vep"].values()) == {None}
+        vep_values = {
+            value for key, value in predictions["ensembl_vep"].items() if key != "cadd_phred_note"
+        }
+        assert vep_values == {None}
         assert predictions["alphamissense"] == {
             "status": "skipped_upstream_invalid",
             "protein_variant": None,
@@ -1079,6 +1090,7 @@ async def test_recorded_intergenic_consequence_is_reported_without_a_transcript(
         "polyphen_prediction": "",
         "polyphen_score": None,
         "cadd_phred": None,
+        "cadd_phred_note": pm._CADD_NOT_RETRIEVED,
     }
     assert report["gene_symbol"] is None
     assert report["acmg_criteria_draft"]["criteria"] == {}

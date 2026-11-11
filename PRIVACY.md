@@ -6,73 +6,158 @@ AlphaFold Sovereign MCP is local-first, on-premises software. It is
 not a SaaS. The software runs on your infrastructure, under your
 control.
 
+This document describes what the shipped server does with the values it
+is given. It makes no statement about how any law or regulation applies
+to a particular deployment.
+
 ## Data This Software Processes
 
-The MCP server processes:
+The tools accept scientific identifiers and search text:
 
-- **UniProt accession IDs** (e.g., `P12345`) — identifiers for
-  protein sequences. These are not personal data.
-- **Amino acid sequences** submitted to `screen_sequence_of_concern`
-  or similar tools. These are not personal data.
-- **Gene symbols, variant identifiers (HGVS notation), disease
-  terms, and ontology identifiers.** These are scientific identifiers,
-  not personal data.
-- **Tool-call parameters and results** that may be persisted in the
-  audit log.
+- **UniProt accessions** (e.g., `P12345`), **gene symbols**, and
+  **Ensembl gene IDs**.
+- **Variants in HGVS notation.**
+- **Disease and phenotype identifiers**: MONDO IDs, HPO IDs, and
+  ICD-10 codes.
+- **Free-text search terms**, such as a disease name.
+- Species names, numeric limits, thresholds, and option flags.
 
-**This software does not process, store, or transmit any data that
-constitutes Personal Health Information (PHI) under HIPAA, or
-personal data under GDPR, by design.** If you extend it to do so,
-that is your responsibility and you must conduct a DPIA.
+No tool has a field for a person's name, date of birth, contact
+details, or record number, and no tool accepts a sequence or a file.
+Input validation checks identifier formats and numeric ranges. It does
+not look for personal information, so the software cannot tell whether
+a variant or a search term relates to an identifiable person. Whatever
+is supplied is handled as the sections below describe: it is sent to
+the upstream service that answers the query, it can appear in the
+server log, and the result is returned to the MCP client that made the
+call. Deciding which values may be supplied is left to whoever runs the
+server.
 
 ## Outbound Network Calls
 
-In online mode (default), the software makes outbound HTTPS requests
-to the following upstream services:
+In online mode (default), the tools that query an upstream service make
+HTTPS requests through one shared client. That client contacts the
+hosts below and refuses any request or redirect that leaves the
+configured origin.
 
-| Service | Purpose | Data sent | Privacy policy |
+| Host | Service | Used for | Sent in the request |
 |---|---|---|---|
-| `alphafold.ebi.ac.uk` | Fetch predicted structures | UniProt accession ID | [EMBL-EBI](https://www.ebi.ac.uk/data-protection/privacy-notice/alphafold) |
-| `rest.uniprot.org` | Fetch protein metadata | UniProt accession ID | [UniProt](https://www.uniprot.org/help/privacy) |
-| `www.ebi.ac.uk/ols4` | Fetch ontology terms (MONDO, HPO, etc.) | Ontology term ID | [EMBL-EBI](https://www.ebi.ac.uk/data-protection) |
-| `open.fda.gov` | Drug label and adverse-event queries | Drug/compound identifier | [openFDA](https://open.fda.gov/about/privacy/) |
-| `api.opentargets.org` | Disease-target evidence | Gene/disease identifier | [Open Targets](https://platform.opentargets.org/privacy) |
-| `clinicaltrials.gov` | Clinical trial data | Search terms | [ClinicalTrials.gov](https://clinicaltrials.gov/about-site/privacy) |
-| `eutils.ncbi.nlm.nih.gov` | PubMed/Gene queries | Search terms | [NCBI](https://www.ncbi.nlm.nih.gov/home/about/policies/) |
-| `clinicaltables.nlm.nih.gov` | ICD-10 code lookup | Code string | [NLM](https://www.nlm.nih.gov/privacy.html) |
-| `gnomad.broadinstitute.org` | Population allele frequencies | HGVS variant string | [gnomAD](https://gnomad.broadinstitute.org/privacy) |
+| `alphafold.ebi.ac.uk` | AlphaFold DB | Predicted structures, pLDDT, PAE, AlphaMissense scores | UniProt accession |
+| `rest.uniprot.org` | UniProtKB | Identity check for an explicitly requested isoform | UniProt accession |
+| `rest.ensembl.org` | Ensembl REST | Variant consequences (VEP), gene lookup, orthologs | HGVS variant, gene symbol, Ensembl gene ID |
+| `eutils.ncbi.nlm.nih.gov` | ClinVar through NCBI E-utilities | Variant classifications | HGVS variant or gene symbol as the search term |
+| `gnomad.broadinstitute.org` | gnomAD | Allele frequencies, gene constraint | Variant ID (chromosome, position, alleles) derived from the HGVS input; gene symbol |
+| `api.platform.opentargets.org` | Open Targets Platform | Target-disease evidence, tractability | UniProt accession or gene symbol, Ensembl gene ID, disease ID or name |
+| `ontology.jax.org` | HPO | Phenotype terms, disease and gene annotations | HPO term ID, NCBI gene ID |
+| `www.ebi.ac.uk` | MONDO through OLS4 | Disease terms, hierarchy, cross-references | MONDO ID, disease search text, ICD-10, OMIM or Orphanet code |
+| `www.ebi.ac.uk` | ChEMBL | Drug targets, approved drugs, indications | UniProt accession, ChEMBL ID, disease ID or name |
+| `www.ebi.ac.uk` | PDBe | Residue-level literature annotations, only when requested | UniProt accession and residue number |
+| `api.disgenet.com` | DisGeNET | Gene-disease association scores | Gene symbol |
 
-In **offline mode** (`ALPHAFOLD_OFFLINE=1`), no outbound requests are
-made. All data is served from the local cache and the air-gap bundle.
+Every request carries a `User-Agent` header naming this software, its
+version, and its repository URL. If you set `NCBI_API_KEY` or
+`DISGENET_API_KEY`, that key is sent to the corresponding service as a
+request parameter. As with any HTTPS request, the receiving service
+also sees the network address the request comes from.
+
+These services are operated by third parties. This project does not
+control how they handle the requests they receive.
+
+### Offline mode
+
+With `ALPHAFOLD_OFFLINE` set to `1`, `true`, or `yes` when the server
+starts, the shared client refuses every request before a connection is
+opened, except to hosts you list in `ALPHAFOLD_ALLOW_HOSTS`, and the
+framework's update check described below is turned off. There is
+no bundled data set and no cache of upstream responses. A tool that
+needs an upstream service then fails with an error or returns a result
+that reports the affected lookups as failed or not assessed; it does
+not fall back to stored data. The knowledge-graph tools read only the
+local database (see Local Storage) and keep working.
+
+### Update check by the MCP framework
+
+In online mode one start-up request is made outside that client. When
+the server starts, FastMCP, the framework it is built on, asks
+`pypi.org` whether a newer FastMCP release exists. The request carries
+no tool input, and FastMCP keeps the answer for 12 hours in a cache
+file in its own data directory. Set `FASTMCP_CHECK_FOR_UPDATES=off` to
+turn it off.
+
+In offline mode the server turns this check off itself before it
+starts, whatever `FASTMCP_CHECK_FOR_UPDATES` says, and the process
+starts without any name lookup or connection. Both paragraphs describe
+FastMCP 4.1.4 and 4.1.8, the versions this was observed with.
+
+## Logs
+
+This software writes structured log lines to its standard error stream
+and to no file. A line can contain the identifier or search text of the
+call it describes (for example a UniProt accession, a gene symbol, an
+HGVS variant, or a disease search term), the name of the upstream
+service, the request path, and error text. The program that launches
+the server decides whether standard error is displayed, stored, or
+discarded.
+
+## Local Storage
+
+This software keeps one local SQLite database, the knowledge graph, in
+the per-user application data directory or at the path given in
+`ALPHAFOLD_KG_PATH`. The server creates it with empty tables: a new
+database holds no records, only a schema-version marker. No registered
+tool and no start-up step writes records to it. Records exist only if
+you, or code you add, write them through the storage API, or if the
+database comes from an earlier release that seeded illustrative rows,
+which this release leaves untouched. The knowledge-graph tools read the
+database and return what they find to the MCP client that calls them.
+
+The database is ordinary SQLite. This software does not encrypt it and
+places no access restriction on it beyond the file permissions of your
+system.
 
 ## Telemetry
 
-**None by default.** The software does not call home, report usage,
-or transmit any telemetry.
+**None by default.** The software does not call home, report usage, or
+transmit any telemetry, and it contains no telemetry code or exporter
+of its own.
 
-If you enable the optional OpenTelemetry exporter
-(`OTEL_EXPORTER_OTLP_ENDPOINT`), spans and metrics are sent to the
-endpoint you configure. You control that endpoint.
+FastMCP (4.1.4 and 4.1.8 were examined) includes OpenTelemetry
+instrumentation built on the OpenTelemetry API package alone. No
+OpenTelemetry SDK or exporter is a dependency of this software, so that
+instrumentation exports nothing unless you install an SDK and configure
+an exporter yourself. If you do, spans go to the endpoint you
+configured, and their content is determined by FastMCP, not by this
+project.
 
 ## Audit Log
 
-The audit log is stored locally (or in the backend you configure). It
-contains tool names, timestamps, input hashes, and response hashes —
-not raw inputs or outputs. Retention policy is configurable; default
-is 90 days. The audit log does not leave the deployment environment
-unless you explicitly configure an exporter.
+There is no automatic audit log. The database has a `tool_invocations`
+table and the storage API has a function,
+`KnowledgeGraph.log_tool_invocation`, that writes to it, but the
+shipped server never calls that function. In normal operation no tool
+call is recorded and the table stays empty.
 
-## GDPR
+If code you add calls it, each record holds the tool name, the complete
+input parameters and the complete result as JSON text, a SHA-256 hash
+of each, the duration, any error text, session and request identifiers,
+and timestamps. The records are not limited to hashes.
 
-If you deploy this software in the European Economic Area, you are
-the data controller for any personal data that passes through it.
-This software, by itself, does not constitute a data processor — the
-software runs on your infrastructure and the upstream APIs it calls
-(EBI, NIH, NCBI, etc.) have their own privacy notices (linked above).
+There is no retention setting. The software contains no expiry, purge,
+or rotation code, so whatever is written to the database stays there
+until you delete it. Nothing sends the database to another system. The
+dataset-export tool returns the tables it is asked for to the MCP
+client, and it accepts `tool_invocations` as a table name.
 
-## HIPAA
+## Personal and Health Data
 
-This software does not process Protected Health Information.
+This software is not designed for data about identifiable people. It
+has no de-identification step, no access control of its own, and no
+encryption of the local database, and it holds no certification for
+regulated use (see
+[`STATUS.md`](https://github.com/smaniches/alphafold-sovereign-mcp/blob/main/STATUS.md)).
+
+This document makes no claim about whether GDPR, HIPAA, or any other
+law applies to a deployment, or about what such a law would require.
 
 ## Contact
 
@@ -81,4 +166,4 @@ Privacy questions: open a
 or, for sensitive issues, follow the coordinated-disclosure process
 in [`SECURITY.md`](https://github.com/smaniches/alphafold-sovereign-mcp/blob/main/SECURITY.md).
 
-*Last updated: 2026-05-11*
+*Last updated: 2026-11-11*

@@ -34,7 +34,7 @@ keywords:
 
 # Transport configuration — stdio for Claude Desktop and other
 # stdio-based MCP clients. Streamable HTTP + OAuth is on the roadmap
-# (see STATUS.md "Roadmap to v1.2.0").
+# (see ARCHITECTURE.md "Roadmap (not yet shipped)").
 transport:
   type: stdio
   command: alphafold-sovereign-mcp

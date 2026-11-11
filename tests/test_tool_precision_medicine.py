@@ -3708,3 +3708,73 @@ async def test_dossier_open_targets_rows_are_presence_only_for_scoring(
     assert result["druggability"]["drug_count"] == 7
     assert result["druggability"]["drug_precedent_scoring_count"] == 1
     assert result["druggability"]["tier"] == "WARM"
+
+
+# ---------------------------------------------------------------------------
+# AF-10: provenance names the AlphaFold DB model version of the record read
+# ---------------------------------------------------------------------------
+
+
+def _provenance_fields(out: dict[str, Any]) -> dict[str, str]:
+    """The ``key=value`` fields of a tool result's provenance footer."""
+    footer = out["provenance"].rstrip("*").rsplit(" · ", 1)[-1]
+    return dict(field.split("=", 1) for field in footer.split(", "))
+
+
+_AFDB_PROVENANCE_CASES = [
+    pytest.param({"globalMetricValue": 85.0, "latestVersion": 4}, "v4", id="v4-record"),
+    pytest.param({"globalMetricValue": 85.0, "latestVersion": 6}, "v6", id="v6-record"),
+    pytest.param({"globalMetricValue": 85.0}, "version-unreported", id="no-version-field"),
+    pytest.param(
+        {"globalMetricValue": 85.0, "latestVersion": "6"},
+        "version-unreported",
+        id="non-integer-version",
+    ),
+    pytest.param({}, "not-retrieved", id="no-record"),
+    pytest.param([], "not-retrieved", id="malformed-response"),
+    pytest.param(RuntimeError("alphafold down"), "not-retrieved", id="request-failed"),
+    pytest.param(
+        AlphaFoldPredictionSchemaError("bad record"), "not-retrieved", id="rejected-record"
+    ),
+]
+
+
+def _prediction_mock(prediction: Any) -> AsyncMock:
+    if isinstance(prediction, Exception):
+        return AsyncMock(side_effect=prediction)
+    return AsyncMock(return_value=prediction)
+
+
+@pytest.mark.parametrize(("prediction", "expected"), _AFDB_PROVENANCE_CASES)
+async def test_druggability_provenance_names_the_alphafold_version_read(
+    monkeypatch: pytest.MonkeyPatch, prediction: Any, expected: str
+) -> None:
+    """Release 1.5.12 stamped ``alphafold_db=v6`` whatever was, or was not, retrieved."""
+    mocks = _patch_clients(monkeypatch)
+    mocks["chembl"].target_by_uniprot = AsyncMock(return_value=None)
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(
+        return_value={"drug_count": 0, "tractability_labels": []}
+    )
+    mocks["gnomad"].gene_constraint = AsyncMock(return_value={})
+    mocks["alphafold"].get_prediction = _prediction_mock(prediction)
+
+    out = await assess_target_druggability(DruggabilityInput(uniprot_id="P38398"))
+
+    assert _provenance_fields(out)["alphafold_db"] == expected
+
+
+@pytest.mark.parametrize(("prediction", "expected"), _AFDB_PROVENANCE_CASES)
+async def test_dossier_provenance_names_the_alphafold_version_read(
+    monkeypatch: pytest.MonkeyPatch, prediction: Any, expected: str
+) -> None:
+    mocks = _patch_dossier_clients(monkeypatch)
+    mocks["opentargets"].drug_count_and_tractability = AsyncMock(
+        return_value={"drug_count": 0, "tractability_labels": []}
+    )
+    mocks["alphafold"].get_prediction = _prediction_mock(prediction)
+
+    out = await synthesize_protein_dossier(
+        ProteinDossierInput(uniprot_id="P38398", gene_symbol="BRCA1", depth="brief")
+    )
+
+    assert _provenance_fields(out)["alphafold_db"] == expected

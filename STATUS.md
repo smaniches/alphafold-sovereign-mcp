@@ -19,8 +19,8 @@ expectation of what this project is and is not.
 | Static analysis | Clean | `ruff check`, `mypy --strict`, `bandit` on every PR |
 | Security scanning | Automated PR checks passing on verified commits | CodeQL `security-extended` runs in CI; repository-wide open security alerts require a separate Security-tab check |
 | Release provenance | Sigstore signature bundles + CycloneDX SBOM attached; SLSA L3 generated in CI | `release.yml` (its final job dispatches `verify-published-release.yml` after publishing); `scripts/replicate.sh` recomputes the PyPI wheel and sdist SHA-256 digests and runs `cosign verify-blob` on their Sigstore bundles (and, from 1.4.7, the signed SBOM bundles) against the `release.yml@refs/tags/<tag>` workflow identity |
-| Integration tests (live APIs) | Not run in CI | Tests mock upstreams via `respx`; AFDB's renamed fields and isoform selection have regression fixtures, not independent live-API verification |
-| Scientific validation | Not performed | ACMG mapping and druggability tier are unreviewed by domain experts |
+| Integration tests (live APIs) | One narrow live check; no continuous live suite | `pdbe-sifts-live.yml` queries UniProt, PDBe and SIFTS live for one residue correspondence (Q8VH51, position 495) on pull requests that change its script, test or workflow file, and on manual dispatch. Every other test runs offline: upstream HTTP is intercepted with `respx` and answered from mocked or recorded responses; AFDB's renamed fields and isoform selection have regression fixtures, not independent live-API verification |
+| Scientific validation | Not performed | ACMG mapping and druggability tier are unreviewed by domain experts; the structure heuristics are not validated (`LIMITATIONS.md` L10 to L12) |
 | Clinical validation | Not performed | No clinical geneticist has signed off on any output |
 | Regulatory certification | None | Not certified for HIPAA, GxP, 21 CFR Part 11, FedRAMP, FIPS, or SOC 2 |
 | Production deployment | None | Never deployed as a long-running service for real users |
@@ -84,6 +84,9 @@ expectation of what this project is and is not.
 
 ### CI matrix
 - Python 3.11 / 3.12 / 3.13 on Ubuntu and macOS.
+- One further job installs the optional ``[tda]`` extra (GUDHI) on
+  Python 3.12 and runs the same suite with the same coverage gate, so
+  the persistent-homology path is executed in CI.
 - Lint (ruff), format (ruff format), type-check (mypy strict),
   build (sdist + wheel), MCP schema validation.
 
@@ -115,6 +118,14 @@ expectation of what this project is and is not.
   based on rough literature priors. They have not been calibrated
   against a benchmark of known druggable / non-druggable targets and
   are not citation-backed.
+- **The structure heuristics are not validated.**
+  ``analyze_structural_confidence`` does not identify protein domains,
+  ``score_binding_pocket_geometry`` does not detect binding pockets or
+  assess druggability, and the Cα topology vector is not a validated
+  similarity measure. An internal audit in November 2026 did not support
+  the earlier descriptions of these outputs as domain boundaries, scored
+  pockets and a 64-component fingerprint; see ``LIMITATIONS.md`` L10 to
+  L12 for what was measured.
 - **No independent PDBe/SIFTS validation.** The optional literature
   client verifies accession and residue identity from PDBe's returned data,
   not SIFTS mapping or HGVS-to-UniProt numbering. Its deterministic tests
@@ -190,5 +201,5 @@ planned, sequenced steps are:
 
 ## Last updated
 
-2026-07-14. This document is part of the repo; PRs to correct or
+2026-11-11. This document is part of the repo; PRs to correct or
 expand it are welcome.

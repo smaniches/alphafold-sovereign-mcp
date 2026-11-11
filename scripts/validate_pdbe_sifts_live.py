@@ -103,10 +103,13 @@ def check_sequence(data):
     if len(sequence) < POSITION:
         return {"status": "CONFLICT", "reason": "sequence_too_short"}
     residue = sequence[POSITION - 1]
+    # UniProtKB reports the sequence version under entryAudit, not under sequence.
+    audit = data.get("entryAudit")
+    version = audit.get("sequenceVersion") if isinstance(audit, dict) else None
     return {
         "status": "PASS" if residue == AMINO_ACID else "CONFLICT",
         "residue": residue,
-        "sequence_version": sequence_data.get("version"),
+        "sequence_version": version if type(version) is int else None,
         "sequence_length": len(sequence),
         "sequence_sha256": hashlib.sha256(sequence.encode()).hexdigest(),
     }
